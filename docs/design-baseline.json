@@ -46,7 +46,7 @@
       "source_size": 1238,
       "destination_size": 1333,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "5fe7cfeeb6277429ee4613109b091dcf3df238070b50783bfa65c7ca2e1a2d2d",
+      "destination_sha256": "dbe4b9b713b1de88234f585ae99c4705e0e268060787cad858821e8b0f23ff47",
       "content_change": "task roadmap reconciled to seven framework-scale tasks; authoritative-ticket rule preserved and clarified"
     },
     {
