@@ -1,7 +1,7 @@
 PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 
-.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof lint format-check typecheck import-check docs-check baseline-check build validate review-package
+.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof lint format-check typecheck import-check docs-check baseline-check build validate review-package
 
 setup:
 	$(PYTHON) -m venv .venv
@@ -27,6 +27,9 @@ sec-api-offline: setup
 task005-proof: setup
 	$(VENV_PYTHON) scripts/task005_operator.py fixture-proof
 
+task006-proof: setup
+	$(VENV_PYTHON) scripts/task006_browser.py fixture-proof
+
 lint: setup
 	$(VENV_PYTHON) scripts/quality.py lint
 
@@ -48,7 +51,7 @@ baseline-check: setup
 build: setup
 	$(VENV_PYTHON) scripts/build_source_archive.py
 
-validate: test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof lint format-check typecheck import-check docs-check baseline-check build
+validate: test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof lint format-check typecheck import-check docs-check baseline-check build
 
 review-package: setup
-	$(VENV_PYTHON) scripts/generate_task005_review.py
+	$(VENV_PYTHON) scripts/generate_task006_review.py

@@ -4,6 +4,7 @@ from rfi.knowledge.contracts import (
     DerivationFailure,
     DerivedObject,
     KnowledgeError,
+    KnowledgeReader,
     KnowledgeStatus,
     ProvenanceReference,
 )
@@ -15,6 +16,7 @@ __all__ = [
     "DerivedObject",
     "DeterministicSecDeriver",
     "KnowledgeError",
+    "KnowledgeReader",
     "KnowledgeRepository",
     "KnowledgeStatus",
     "ProvenanceReference",

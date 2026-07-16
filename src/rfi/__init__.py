@@ -1,7 +1,8 @@
-"""Repository-First Intelligence project foundation.
+"""Repository-First Intelligence governed evidence and knowledge foundation.
 
-The implemented product boundary is the provider-neutral acquisition substrate. External source
-adapters and downstream knowledge capabilities remain intentionally absent.
+Implemented boundaries cover acquisition, immutable evidence, structural source objects,
+versioned derived knowledge, and governed retrieval with evidence assembly. Model-guided
+intelligence and consulting projections remain intentionally absent.
 """
 
 __all__ = ["__version__"]
