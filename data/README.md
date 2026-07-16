@@ -1,6 +1,8 @@
 # Runtime data boundary
 
-This directory is reserved for local repository state introduced by later task tickets. Its
-contents are ignored by Git except for this boundary document.
+This directory is available for local acquisition repository state. Its contents are ignored by
+Git except for this boundary document. Tests and the demonstration use temporary directories so
+routine validation leaves this boundary empty.
 
-No evidence, index, ledger, cache, or output schema is defined by TASK-001.
+The public domain contract accepts the state-root path only. Physical object paths beneath it are
+private implementation details and must not be persisted by callers.

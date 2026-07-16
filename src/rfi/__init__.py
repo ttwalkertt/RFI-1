@@ -1,7 +1,7 @@
 """Repository-First Intelligence project foundation.
 
-Product capabilities intentionally begin in later tasks. This package currently exposes only
-bootstrap metadata so installation and import boundaries can be validated.
+The implemented product boundary is the provider-neutral acquisition substrate. External source
+adapters and downstream knowledge capabilities remain intentionally absent.
 """
 
 __all__ = ["__version__"]
