@@ -133,3 +133,27 @@ Run `make task005-proof` for the deterministic offline construction and independ
 The source-object catalog and derived-knowledge store are separate and can be inspected with the
 commands in the [TASK-005 subsystem guide](source-objects-and-derived-knowledge.md). The optional
 real proof consumes the existing TASK-004 runtime corpus locally and performs no network access.
+
+## TASK-006 retrieval workflow
+
+Run `make task006-proof` for deterministic governed retrieval, provenance-complete evidence
+assembly, replaceability, and browser inspection. See the
+[TASK-006 subsystem guide](governed-retrieval-and-source-browser.md) for query and navigation
+commands.
+
+## TASK-007 intelligence workflow
+
+Run `make task007-proof` for the deterministic multi-step, insufficiency, ambiguity,
+replaceability, refusal, and fail-closed model-output proofs. Run the accepted local corpus proof:
+
+```sh
+.venv/bin/python scripts/task007_operator.py real-proof \
+  --acquisition-state .artifacts/runtime/TASK-004-edgar \
+  --state .artifacts/runtime/TASK-007
+```
+
+The JSON record exposes the structured plan, every TASK-006 request and consumed package,
+model-facing projection, raw draft, claim mappings, iteration decisions, and stopping reason. See
+the [TASK-007 subsystem guide](model-guided-source-grounded-intelligence.md) for contracts,
+retention, runtime policy, failure semantics, and limitations. `make review-package` creates the
+TASK-007 review package.

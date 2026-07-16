@@ -330,6 +330,11 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "acquisition/repository.py",
                 "acquisition/runtime_config.py",
                 "acquisition/sec_api.py",
+                "intelligence/__init__.py",
+                "intelligence/contracts.py",
+                "intelligence/deterministic.py",
+                "intelligence/inspection.py",
+                "intelligence/orchestration.py",
                 "knowledge/__init__.py",
                 "knowledge/contracts.py",
                 "knowledge/derivation.py",
@@ -347,7 +352,7 @@ class ScopeBoundaryTests(unittest.TestCase):
             },
         )
 
-    def test_networking_is_confined_to_live_adapter_and_future_layers_are_absent(self) -> None:
+    def test_networking_is_confined_to_live_adapters_and_consulting_is_absent(self) -> None:
         provider_neutral = "\n".join(
             path.read_text(encoding="utf-8")
             for path in (SRC / "rfi" / "acquisition").glob("*.py")
@@ -361,7 +366,6 @@ class ScopeBoundaryTests(unittest.TestCase):
         ).lower()
         for term in (
             "openai",
-            "retrieval-plan",
             "consulting-workspace",
         ):
             with self.subTest(term=term):
