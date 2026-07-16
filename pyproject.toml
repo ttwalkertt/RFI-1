@@ -1,0 +1,14 @@
+[project]
+name = "rfi-1"
+version = "0.0.0"
+description = "Repository-First Intelligence engineering foundation"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "RFI-1 contributors" }]
+dependencies = []
+
+[tool.rfi]
+source-root = "src"
+test-root = "tests"
+artifact-root = ".artifacts"

@@ -1,0 +1,266 @@
+# ARCHITECTURE.md
+
+# Repository-First Intelligence (RFI) Architecture
+
+> **This document describes the architectural model of Repository-First Intelligence.**
+>
+> It intentionally avoids implementation details. Those belong in design guidance, task tickets, and code.
+
+---
+
+# Purpose
+
+Repository-First Intelligence (RFI) is an architectural pattern for building persistent, evidence-backed knowledge systems.
+
+Its defining characteristic is the separation of three concerns:
+
+1. Information acquisition
+2. Knowledge development
+3. Information projection
+
+Each concern evolves independently while sharing a common repository.
+
+---
+
+# Repository-First Philosophy
+
+The repository is the system of record.
+
+It preserves:
+
+- immutable source evidence
+- provenance
+- evolving knowledge
+- historical context
+
+The repository is not merely a cache for AI prompts. It is intended to become the durable foundation for information ingress, knowledge development, and downstream outputs.
+
+The repository is expected to outlive any individual AI model, retrieval technique, reporting format, or user interface.
+
+---
+
+# Architectural Separation
+
+## Acquisition
+
+Acquisition is responsible for discovering and preserving information from trusted sources.
+
+Its responsibilities include:
+
+- source discovery
+- document retrieval
+- immutable artifact storage
+- provenance capture
+- acquisition history
+
+Acquisition records **what became available**.
+
+It does not determine what the information means.
+
+---
+
+## Knowledge Development
+
+Knowledge development transforms evidence into increasingly useful forms.
+
+Each layer is expected to remain traceable to supporting evidence.
+
+Knowledge development may involve deterministic processing, AI-assisted processing, or human review.
+
+---
+
+## Projection
+
+Projection consumes repository state to produce outputs.
+
+Examples include:
+
+- consulting briefs
+- competitive analyses
+- dashboards
+- interactive Q&A
+- research reports
+- social media posts
+
+Projection should not modify repository history as part of routine operation.
+
+---
+
+# Reference Knowledge Pipeline
+
+The conceptual flow of information is:
+
+```text
+Sources
+    ↓
+Artifacts
+    ↓
+Observations
+    ↓
+Derivations
+    ↓
+Enrichments
+    ↓
+Claims
+    ↓
+Positions
+    ↓
+Projections
+```
+
+Each layer has a distinct purpose.
+
+---
+
+## Sources
+
+External publishers and information providers.
+
+Examples:
+
+- SEC filings
+- investor relations sites
+- standards organizations
+- conference presentations
+- technical papers
+- regulatory publications
+
+---
+
+## Artifacts
+
+Exact immutable representations of acquired source material.
+
+Artifacts are preserved as evidence.
+
+Examples:
+
+- PDF
+- HTML
+- transcript
+- slide deck
+- JSON
+- audio
+
+Artifacts retain provenance and are never modified.
+
+---
+
+## Observations
+
+Explicit statements extracted from artifacts.
+
+Observations describe facts present in the evidence without introducing interpretation.
+
+Examples:
+
+- announced capacity
+- release date
+- product name
+- quoted shipment volume
+
+---
+
+## Derivations
+
+Information computed from observations.
+
+Examples:
+
+- year-over-year growth
+- rankings
+- timelines
+- trend calculations
+- consistency checks
+
+Derivations should be reproducible from repository state.
+
+---
+
+## Enrichments
+
+Additional semantic structure attached to repository objects.
+
+Examples:
+
+- technology classification
+- market segment
+- workload type
+- customer category
+- relationship mapping
+
+Enrichments may be deterministic, AI-assisted, or human-curated.
+
+---
+
+## Claims
+
+Evidence-backed assertions supported by observations and derivations.
+
+Claims express conclusions that remain traceable to supporting evidence.
+
+Claims are expected to evolve as repository knowledge grows.
+
+---
+
+## Positions
+
+Higher-level viewpoints developed from multiple claims.
+
+Positions represent the repository's current understanding of a topic.
+
+Examples:
+
+- competitive assessment
+- technology outlook
+- market interpretation
+
+---
+
+## Projections
+
+Consumable outputs generated from repository state.
+
+Projections include:
+
+- reports
+- presentations
+- consulting briefs
+- interactive answers
+- dashboards
+
+Projections are intentionally ephemeral.
+
+The repository remains the durable foundation.
+
+---
+
+# Architectural Characteristics
+
+An RFI implementation should strive for:
+
+- evidence-backed reasoning
+- explicit provenance
+- replayability
+- reproducibility
+- incremental evolution
+- implementation independence
+- separation of concerns
+
+---
+
+# Expected Evolution
+
+The architecture is intended to evolve through implementation experience.
+
+Early development focuses on acquisition.
+
+Later work will refine:
+
+- observation models
+- derivation pipelines
+- enrichment models
+- claim lifecycle
+- projection architecture
+
+The architectural boundaries described in this document are expected to remain substantially more stable than any individual implementation.

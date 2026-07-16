@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "task": "TASK-001",
+  "source_directory": "~/Downloads",
+  "selection_policy": "exactly one stable filename or approved (1) variant; always import to stable destination",
+  "documents": [
+    {
+      "source": "RFI_MANIFESTO.md",
+      "destination": "RFI_MANIFESTO.md",
+      "source_size": 1884,
+      "destination_size": 1884,
+      "source_sha256": "7c4443f48c6ecc60f7d477b16b2573fb7796c837c8f0d57e5b7f0a393ae273c5",
+      "destination_sha256": "7c4443f48c6ecc60f7d477b16b2573fb7796c837c8f0d57e5b7f0a393ae273c5",
+      "content_change": "none"
+    },
+    {
+      "source": "README.md",
+      "destination": "README.md",
+      "source_size": 5104,
+      "destination_size": 5104,
+      "source_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
+      "destination_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
+      "content_change": "none"
+    },
+    {
+      "source": "DESIGN_PRINCIPLES.md",
+      "destination": "DESIGN_PRINCIPLES.md",
+      "source_size": 3617,
+      "destination_size": 3617,
+      "source_sha256": "f102b45ff2a70d1182845752a46dc3692e4fb6ac776dfd36c20d1c978206f0b7",
+      "destination_sha256": "f102b45ff2a70d1182845752a46dc3692e4fb6ac776dfd36c20d1c978206f0b7",
+      "content_change": "none"
+    },
+    {
+      "source": "ACQUISITION_POC_GUIDANCE.md",
+      "destination": "ACQUISITION_POC_GUIDANCE.md",
+      "source_size": 5067,
+      "destination_size": 5067,
+      "source_sha256": "6e7ec9ffc41847de9583f2e7a43c1b16c39afea499679331446ed32a24797b73",
+      "destination_sha256": "6e7ec9ffc41847de9583f2e7a43c1b16c39afea499679331446ed32a24797b73",
+      "content_change": "none"
+    },
+    {
+      "source": "TASKS.md",
+      "destination": "TASKS.md",
+      "source_size": 1238,
+      "destination_size": 1333,
+      "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
+      "destination_sha256": "5fe7cfeeb6277429ee4613109b091dcf3df238070b50783bfa65c7ca2e1a2d2d",
+      "content_change": "task roadmap reconciled to seven framework-scale tasks; authoritative-ticket rule preserved and clarified"
+    },
+    {
+      "source": "ROADMAP.md",
+      "destination": "ROADMAP.md",
+      "source_size": 3371,
+      "destination_size": 3371,
+      "source_sha256": "1de0192a023e8c046f2cdedc2fe61592345d2e06b324c9b49b2c2b25424dfdad",
+      "destination_sha256": "1de0192a023e8c046f2cdedc2fe61592345d2e06b324c9b49b2c2b25424dfdad",
+      "content_change": "none"
+    },
+    {
+      "source": "ARCHITECTURE.md",
+      "destination": "ARCHITECTURE.md",
+      "source_size": 4889,
+      "destination_size": 4889,
+      "source_sha256": "b1035d87d8f620ace89e3aaae5ca65b0c21cf93c6e1ca91c824c1e623b20aa9f",
+      "destination_sha256": "b1035d87d8f620ace89e3aaae5ca65b0c21cf93c6e1ca91c824c1e623b20aa9f",
+      "content_change": "none"
+    }
+  ]
+}
