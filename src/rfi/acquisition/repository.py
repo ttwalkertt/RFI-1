@@ -264,6 +264,34 @@ class AcquisitionRepository:
             return {"schema_version": _SCHEMA, "sources": {}}
         return load_json(self._layout.checkpoints)
 
+    def advance_checkpoint(
+        self, source_id: str, successful_attempt_id: str, checkpoint: Checkpoint
+    ) -> bool:
+        """Finalize source progress against an already durable successful attempt.
+
+        Engines may need to know that a bounded discovery run completed before publishing its
+        checkpoint. This public operation preserves the TASK-002 ordering invariant while keeping
+        ledger layout and checkpoint-event construction repository-owned.
+        """
+        require_identifier(source_id, "source_id")
+        require_identifier(successful_attempt_id, "attempt_id")
+        self.source(source_id)
+        successful = next(
+            (
+                record
+                for record in self.history()
+                if record["record_type"] == "retrieval_attempt"
+                and record["attempt_id"] == successful_attempt_id
+                and record["outcome"] == RetrievalOutcome.SUCCESS.value
+            ),
+            None,
+        )
+        if successful is None:
+            raise ContractError("checkpoint requires an existing successful retrieval attempt")
+        if successful["source_id"] != source_id:
+            raise ContractError("checkpoint source differs from its successful retrieval attempt")
+        return self._advance_checkpoint(source_id, successful_attempt_id, checkpoint)
+
     def delete_derived_state(self) -> None:
         """Remove only rebuildable acquisition views for replay demonstrations."""
         self._layout.index.unlink(missing_ok=True)
@@ -323,7 +351,7 @@ class AcquisitionRepository:
 
     def _advance_checkpoint(
         self, source_id: str, attempt_id: str, checkpoint: Checkpoint
-    ) -> None:
+    ) -> bool:
         """Append progress only after preceding required durable effects exist."""
         self._validate_checkpoint(source_id, checkpoint)
         event = {
@@ -333,10 +361,11 @@ class AcquisitionRepository:
             "source_id": source_id,
             "checkpoint": checkpoint.to_dict(),
         }
-        self._append_record(f"checkpoint-{attempt_id}", event)
+        created = self._append_record(f"checkpoint-{attempt_id}", event)
         atomic_replace(
             self._layout.checkpoints, canonical_json(self._derive_checkpoints(self.history()))
         )
+        return created
 
     def _validate_checkpoint(self, source_id: str, checkpoint: Checkpoint) -> None:
         """Reject backward or ambiguous progress before creating other durable effects."""

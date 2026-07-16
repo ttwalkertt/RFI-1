@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the self-contained TASK-002 verification and review package."""
+"""Generate the self-contained TASK-003 verification and review package."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-TASK_ID = "TASK-002"
+TASK_ID = "TASK-003"
 REVIEW_ROOT = ROOT / ".artifacts/review"
 PACKAGE_DIR = REVIEW_ROOT / TASK_ID
 ZIP_PATH = REVIEW_ROOT / f"{TASK_ID}-review.zip"
@@ -102,14 +102,14 @@ def isolated_validation() -> tuple[int, str]:
         """Exclude non-source state from the isolated copy."""
         return set(names).intersection(EXCLUDED_PARTS)
 
-    with tempfile.TemporaryDirectory(prefix="rfi-task-002-isolated-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="rfi-task-003-isolated-") as temporary:
         destination = Path(temporary) / "RFI-1"
         shutil.copytree(ROOT, destination, ignore=ignore)
         code, output = run(["make", "validate"], cwd=destination)
     method = (
         "Method: copied the complete final source tree while excluding `.git`, `.venv`, "
         "`.artifacts`, and caches; then ran `make validate`. This is clean-checkout-equivalent "
-        "because TASK-002 changes are intentionally uncommitted.\n\n"
+        "because TASK-003 changes are intentionally uncommitted.\n\n"
     )
     return code, method + output
 
@@ -120,6 +120,26 @@ def validation_matrix() -> list[tuple[str, list[str], dict[str, str] | None]]:
     environment["PYTHONPATH"] = "src"
     unittest = [str(PYTHON), "-m", "unittest"]
     return [
+        (
+            "focused-engine-adapter-output.txt",
+            [*unittest, "tests.test_engine.AdapterAndOrderingTests", "-v"],
+            None,
+        ),
+        (
+            "focused-idempotency-revision-output.txt",
+            [*unittest, "tests.test_engine.IdempotencyRevisionTests", "-v"],
+            None,
+        ),
+        (
+            "focused-failure-resumption-output.txt",
+            [*unittest, "tests.test_engine.FailureAndResumptionTests", "-v"],
+            None,
+        ),
+        (
+            "focused-replay-integrity-conflict-output.txt",
+            [*unittest, "tests.test_engine.ReplayIntegrityAndConflictTests", "-v"],
+            None,
+        ),
         (
             "focused-contract-registry-output.txt",
             [*unittest, "tests.test_acquisition.ContractAndRegistryTests", "-v"],
@@ -167,7 +187,37 @@ def validation_matrix() -> list[tuple[str, list[str], dict[str, str] | None]]:
         ),
         (
             "deterministic-clean-runs-output.txt",
-            [str(PYTHON), "scripts/verify_acquisition.py", "determinism"],
+            [str(PYTHON), "scripts/verify_engine.py", "determinism"],
+            None,
+        ),
+        (
+            "end-to-end-demonstration-output.txt",
+            [str(PYTHON), "scripts/verify_engine.py", "end-to-end"],
+            None,
+        ),
+        (
+            "repeated-run-idempotency-output.txt",
+            [str(PYTHON), "scripts/verify_engine.py", "idempotency"],
+            None,
+        ),
+        (
+            "revision-demonstration-output.txt",
+            [str(PYTHON), "scripts/verify_engine.py", "revision"],
+            None,
+        ),
+        (
+            "failure-and-resumption-output.txt",
+            [str(PYTHON), "scripts/verify_engine.py", "failure-resumption"],
+            None,
+        ),
+        (
+            "replay-with-adapters-disabled-output.txt",
+            [str(PYTHON), "scripts/verify_engine.py", "replay-rebuild"],
+            None,
+        ),
+        (
+            "rebuild-integrity-verification-output.txt",
+            [str(PYTHON), "scripts/verify_engine.py", "replay-rebuild"],
             None,
         ),
         ("lint-output.txt", [str(PYTHON), "scripts/quality.py", "lint"], None),
@@ -188,29 +238,32 @@ def validation_matrix() -> list[tuple[str, list[str], dict[str, str] | None]]:
 def acceptance_criteria() -> str:
     """Map every ticket acceptance criterion to durable verification evidence."""
     evidence = [
-        "Contracts: source code, acquisition guide, contract/identity summary, focused tests.",
-        "Identity separation: acquisition guide identity table and contract test output.",
-        "Registry: immutable validated profiles and malformed/conflict tests.",
-        "Exact artifacts: artifact integrity output and byte-preservation tests.",
-        "Artifact conflicts: exclusive-create store plus corruption/conflict tests.",
-        "Append-only history: immutable record implementation and ledger tests.",
-        "Useful rebuildable index: lifecycle tests and index rebuild output.",
-        "Index loss safety: rebuild output preserves bytes, history, provenance, and progress.",
-        "Checkpoint ordering: failure injection tests and durability model.",
-        "Idempotency: fixture demonstration and repeat tests.",
-        "Conflicts: fixture demonstration and conflict tests.",
-        "Offline replay: blocked-socket rebuild evidence and scope checks.",
-        "Partial failures: failure injection and replay failure outputs.",
-        "Independent integrity: fixture/stored SHA-256 output and corruption test.",
-        "Fixture lifecycle: fixture demonstration output.",
-        "Operator workflows: development and acquisition-substrate documentation.",
-        "Design decisions: ADR-0002 and architecture/alternatives package documents.",
-        "Existing gates: full validation and isolated-tree validation outputs.",
-        "Prohibited scope absent: scope tests, source inventory, and full patch.",
-        "Review package: manifest, raw outputs, checksums, listing, and integrity evidence.",
-        "Final state: git status, staged diff, changed files, branch, and HEAD in manifest.",
+        "Production engine uses only public TASK-002 repository operations.",
+        "Adapter protocol separates discovery/retrieval from persistence.",
+        "Catalog and feed fixtures use the identical engine and repository facade.",
+        "Adapter constructors have no repository and tests assert repository effects.",
+        "Profiles select explicitly validated mechanism registrations.",
+        "Frozen structured run results expose lifecycle, counts, progress, and diagnostics.",
+        "Stable sorting and within/across-page duplicate evidence are verified.",
+        "Provider continuations and repository checkpoints are distinct fields and semantics.",
+        "Page, mid-page, and finalization failures do not overstate progress.",
+        "Transient, permanent, malformed, policy, conflict, and integrity classes are explicit.",
+        "Equivalent complete runs leave complete repository state byte-semantically unchanged.",
+        "A stable document relates immutable v1 and v2 artifacts without history rewrite.",
+        "Malformed output and repository conflict produce structured failed results.",
+        "Checkpoint finalization requires a durable same-source successful attempt.",
+        "Multi-source state rebuilds completely after both derived views are deleted.",
+        "Replay succeeds with adapters disabled and socket creation blocked.",
+        "Exact bytes and independent artifact integrity verification pass.",
+        "Operator commands cover execution, resumption, inspection, verification, and replay.",
+        "Profile reference plus runtime adapter construction document the secret boundary.",
+        "ADR-0003 records responsibilities, alternatives, concurrency, and proof limits.",
+        "Legacy and engine tests plus all quality gates and isolated validation pass.",
+        "Scope tests, imports, repository tree, and patch prove prohibited capabilities absent.",
+        "Manifest, raw outputs, checksums, member listing, and ZIP integrity are self-checked.",
+        "Branch, HEAD, complete patch, changed files, staged diff, and status are captured.",
     ]
-    lines = ["# TASK-002 acceptance criteria", ""]
+    lines = ["# TASK-003 acceptance criteria", ""]
     lines.extend(f"{number}. PASS — {item}" for number, item in enumerate(evidence, start=1))
     return "\n".join(lines) + "\n"
 
@@ -220,95 +273,87 @@ def write_narrative(branch: str, head: str, timestamp: str) -> None:
     write(
         "executive-summary.md",
         "# Executive summary\n\n"
-        "TASK-002 adds a dependency-free, provider-neutral acquisition repository substrate. "
-        "It proves governed sources, exact immutable artifacts, append-only retrieval history, "
-        "a disposable document index, ordered source progress, offline replay, idempotency, "
-        "conflict detection, diagnostics, integrity checking, and observable partial failure. "
-        "All captured validations must pass for package generation to succeed. No external "
-        "retrieval or downstream intelligence capability is implemented.\n\n"
+        "TASK-003 adds a dependency-free fixture-backed acquisition engine and end-to-end kernel "
+        "over the TASK-002 repository facade. Two materially different adapters prove explicit "
+        "selection, deterministic pagination and duplicates, idempotency, revisions, partial "
+        "failure and resumption, bounded checkpointing, offline replay, rebuild, and integrity. "
+        "No live retrieval or downstream intelligence capability is implemented.\n\n"
         f"Branch: `{branch}`  \nHEAD: `{head}`  \nGenerated UTC: `{timestamp}`\n",
     )
     write(
         "implementation-summary.md",
         "# Implementation summary\n\n"
-        "- Frozen provider-neutral source, candidate, provenance, retrieval, checkpoint, receipt, "
-        "and replay contracts.\n"
-        "- Filesystem-backed immutable source/artifact/ledger records behind a private layout.\n"
-        "- Derived document index and checkpoint view rebuilt from authoritative local state.\n"
-        "- Ordered lifecycle with deterministic fault injection, idempotent retry, integrity "
-        "verification, and conflict rejection.\n"
-        "- Fixture demonstration, operator interface, focused tests, full gates, isolated-tree "
-        "validation, and reproducible review packaging.\n",
+        "- Explicit adapter registry, minimal discovery/retrieval protocol, and structured runs.\n"
+        "- Single-page stable-ID catalog and paginated URL-like feed fixtures.\n"
+        "- Deterministic ordering, duplicate evidence, revisions, and bounded checkpoints.\n"
+        "- Classified failure, safe idempotent resumption, replay, rebuild, and integrity proof.\n"
+        "- Operator workflow, focused/full gates, isolated validation, and review packaging.\n",
     )
-    adr = (ROOT / "docs/decisions/0002-acquisition-substrate.md").read_text(encoding="utf-8")
+    adr = (ROOT / "docs/decisions/0003-fixture-backed-acquisition-engine.md").read_text(
+        encoding="utf-8"
+    )
     write("architecture-decisions.md", adr)
     alternatives = adr.split("## Alternatives considered", maxsplit=1)[1]
     alternatives = alternatives.split("## Consequences and limits", maxsplit=1)[0]
     write("alternatives-considered.md", "# Alternatives considered\n" + alternatives)
-    guide = (ROOT / "docs/acquisition-substrate.md").read_text(encoding="utf-8")
+    guide = (ROOT / "docs/acquisition-engine.md").read_text(encoding="utf-8")
     sections = {
-        "contract-and-identity-model.md": ("Contracts and identity", "Authoritative and derived"),
-        "durability-and-failure-model.md": (
-            "Durability and failure ordering",
-            "Checkpoints and replay",
+        "engine-contract-summary.md": (
+            "Responsibilities and contracts",
+            "Run lifecycle and result model",
         ),
-        "checkpoint-and-replay-summary.md": ("Checkpoints and replay", "Operator commands"),
+        "adapter-boundary-summary.md": (
+            "Responsibilities and contracts",
+            "Run lifecycle and result model",
+        ),
+        "run-lifecycle-and-result-model.md": (
+            "Run lifecycle and result model",
+            "Candidate ordering, duplicates, and revisions",
+        ),
+        "candidate-ordering-and-pagination.md": (
+            "Candidate ordering, duplicates, and revisions",
+            "Failure, retry, and concurrency model",
+        ),
+        "failure-retry-and-resumption.md": (
+            "Failure, retry, and concurrency model",
+            "Fixture representativeness",
+        ),
+        "checkpoint-and-idempotency-analysis.md": (
+            "Pagination, checkpoints, and resumption",
+            "Failure, retry, and concurrency model",
+        ),
+        "fixture-representativeness.md": (
+            "Fixture representativeness",
+            "Configuration and credential boundary",
+        ),
+        "credential-boundary.md": (
+            "Configuration and credential boundary",
+            "Replay boundary and limitations",
+        ),
     }
     for name, (start, end) in sections.items():
         content = guide.split(f"## {start}", maxsplit=1)[1].split(f"## {end}", maxsplit=1)[0]
         write(name, f"# {start}\n" + content)
     write(
-        "source-registry-summary.md",
-        "# Source registry summary\n\nGoverned source profiles use stable internal identity, "
-        "explicit "
-        "enablement, generic mechanism, deterministic JSON configuration, and policy. Profiles "
-        "are immutable-by-contract; exact repeats are idempotent and conflicts fail closed. "
-        "Provider names and URLs cannot define source identity.\n",
-    )
-    write(
-        "artifact-store-summary.md",
-        "# Artifact store summary\n\nArtifact identity is `artifact-<sha256>`. Exact bytes and "
-        "metadata "
-        "are exclusive-created and fsynced. Metadata contains digest, size, and media type. "
-        "Reads and full verification recompute integrity; physical layout is private.\n",
-    )
-    write(
-        "retrieval-ledger-summary.md",
-        "# Retrieval ledger summary\n\nEach attempt and checkpoint event is a separate immutable "
-        "record. "
-        "Normal operation only appends or accepts exact identity repetition. Success, failure, "
-        "skip, and duplicate outcomes retain audit and diagnostic evidence.\n",
-    )
-    write(
-        "document-index-summary.md",
-        "# Document index summary\n\nThe JSON index maps stable document IDs to immutable "
-        "artifacts, "
-        "successful attempts, sources, and provenance. It owns no authoritative facts and is "
-        "atomically rebuilt from ledger and artifact records. Ambiguity fails closed.\n",
-    )
-    write(
-        "fixture-demonstration.md",
-        "# Fixture demonstration\n\nThe synthetic local fixture registers a governed source, "
-        "records "
-        "exact evidence and progress, repeats idempotently, rejects conflict, records a simulated "
-        "failure with diagnostics, deletes derived state, replays offline, and verifies bytes. "
-        "Raw evidence is in `fixture-demonstration-output.txt`.\n",
+        "end-to-end-demonstration.md",
+        "# End-to-end demonstration\n\nThe production kernel runs both fixture sources with socket "
+        "construction blocked, preserves five exact artifacts, records skip and duplicate "
+        "evidence, "
+        "and publishes two bounded checkpoints. Separate raw outputs prove repeat idempotency, "
+        "revision, failure/resumption, replay, rebuild, integrity, and clean-run determinism.\n",
     )
     write(
         "known-limitations.md",
-        "# Known limitations\n\n- Single-writer POC; no cross-process transaction coordinator.\n"
-        "- Filesystem permissions can alter immutable-by-contract files; checks detect evidence "
-        "corruption but no cryptographic ledger chain exists.\n"
-        "- Interrupted operations may retain orphan evidence intentionally.\n"
-        "- JSON views are suitable for fixture/POC scale, not a measured large corpus.\n"
-        "- Schema migration, backup, locking, and production object storage are not implemented.\n",
+        "# Known limitations\n\n- Sequential single-writer POC with bounded-run checkpoints.\n"
+        "- Fixture behavior does not prove real authentication, HTTP, pagination drift, or scale.\n"
+        "- Runtime scheduling, automatic backoff, locking, and schema migration are absent.\n",
     )
     write(
         "deferred-work.md",
-        "# Deferred work\n\nReal adapters, SEC/EDGAR and Investor Relations integration, network "
-        "retrieval, crawling, provider credentials, pagination, extraction, OCR, LLMs, embeddings, "
-        "vector search, observations, claims, projections, reports, distributed processing, and "
-        "production infrastructure remain deferred.\n",
+        "# Deferred work\n\nSEC/EDGAR, commercial providers, Investor Relations, live HTTP, "
+        "crawling, production credentials and scheduling, extraction, OCR, observations, claims, "
+        "LLMs, embeddings, vector search, RAG, projections, reports, and production infrastructure "
+        "remain deferred.\n",
     )
 
 
@@ -355,7 +400,7 @@ def main() -> int:
     commands.extend(
         [
             "- `.venv/bin/python scripts/generate_review_package.py`",
-            "- `python -m zipfile -t .artifacts/review/TASK-002-review.zip`",
+            f"- `python -m zipfile -t .artifacts/review/{TASK_ID}-review.zip`",
             "",
             "All checks are applicable; none were skipped. No command requires network access.",
             "Untracked task files are included by `git diff --no-index /dev/null <file>` and are "
@@ -366,7 +411,7 @@ def main() -> int:
     write(
         "zip-checksum.txt",
         "The final archive SHA-256 is stored in the sibling "
-        "`.artifacts/review/TASK-002-review.zip.sha256`. It cannot be embedded in the archive "
+        f"`.artifacts/review/{TASK_ID}-review.zip.sha256`. It cannot be embedded in the archive "
         "whose bytes it hashes without a self-reference. The generator prints the same value.\n",
     )
     write(
