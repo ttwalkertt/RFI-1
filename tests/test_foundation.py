@@ -68,6 +68,10 @@ class FoundationTests(unittest.TestCase):
                 "source_objects/contracts.py",
                 "source_objects/parser.py",
                 "source_objects/repository.py",
+                "workspace/__init__.py",
+                "workspace/contracts.py",
+                "workspace/repository.py",
+                "workspace/service.py",
             ],
         )
 
