@@ -1,7 +1,7 @@
 PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 
-.PHONY: setup test focused-test acquisition-demo engine-demo lint format-check typecheck import-check docs-check baseline-check build validate review-package
+.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline lint format-check typecheck import-check docs-check baseline-check build validate review-package
 
 setup:
 	$(PYTHON) -m venv .venv
@@ -17,6 +17,12 @@ acquisition-demo: setup
 
 engine-demo: setup
 	$(VENV_PYTHON) scripts/verify_engine.py end-to-end
+
+edgar-offline: setup
+	env -u RFI_SEC_USER_AGENT $(VENV_PYTHON) scripts/verify_edgar.py
+
+sec-api-offline: setup
+	env -u SEC_API_IO_API_KEY $(VENV_PYTHON) scripts/verify_sec_api.py
 
 lint: setup
 	$(VENV_PYTHON) scripts/quality.py lint
@@ -39,7 +45,7 @@ baseline-check: setup
 build: setup
 	$(VENV_PYTHON) scripts/build_source_archive.py
 
-validate: test acquisition-demo engine-demo lint format-check typecheck import-check docs-check baseline-check build
+validate: test acquisition-demo engine-demo edgar-offline sec-api-offline lint format-check typecheck import-check docs-check baseline-check build
 
 review-package: setup
-	$(VENV_PYTHON) scripts/generate_review_package.py
+	$(VENV_PYTHON) scripts/generate_task004_review.py

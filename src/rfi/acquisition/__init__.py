@@ -22,12 +22,25 @@ from rfi.acquisition.engine import (
     FailureClass,
     RunStatus,
 )
+from rfi.acquisition.edgar import (
+    EdgarAdapter,
+    load_edgar_profiles,
+    user_agent_from_environment,
+    validate_edgar_profile,
+)
 from rfi.acquisition.fixture_adapters import (
     FixtureCatalogAdapter,
     FixtureFeedAdapter,
     fixture_profiles,
 )
 from rfi.acquisition.repository import AcquisitionRepository
+from rfi.acquisition.runtime_config import load_runtime_configuration
+from rfi.acquisition.sec_api import (
+    SecApiAdapter,
+    credential_from_environment,
+    load_live_profiles,
+    validate_live_profile,
+)
 
 __all__ = [
     "AcquisitionReceipt",
@@ -43,6 +56,7 @@ __all__ = [
     "DiscoveryProvenance",
     "DiscoveryPage",
     "EngineFailurePoint",
+    "EdgarAdapter",
     "FailurePoint",
     "FailureClass",
     "FixtureCatalogAdapter",
@@ -50,6 +64,14 @@ __all__ = [
     "RetrievalOutcome",
     "RetrievalResult",
     "RunStatus",
+    "SecApiAdapter",
     "SourceProfile",
+    "credential_from_environment",
     "fixture_profiles",
+    "load_live_profiles",
+    "load_edgar_profiles",
+    "load_runtime_configuration",
+    "user_agent_from_environment",
+    "validate_live_profile",
+    "validate_edgar_profile",
 ]

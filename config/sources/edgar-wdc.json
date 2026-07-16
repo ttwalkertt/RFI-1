@@ -1,0 +1,26 @@
+{
+  "configuration": {
+    "cik": "106040",
+    "filed_from": "2024-01-01",
+    "filed_through": "2025-12-31",
+    "form_limits": {
+      "10-K": 1,
+      "10-Q": 2,
+      "8-K": 2
+    },
+    "page_size": 1,
+    "ticker": "WDC",
+    "user_agent_reference": "env:RFI_SEC_USER_AGENT"
+  },
+  "enabled": true,
+  "mechanism": "sec-edgar",
+  "name": "Western Digital Corporation native EDGAR filings",
+  "policy": {
+    "maximum_artifact_bytes": 50000000,
+    "maximum_attempts_per_request": 2,
+    "maximum_live_requests": 80,
+    "minimum_request_interval_seconds": 0.5,
+    "timeout_seconds": 20
+  },
+  "source_id": "source-edgar-wdc"
+}

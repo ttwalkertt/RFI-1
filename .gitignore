@@ -17,6 +17,7 @@ dist/
 .env
 .env.*
 !.env.example
+.rfi/runtime.env
 *.pem
 *.key
 

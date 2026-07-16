@@ -65,10 +65,13 @@ def main() -> int:
         "acquisition/__init__.py",
         "acquisition/contracts.py",
         "acquisition/demo.py",
+        "acquisition/edgar.py",
         "acquisition/engine.py",
         "acquisition/fixture_adapters.py",
         "acquisition/persistence.py",
         "acquisition/repository.py",
+        "acquisition/runtime_config.py",
+        "acquisition/sec_api.py",
         "py.typed",
     ]
     if product_files != expected_product_files:

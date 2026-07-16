@@ -323,30 +323,35 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "acquisition/__init__.py",
                 "acquisition/contracts.py",
                 "acquisition/demo.py",
+                "acquisition/edgar.py",
                 "acquisition/engine.py",
                 "acquisition/fixture_adapters.py",
                 "acquisition/persistence.py",
                 "acquisition/repository.py",
+                "acquisition/runtime_config.py",
+                "acquisition/sec_api.py",
             },
         )
 
-    def test_no_network_or_downstream_imports_exist(self) -> None:
-        prohibited = (
-            "requests",
-            "urllib.request",
-            "http.client",
-            "socket",
+    def test_networking_is_confined_to_live_adapter_and_downstream_is_absent(self) -> None:
+        provider_neutral = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (SRC / "rfi" / "acquisition").glob("*.py")
+            if path.name not in {"edgar.py", "sec_api.py"}
+        ).lower()
+        for term in ("requests", "urllib.request", "http.client", "socket"):
+            with self.subTest(provider_neutral_term=term):
+                self.assertNotIn(term, provider_neutral)
+        content = "\n".join(
+            path.read_text(encoding="utf-8") for path in (SRC / "rfi").rglob("*.py")
+        ).lower()
+        for term in (
             "openai",
             "embedding",
             "vector",
             "observation",
             "projection",
-        )
-        content = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in (SRC / "rfi").rglob("*.py")
-        ).lower()
-        for term in prohibited:
+        ):
             with self.subTest(term=term):
                 self.assertNotIn(term, content)
 
