@@ -241,6 +241,22 @@ class LifecycleReplayTests(RepositoryCase):
             self.repository.checkpoints()["sources"][self.candidate.source_id]["position"], 7
         )
 
+    def test_public_checkpoint_finalization_requires_durable_success(self) -> None:
+        receipt = self.repository.record_success(
+            "attempt-finalize-anchor", self.candidate, self.result
+        )
+        created = self.repository.advance_checkpoint(
+            self.candidate.source_id, receipt.attempt_id, self.checkpoint
+        )
+        self.assertTrue(created)
+        self.assertEqual(
+            self.repository.checkpoints()["sources"][self.candidate.source_id]["position"], 7
+        )
+        with self.assertRaises(ContractError):
+            self.repository.advance_checkpoint(
+                self.candidate.source_id, "attempt-not-durable", Checkpoint(8, "cursor-eight")
+            )
+
     def test_replay_failure_does_not_publish_partial_derived_state(self) -> None:
         self.succeed()
         self.repository.delete_derived_state()
@@ -307,6 +323,8 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "acquisition/__init__.py",
                 "acquisition/contracts.py",
                 "acquisition/demo.py",
+                "acquisition/engine.py",
+                "acquisition/fixture_adapters.py",
                 "acquisition/persistence.py",
                 "acquisition/repository.py",
             },

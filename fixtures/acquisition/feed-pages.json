@@ -1,0 +1,76 @@
+{
+  "states": {
+    "default": {
+      "pages": [
+        {
+          "candidates": [
+            {
+              "candidate_id": "candidate-feed-b-v1",
+              "content_file": "feed-b.txt",
+              "discovered_at": "2026-03-01T00:00:01Z",
+              "document_id": "document-feed-b",
+              "locations": ["fixture://feed/items/b"],
+              "media_type": "text/plain",
+              "position": 2,
+              "provider_identifiers": {"discovery_href": "/items/b"},
+              "retrieved_at": "2026-03-01T00:01:02Z",
+              "revision": "v1"
+            },
+            {
+              "candidate_id": "candidate-feed-a-v1",
+              "content_file": "feed-a.txt",
+              "discovered_at": "2026-03-01T00:00:01Z",
+              "document_id": "document-feed-a",
+              "locations": ["fixture://feed/items/a"],
+              "media_type": "text/plain",
+              "position": 1,
+              "provider_identifiers": {"discovery_href": "/items/a"},
+              "retrieved_at": "2026-03-01T00:01:01Z",
+              "revision": "v1"
+            },
+            {
+              "candidate_id": "candidate-feed-a-v1",
+              "content_file": "feed-a.txt",
+              "discovered_at": "2026-03-01T00:00:01Z",
+              "document_id": "document-feed-a",
+              "locations": ["fixture://feed/items/a"],
+              "media_type": "text/plain",
+              "position": 1,
+              "provider_identifiers": {"discovery_href": "/items/a"},
+              "retrieved_at": "2026-03-01T00:01:01Z",
+              "revision": "v1"
+            }
+          ]
+        },
+        {
+          "candidates": [
+            {
+              "candidate_id": "candidate-feed-c-v1",
+              "content_file": "feed-c.txt",
+              "discovered_at": "2026-03-01T00:00:03Z",
+              "document_id": "document-feed-c",
+              "locations": ["fixture://feed/items/c"],
+              "media_type": "text/plain",
+              "position": 3,
+              "provider_identifiers": {"discovery_href": "/items/c"},
+              "retrieved_at": "2026-03-01T00:01:03Z",
+              "revision": "v1"
+            },
+            {
+              "candidate_id": "candidate-feed-b-v1",
+              "content_file": "feed-b.txt",
+              "discovered_at": "2026-03-01T00:00:01Z",
+              "document_id": "document-feed-b",
+              "locations": ["fixture://feed/items/b"],
+              "media_type": "text/plain",
+              "position": 2,
+              "provider_identifiers": {"discovery_href": "/items/b"},
+              "retrieved_at": "2026-03-01T00:01:02Z",
+              "revision": "v1"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

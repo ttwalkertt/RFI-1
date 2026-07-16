@@ -1,0 +1,70 @@
+{
+  "states": {
+    "default": {
+      "pages": [
+        {
+          "candidates": [
+            {
+              "candidate_id": "candidate-catalog-c-v1",
+              "content_file": "catalog-c.txt",
+              "discovered_at": "2026-02-01T00:00:03Z",
+              "document_id": "document-catalog-c",
+              "locations": ["fixture://catalog/c"],
+              "media_type": "text/plain",
+              "position": 3,
+              "provider_identifiers": {"catalog_id": "catalog-c"},
+              "retrieval_provider_identifiers": {"catalog_revision": "c-v1"},
+              "retrieved_at": "2026-02-01T00:01:03Z",
+              "revision": "v1"
+            },
+            {
+              "candidate_id": "candidate-catalog-a-v1",
+              "content_file": "catalog-a-v1.txt",
+              "discovered_at": "2026-02-01T00:00:01Z",
+              "document_id": "document-catalog-a",
+              "locations": ["fixture://catalog/a"],
+              "media_type": "text/plain",
+              "position": 1,
+              "provider_identifiers": {"catalog_id": "stable-a"},
+              "retrieval_provider_identifiers": {"catalog_revision": "a-v1"},
+              "retrieved_at": "2026-02-01T00:01:01Z",
+              "revision": "v1"
+            },
+            {
+              "candidate_id": "candidate-catalog-b-policy",
+              "discovered_at": "2026-02-01T00:00:02Z",
+              "disposition": "skip",
+              "disposition_reason": "fixture policy excludes unsupported media",
+              "document_id": "document-catalog-b",
+              "locations": ["fixture://catalog/b"],
+              "position": 2,
+              "provider_identifiers": {"catalog_id": "stable-b"},
+              "revision": "v1"
+            }
+          ]
+        }
+      ]
+    },
+    "revised": {
+      "pages": [
+        {
+          "candidates": [
+            {
+              "candidate_id": "candidate-catalog-a-v2",
+              "content_file": "catalog-a-v2.txt",
+              "discovered_at": "2026-02-02T00:00:04Z",
+              "document_id": "document-catalog-a",
+              "locations": ["fixture://catalog/a"],
+              "media_type": "text/plain",
+              "position": 4,
+              "provider_identifiers": {"catalog_id": "stable-a"},
+              "retrieval_provider_identifiers": {"catalog_revision": "a-v2"},
+              "retrieved_at": "2026-02-02T00:01:04Z",
+              "revision": "v2"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

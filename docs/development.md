@@ -63,6 +63,34 @@ For an existing state directory, inspect and maintain it with:
 See [the acquisition substrate guide](acquisition-substrate.md) for contracts, durability,
 checkpoint ordering, failure behavior, and replay semantics.
 
+## Acquisition engine operator workflow
+
+The TASK-003 fixtures use only checked-in JSON and exact byte files. Create a local state directory,
+inspect explicit adapter registration, and run one or all enabled governed fixture sources:
+
+```sh
+.venv/bin/python scripts/acquisition_operator.py adapters --state STATE
+.venv/bin/python scripts/acquisition_operator.py run-source --state STATE \
+  --source source-fixture-feed --run-key first
+.venv/bin/python scripts/acquisition_operator.py run-all --state STATE --run-key complete
+```
+
+Inject a transient failure and resume by rerunning without the injection:
+
+```sh
+.venv/bin/python scripts/acquisition_operator.py run-source --state STATE \
+  --source source-fixture-feed --run-key partial \
+  --fail-candidate candidate-feed-b-v1
+.venv/bin/python scripts/acquisition_operator.py run-source --state STATE \
+  --source source-fixture-feed --run-key resumed
+```
+
+Use the existing `sources`, `history`, `checkpoints`, `index`, `verify`, `delete-derived`, and
+`rebuild` commands to inspect and replay repository state. `rebuild` never loads adapters. Run the
+raw multi-source demonstration with `make engine-demo`, complete validation with `make validate`,
+and generate the independently auditable TASK-003 package with `make review-package`. See the
+[engine design](acquisition-engine.md) for contracts and failure semantics.
+
 ## Review package
 
 ```sh
@@ -72,9 +100,9 @@ make review-package
 This reruns and captures every gate, performs an equivalent isolated-tree validation, records
 Git state and the full task patch, and creates:
 
-- `.artifacts/review/TASK-002/`
-- `.artifacts/review/TASK-002-review.zip`
-- `.artifacts/review/TASK-002-review.zip.sha256`
+- `.artifacts/review/TASK-003/`
+- `.artifacts/review/TASK-003-review.zip`
+- `.artifacts/review/TASK-003-review.zip.sha256`
 
 Generated artifacts are intentionally ignored by Git. Review evidence must be regenerated from
 the final state rather than committed as durable project source.

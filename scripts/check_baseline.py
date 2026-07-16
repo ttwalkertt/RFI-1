@@ -65,6 +65,8 @@ def main() -> int:
         "acquisition/__init__.py",
         "acquisition/contracts.py",
         "acquisition/demo.py",
+        "acquisition/engine.py",
+        "acquisition/fixture_adapters.py",
         "acquisition/persistence.py",
         "acquisition/repository.py",
         "py.typed",

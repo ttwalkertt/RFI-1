@@ -65,6 +65,11 @@ Checkpoints are source-scoped pairs of a non-negative monotonic `position` and a
 Positions cannot move backward. Reusing a position with a different cursor is ambiguous and is
 rejected. The cursor is not interpreted by the substrate.
 
+The public `advance_checkpoint` operation supports bounded engine finalization. It requires an
+existing successful attempt for the same source before appending the normal repository-owned
+checkpoint event. This is an additive TASK-003 facade operation; storage layout and TASK-002
+ordering semantics are unchanged.
+
 Replay validates authoritative records, regenerates the complete document index from successful
 attempts, and regenerates source progress from checkpoint events. It reads local files only. It
 does not call adapters, open network connections, interpret documents, or create downstream
