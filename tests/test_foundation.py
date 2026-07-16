@@ -26,7 +26,7 @@ class FoundationTests(unittest.TestCase):
             digest = hashlib.sha256(destination.read_bytes()).hexdigest()
             self.assertEqual(digest, document["destination_sha256"], destination.name)
 
-    def test_product_scope_is_acquisition_only(self) -> None:
+    def test_product_scope_matches_completed_architectural_milestones(self) -> None:
         package_files = sorted(
             path.relative_to(SRC / "rfi").as_posix()
             for path in (SRC / "rfi").rglob("*")
@@ -46,7 +46,15 @@ class FoundationTests(unittest.TestCase):
                 "acquisition/repository.py",
                 "acquisition/runtime_config.py",
                 "acquisition/sec_api.py",
+                "knowledge/__init__.py",
+                "knowledge/contracts.py",
+                "knowledge/derivation.py",
+                "knowledge/repository.py",
                 "py.typed",
+                "source_objects/__init__.py",
+                "source_objects/contracts.py",
+                "source_objects/parser.py",
+                "source_objects/repository.py",
             ],
         )
 

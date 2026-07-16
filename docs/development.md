@@ -126,3 +126,10 @@ Explicit live commands may read the two governed values from private, Git-ignore
 remains identity-free, credential-free, and offline. `make review-package` creates
 the TASK-004 package and honestly marks native live acceptance blocked when `RFI_SEC_USER_AGENT` is
 absent. Live commands are never part of normal validation and must be explicitly invoked.
+
+## TASK-005 source and knowledge workflow
+
+Run `make task005-proof` for the deterministic offline construction and independent rebuild proof.
+The source-object catalog and derived-knowledge store are separate and can be inspected with the
+commands in the [TASK-005 subsystem guide](source-objects-and-derived-knowledge.md). The optional
+real proof consumes the existing TASK-004 runtime corpus locally and performs no network access.
