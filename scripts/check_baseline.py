@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Validate the imported governing design baseline and repository boundaries."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+MANIFEST = ROOT / "docs" / "design-baseline.json"
+
+
+def sha256(path: Path) -> str:
+    """Return the SHA-256 digest of a file."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def main() -> int:
+    """Verify imported files, recorded hashes, structure, and the product-code boundary."""
+    errors: list[str] = []
+    data = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    documents = data.get("documents", [])
+    if len(documents) != 7:
+        errors.append(f"expected 7 design documents, found {len(documents)}")
+    for document in documents:
+        destination = ROOT / document["destination"]
+        if not destination.is_file():
+            errors.append(f"missing design document: {document['destination']}")
+            continue
+        digest = sha256(destination)
+        if digest != document["destination_sha256"]:
+            errors.append(
+                f"destination hash mismatch: {document['destination']} "
+                f"expected {document['destination_sha256']} got {digest}"
+            )
+        size = destination.stat().st_size
+        if size != document["destination_size"]:
+            errors.append(
+                f"destination size mismatch: {document['destination']} "
+                f"expected {document['destination_size']} got {size}"
+            )
+        unchanged = document["content_change"] == "none"
+        if unchanged and document["source_sha256"] != document["destination_sha256"]:
+            errors.append(f"unchanged document has unequal hashes: {document['destination']}")
+    required_paths = (
+        "src/rfi/__init__.py",
+        "tests/test_foundation.py",
+        "docs/development.md",
+        "fixtures/README.md",
+        "data/README.md",
+        "scripts/generate_review_package.py",
+    )
+    for required in required_paths:
+        if not (ROOT / required).is_file():
+            errors.append(f"missing repository boundary: {required}")
+    product_files = sorted(
+        path.relative_to(ROOT / "src" / "rfi").as_posix()
+        for path in (ROOT / "src" / "rfi").rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+    )
+    if product_files != ["__init__.py", "py.typed"]:
+        errors.append(f"unexpected product implementation files: {product_files}")
+    print(f"design documents checked: {len(documents)}")
+    print(f"repository boundaries checked: {len(required_paths)}")
+    print(f"product package files: {', '.join(product_files)}")
+    if errors:
+        print("result: FAIL")
+        print("\n".join(errors))
+        return 1
+    print("result: PASS")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

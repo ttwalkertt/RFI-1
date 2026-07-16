@@ -1,0 +1,36 @@
+# Python environments and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build and packaging outputs
+build/
+dist/
+*.egg-info/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Repository-local runtime boundaries (keep directory documentation only)
+data/*
+!data/README.md
+fixtures/local/*
+!fixtures/local/README.md
+
+# Generated review and build evidence
+.artifacts/
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/
+*.swp
