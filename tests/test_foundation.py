@@ -30,7 +30,9 @@ class FoundationTests(unittest.TestCase):
         package_files = sorted(
             path.relative_to(SRC / "rfi").as_posix()
             for path in (SRC / "rfi").rglob("*")
-            if path.is_file() and "__pycache__" not in path.parts
+            if path.is_file()
+            and "__pycache__" not in path.parts
+            and path.name != ".DS_Store"
         )
         self.assertEqual(
             package_files,
@@ -51,6 +53,12 @@ class FoundationTests(unittest.TestCase):
                 "knowledge/derivation.py",
                 "knowledge/repository.py",
                 "py.typed",
+                "retrieval/__init__.py",
+                "retrieval/contracts.py",
+                "retrieval/evidence.py",
+                "retrieval/replaceability.py",
+                "retrieval/repository.py",
+                "retrieval/vector.py",
                 "source_objects/__init__.py",
                 "source_objects/contracts.py",
                 "source_objects/parser.py",

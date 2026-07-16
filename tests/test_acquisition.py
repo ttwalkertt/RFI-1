@@ -311,7 +311,7 @@ class FailureOrderingTests(RepositoryCase):
 
 
 class ScopeBoundaryTests(unittest.TestCase):
-    def test_acquisition_remains_one_explicit_package_boundary(self) -> None:
+    def test_completed_subsystems_remain_explicit_package_boundaries(self) -> None:
         files = {
             path.relative_to(SRC / "rfi").as_posix()
             for path in (SRC / "rfi").rglob("*.py")
@@ -334,6 +334,12 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "knowledge/contracts.py",
                 "knowledge/derivation.py",
                 "knowledge/repository.py",
+                "retrieval/__init__.py",
+                "retrieval/contracts.py",
+                "retrieval/evidence.py",
+                "retrieval/replaceability.py",
+                "retrieval/repository.py",
+                "retrieval/vector.py",
                 "source_objects/__init__.py",
                 "source_objects/contracts.py",
                 "source_objects/parser.py",
@@ -355,9 +361,6 @@ class ScopeBoundaryTests(unittest.TestCase):
         ).lower()
         for term in (
             "openai",
-            "embedding",
-            "vector",
-            "projection",
             "retrieval-plan",
             "consulting-workspace",
         ):

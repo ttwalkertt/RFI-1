@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, Protocol
+
+from rfi.source_objects.contracts import SourceObjectReader
 
 
 class KnowledgeError(RuntimeError):
@@ -59,3 +61,22 @@ class DerivationFailure:
     category: str
     message: str
     source_object_ids: tuple[str, ...] = ()
+
+
+class KnowledgeReader(Protocol):
+    """Storage-independent read contract available to downstream access layers."""
+
+    def inventory(self, include_superseded: bool = False) -> list[DerivedObject]:
+        """Return current knowledge, or current-generation history when requested."""
+
+    def get(self, object_id: str) -> DerivedObject:
+        """Return the current version for one repository-owned identity."""
+
+    def failures(self) -> list[DerivationFailure]:
+        """Return visible failures and ambiguities for the current generation."""
+
+    def by_source_object(self, source_object_id: str) -> list[DerivedObject]:
+        """Navigate from exact source evidence to associated current interpretations."""
+
+    def verify(self, source: SourceObjectReader) -> dict[str, int | str]:
+        """Validate every current knowledge provenance assertion against source contracts."""
