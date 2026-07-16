@@ -19,6 +19,9 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 TASK_ID = "TASK-004"
+# Verified branch point from which TASK-004 was created. Keep this recorded value so
+# review packages remain reproducible even if origin/main advances later.
+TASK_BASE = "d0f206c50d9bbc7ca709b301c93789c92b5beab2"
 REVIEW_ROOT = ROOT / ".artifacts/review"
 PACKAGE = REVIEW_ROOT / TASK_ID
 ZIP_PATH = REVIEW_ROOT / f"{TASK_ID}-review.zip"
@@ -64,8 +67,36 @@ def write(name: str, content: str) -> None:
     (PACKAGE / name).write_text(content, encoding="utf-8")
 
 
-def complete_patch() -> str:
-    parts = [git("diff", "--binary", "HEAD", "--", ".")]
+def resolve_task_base(head: str) -> tuple[str, str]:
+    base = git("rev-parse", f"{TASK_BASE}^{{commit}}").strip()
+    if git("merge-base", base, head).strip() != base:
+        raise RuntimeError(f"recorded TASK-004 base {base} is not an ancestor of HEAD {head}")
+    origin_main_base = git("merge-base", head, "origin/main").strip()
+    if origin_main_base != base:
+        raise RuntimeError(
+            "recorded TASK-004 base does not match merge-base(HEAD, origin/main): "
+            f"{base} != {origin_main_base}"
+        )
+    return base, origin_main_base
+
+
+def changed_files(base: str, head: str) -> str:
+    committed = git("diff", "--name-status", "--find-renames", base, head, "--", ".")
+    worktree = git("status", "--short", "--untracked-files=all")
+    return (
+        f"CUMULATIVE COMMITTED TASK CHANGE ({base}..{head})\n"
+        + (committed or "(empty)\n")
+        + f"\nPOST-HEAD WORKTREE CHANGE ({head}..working tree)\n"
+        + (worktree or "(empty)\n")
+    )
+
+
+def complete_patch(base: str, head: str) -> str:
+    # The first segment is the complete committed implementation. The second
+    # preserves any later packaging-only tracked/index changes, and the final
+    # loop preserves untracked task files as required by the review contract.
+    parts = [git("diff", "--binary", base, head, "--", ".")]
+    parts.append(git("diff", "--binary", head, "--", "."))
     untracked = git("ls-files", "--others", "--exclude-standard", "-z").split("\0")
     for relative in sorted(item for item in untracked if item):
         code, output = run(["git", "diff", "--no-index", "--binary", "/dev/null", relative])
@@ -73,6 +104,23 @@ def complete_patch() -> str:
             raise RuntimeError(output)
         parts.append(output.split("\n", 1)[1].rsplit("exit_code:", 1)[0])
     return "".join(parts)
+
+
+def commit_list(base: str, head: str) -> str:
+    commits = git(
+        "log",
+        "--reverse",
+        "--format=%H%x09%P%x09%aI%x09%s",
+        f"{base}..{head}",
+    )
+    if not commits:
+        raise RuntimeError(f"TASK-004 commit range is empty: {base}..{head}")
+    return (
+        "commit\tparents\tauthor_date\tsubject\n"
+        f"# exclusive base: {base}\n"
+        f"# inclusive head: {head}\n"
+        + commits
+    )
 
 
 def repository_tree() -> str:
@@ -297,6 +345,8 @@ def main() -> int:
     environment["PYTHONPATH"] = "src"
     branch = git("branch", "--show-current").strip()
     head = git("rev-parse", "HEAD").strip()
+    task_base, origin_main_base = resolve_task_base(head)
+    task_commits = commit_list(task_base, head)
     outcomes: dict[str, dict[str, Any]] = {}
     matrix = [
         (
@@ -417,6 +467,25 @@ def main() -> int:
         "- Generated review artifacts: ignored `.artifacts/review/TASK-004/` and ZIP.\n",
     )
     write(
+        "task-change-scope.md",
+        "# TASK-004 cumulative Git scope\n\n"
+        f"- Verified recorded task base: `{task_base}`.\n"
+        f"- `merge-base(HEAD, origin/main)`: `{origin_main_base}`.\n"
+        f"- Current HEAD: `{head}`.\n"
+        f"- Committed implementation range: `{task_base}..{head}`.\n"
+        "- `changed-files.txt` inventories that complete committed range, followed by a "
+        "separately labeled post-HEAD worktree section.\n"
+        "- `git-diff.patch` starts with the complete binary-safe committed range and then "
+        "includes any post-HEAD tracked, staged, or untracked packaging changes.\n"
+        "- `task-commit-list.txt` lists every commit after the exclusive base through the "
+        "inclusive HEAD in chronological order.\n\n"
+        "## Post-implementation live acceptance state\n\n"
+        "Live acceptance ran after the implementation commits and changed only ignored runtime "
+        "state under `.artifacts/runtime/` and ignored review state under `.artifacts/review/`. "
+        "It did not change tracked implementation files or the Git index. This generator imports "
+        "and validates the preserved live evidence; it does not rerun live acquisition.\n",
+    )
+    write(
         "sec-api-status.md",
         "# SEC-API.io status\n\nThe optional commercial adapter remains implemented and all "
         "offline tests pass. No commercial credential-backed request was performed; commercial "
@@ -426,10 +495,16 @@ def main() -> int:
     narratives(branch, head, native_identity_present, native_live_complete)
     write("acceptance-criteria.md", acceptance(native_live_complete))
     write("repository-tree.txt", repository_tree())
-    status = git("status", "--short", "--untracked-files=all")
-    write("changed-files.txt", status)
+    inventory = changed_files(task_base, head)
+    patch = complete_patch(task_base, head)
+    if not git("diff", "--name-only", task_base, head, "--", ".").strip():
+        raise RuntimeError("cumulative TASK-004 changed-file inventory is empty")
+    if not patch.strip():
+        raise RuntimeError("cumulative TASK-004 patch is empty")
+    write("changed-files.txt", inventory)
+    write("task-commit-list.txt", task_commits)
     write("git-status.txt", git("status", "--short", "--branch", "--untracked-files=all"))
-    write("git-diff.patch", complete_patch())
+    write("git-diff.patch", patch)
     write("staged-diff.txt", git("diff", "--cached", "--binary") or "(empty)\n")
     write(
         "validation-commands.md",
@@ -445,7 +520,8 @@ def main() -> int:
         "environment values and contain no live operator commands. The isolated source copy also "
         "excludes local runtime configuration. Missing-value configuration probes report zero "
         "requests. Native live evidence is imported only from the ignored acceptance-evidence "
-        "boundary.\n",
+        "boundary. Review Git scope is the recorded task base through HEAD, with post-HEAD "
+        "packaging changes included separately.\n",
     )
     write(
         "zip-checksum.txt",
@@ -530,7 +606,15 @@ def main() -> int:
         "schema_version": 1,
         "task_id": TASK_ID,
         "branch": branch,
+        "task_base": task_base,
+        "origin_main_merge_base": origin_main_base,
         "head": head,
+        "commit_count_after_base_through_head": len(
+            [line for line in task_commits.splitlines() if line and not line.startswith("#")]
+        )
+        - 1,
+        "patch_scope": "task_base_through_head_plus_separate_post_head_worktree",
+        "live_acceptance_post_implementation_git_effect": "ignored_runtime_and_review_state_only",
         "generated_at_utc": datetime.now(UTC).isoformat(),
         "live_provider": "SEC EDGAR",
         "native_identity_present_during_packaging": native_identity_present,
