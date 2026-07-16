@@ -10,7 +10,7 @@
 | TASK-002 | Immutable acquisition substrate and repository-owned evidence contracts | Complete |
 | TASK-003 | Deterministic acquisition engine and provider adapter boundary | Complete |
 | TASK-004 | First live production acquisition and provider-independent SEC evidence corpus | Live acceptance complete; final review and merge pending |
-| TASK-005 | Canonical knowledge construction from immutable evidence | Planned |
+| TASK-005 | Canonical knowledge construction from immutable evidence | Complete |
 | TASK-006 | Knowledge retrieval, evidence assembly, and source-object browser | Planned |
 | TASK-007 | Model-guided intelligence with explicit provenance and retrieval traces | Planned |
 | TASK-008 | Consulting workspace, operational hardening, and POC assessment | Provisional |

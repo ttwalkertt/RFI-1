@@ -72,7 +72,15 @@ def main() -> int:
         "acquisition/repository.py",
         "acquisition/runtime_config.py",
         "acquisition/sec_api.py",
+        "knowledge/__init__.py",
+        "knowledge/contracts.py",
+        "knowledge/derivation.py",
+        "knowledge/repository.py",
         "py.typed",
+        "source_objects/__init__.py",
+        "source_objects/contracts.py",
+        "source_objects/parser.py",
+        "source_objects/repository.py",
     ]
     if product_files != expected_product_files:
         errors.append(f"unexpected product implementation files: {product_files}")

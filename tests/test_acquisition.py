@@ -311,7 +311,7 @@ class FailureOrderingTests(RepositoryCase):
 
 
 class ScopeBoundaryTests(unittest.TestCase):
-    def test_product_package_contains_only_acquisition_substrate(self) -> None:
+    def test_acquisition_remains_one_explicit_package_boundary(self) -> None:
         files = {
             path.relative_to(SRC / "rfi").as_posix()
             for path in (SRC / "rfi").rglob("*.py")
@@ -330,10 +330,18 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "acquisition/repository.py",
                 "acquisition/runtime_config.py",
                 "acquisition/sec_api.py",
+                "knowledge/__init__.py",
+                "knowledge/contracts.py",
+                "knowledge/derivation.py",
+                "knowledge/repository.py",
+                "source_objects/__init__.py",
+                "source_objects/contracts.py",
+                "source_objects/parser.py",
+                "source_objects/repository.py",
             },
         )
 
-    def test_networking_is_confined_to_live_adapter_and_downstream_is_absent(self) -> None:
+    def test_networking_is_confined_to_live_adapter_and_future_layers_are_absent(self) -> None:
         provider_neutral = "\n".join(
             path.read_text(encoding="utf-8")
             for path in (SRC / "rfi" / "acquisition").glob("*.py")
@@ -349,8 +357,9 @@ class ScopeBoundaryTests(unittest.TestCase):
             "openai",
             "embedding",
             "vector",
-            "observation",
             "projection",
+            "retrieval-plan",
+            "consulting-workspace",
         ):
             with self.subTest(term=term):
                 self.assertNotIn(term, content)
