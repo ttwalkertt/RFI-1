@@ -28,11 +28,16 @@ Retrieve exact complete-submission bytes from
 bytes unchanged. The adapter validates the complete-submission marker but never parses filing
 content.
 
-Require the operator to set `RFI_SEC_USER_AGENT` at runtime to a descriptive application identity
-and contact email. Checked-in profiles contain only `env:RFI_SEC_USER_AGENT`. The value exists only
-in process memory and the outgoing User-Agent header; it must not enter repository evidence,
-diagnostics, fixtures, patches, or review artifacts. Missing or malformed identity stops before
-network access.
+Require the operator to supply `RFI_SEC_USER_AGENT` at runtime as a descriptive application
+identity and contact email. Explicit live commands resolve it from the process environment first,
+then from private Git-ignored `.rfi/runtime.env`. The same file may contain the optional
+`SEC_API_IO_API_KEY`. The strict literal parser accepts only those two names, performs no expansion,
+and rejects symlinks, non-regular files, permissions broader than `0600`, malformed or duplicate
+lines, and files over 16 KiB. Checked-in profiles contain only `env:` references. Values exist only
+in the local operator boundary, process memory, and outgoing headers; they must not enter repository
+evidence, diagnostics, fixtures, patches, or review artifacts. Missing or malformed required
+identity stops before network access. Ordinary validation and review generation bypass local
+configuration, and environment values override local values key by key.
 
 Pace native requests at no more than two per second through a minimum 0.5-second interval, below
 the SEC-published maximum of ten requests per second. Use a 20-second timeout, two bounded attempts,

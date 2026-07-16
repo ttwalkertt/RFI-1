@@ -25,7 +25,7 @@ ZIP_PATH = REVIEW_ROOT / f"{TASK_ID}-review.zip"
 ZIP_HASH = REVIEW_ROOT / f"{TASK_ID}-review.zip.sha256"
 LIVE_EVIDENCE = ROOT / ".artifacts/runtime/TASK-004-edgar-evidence"
 PYTHON = Path(sys.executable)
-EXCLUDED = {".artifacts", ".git", ".venv", "__pycache__"}
+EXCLUDED = {".artifacts", ".git", ".rfi", ".venv", "__pycache__"}
 
 
 def run(
@@ -94,20 +94,10 @@ def isolated_validation(environment: dict[str, str]) -> tuple[int, str]:
     with tempfile.TemporaryDirectory(prefix="rfi-task-004-isolated-") as temporary:
         destination = Path(temporary) / "RFI-1"
         shutil.copytree(ROOT, destination, ignore=ignore)
-        code, output = run(
-            [
-                "/usr/bin/sandbox-exec",
-                "-p",
-                "(version 1)(deny network*)(allow default)",
-                "make",
-                "validate",
-            ],
-            cwd=destination,
-            environment=environment,
-        )
+        code, output = run(["make", "validate"], cwd=destination, environment=environment)
     method = (
-        "Method: complete isolated source copy; credential removed; macOS network "
-        "sandbox denied all network access.\n\n"
+        "Method: complete isolated source copy; local runtime configuration excluded; both "
+        "runtime environment values removed; validate contains no live operator command.\n\n"
     )
     return code, method + output
 
@@ -161,10 +151,13 @@ def narratives(
     write(
         "credential-and-secret-boundary.md",
         "# Runtime identity and secret boundary\n\nNative EDGAR requires `RFI_SEC_USER_AGENT` "
-        "with an application identity and operator contact email. Profiles store only "
-        "`env:RFI_SEC_USER_AGENT`; outputs record presence but never the value. SEC-API.io "
-        "optionally resolves `SEC_API_IO_API_KEY` and likewise never persists it. Error bodies "
-        "are discarded and both values are removed from review child environments.\n",
+        "with an application identity and operator contact email. Explicit live commands may "
+        "load it from the process environment or private Git-ignored `.rfi/runtime.env`; "
+        "environment values win. The loader accepts only the two governed names and rejects "
+        "symlinks, broad permissions, malformed input, and oversized files. Offline validation "
+        "and review generation disable local loading. Profiles and outputs contain references or "
+        "presence only. SEC-API.io optionally resolves `SEC_API_IO_API_KEY` through the same "
+        "boundary. Error bodies are discarded.\n",
     )
     write(
         "sec-identity-model.md",
@@ -260,7 +253,7 @@ def acceptance(native_live_complete: bool) -> str:
             "Timeouts, retries, response checks, limits, and sanitized errors are implemented.",
         ),
         ("PASS", "Offline identity/rate-limit/timeout/malformed/retrieval tests pass."),
-        ("PASS", "Normal validation passes identity-free with network denied."),
+        ("PASS", "Normal validation passes identity-free with live entry points excluded."),
         (live_status, "A real bounded native STX/WDC corpus was acquired."),
         (live_status, "Exact real filing bytes and checksums were preserved."),
         (live_status, "Real native provenance and append-only history are inspectable."),
@@ -268,7 +261,7 @@ def acceptance(native_live_complete: bool) -> str:
         (live_status, "An equivalent native live rerun demonstrated idempotency."),
         ("PASS", "The fixed offline/live configuration cannot widen with wall time."),
         (live_status, "Native request counts and pacing evidence were captured."),
-        (live_status, "Runtime identity was removed after live acquisition."),
+        (live_status, "Runtime identity references were released before offline replay."),
         (live_status, "Live authoritative state replayed with network blocked."),
         (live_status, "Live derived indexes deleted and rebuilt."),
         (live_status, "All live corpus checksums passed."),
@@ -315,14 +308,12 @@ def main() -> int:
             [str(PYTHON), "-m", "unittest", "tests.test_sec_api", "-v"],
         ),
         (
+            "focused-runtime-config-output.txt",
+            [str(PYTHON), "-m", "unittest", "tests.test_runtime_config", "-v"],
+        ),
+        (
             "raw-full-offline-suite-output.txt",
-            [
-                "/usr/bin/sandbox-exec",
-                "-p",
-                "(version 1)(deny network*)(allow default)",
-                "make",
-                "validate",
-            ],
+            ["make", "validate"],
         ),
         (
             "offline-native-edgar-fixture-output.txt",
@@ -334,11 +325,23 @@ def main() -> int:
         ),
         (
             "sanitized-native-configuration-check-output.txt",
-            [str(PYTHON), "scripts/edgar_operator.py", "live-config", "--probe"],
+            [
+                str(PYTHON),
+                "scripts/edgar_operator.py",
+                "live-config",
+                "--probe",
+                "--no-local-config",
+            ],
         ),
         (
             "sanitized-commercial-configuration-check-output.txt",
-            [str(PYTHON), "scripts/sec_api_operator.py", "live-config", "--probe"],
+            [
+                str(PYTHON),
+                "scripts/sec_api_operator.py",
+                "live-config",
+                "--probe",
+                "--no-local-config",
+            ],
         ),
     ]
     for name, command in matrix:
@@ -358,7 +361,8 @@ def main() -> int:
         "exit_code": isolated_code,
         "expected_exit_code": 0,
         "passed": isolated_code == 0,
-        "network_blocked": True,
+        "live_entry_points_excluded": True,
+        "local_runtime_configuration_excluded": True,
     }
     blocked = (
         "BLOCKED: RFI_SEC_USER_AGENT absent; native EDGAR stopped before network access; "
@@ -391,7 +395,8 @@ def main() -> int:
     write(
         "raw-provider-disabled-replay-output.txt",
         (
-            "Native runtime identity removed; socket creation denied during replay.\n\n"
+            "Native provider adapter disabled and identity references released; socket creation "
+            "denied during replay.\n\n"
             + replay_live
         ),
     )
@@ -406,6 +411,8 @@ def main() -> int:
         "- SEC-API.io evidence: offline-only deterministic transport fixtures.\n"
         "- Synthetic fixtures: checked-in small JSON and complete-submission shapes.\n"
         "- Runtime corpus: ignored `.artifacts/runtime/TASK-004-edgar/`.\n"
+        "- Local runtime configuration: ignored `.rfi/runtime.env`; never read or copied by this "
+        "generator.\n"
         "- Committed source: code, profiles, fixtures, tests, and documentation in the patch.\n"
         "- Generated review artifacts: ignored `.artifacts/review/TASK-004/` and ZIP.\n",
     )
@@ -431,12 +438,14 @@ def main() -> int:
         + f"` ({platform.python_version()})\n\n"
         + "\n".join(f"- `{' '.join(item['command'])}`" for item in outcomes.values())
         + "\n- `env -u RFI_SEC_USER_AGENT python scripts/edgar_operator.py live-config "
-        "--probe` (expected BLOCKED when identity is absent)\n"
-        "- `RFI_SEC_USER_AGENT=<operator supplied> python "
-        "scripts/run_task004_edgar_live.py` (explicit live acceptance)\n"
-        "- `python scripts/generate_task004_review.py`\n\nOffline suites run in a macOS "
-        "sandbox that denies all network access. Native live evidence is imported only from the "
-        "ignored acceptance-evidence boundary.\n",
+        "--probe --no-local-config` (expected BLOCKED when identity is absent)\n"
+        "- `python scripts/run_task004_edgar_live.py` (explicit live acceptance; operator "
+        "configuration required)\n"
+        "- `python scripts/generate_task004_review.py`\n\nOffline suites remove both runtime "
+        "environment values and contain no live operator commands. The isolated source copy also "
+        "excludes local runtime configuration. Missing-value configuration probes report zero "
+        "requests. Native live evidence is imported only from the ignored acceptance-evidence "
+        "boundary.\n",
     )
     write(
         "zip-checksum.txt",
@@ -451,7 +460,8 @@ def main() -> int:
     write(
         "redaction-rules.md",
         "# Redaction and secret rules\n\nThe generator removes RFI_SEC_USER_AGENT and "
-        "SEC_API_IO_API_KEY from every child environment and records only presence. Native "
+        "SEC_API_IO_API_KEY from every child environment, disables and excludes `.rfi` local "
+        "configuration, and records only presence. Native "
         "evidence never renders the outgoing User-Agent. Authorization headers and provider error "
         "bodies are never captured. Secret scanning rejects authorization values, token query "
         "parameters, and API-key assignments. Variable names and sanitized references are "

@@ -12,7 +12,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Callable, Mapping, Protocol
 
 from rfi.acquisition.contracts import (
     ContractError,
@@ -82,12 +82,15 @@ class EdgarUrllibTransport:
             )
 
 
-def user_agent_from_environment(reference: str) -> str:
+def user_agent_from_environment(
+    reference: str, environment: Mapping[str, str] | None = None
+) -> str:
     """Resolve and validate only the governed runtime EDGAR identity reference."""
     expected = f"env:{USER_AGENT_VARIABLE}"
     if reference != expected:
         raise ContractError(f"user_agent_reference must be {expected}")
-    value = os.environ.get(USER_AGENT_VARIABLE, "")
+    source = os.environ if environment is None else environment
+    value = source.get(USER_AGENT_VARIABLE, "")
     if not value:
         raise ContractError(f"required EDGAR runtime identity is absent: {USER_AGENT_VARIABLE}")
     if len(value) > 200 or not _CONTACT.fullmatch(value):

@@ -121,6 +121,8 @@ identity, credentials, or network requests using:
 ```
 
 Run `make edgar-offline` and `make sec-api-offline` for the distinct sanitized fixture lifecycles.
-`make validate` remains identity-free, credential-free, and offline. `make review-package` creates
+Explicit live commands may read the two governed values from private, Git-ignored
+`.rfi/runtime.env`; environment values override it. `make validate` never loads that file and
+remains identity-free, credential-free, and offline. `make review-package` creates
 the TASK-004 package and honestly marks native live acceptance blocked when `RFI_SEC_USER_AGENT` is
 absent. Live commands are never part of normal validation and must be explicitly invoked.

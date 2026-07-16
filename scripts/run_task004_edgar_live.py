@@ -30,6 +30,7 @@ from rfi.acquisition.engine import (  # noqa: E402
     AdapterRegistry,
 )
 from rfi.acquisition.repository import AcquisitionRepository  # noqa: E402
+from rfi.acquisition.runtime_config import load_runtime_configuration  # noqa: E402
 
 
 def write(path: Path, value: object) -> None:
@@ -84,6 +85,11 @@ def main() -> int:
         type=Path,
         default=ROOT / ".artifacts/runtime/TASK-004-edgar-evidence",
     )
+    parser.add_argument(
+        "--no-local-config",
+        action="store_true",
+        help="Ignore .rfi/runtime.env and require the process environment",
+    )
     arguments = parser.parse_args()
     if arguments.state.exists() or arguments.evidence.exists():
         print(
@@ -101,8 +107,11 @@ def main() -> int:
         return 2
     profiles = load_edgar_profiles(ROOT)
     try:
+        runtime = load_runtime_configuration(
+            ROOT, allow_local=not arguments.no_local_config
+        )
         reference = str(profiles[0].configuration["user_agent_reference"])
-        user_agent = user_agent_from_environment(reference)
+        user_agent = user_agent_from_environment(reference, runtime)
     except ContractError as error:
         print(
             json.dumps(
@@ -153,13 +162,16 @@ def main() -> int:
     }
     write(arguments.evidence / "live-second-run.json", second_result)
     os.environ.pop(USER_AGENT_VARIABLE, None)
+    runtime.clear()
+    del kernel, engine, adapter, user_agent
     integrity_before = repository.verify_integrity()
     repository.delete_derived_state()
     with patch("socket.socket", side_effect=AssertionError("network creation blocked")):
         replay = repository.replay()
         integrity_after = repository.verify_integrity()
     replay_result = {
-        "runtime_identity_removed": True,
+        "runtime_identity_references_released_before_replay": True,
+        "provider_adapter_disabled": True,
         "network_blocked": True,
         "replay": asdict(replay),
         "integrity_before": integrity_before,

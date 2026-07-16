@@ -11,7 +11,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Callable, Mapping, Protocol
 from urllib.parse import urlparse
 
 from rfi.acquisition.contracts import (
@@ -86,12 +86,15 @@ class UrllibTransport:
             )
 
 
-def credential_from_environment(reference: str) -> str:
+def credential_from_environment(
+    reference: str, environment: Mapping[str, str] | None = None
+) -> str:
     """Resolve only the explicitly governed environment reference without revealing it."""
     expected = f"env:{ENVIRONMENT_VARIABLE}"
     if reference != expected:
         raise ContractError(f"credential_reference must be {expected}")
-    value = os.environ.get(ENVIRONMENT_VARIABLE, "")
+    source = os.environ if environment is None else environment
+    value = source.get(ENVIRONMENT_VARIABLE, "")
     if not value:
         raise ContractError(f"required runtime credential is absent: {ENVIRONMENT_VARIABLE}")
     return value

@@ -24,14 +24,33 @@ The exact complete-submission bytes become immutable content-addressed repositor
 
 ## Runtime identity and fair access
 
-Set `RFI_SEC_USER_AGENT` only in the invoking process. Its value must contain a descriptive
-application identity followed by an operator-controlled contact email. For example, the shape is
-`ApplicationName/Version contact-at-operator-domain`; the repository intentionally supplies no
-real contact value.
+`RFI_SEC_USER_AGENT` may be supplied in the invoking process environment or in the ignored local
+file `.rfi/runtime.env`. Its value must contain a descriptive application identity followed by an
+operator-controlled contact email. The repository intentionally supplies no real contact value.
 
-Profiles contain only `env:RFI_SEC_USER_AGENT`. The value is never printed, persisted, copied into
-fixtures, placed in URLs, or included in review evidence. Missing or malformed configuration
-stops before network access.
+The local file is a literal UTF-8 `KEY=value` file: it performs no shell expansion, interpolation,
+or command execution. Only `RFI_SEC_USER_AGENT` and optional `SEC_API_IO_API_KEY` are accepted.
+Create it with private permissions and edit in the operator's normal secret-safe editor:
+
+```sh
+umask 077
+mkdir -p .rfi
+chmod 700 .rfi
+touch .rfi/runtime.env
+chmod 600 .rfi/runtime.env
+${EDITOR:?set EDITOR to a secret-safe editor} .rfi/runtime.env
+```
+
+Add `RFI_SEC_USER_AGENT=<operator supplied>` and, only if needed, the optional commercial key.
+Do not paste values into commands, tickets, chat, test output, or review artifacts. Environment
+variables override the corresponding local file values. Empty environment overrides fail closed
+rather than falling back to the file.
+
+Profiles contain only `env:RFI_SEC_USER_AGENT`. The local file is Git-ignored. The loader rejects
+symlinks, non-regular files, permissions broader than `0600`, files over 16 KiB, malformed lines,
+duplicate keys, and unknown keys. Values are never printed, copied into process environment,
+persisted in runtime evidence, copied into fixtures, placed in URLs, or included in review
+evidence. Missing or malformed configuration stops before network access.
 
 The adapter spaces requests by at least 0.5 seconds, limiting it to two requests per second—well
 below the current SEC maximum of ten. It also enforces two attempts, a 20-second timeout, a 5 MB
@@ -46,20 +65,20 @@ Offline scope and tests:
 .venv/bin/python scripts/edgar_operator.py scope
 env -u RFI_SEC_USER_AGENT .venv/bin/python -m unittest tests.test_edgar -v
 env -u RFI_SEC_USER_AGENT make validate
+.venv/bin/python -m unittest tests.test_runtime_config -v
 ```
 
 Explicitly live commands:
 
 ```sh
-RFI_SEC_USER_AGENT='operator-supplied value' \
-  .venv/bin/python scripts/edgar_operator.py live-config --probe
-RFI_SEC_USER_AGENT='operator-supplied value' \
-  .venv/bin/python scripts/edgar_operator.py run-all \
-  --state .artifacts/runtime/TASK-004-edgar --run-key first
-RFI_SEC_USER_AGENT='operator-supplied value' \
-  .venv/bin/python scripts/edgar_operator.py run-all \
-  --state .artifacts/runtime/TASK-004-edgar --run-key second
+.venv/bin/python scripts/edgar_operator.py live-config
+.venv/bin/python scripts/edgar_operator.py live-config --probe
+.venv/bin/python scripts/run_task004_edgar_live.py
 ```
+
+The first command validates configuration without network access. The `--probe` command makes one
+live request. The acceptance runner refuses ambiguous reuse if its ignored state or evidence path
+already exists. Use `--no-local-config` on either entry point to require environment-only input.
 
 Provider-disabled inspection, integrity, replay, and rebuild:
 
@@ -74,5 +93,7 @@ env -u RFI_SEC_USER_AGENT .venv/bin/python scripts/acquisition_operator.py rebui
   --state .artifacts/runtime/TASK-004-edgar
 ```
 
-The live User-Agent must be supplied directly by the operator. A package generated without it must
-mark native live acceptance blocked and must not substitute fixture evidence for real EDGAR data.
+Review generation always disables local configuration and removes both supported environment
+variables from child processes. A package generated without separately captured sanitized live
+evidence marks native live acceptance blocked and cannot substitute fixture evidence for real
+EDGAR data.

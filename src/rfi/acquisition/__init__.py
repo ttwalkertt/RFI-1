@@ -34,6 +34,7 @@ from rfi.acquisition.fixture_adapters import (
     fixture_profiles,
 )
 from rfi.acquisition.repository import AcquisitionRepository
+from rfi.acquisition.runtime_config import load_runtime_configuration
 from rfi.acquisition.sec_api import (
     SecApiAdapter,
     credential_from_environment,
@@ -69,6 +70,7 @@ __all__ = [
     "fixture_profiles",
     "load_live_profiles",
     "load_edgar_profiles",
+    "load_runtime_configuration",
     "user_agent_from_environment",
     "validate_live_profile",
     "validate_edgar_profile",

@@ -36,9 +36,12 @@ submission URL fails closed; optional absent fields remain null rather than bein
 
 ## Credential and network boundary
 
-Set `SEC_API_IO_API_KEY` only in the invoking process environment. The source profiles contain only
-`env:SEC_API_IO_API_KEY`. The adapter sends the value as the raw `Authorization` header required by
-SEC-API.io and never places it in a URL, diagnostic, fixture, repository record, or review artifact.
+`SEC_API_IO_API_KEY` may be supplied in the invoking process environment or in the private,
+Git-ignored `.rfi/runtime.env` file documented in the
+[native EDGAR operator guide](edgar-acquisition.md). It is optional for TASK-004. Environment
+values override the local file key. The source profiles contain only `env:SEC_API_IO_API_KEY`.
+The adapter sends the value as the raw `Authorization` header required by SEC-API.io and never
+places it in a URL, diagnostic, fixture, repository record, or review artifact.
 
 The standard-library transport enforces a 20-second connection/read timeout, a 50 MB artifact
 limit, two bounded attempts, a process-wide 80-request ceiling for the complete two-run acceptance,
@@ -67,6 +70,9 @@ SEC_API_IO_API_KEY=... .venv/bin/python scripts/sec_api_operator.py run-all \
 SEC_API_IO_API_KEY=... .venv/bin/python scripts/sec_api_operator.py run-all \
   --state data/runtime/TASK-004 --run-key second
 ```
+
+Omit the inline assignments when using `.rfi/runtime.env`. Run `live-config` without `--probe` to
+validate presence without a request. Use `--no-local-config` to require environment-only input.
 
 Inspect, verify, disable provider access, and rebuild without network:
 

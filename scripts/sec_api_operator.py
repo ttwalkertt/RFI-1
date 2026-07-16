@@ -22,6 +22,7 @@ from rfi.acquisition.engine import (  # noqa: E402
     AdapterRegistry,
 )
 from rfi.acquisition.repository import AcquisitionRepository  # noqa: E402
+from rfi.acquisition.runtime_config import load_runtime_configuration  # noqa: E402
 from rfi.acquisition.sec_api import (  # noqa: E402
     ENVIRONMENT_VARIABLE,
     SecApiAdapter,
@@ -81,6 +82,11 @@ def main() -> int:
         action="store_true",
         help="Perform one quota-consuming provider discovery request during live-config",
     )
+    parser.add_argument(
+        "--no-local-config",
+        action="store_true",
+        help="Ignore .rfi/runtime.env (used by offline validation and environment-only runs)",
+    )
     arguments = parser.parse_args()
     if arguments.command == "scope":
         render(scope())
@@ -94,8 +100,11 @@ def main() -> int:
         parser.error("--state is required for live acquisition")
     profiles = load_live_profiles(ROOT)
     try:
+        runtime = load_runtime_configuration(
+            ROOT, allow_local=not arguments.no_local_config
+        )
         reference = str(profiles[0].configuration["credential_reference"])
-        api_key = credential_from_environment(reference)
+        api_key = credential_from_environment(reference, runtime)
     except ContractError as error:
         render(
             {
