@@ -60,7 +60,16 @@ def main() -> int:
         for path in (ROOT / "src" / "rfi").rglob("*")
         if path.is_file() and "__pycache__" not in path.parts
     )
-    if product_files != ["__init__.py", "py.typed"]:
+    expected_product_files = [
+        "__init__.py",
+        "acquisition/__init__.py",
+        "acquisition/contracts.py",
+        "acquisition/demo.py",
+        "acquisition/persistence.py",
+        "acquisition/repository.py",
+        "py.typed",
+    ]
+    if product_files != expected_product_files:
         errors.append(f"unexpected product implementation files: {product_files}")
     print(f"design documents checked: {len(documents)}")
     print(f"repository boundaries checked: {len(required_paths)}")

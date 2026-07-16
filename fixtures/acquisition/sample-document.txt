@@ -1,0 +1,3 @@
+RFI acquisition substrate fixture
+
+These exact bytes are immutable synthetic evidence for TASK-002.

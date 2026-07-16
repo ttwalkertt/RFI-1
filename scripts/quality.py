@@ -103,7 +103,7 @@ def main() -> int:
         "typecheck": check_type_policy,
     }
     errors = checks[check]()
-    print(f"policy: dependency-free TASK-001 {check} check")
+    print(f"policy: dependency-free repository {check} check")
     print(f"python files checked: {len(python_files())}")
     if errors:
         print("result: FAIL")

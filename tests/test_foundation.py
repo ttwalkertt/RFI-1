@@ -26,13 +26,24 @@ class FoundationTests(unittest.TestCase):
             digest = hashlib.sha256(destination.read_bytes()).hexdigest()
             self.assertEqual(digest, document["destination_sha256"], destination.name)
 
-    def test_product_capabilities_are_not_present(self) -> None:
+    def test_task_002_product_scope_is_acquisition_only(self) -> None:
         package_files = sorted(
             path.relative_to(SRC / "rfi").as_posix()
             for path in (SRC / "rfi").rglob("*")
             if path.is_file() and "__pycache__" not in path.parts
         )
-        self.assertEqual(package_files, ["__init__.py", "py.typed"])
+        self.assertEqual(
+            package_files,
+            [
+                "__init__.py",
+                "acquisition/__init__.py",
+                "acquisition/contracts.py",
+                "acquisition/demo.py",
+                "acquisition/persistence.py",
+                "acquisition/repository.py",
+                "py.typed",
+            ],
+        )
 
 
 if __name__ == "__main__":

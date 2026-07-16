@@ -1,13 +1,19 @@
 PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 
-.PHONY: setup test lint format-check typecheck import-check docs-check baseline-check build validate review-package
+.PHONY: setup test focused-test acquisition-demo lint format-check typecheck import-check docs-check baseline-check build validate review-package
 
 setup:
 	$(PYTHON) -m venv .venv
 
 test: setup
 	$(VENV_PYTHON) -m unittest discover -s tests -v
+
+focused-test: setup
+	$(VENV_PYTHON) -m unittest tests.test_acquisition -v
+
+acquisition-demo: setup
+	$(VENV_PYTHON) scripts/acquisition_operator.py demo
 
 lint: setup
 	$(VENV_PYTHON) scripts/quality.py lint
@@ -30,7 +36,7 @@ baseline-check: setup
 build: setup
 	$(VENV_PYTHON) scripts/build_source_archive.py
 
-validate: test lint format-check typecheck import-check docs-check baseline-check build
+validate: test acquisition-demo lint format-check typecheck import-check docs-check baseline-check build
 
 review-package: setup
 	$(VENV_PYTHON) scripts/generate_review_package.py

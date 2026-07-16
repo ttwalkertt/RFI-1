@@ -1,0 +1,12 @@
+{
+  "configuration": {
+    "manifest": "fixtures/acquisition/source-profile.json"
+  },
+  "enabled": true,
+  "mechanism": "fixture-reader",
+  "name": "Local fixture publications",
+  "policy": {
+    "checkpoint_order": "monotonic_position"
+  },
+  "source_id": "source-fixture-publications"
+}
