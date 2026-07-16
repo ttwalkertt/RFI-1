@@ -1,0 +1,4 @@
+<SEC-DOCUMENT>fixture-complete-submission
+<SEC-HEADER>Sanitized deterministic TASK-004 transport fixture</SEC-HEADER>
+<DOCUMENT><TYPE>TEST</TYPE><TEXT>Offline adapter contract evidence.</TEXT></DOCUMENT>
+</SEC-DOCUMENT>

@@ -39,10 +39,12 @@ class FoundationTests(unittest.TestCase):
                 "acquisition/__init__.py",
                 "acquisition/contracts.py",
                 "acquisition/demo.py",
+                "acquisition/edgar.py",
                 "acquisition/engine.py",
                 "acquisition/fixture_adapters.py",
                 "acquisition/persistence.py",
                 "acquisition/repository.py",
+                "acquisition/sec_api.py",
                 "py.typed",
             ],
         )

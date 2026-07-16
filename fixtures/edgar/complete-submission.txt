@@ -1,0 +1,4 @@
+<SEC-DOCUMENT>synthetic-native-edgar-fixture
+<SEC-HEADER>Sanitized deterministic TASK-004 native EDGAR transport fixture</SEC-HEADER>
+<DOCUMENT><TYPE>TEST</TYPE><TEXT>Offline native adapter evidence.</TEXT></DOCUMENT>
+</SEC-DOCUMENT>

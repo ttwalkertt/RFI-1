@@ -106,3 +106,21 @@ Git state and the full task patch, and creates:
 
 Generated artifacts are intentionally ignored by Git. Review evidence must be regenerated from
 the final state rather than committed as durable project source.
+
+## TASK-004 SEC workflow
+
+Native EDGAR is the required live acceptance path; SEC-API.io remains an optional commercial
+acceleration path. Native profiles, fair-access pacing, runtime identity, live commands, and replay
+are documented in [the native EDGAR guide](edgar-acquisition.md). The commercial boundary remains
+documented in [the SEC-API.io guide](sec-api-acquisition.md). Inspect both scopes without operator
+identity, credentials, or network requests using:
+
+```sh
+.venv/bin/python scripts/edgar_operator.py scope
+.venv/bin/python scripts/sec_api_operator.py scope
+```
+
+Run `make edgar-offline` and `make sec-api-offline` for the distinct sanitized fixture lifecycles.
+`make validate` remains identity-free, credential-free, and offline. `make review-package` creates
+the TASK-004 package and honestly marks native live acceptance blocked when `RFI_SEC_USER_AGENT` is
+absent. Live commands are never part of normal validation and must be explicitly invoked.

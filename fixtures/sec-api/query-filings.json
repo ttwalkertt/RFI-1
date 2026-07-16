@@ -1,0 +1,28 @@
+{
+  "STX": {
+    "10-K": [
+      {"accessionNo":"0001137789-25-000001","cik":"1137789","companyName":"Seagate Technology Holdings plc","filedAt":"2025-08-01T12:00:00-04:00","formType":"10-K","id":"fixture-stx-10k","linkToFilingDetails":"https://www.sec.gov/Archives/edgar/data/1137789/000113778925000001/stx-10k.htm","linkToTxt":"https://www.sec.gov/Archives/edgar/data/1137789/000113778925000001/0001137789-25-000001.txt","periodOfReport":"2025-06-27"}
+    ],
+    "10-Q": [
+      {"accessionNo":"0001137789-25-000002","cik":"1137789","companyName":"Seagate Technology Holdings plc","filedAt":"2025-04-25T12:00:00-04:00","formType":"10-Q","id":"fixture-stx-10q-2","linkToFilingDetails":"https://www.sec.gov/Archives/edgar/data/1137789/000113778925000002/stx-10q.htm","linkToTxt":"https://www.sec.gov/Archives/edgar/data/1137789/000113778925000002/0001137789-25-000002.txt","periodOfReport":"2025-03-28"},
+      {"accessionNo":"0001137789-25-000003","cik":"1137789","companyName":"Seagate Technology Holdings plc","filedAt":"2025-01-24T12:00:00-05:00","formType":"10-Q","id":"fixture-stx-10q-1","linkToFilingDetails":"https://www.sec.gov/Archives/edgar/data/1137789/000113778925000003/stx-10q.htm","linkToTxt":"https://www.sec.gov/Archives/edgar/data/1137789/000113778925000003/0001137789-25-000003.txt","periodOfReport":"2024-12-27"}
+    ],
+    "8-K": [
+      {"accessionNo":"0001137789-25-000004","cik":"1137789","companyName":"Seagate Technology Holdings plc","filedAt":"2025-07-29T12:00:00-04:00","formType":"8-K","id":"fixture-stx-8k-2","linkToFilingDetails":"https://www.sec.gov/Archives/edgar/data/1137789/000113778925000004/stx-8k.htm","linkToTxt":"https://www.sec.gov/Archives/edgar/data/1137789/000113778925000004/0001137789-25-000004.txt","periodOfReport":"2025-07-29"},
+      {"accessionNo":"0001137789-25-000005","cik":"1137789","companyName":"Seagate Technology Holdings plc","filedAt":"2025-04-29T12:00:00-04:00","formType":"8-K","id":"fixture-stx-8k-1","linkToFilingDetails":"https://www.sec.gov/Archives/edgar/data/1137789/000113778925000005/stx-8k.htm","linkToTxt":"https://www.sec.gov/Archives/edgar/data/1137789/000113778925000005/0001137789-25-000005.txt","periodOfReport":"2025-04-29"}
+    ]
+  },
+  "WDC": {
+    "10-K": [
+      {"accessionNo":"0000106040-25-000001","cik":"106040","companyName":"Western Digital Corporation","filedAt":"2025-08-15T12:00:00-04:00","formType":"10-K","id":"fixture-wdc-10k","linkToFilingDetails":"https://www.sec.gov/Archives/edgar/data/106040/000010604025000001/wdc-10k.htm","linkToTxt":"https://www.sec.gov/Archives/edgar/data/106040/000010604025000001/0000106040-25-000001.txt","periodOfReport":"2025-06-27"}
+    ],
+    "10-Q": [
+      {"accessionNo":"0000106040-25-000002","cik":"106040","companyName":"Western Digital Corporation","filedAt":"2025-05-02T12:00:00-04:00","formType":"10-Q","id":"fixture-wdc-10q-2","linkToFilingDetails":"https://www.sec.gov/Archives/edgar/data/106040/000010604025000002/wdc-10q.htm","linkToTxt":"https://www.sec.gov/Archives/edgar/data/106040/000010604025000002/0000106040-25-000002.txt","periodOfReport":"2025-03-28"},
+      {"accessionNo":"0000106040-25-000003","cik":"106040","companyName":"Western Digital Corporation","filedAt":"2025-01-31T12:00:00-05:00","formType":"10-Q","id":"fixture-wdc-10q-1","linkToFilingDetails":"https://www.sec.gov/Archives/edgar/data/106040/000010604025000003/wdc-10q.htm","linkToTxt":"https://www.sec.gov/Archives/edgar/data/106040/000010604025000003/0000106040-25-000003.txt","periodOfReport":"2024-12-27"}
+    ],
+    "8-K": [
+      {"accessionNo":"0000106040-25-000004","cik":"106040","companyName":"Western Digital Corporation","filedAt":"2025-07-31T12:00:00-04:00","formType":"8-K","id":"fixture-wdc-8k-2","linkToFilingDetails":"https://www.sec.gov/Archives/edgar/data/106040/000010604025000004/wdc-8k.htm","linkToTxt":"https://www.sec.gov/Archives/edgar/data/106040/000010604025000004/0000106040-25-000004.txt","periodOfReport":"2025-07-31"},
+      {"accessionNo":"0000106040-25-000005","cik":"106040","companyName":"Western Digital Corporation","filedAt":"2025-05-01T12:00:00-04:00","formType":"8-K","id":"fixture-wdc-8k-1","linkToFilingDetails":"https://www.sec.gov/Archives/edgar/data/106040/000010604025000005/wdc-8k.htm","linkToTxt":"https://www.sec.gov/Archives/edgar/data/106040/000010604025000005/0000106040-25-000005.txt","periodOfReport":"2025-05-01"}
+    ]
+  }
+}
