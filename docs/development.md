@@ -38,6 +38,24 @@ the codebase has enough behavior to justify the dependency.
 `make build` creates and verifies a source snapshot at `.artifacts/build/rfi-1-source.zip`.
 It is a reviewable bootstrap build artifact, not a published application distribution.
 
+## Stable application workflow
+
+Install the repository into the active virtual environment with `python -m pip install -e .` when
+the `rfi` executable is not already present. The module form works through the same implementation.
+
+First run:
+
+```sh
+.venv/bin/rfi init
+.venv/bin/rfi seed  # optional, explicit starter data
+.venv/bin/rfi admin
+```
+
+Later runs need only `.venv/bin/rfi admin`. Use `--state PATH` consistently to select another
+state location, and use `rfi --help` or `rfi <command> --help` for host, port, defaults, examples,
+and lifecycle behavior. See the [application CLI guide](application-cli.md) for the full operator
+workflow and failure semantics. Routine application use no longer requires task-specific scripts.
+
 ## TASK-011 target-firm workflow
 
 Run `make task011-proof` for the seeded HDD firm catalog, conflict, revision, restart, and stable

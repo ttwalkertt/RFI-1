@@ -17,6 +17,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from rfi.admin import create_admin_server  # noqa: E402
+from rfi.concepts import ConceptRepository  # noqa: E402
 from rfi.firms import (  # noqa: E402
     FirmDraft,
     FirmError,
@@ -149,6 +150,10 @@ class FirmAdminConsoleTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
+        ConceptRepository.initialize(self.root / "concept-catalog")
+        repository = FirmRepository.initialize(self.root / "concept-catalog/firm-catalog")
+        for draft in sample_firms():
+            repository.create(draft)
         self.server = create_admin_server(self.root / "concept-catalog", port=0)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()

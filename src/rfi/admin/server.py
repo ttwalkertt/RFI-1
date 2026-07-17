@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from rfi.admin.field_definitions import field_definitions
 from rfi.concepts import ConceptError, ConceptRepository, ConceptService
-from rfi.firms import FirmError, FirmRepository, FirmService, sample_firms
+from rfi.firms import FirmError, FirmRepository, FirmService
 
 MAX_BODY_BYTES = 1_000_000
 
@@ -457,11 +457,8 @@ def create_admin_server(
     """Create a local-default server backed by repository-controlled catalog state."""
     if not 0 <= port <= 65535:
         raise ConceptError("port must be between 0 and 65535")
-    repository = ConceptRepository.initialize(state)
-    firm_repository = FirmRepository.initialize(state / "firm-catalog")
-    if not firm_repository.lookup():
-        for draft in sample_firms():
-            firm_repository.create(draft)
+    repository = ConceptRepository.open(state)
+    firm_repository = FirmRepository.open(state / "firm-catalog")
     return AdminConsole(
         (host, port),
         ConceptService(repository),

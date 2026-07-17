@@ -18,6 +18,7 @@ if str(SRC) not in sys.path:
 from rfi.admin import create_admin_server  # noqa: E402
 from rfi.admin.field_definitions import FIELD_DEFINITIONS  # noqa: E402
 from rfi.concepts import ConceptRepository, sample_concepts  # noqa: E402
+from rfi.firms import FirmRepository  # noqa: E402
 
 
 class AdminEditorUsabilityTests(unittest.TestCase):
@@ -27,6 +28,7 @@ class AdminEditorUsabilityTests(unittest.TestCase):
         repository = ConceptRepository.initialize(self.state)
         for draft in sample_concepts():
             repository.create(draft)
+        FirmRepository.initialize(self.state / "firm-catalog")
         self.server = create_admin_server(self.state, port=0)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()

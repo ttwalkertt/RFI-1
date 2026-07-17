@@ -320,6 +320,7 @@ class ScopeBoundaryTests(unittest.TestCase):
             files,
             {
                 "__init__.py",
+                "__main__.py",
                 "acquisition/__init__.py",
                 "acquisition/contracts.py",
                 "acquisition/demo.py",
@@ -333,6 +334,7 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "admin/__init__.py",
                 "admin/field_definitions.py",
                 "admin/server.py",
+                "cli.py",
                 "concepts/__init__.py",
                 "concepts/contracts.py",
                 "concepts/derivation.py",

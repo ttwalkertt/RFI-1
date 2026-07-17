@@ -31,6 +31,7 @@ from rfi.concepts import (  # noqa: E402
     ObservationService,
     sample_concepts,
 )
+from rfi.firms import FirmRepository  # noqa: E402
 
 
 class ConceptCatalogTests(unittest.TestCase):
@@ -291,6 +292,7 @@ class AdminConsoleTests(unittest.TestCase):
         repository = ConceptRepository.initialize(self.root / "catalog")
         for draft in sample_concepts():
             repository.create(draft)
+        FirmRepository.initialize(self.root / "catalog/firm-catalog")
         self.server = create_admin_server(self.root / "catalog", port=0)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
