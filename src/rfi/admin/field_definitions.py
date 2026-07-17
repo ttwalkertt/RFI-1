@@ -114,6 +114,51 @@ FIELD_DEFINITIONS: Final[dict[str, str]] = {
         "The sample structure to edit. Quantity uses value and unit, event uses an effective "
         "date and event type, and state uses an as-of date and state value."
     ),
+    "firm_id": (
+        "The stable repository identity for a target firm. Future source, knowledge, and "
+        "workspace records may reference it; it cannot change after creation."
+    ),
+    "canonical_name": (
+        "The concise operator-facing name used for browsing and firm-centered workflows."
+    ),
+    "legal_name": (
+        "The formal legal issuer or corporate name when known. It may differ from the "
+        "canonical consulting name."
+    ),
+    "firm_aliases": (
+        "Alternative company, issuer, or commonly used names that help recognize the target. "
+        "They are hints, not extracted entity assertions."
+    ),
+    "identifiers": (
+        "Typed recognition keys such as ticker, CIK, or LEI. Kind, optional market, and value "
+        "together must not conflict with another current firm."
+    ),
+    "domains": (
+        "Normalized domain hints used to recognize official web properties. A domain is unique "
+        "to one current firm in this catalog."
+    ),
+    "headquarters": "An operator-maintained location hint; it is not source-grounded evidence.",
+    "jurisdiction": (
+        "The legal or incorporation jurisdiction useful for distinguishing corporate identities."
+    ),
+    "sector": "A broad, operator-owned classification used for firm browsing and filtering.",
+    "industry": "A narrower, operator-owned classification used for browsing and filtering.",
+    "technology_focus": (
+        "Technologies relevant to consulting scope and source discovery. These labels do not "
+        "assert product ownership or extracted facts."
+    ),
+    "relationships": (
+        "Lightweight typed references to other stable firm IDs. They support navigation and "
+        "recognition, not a final corporate hierarchy or inferred knowledge graph."
+    ),
+    "source_hints": (
+        "Operator guidance for locating likely sources, such as investor-relations sites or "
+        "regulatory identifiers. Hints are not acquired evidence."
+    ),
+    "firm_notes": (
+        "Operating context and identity cautions maintained by the catalog operator. Extracted "
+        "facts and arbitrary research findings belong in their own authorities."
+    ),
 }
 
 

@@ -44,10 +44,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 4577,
+      "destination_size": 4650,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "b2d2964ce5cf639f940919c5a4e6db229e5f32c97300e8d4516a77796e07e454",
-      "content_change": "task roadmap reconciled to seven framework-scale tasks; authoritative-ticket rule preserved and clarified"
+      "destination_sha256": "f0f5677f5dfa328208bc933463ed0c3153b4c52f18c54a4bc79fa61a501f40da",
+      "content_change": "task roadmap reconciled to completed architectural milestones through TASK-011; authoritative-ticket rule preserved and clarified"
     },
     {
       "source": "ROADMAP.md",

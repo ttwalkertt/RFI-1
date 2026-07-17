@@ -16,6 +16,7 @@
 | TASK-008 | Consulting workspace, operational hardening, and POC assessment | Provisional |
 | TASK-009 | Extensible business concept catalog and local admin console | Complete |
 | TASK-010 | Admin-console usability and schema-aware concept editor | Complete |
+| TASK-011 | Target firm catalog, browser, and admin editor | Complete |
 
 ## Architectural Progression
 
