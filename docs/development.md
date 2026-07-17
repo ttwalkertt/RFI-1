@@ -1,8 +1,7 @@
 # Development
 
-RFI-1 has no runtime or third-party development dependencies. Python 3.11 or newer,
-`make`, Git, and a ZIP-capable Python standard library are sufficient. This intentionally keeps
-the bootstrap usable offline and avoids choosing product dependencies before later task tickets.
+RFI-1 requires Python 3.11 or newer, `make`, Git, and the runtime dependencies declared in
+`pyproject.toml`. PyYAML provides standards-compliant external catalog parsing for TASK-013.
 
 ## Setup
 
@@ -55,6 +54,10 @@ Later runs need only `.venv/bin/rfi admin`. Use `--state PATH` consistently to s
 state location, and use `rfi --help` or `rfi <command> --help` for host, port, defaults, examples,
 and lifecycle behavior. See the [application CLI guide](application-cli.md) for the full operator
 workflow and failure semantics. Routine application use no longer requires task-specific scripts.
+
+Use `.venv/bin/rfi seed --print-schema` to print the canonical external catalog template, then
+`.venv/bin/rfi seed --file FILE [-f FILE ...]` to validate and idempotently import curated target
+firms alongside the starter seed. See the application CLI guide for format and failure semantics.
 
 ## TASK-011 target-firm workflow
 

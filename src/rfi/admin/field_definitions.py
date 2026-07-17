@@ -143,6 +143,10 @@ FIELD_DEFINITIONS: Final[dict[str, str]] = {
     ),
     "sector": "A broad, operator-owned classification used for firm browsing and filtering.",
     "industry": "A narrower, operator-owned classification used for browsing and filtering.",
+    "relevance": (
+        "A numeric prioritization score from 0 through 100. It defaults to 0 and supports "
+        "sorting, filtering, and search; it is not a classification, taxonomy, or status."
+    ),
     "technology_focus": (
         "Technologies relevant to consulting scope and source discovery. These labels do not "
         "assert product ownership or extracted facts."

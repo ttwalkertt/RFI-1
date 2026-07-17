@@ -41,7 +41,10 @@ confidence, and source support.
 
 `FirmDraft` provides canonical and legal names, aliases, typed identifiers, normalized domains,
 headquarters and jurisdiction hints, sector and industry classifications, technology focus,
-source-discovery hints, operator notes, lifecycle status, and business validity. `FirmIdentifier`
+source-discovery hints, operator notes, numeric relevance, lifecycle status, and business validity.
+Relevance is a finite prioritization score from 0 through 100 inclusive and defaults to 0. It is
+ordinary sortable/filterable/searchable data, not a classification, taxonomy, role, or status.
+`FirmIdentifier`
 represents kind, value, and optional market/registry. `SourceDiscoveryHint` is typed operator
 guidance and never acquired evidence. Technology focus and classifications are recognition and
 discovery labels on the firm itself; they do not assert an edge to another firm or technology
@@ -77,8 +80,9 @@ Catalog and Target Firms while retaining TASK-010's visual language and operator
 List/Search → Detail/Browser → Edit/Create Revision → Validate → Preview → Save Revision
 ```
 
-The list searches names, aliases, identifiers, domains, technologies, notes, and source hints and
-filters by status, sector, and industry. Detail shows canonical/legal identity, recognition
+The list searches names, aliases, identifiers, domains, technologies, notes, source hints, and
+numeric relevance; sorts by descending relevance with stable identity tie-breaking; and filters by
+status, sector, industry, and minimum relevance. Detail shows canonical/legal identity, recognition
 metadata, classifications, hints, notes, and immutable history. Loading, empty, failure, saved,
 and retired states remain explicit.
 

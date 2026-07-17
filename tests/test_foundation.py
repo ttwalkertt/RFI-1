@@ -54,6 +54,7 @@ class FoundationTests(unittest.TestCase):
                 "admin/field_definitions.py",
                 "admin/firms.html",
                 "admin/server.py",
+                "catalog_import.py",
                 "cli.py",
                 "concepts/__init__.py",
                 "concepts/contracts.py",

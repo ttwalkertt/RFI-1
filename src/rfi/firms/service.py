@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from rfi.firms.contracts import (
@@ -27,10 +28,17 @@ class FirmService:
         status: str | None = None,
         sector: str | None = None,
         industry: str | None = None,
+        minimum_relevance: float | None = None,
     ) -> tuple[FirmRevision, ...]:
         """Look up current target firms through public catalog semantics."""
         parsed_status = FirmStatus(status) if status else None
-        return self.catalog.lookup(query, parsed_status, sector, industry)
+        if minimum_relevance is not None and (
+            isinstance(minimum_relevance, bool)
+            or not math.isfinite(minimum_relevance)
+            or not 0 <= minimum_relevance <= 100
+        ):
+            raise FirmError("minimum relevance must be a finite number from 0 through 100")
+        return self.catalog.lookup(query, parsed_status, sector, industry, minimum_relevance)
 
     def detail(self, firm_id: str, revision_id: str | None = None) -> FirmRevision:
         """Return one current or historical firm record."""
@@ -112,6 +120,7 @@ class FirmService:
                 technology_focus=tuple(payload.get("technology_focus", ())),
                 source_hints=source_hints,
                 notes=str(payload.get("notes", "")),
+                relevance=payload.get("relevance", 0.0),
                 status=FirmStatus(payload.get("status", FirmStatus.DRAFT)),
                 valid_from=str(payload.get("valid_from", "")),
                 valid_through=payload.get("valid_through") or None,

@@ -8,7 +8,8 @@ implementation. Run `rfi --help` and `rfi <command> --help` to discover options 
 
 ```text
 rfi init [--state PATH]
-rfi seed [--state PATH]
+rfi seed [--state PATH] [-f FILE | --file FILE ...]
+rfi seed --print-schema
 rfi admin [--state PATH] [--host HOST] [--port PORT]
 ```
 
@@ -51,6 +52,42 @@ Existing valid state needs only:
 Use the same `--state PATH` on every command when selecting a non-default location. Repeating
 `init` verifies existing catalogs and reports that they already exist. Repeating `seed` creates
 only missing starter identities and reports created and already-present counts.
+
+## External catalog import
+
+Print the canonical YAML authoring template without initialized state or any state changes:
+
+```sh
+.venv/bin/rfi seed --print-schema > firms.yaml
+```
+
+Replace the placeholders with real values, initialize the selected state, and import one or more
+files. Both option spellings are equivalent and repeatable:
+
+```sh
+.venv/bin/rfi seed --state /path/to/state --file firms.yaml -f additional-firms.yaml
+```
+
+File import remains explicit. With no file, `seed` retains its starter-only behavior. With files,
+the command validates the entire batch and conflicts with existing and starter firms before
+creating any record. Identical existing records are reported as already present; duplicate or
+conflicting canonical IDs, recognition identifiers, and domains fail closed without revisions.
+Unknown fields and unsupported schema versions are rejected so authoring errors remain visible.
+
+The emitted template and decoder share a canonical recursive field registry. YAML catalog and
+research metadata are validated but remain external metadata rather than application state. Only
+target-firm records are currently importable; the registry is the extension point for future
+catalog types.
+
+`relevance` is a finite numeric score from `0` through `100`, inclusive. Omission defaults to
+`0.0`. Higher values sort first, the firm API accepts `minimum_relevance`, and numeric text is
+searchable. Relevance is ordinary prioritization data—not a classification, taxonomy, role,
+status, sector, or industry—and has no category labels.
+
+New firms from every supplied file publish through one repository batch transaction. Revision
+artifacts are staged first and one canonical catalog pointer is published only after all staging
+succeeds. A persistence failure removes every artifact staged by that batch and leaves the prior
+catalog readable and byte-for-byte unchanged.
 
 ## Failure behavior and boundaries
 

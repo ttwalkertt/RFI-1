@@ -1,10 +1,17 @@
 PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
+VENV_STAMP := .venv/.rfi-installed
 
-.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task012-test lint format-check typecheck import-check docs-check baseline-check build validate review-package
+.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task012-test task013-test lint format-check typecheck import-check docs-check baseline-check build validate review-package
 
-setup:
+setup: $(VENV_STAMP)
+
+$(VENV_PYTHON):
 	$(PYTHON) -m venv .venv
+
+$(VENV_STAMP): pyproject.toml $(VENV_PYTHON)
+	$(VENV_PYTHON) -m pip install -e .
+	touch $(VENV_STAMP)
 
 test: setup
 	$(VENV_PYTHON) -m unittest discover -s tests -v
@@ -48,6 +55,9 @@ task011-proof: setup
 task012-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task012 -v
 
+task013-test: setup
+	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task013 -v
+
 lint: setup
 	$(VENV_PYTHON) scripts/quality.py lint
 
@@ -72,4 +82,4 @@ build: setup
 validate: test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof lint format-check typecheck import-check docs-check baseline-check build
 
 review-package: setup
-	$(VENV_PYTHON) scripts/generate_task012_review.py
+	$(VENV_PYTHON) scripts/generate_task013_review.py

@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Sequence
 
 from rfi.admin import create_admin_server
+from rfi.catalog_import import (
+    CatalogImportError,
+    canonical_template,
+    import_catalogs,
+)
 from rfi.concepts import ConceptError, ConceptRepository, sample_concepts
 from rfi.firms import FirmError, FirmRepository, sample_firms
 
@@ -62,9 +67,29 @@ def parser() -> argparse.ArgumentParser:
         "seed",
         help="explicitly add missing starter data (optional, repeat-safe)",
         description="Add missing RFI-1 starter concepts and target firms to initialized state.",
-        epilog="example: rfi seed --state .artifacts/runtime/rfi-1",
+        epilog=(
+            "examples:\n"
+            "  rfi seed --state .artifacts/runtime/rfi-1\n"
+            "  rfi seed --state .artifacts/runtime/rfi-1 --file firms.yaml\n"
+            "  rfi seed --print-schema"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     _add_state(seed)
+    seed.add_argument(
+        "-f",
+        "--file",
+        action="append",
+        type=_state,
+        default=[],
+        metavar="FILE",
+        help="external YAML catalog to import (repeat for multiple files)",
+    )
+    seed.add_argument(
+        "--print-schema",
+        action="store_true",
+        help="print the canonical YAML import template without reading or changing state",
+    )
     admin = commands.add_parser(
         "admin",
         help="launch the integrated concept and target-firm admin console",
@@ -121,9 +146,10 @@ def _open_state(state: Path) -> tuple[ConceptRepository, FirmRepository]:
     return ConceptRepository.open(state), FirmRepository.open(state / "firm-catalog")
 
 
-def seed(state: Path) -> None:
+def seed(state: Path, files: tuple[Path, ...] = ()) -> None:
     """Add only missing starter records to verified initialized state."""
     concepts, firms = _open_state(state)
+    imported = import_catalogs(files, firms, sample_firms()) if files else None
     existing_concepts = {item.concept_id for item in concepts.lookup()}
     existing_firms = {item.firm_id for item in firms.lookup()}
     concept_created = []
@@ -141,6 +167,11 @@ def seed(state: Path) -> None:
           f"{len(existing_concepts.intersection(item.concept_id for item in sample_concepts()))}")
     print(f"- starter target firms created: {len(firm_created)}; already present: "
           f"{len(existing_firms.intersection(item.firm_id for item in sample_firms()))}")
+    if imported is not None:
+        print(
+            f"- external catalogs validated: {imported.files}; target firms created: "
+            f"{len(imported.created)}; already present: {len(imported.already_present)}"
+        )
 
 
 def serve(state: Path, host: str, port: int) -> None:
@@ -168,10 +199,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         if arguments.command == "init":
             initialize(arguments.state)
         elif arguments.command == "seed":
-            seed(arguments.state)
+            if arguments.print_schema:
+                if arguments.file:
+                    raise ApplicationError("--print-schema cannot be combined with --file")
+                print(canonical_template(), end="")
+            else:
+                seed(arguments.state, tuple(arguments.file))
         else:
             serve(arguments.state, arguments.host, arguments.port)
-    except (ApplicationError, ConceptError, FirmError, OSError) as error:
+    except (ApplicationError, CatalogImportError, ConceptError, FirmError, OSError) as error:
         print(f"rfi: error: {error}", file=sys.stderr)
         print("Use 'rfi --help' or 'rfi <command> --help' for usage.", file=sys.stderr)
         return 2

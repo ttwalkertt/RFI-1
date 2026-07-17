@@ -334,6 +334,7 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "admin/__init__.py",
                 "admin/field_definitions.py",
                 "admin/server.py",
+                "catalog_import.py",
                 "cli.py",
                 "concepts/__init__.py",
                 "concepts/contracts.py",
