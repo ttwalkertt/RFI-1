@@ -64,6 +64,7 @@ class FirmDraft:
     technology_focus: tuple[str, ...] = ()
     source_hints: tuple[SourceDiscoveryHint, ...] = ()
     notes: str = ""
+    relevance: float = 0.0
     status: FirmStatus = FirmStatus.DRAFT
     valid_through: str | None = None
 
@@ -87,6 +88,7 @@ class FirmRevision:
     technology_focus: tuple[str, ...]
     source_hints: tuple[SourceDiscoveryHint, ...]
     notes: str
+    relevance: float
     status: FirmStatus
     valid_from: str
     valid_through: str | None
@@ -100,6 +102,9 @@ class FirmCatalog(Protocol):
 
     def create(self, draft: FirmDraft) -> FirmRevision:
         """Create the first revision of a stable firm identity."""
+
+    def create_batch(self, drafts: tuple[FirmDraft, ...]) -> tuple[FirmRevision, ...]:
+        """Publish multiple first revisions through one all-or-nothing catalog update."""
 
     def validate(self, draft: FirmDraft, current_firm_id: str | None = None) -> None:
         """Validate intent and cross-catalog recognition conflicts without publishing."""
@@ -121,5 +126,6 @@ class FirmCatalog(Protocol):
         status: FirmStatus | None = None,
         sector: str | None = None,
         industry: str | None = None,
+        minimum_relevance: float | None = None,
     ) -> tuple[FirmRevision, ...]:
         """Search current firm records through public recognition metadata."""

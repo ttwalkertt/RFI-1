@@ -62,6 +62,7 @@ class FirmCatalogTests(unittest.TestCase):
                 SourceDiscoveryHint("investor-relations", "ir.example-storage.com"),
             ),
             notes="Illustrative operator context, not extracted knowledge.",
+            relevance=42.5,
             status=FirmStatus.ACTIVE,
             valid_from="2024-01-01",
         )
@@ -220,7 +221,11 @@ class FirmAdminConsoleTests(unittest.TestCase):
         status, result = self.request("/api/firms?q=STX&status=active&sector=Technology")
         self.assertEqual(status, 200)
         self.assertEqual([item["firm_id"] for item in result["items"]], ["seagate"])
+        status, result = self.request("/api/firms?minimum_relevance=1")
+        self.assertEqual(status, 200)
+        self.assertEqual(result["items"], [])
         detail = self.request("/api/firms/western-digital")[1]
+        self.assertEqual(detail["relevance"], 0.0)
         self.assertEqual(detail["identifiers"][0]["value"], "WDC")
         self.assertNotIn("relationships", detail)
         history = self.request("/api/firms/toshiba/history")[1]

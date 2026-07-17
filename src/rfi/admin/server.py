@@ -301,6 +301,9 @@ class AdminHandler(BaseHTTPRequestHandler):
                 self._first(query, "status") or None,
                 self._first(query, "sector") or None,
                 self._first(query, "industry") or None,
+                float(self._first(query, "minimum_relevance"))
+                if self._first(query, "minimum_relevance")
+                else None,
             )
             self._send_json(HTTPStatus.OK, {"items": [asdict(item) for item in items]})
             return

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import tempfile
@@ -101,6 +102,76 @@ class FirmRepository:
         self._atomic_json(self.pointer, state)
         return revision
 
+    def create_batch(
+        self,
+        drafts: tuple[FirmDraft, ...],
+        fail_after_revision_count: int | None = None,
+    ) -> tuple[FirmRevision, ...]:
+        """Publish first revisions together or restore the exact pre-call repository."""
+        state = self._state()
+        ordered = tuple(sorted(drafts, key=lambda item: item.firm_id))
+        if not ordered:
+            return ()
+        if len({draft.firm_id for draft in ordered}) != len(ordered):
+            raise FirmError("batch contains duplicate firm identifiers")
+        planned_identifiers: dict[tuple[str, str, str], str] = {}
+        planned_domains: dict[str, str] = {}
+        for draft in ordered:
+            self.validate(draft)
+            if draft.firm_id in state["current_revisions"]:
+                raise FirmError(f"duplicate firm identifier: {draft.firm_id}")
+            for identifier in draft.identifiers:
+                key = self._identifier_key(identifier)
+                owner = planned_identifiers.get(key)
+                if owner is not None:
+                    raise FirmError(
+                        f"conflicting firm identifier in batch belongs to {owner} and "
+                        f"{draft.firm_id}"
+                    )
+                planned_identifiers[key] = draft.firm_id
+            for domain in draft.domains:
+                key = domain.casefold()
+                owner = planned_domains.get(key)
+                if owner is not None:
+                    raise FirmError(
+                        f"conflicting firm domain in batch belongs to {owner} and "
+                        f"{draft.firm_id}"
+                    )
+                planned_domains[key] = draft.firm_id
+        timestamp = _now()
+        revisions = tuple(
+            self._revision(draft, 1, None, timestamp, timestamp) for draft in ordered
+        )
+        created_paths: list[Path] = []
+        try:
+            for revision in revisions:
+                path = self._revision_path(revision.revision_id)
+                existed = path.exists()
+                self._write_revision(revision)
+                if not existed:
+                    created_paths.append(path)
+                if (
+                    fail_after_revision_count is not None
+                    and len(created_paths) >= fail_after_revision_count
+                ):
+                    raise FirmError("injected batch persistence failure before publication")
+            published = {
+                "schema_version": state["schema_version"],
+                "current_revisions": dict(state["current_revisions"]),
+                "revision_history": {
+                    key: list(value) for key, value in state["revision_history"].items()
+                },
+            }
+            for revision in revisions:
+                published["current_revisions"][revision.firm_id] = revision.revision_id
+                published["revision_history"][revision.firm_id] = [revision.revision_id]
+            self._atomic_json(self.pointer, published)
+        except Exception:
+            for path in created_paths:
+                path.unlink(missing_ok=True)
+            raise
+        return revisions
+
     def validate(self, draft: FirmDraft, current_firm_id: str | None = None) -> None:
         """Validate local fields plus identifiers and domains unique among current firms."""
         self._validate_draft(draft)
@@ -191,6 +262,7 @@ class FirmRepository:
         status: FirmStatus | None = None,
         sector: str | None = None,
         industry: str | None = None,
+        minimum_relevance: float | None = None,
     ) -> tuple[FirmRevision, ...]:
         """Search current records by identity, recognition, classification, and notes."""
         needle = query.strip().casefold()
@@ -208,6 +280,7 @@ class FirmRepository:
                     item.sector,
                     item.industry,
                     item.notes,
+                    str(item.relevance),
                     *item.aliases,
                     *item.domains,
                     *item.technology_focus,
@@ -223,8 +296,10 @@ class FirmRepository:
                 continue
             if industry and industry.casefold() not in item.industry.casefold():
                 continue
+            if minimum_relevance is not None and item.relevance < minimum_relevance:
+                continue
             result.append(item)
-        return tuple(result)
+        return tuple(sorted(result, key=lambda item: (-item.relevance, item.firm_id)))
 
     def verify(self) -> dict[str, int | str]:
         """Fail closed on schema, chain, digest, pointer, or file inconsistencies."""
@@ -300,6 +375,13 @@ class FirmRepository:
         for hint in draft.source_hints:
             if not _TOKEN.fullmatch(hint.kind) or not hint.value.strip():
                 raise FirmError("source hints require a valid kind and value")
+        if (
+            isinstance(draft.relevance, bool)
+            or not isinstance(draft.relevance, (int, float))
+            or not math.isfinite(draft.relevance)
+            or not 0 <= draft.relevance <= 100
+        ):
+            raise FirmError("relevance must be a finite number from 0 through 100")
 
     @staticmethod
     def _identifier_key(item: FirmIdentifier) -> tuple[str, str, str]:
@@ -343,7 +425,20 @@ class FirmRepository:
             revision.created_at,
             revision.updated_at,
         ).revision_id
-        if expected != revision.revision_id:
+        if expected == revision.revision_id:
+            return
+        draft = self.to_draft(revision)
+        material = {
+            **asdict(draft),
+            "status": draft.status.value,
+            "revision_number": revision.revision_number,
+            "created_at": revision.created_at,
+            "updated_at": revision.updated_at,
+            "supersedes_revision_id": revision.supersedes_revision_id,
+        }
+        material.pop("relevance")
+        legacy = "firm-revision-" + hashlib.sha256(_canonical(material)).hexdigest()
+        if revision.relevance != 0 or legacy != revision.revision_id:
             raise FirmError(f"firm revision digest mismatch: {revision.revision_id}")
 
     def _state(self) -> dict[str, Any]:
@@ -371,6 +466,7 @@ class FirmRepository:
 
     def _load_revision(self, revision_id: str) -> FirmRevision:
         value = self._load_json(self._revision_path(revision_id))
+        value.setdefault("relevance", 0.0)
         value["status"] = FirmStatus(value["status"])
         value["aliases"] = tuple(value["aliases"])
         value["domains"] = tuple(value["domains"])
