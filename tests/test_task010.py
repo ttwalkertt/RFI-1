@@ -97,6 +97,8 @@ class AdminEditorUsabilityTests(unittest.TestCase):
         for proof in (
             "data-help",
             "aria-describedby",
+            'popover="manual"',
+            "showPopover",
             "beforeunload",
             "Preview new revision",
             "Save new revision",

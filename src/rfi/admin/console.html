@@ -40,7 +40,7 @@
     fieldset{border:1px solid var(--line);border-radius:9px;margin:0 0 18px;padding:16px}legend{font-weight:750;padding:0 7px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px 20px}
     .field{display:flex;flex-direction:column;gap:5px}.field.wide{grid-column:1/-1}.field-label{display:flex;align-items:center;gap:7px;font-weight:700}.required::after{content:' *';color:var(--danger)}
     .help{display:inline-grid;place-items:center;width:28px;min-width:28px;min-height:28px;padding:0;border-radius:50%;color:var(--blue);background:var(--blue2)}
-    #help-popover{position:fixed;z-index:20;max-width:370px;padding:12px 14px;border-radius:8px;background:#172334;color:#fff;box-shadow:0 8px 30px #0006}
+    #help-popover{position:fixed;z-index:20;max-width:370px;margin:0;padding:12px 14px;border:0;border-radius:8px;background:#172334;color:#fff;box-shadow:0 8px 30px #0006}
     .error{color:var(--danger);font-size:13px;font-weight:650}.invalid{border-color:var(--danger)!important;background:#fff8f7!important}.summary{padding:13px 16px;margin-bottom:16px;border:1px solid #e5a29c;border-radius:8px;background:var(--danger-bg);color:var(--danger)}
     .summary:focus{outline:3px solid var(--focus)}.summary h3{margin:0 0 6px}.summary ul{margin:0;padding-left:22px}.summary a{color:inherit}
     .repeater{grid-column:1/-1}.repeat-list{display:grid;gap:9px}.repeat-row{display:flex;gap:8px;align-items:start}.repeat-row>input,.repeat-row>select{flex:1}
@@ -90,7 +90,7 @@
   <div id="preview-content"></div>
   <div class="sticky-actions"><button id="back-to-edit">Back to editor</button><button id="confirm-save" class="primary">Save new revision</button></div>
 </dialog>
-<div id="help-popover" class="hidden" role="tooltip"></div>
+<div id="help-popover" class="hidden" role="tooltip" popover="manual"></div>
 
 <script>
 'use strict';
@@ -100,8 +100,8 @@ const clone=x=>JSON.parse(JSON.stringify(x));
 async function api(path,options={}){const response=await fetch(path,{headers:{'Content-Type':'application/json'},...options});let data;try{data=await response.json()}catch{data={error:'The server returned an unreadable response.'}}if(!response.ok){const e=new Error(data.error||'Request failed');e.code=data.error_code||'request_failed';throw e}return data}
 function help(key,label='Field help'){return `<button type="button" class="help" data-help="${esc(key)}" aria-label="${esc(label)}" aria-describedby="help-popover">i</button>`}
 function bindHelp(root=document){root.querySelectorAll('[data-help]').forEach(b=>{const show=()=>showHelp(b);b.addEventListener('mouseenter',show);b.addEventListener('focus',show);b.addEventListener('mouseleave',()=>{if(!helpPinned)hideHelp()});b.addEventListener('blur',()=>{if(!helpPinned)hideHelp()});b.addEventListener('click',e=>{e.stopPropagation();helpPinned=!helpPinned;helpPinned?show():hideHelp()})})}
-function showHelp(button){const pop=$('help-popover'),text=fieldHelp[button.dataset.help]||'No field guidance is registered.';pop.textContent=text;pop.classList.remove('hidden');const r=button.getBoundingClientRect();pop.style.left=Math.min(r.left,window.innerWidth-390)+'px';pop.style.top=Math.min(r.bottom+8,window.innerHeight-pop.offsetHeight-8)+'px'}
-function hideHelp(){helpPinned=false;$('help-popover').classList.add('hidden')}document.addEventListener('click',hideHelp);
+function showHelp(button){const pop=$('help-popover'),text=fieldHelp[button.dataset.help]||'No field guidance is registered.';pop.textContent=text;pop.classList.remove('hidden');if(pop.showPopover&&!pop.matches(':popover-open'))pop.showPopover();const r=button.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(r.left,window.innerWidth-pop.offsetWidth-8))+'px';pop.style.top=Math.max(8,Math.min(r.bottom+8,window.innerHeight-pop.offsetHeight-8))+'px'}
+function hideHelp(){helpPinned=false;const pop=$('help-popover');if(pop.hidePopover&&pop.matches(':popover-open'))pop.hidePopover();pop.classList.add('hidden')}document.addEventListener('click',hideHelp);
 function setDirty(value=true){dirty=value;$('draft-state').textContent=value?'Unsaved draft':'Saved state';$('draft-state').classList.toggle('dirty',value)}
 function field(name,label,type='text',required=false,wide=false,options=[]){const req=required?' required':'';const cls=`field ${wide?'wide':''}`;let control;if(type==='textarea')control=`<textarea id="f-${name}" name="${name}"${req}></textarea>`;else if(type==='select')control=`<select id="f-${name}" name="${name}"${req}>${options.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select>`;else control=`<input id="f-${name}" name="${name}" type="${type}"${req}>`;return `<div class="${cls}"><div class="field-label"><label for="f-${name}" class="${required?'required':''}">${esc(label)}</label>${help(name)}</div>${control}<span class="error" id="error-${name}"></span></div>`}
 function renderMetadata(){ $('metadata-fields').innerHTML=field('concept_id','Stable ID','text',true)+field('display_name','Display name','text',true)+field('definition','Definition','textarea',true,true)+field('comments','Comments and interpretation guidance','textarea',false,true)+field('status','Status','select',true,false,['draft','active','retired','superseded'])+field('valid_from','Valid from','date',true)+field('valid_through','Valid through','date')+field('sample_date','Sample date','date');

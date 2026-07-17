@@ -196,6 +196,8 @@ class FirmAdminConsoleTests(unittest.TestCase):
         for marker in (
             "Target Firms",
             "data-help",
+            'popover="manual"',
+            "showPopover",
             "beforeunload",
             "Preview new revision",
             "Save new revision",
