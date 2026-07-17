@@ -9,7 +9,6 @@ from rfi.firms.contracts import (
     FirmDraft,
     FirmError,
     FirmIdentifier,
-    FirmRelationship,
     FirmRevision,
     FirmStatus,
     SourceDiscoveryHint,
@@ -77,6 +76,11 @@ class FirmService:
         """Decode JSON-compatible values into typed editable intent."""
         if not isinstance(payload, dict):
             raise FirmError("firm payload must be an object")
+        if "relationships" in payload:
+            raise FirmError(
+                "relationships are outside the firm identity authority and require "
+                "evidence-backed graph records"
+            )
         try:
             identifiers = tuple(
                 FirmIdentifier(
@@ -85,15 +89,6 @@ class FirmService:
                     market=str(item["market"]) if item.get("market") else None,
                 )
                 for item in FirmService._objects(payload, "identifiers")
-            )
-            relationships = tuple(
-                FirmRelationship(
-                    kind=str(item.get("kind", "")),
-                    target_firm_id=str(item.get("target_firm_id", "")),
-                    label=str(item.get("label", "")),
-                    notes=str(item.get("notes", "")),
-                )
-                for item in FirmService._objects(payload, "relationships")
             )
             source_hints = tuple(
                 SourceDiscoveryHint(
@@ -115,7 +110,6 @@ class FirmService:
                 sector=str(payload.get("sector", "")),
                 industry=str(payload.get("industry", "")),
                 technology_focus=tuple(payload.get("technology_focus", ())),
-                relationships=relationships,
                 source_hints=source_hints,
                 notes=str(payload.get("notes", "")),
                 status=FirmStatus(payload.get("status", FirmStatus.DRAFT)),

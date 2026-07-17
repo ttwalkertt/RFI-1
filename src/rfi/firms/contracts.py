@@ -30,16 +30,6 @@ class FirmIdentifier:
 
 
 @dataclass(frozen=True)
-class FirmRelationship:
-    """A lightweight reference to another stable firm identity."""
-
-    kind: str
-    target_firm_id: str
-    label: str = ""
-    notes: str = ""
-
-
-@dataclass(frozen=True)
 class FirmReference:
     """Stable integration reference; callers may optionally pin recognition semantics."""
 
@@ -72,7 +62,6 @@ class FirmDraft:
     sector: str = ""
     industry: str = ""
     technology_focus: tuple[str, ...] = ()
-    relationships: tuple[FirmRelationship, ...] = ()
     source_hints: tuple[SourceDiscoveryHint, ...] = ()
     notes: str = ""
     status: FirmStatus = FirmStatus.DRAFT
@@ -96,7 +85,6 @@ class FirmRevision:
     sector: str
     industry: str
     technology_focus: tuple[str, ...]
-    relationships: tuple[FirmRelationship, ...]
     source_hints: tuple[SourceDiscoveryHint, ...]
     notes: str
     status: FirmStatus

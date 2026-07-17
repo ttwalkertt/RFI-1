@@ -147,10 +147,6 @@ FIELD_DEFINITIONS: Final[dict[str, str]] = {
         "Technologies relevant to consulting scope and source discovery. These labels do not "
         "assert product ownership or extracted facts."
     ),
-    "relationships": (
-        "Lightweight typed references to other stable firm IDs. They support navigation and "
-        "recognition, not a final corporate hierarchy or inferred knowledge graph."
-    ),
     "source_hints": (
         "Operator guidance for locating likely sources, such as investor-relations sites or "
         "regulatory identifiers. Hints are not acquired evidence."

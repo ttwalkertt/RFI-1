@@ -16,19 +16,17 @@ from rfi.firms.contracts import (
     FirmDraft,
     FirmError,
     FirmIdentifier,
-    FirmRelationship,
     FirmRevision,
     FirmStatus,
     SourceDiscoveryHint,
 )
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
 _TOKEN = re.compile(r"^[a-z][a-z0-9_-]*$")
 _DOMAIN = re.compile(
     r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
 )
-_RELATIONSHIP_KINDS = {"parent", "subsidiary", "brand", "related", "competitor"}
 
 
 def _canonical(value: Any) -> bytes:
@@ -269,7 +267,6 @@ class FirmRepository:
             fields.pop(name)
         fields["status"] = status or revision.status
         fields["identifiers"] = revision.identifiers
-        fields["relationships"] = revision.relationships
         fields["source_hints"] = revision.source_hints
         return FirmDraft(**fields)
 
@@ -300,18 +297,6 @@ class FirmRepository:
             if key in identifier_keys:
                 raise FirmError("identifiers must not contain duplicates")
             identifier_keys.add(key)
-        relationship_keys: set[tuple[str, str]] = set()
-        for relationship in draft.relationships:
-            if relationship.kind not in _RELATIONSHIP_KINDS:
-                raise FirmError(f"invalid relationship kind: {relationship.kind}")
-            if not _IDENTIFIER.fullmatch(relationship.target_firm_id):
-                raise FirmError(f"invalid related firm identifier: {relationship.target_firm_id}")
-            if relationship.target_firm_id == draft.firm_id:
-                raise FirmError("a firm relationship cannot reference itself")
-            key = (relationship.kind, relationship.target_firm_id)
-            if key in relationship_keys:
-                raise FirmError("relationships must not contain duplicates")
-            relationship_keys.add(key)
         for hint in draft.source_hints:
             if not _TOKEN.fullmatch(hint.kind) or not hint.value.strip():
                 raise FirmError("source hints require a valid kind and value")
@@ -340,7 +325,6 @@ class FirmRepository:
         fields = asdict(draft)
         fields["status"] = draft.status
         fields["identifiers"] = draft.identifiers
-        fields["relationships"] = draft.relationships
         fields["source_hints"] = draft.source_hints
         return FirmRevision(
             revision_id=revision_id,
@@ -392,9 +376,6 @@ class FirmRepository:
         value["domains"] = tuple(value["domains"])
         value["technology_focus"] = tuple(value["technology_focus"])
         value["identifiers"] = tuple(FirmIdentifier(**item) for item in value["identifiers"])
-        value["relationships"] = tuple(
-            FirmRelationship(**item) for item in value["relationships"]
-        )
         value["source_hints"] = tuple(
             SourceDiscoveryHint(**item) for item in value["source_hints"]
         )

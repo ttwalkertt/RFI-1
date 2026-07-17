@@ -90,11 +90,13 @@ def fixture_proof() -> dict[str, Any]:
             "search_and_filters": len(reopened.lookup("storage", sector="Technology")) >= 3,
             "typed_browser_editor": all(
                 marker in console
-                for marker in ("identifiers", "relationships", "source_hints", "repeat-row")
+                for marker in ("identifiers", "source_hints", "repeat-row")
             ),
+            "relationship_graph_deferred": "Firm relationships" not in console
+            and "add-relationship" not in console,
             "central_field_help": all(
                 name in FIELD_DEFINITIONS
-                for name in ("firm_id", "identifiers", "domains", "relationships", "source_hints")
+                for name in ("firm_id", "identifiers", "domains", "source_hints")
             ),
             "input_preservation_and_dirty_protection": all(
                 marker in console for marker in ("beforeunload", "Your draft remains open")

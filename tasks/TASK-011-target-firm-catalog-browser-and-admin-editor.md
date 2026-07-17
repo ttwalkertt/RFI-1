@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Complete — identity/relationship authority boundary corrected
 
 ## Architectural Milestone
 
@@ -33,7 +33,7 @@ Selecting a firm should eventually lead to a firm-centered view of:
 - acquired documents;
 - filings and earnings materials;
 - products and technologies;
-- competitors and relationships;
+- evidence-backed business and corporate-network relationships from a future relationship graph;
 - concepts and observations;
 - analyst notes;
 - unresolved extraction issues;
@@ -57,7 +57,6 @@ The design should support stable firm identity and practical recognition metadat
 - exchange or market identifiers;
 - website or domain hints;
 - headquarters or jurisdiction where useful;
-- parent, subsidiary, brand, or related-entity references;
 - sector, industry, and technology focus;
 - source-discovery hints;
 - operator notes;
@@ -65,7 +64,11 @@ The design should support stable firm identity and practical recognition metadat
 
 Codex should determine the precise schema and revision model based on the existing repository architecture.
 
-The model must remain extensible because the representation of firms, subsidiaries, brands, business units, and relationships will evolve through use.
+The model must remain extensible because firm identity and recognition practices will evolve
+through use. It must not embed business-network or corporate-relationship edges. Competitor,
+customer, supplier, partner, technology, strategic, parent, subsidiary, brand, predecessor,
+successor, and similar relationships belong in a future evidence-backed relationship graph with
+provenance, validity, confidence, and source support.
 
 ### Firm Browser
 
@@ -77,7 +80,7 @@ The browser should support:
 - filtering by useful status or classification fields;
 - opening a firm detail view;
 - displaying canonical identity and recognition metadata;
-- showing aliases, identifiers, relationships, notes, and source hints clearly;
+- showing aliases, identifiers, classifications, notes, and source hints clearly;
 - providing useful empty, error, and loading states.
 
 The browser should follow the interaction standards established by TASK-010.
@@ -90,7 +93,7 @@ The editor should:
 
 - use typed controls;
 - provide field-level contextual help;
-- support repeated values such as aliases, tickers, domains, relationships, and source hints;
+- support repeated values such as aliases, tickers, domains, technology focus, and source hints;
 - validate conflicts and missing required fields;
 - preserve entered data after validation failure;
 - protect unsaved changes;
@@ -111,7 +114,8 @@ At minimum include:
 
 Additional examples may be included where useful.
 
-The proof should demonstrate that aliases, ticker or market identity, domains, notes, and selected relationships can be entered, browsed, persisted, and retrieved through public contracts.
+The proof should demonstrate that aliases, ticker or market identity, domains, classifications,
+notes, and source hints can be entered, browsed, persisted, and retrieved through public contracts.
 
 ### Integration Readiness
 
@@ -123,6 +127,7 @@ The firm catalog should be designed so later tasks can attach:
 - concepts and observations;
 - workspace investigations;
 - question-answering context.
+- evidence-backed relationship-graph nodes and edges through stable firm references.
 
 TASK-011 should not tightly couple those systems prematurely, but it should define stable identity references that they can use.
 
@@ -132,6 +137,8 @@ TASK-011 should not tightly couple those systems prematurely, but it should defi
 - Evidence and source objects define **what was published**.
 - Concepts and observations define **what was extracted, calculated, or asserted**.
 - Workspaces and intelligence define **how the material is investigated and used**.
+- A future relationship graph defines **which evidence-backed business or corporate-network edges
+  are asserted**, with provenance, validity, confidence, and source support.
 
 Keep these authority boundaries explicit.
 
@@ -165,7 +172,7 @@ Document:
 - extension points for corpus acquisition and question answering;
 - known limitations and likely realignment areas.
 
-Add an ADR if the implementation introduces a durable firm-identity or relationship model.
+Add an ADR for the durable firm-identity model and its explicit relationship-graph boundary.
 
 ## Validation
 
@@ -205,6 +212,8 @@ TASK-011 does not require:
 - production-scale corpus acquisition;
 - final entity extraction or normalization;
 - a universal corporate hierarchy model;
+- competitor, customer, supplier, partner, technology, strategic, or other business-network edges;
+- parent, subsidiary, brand, predecessor, successor, or other corporate-network edges;
 - automatic subsidiary discovery;
 - security-master completeness;
 - real-time market data;

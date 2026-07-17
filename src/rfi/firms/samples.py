@@ -5,7 +5,6 @@ from __future__ import annotations
 from rfi.firms.contracts import (
     FirmDraft,
     FirmIdentifier,
-    FirmRelationship,
     FirmStatus,
     SourceDiscoveryHint,
 )
@@ -32,7 +31,6 @@ def sample_firms() -> tuple[FirmDraft, ...]:
         domains=("seagate.com",),
         headquarters="Fremont, California, United States",
         jurisdiction="Ireland",
-        relationships=(FirmRelationship("competitor", "western-digital"),),
         source_hints=(
             SourceDiscoveryHint("investor-relations", "investors.seagate.com"),
             SourceDiscoveryHint("sec-company", "CIK 0001137789"),
@@ -52,7 +50,6 @@ def sample_firms() -> tuple[FirmDraft, ...]:
         domains=("westerndigital.com",),
         headquarters="San Jose, California, United States",
         jurisdiction="Delaware, United States",
-        relationships=(FirmRelationship("competitor", "seagate"),),
         source_hints=(
             SourceDiscoveryHint("investor-relations", "investor.wdc.com"),
             SourceDiscoveryHint("sec-company", "CIK 0000106040"),
@@ -69,21 +66,11 @@ def sample_firms() -> tuple[FirmDraft, ...]:
         domains=("global.toshiba",),
         headquarters="Tokyo, Japan",
         jurisdiction="Japan",
-        relationships=(
-            FirmRelationship(
-                "related",
-                "toshiba-electronic-devices-and-storage",
-                "HDD operating organization",
-            ),
-        ),
         source_hints=(
             SourceDiscoveryHint("corporate", "global.toshiba"),
             SourceDiscoveryHint("product", "toshiba.semicon-storage.com"),
         ),
-        notes=(
-            "Parent-company identity. Future entity work may split the HDD operating "
-            "organization without changing this firm ID."
-        ),
+        notes="Corporate identity used as the target for Toshiba HDD consulting research.",
         **common,
     )
     return seagate, western_digital, toshiba

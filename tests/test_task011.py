@@ -22,7 +22,6 @@ from rfi.firms import (  # noqa: E402
     FirmError,
     FirmIdentifier,
     FirmReference,
-    FirmRelationship,
     FirmRepository,
     FirmService,
     FirmStatus,
@@ -58,7 +57,6 @@ class FirmCatalogTests(unittest.TestCase):
             sector="Technology",
             industry="Data storage",
             technology_focus=("hard disk drives",),
-            relationships=(FirmRelationship("competitor", "seagate"),),
             source_hints=(
                 SourceDiscoveryHint("investor-relations", "ir.example-storage.com"),
             ),
@@ -110,13 +108,6 @@ class FirmCatalogTests(unittest.TestCase):
             self.repository.create(
                 replace(self.generic("bad-domain"), domains=("https://example.com/path",))
             )
-        with self.assertRaisesRegex(FirmError, "cannot reference itself"):
-            self.repository.create(
-                replace(
-                    self.generic("self-related"),
-                    relationships=(FirmRelationship("parent", "self-related"),),
-                )
-            )
         self.assertEqual(len(self.repository.lookup()), before)
 
     def test_optimistic_conflict_interruption_and_corruption_fail_closed(self) -> None:
@@ -144,6 +135,9 @@ class FirmCatalogTests(unittest.TestCase):
         self.assertEqual(asdict(reference)["firm_id"], "seagate")
         payload = asdict(self.generic("service-created"))
         self.assertTrue(service.validate(payload)["valid"])
+        invalid = {**payload, "relationships": [{"kind": "competitor", "target": "seagate"}]}
+        self.assertFalse(service.validate(invalid)["valid"])
+        self.assertIn("outside the firm identity authority", service.validate(invalid)["errors"][0])
         created = service.create(payload)
         self.assertEqual(service.detail(created.firm_id).revision_id, created.revision_id)
         contracts = (SRC / "rfi/firms/contracts.py").read_text(encoding="utf-8")
@@ -202,13 +196,14 @@ class FirmAdminConsoleTests(unittest.TestCase):
             "Save new revision",
             "repeat-row",
             "identifiers",
-            "relationships",
             "source_hints",
             "error-summary",
         ):
             self.assertIn(marker, shell)
         self.assertNotIn("JSON array", shell)
         self.assertNotIn("name=\"identifiers\"", shell)
+        self.assertNotIn("Firm relationships", shell)
+        self.assertNotIn("add-relationship", shell)
 
     def test_seeded_list_detail_search_filters_and_history_api(self) -> None:
         status, result = self.request("/api/firms?q=STX&status=active&sector=Technology")
@@ -216,6 +211,7 @@ class FirmAdminConsoleTests(unittest.TestCase):
         self.assertEqual([item["firm_id"] for item in result["items"]], ["seagate"])
         detail = self.request("/api/firms/western-digital")[1]
         self.assertEqual(detail["identifiers"][0]["value"], "WDC")
+        self.assertNotIn("relationships", detail)
         history = self.request("/api/firms/toshiba/history")[1]
         self.assertEqual(len(history["items"]), 1)
 

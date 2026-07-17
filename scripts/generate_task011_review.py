@@ -144,6 +144,7 @@ def copy_browser_evidence() -> dict[str, Any]:
         "immutable_save_and_history",
         "restart_persistence",
         "narrow_window",
+        "relationship_graph_deferred",
     }
     missing = sorted(name for name in required if proof.get("checks", {}).get(name) is not True)
     if missing:
@@ -164,6 +165,7 @@ def contract_examples(proof: dict[str, Any]) -> None:
                 "seeded_firms": proof["seeded_firms"],
                 "created_and_revised": proof["created_and_revised"],
                 "stable_reference": proof["integration_reference"],
+                "relationship_field_absent": "relationships" not in proof["created_and_revised"],
             },
             indent=2,
             sort_keys=True,
@@ -197,10 +199,12 @@ def summaries(files: list[str]) -> None:
         "implementation-summary.md",
         """# TASK-011 implementation summary
 
-TASK-011 creates a separate immutable target-firm authority, public service and stable reference,
-seeds Seagate, Western Digital, and Toshiba, and adds a Target Firms browser/editor to the existing
-admin console. The GUI reuses TASK-010's typed list/detail/edit/validate/preview/save pattern,
-central field help, dirty-state protection, failure preservation, and local-only HTTP boundary.
+TASK-011 creates a separate immutable identity-and-recognition authority, public service, and stable
+reference; seeds Seagate, Western Digital, and Toshiba; and adds a Target Firms browser/editor to
+the existing admin console. Relationship fields were removed from contracts, persistence, service
+payloads, seeds, and GUI controls. The GUI reuses TASK-010's typed list/detail/edit/validate/
+preview/save pattern, central field help, dirty-state protection, failure preservation, and
+local-only HTTP boundary.
 
 The package's `contracts/`, `evidence/`, `browser/`, and `validation/` directories contain exact
 contract examples, seed data, conflict and restart proof, real browser evidence, and command output.
@@ -216,9 +220,9 @@ HTTP only. Evidence remains what was published, concepts/observations remain wha
 asserted, and workspaces/intelligence remain how research is used.
 
 Future layers use `FirmReference(firm_id, optional firm_revision_id)` and do not import firm
-persistence. Relationships are lightweight stable-ID references, deliberately not a universal
-entity graph. See ADR-0011 and the subsystem guide for decisions, tradeoffs, extension points, and
-known limitations.
+persistence. Business and corporate-network relationships are explicitly excluded and belong in a
+future evidence-backed graph with provenance, validity, confidence, and source support. See
+ADR-0011 and the subsystem guide for decisions, tradeoffs, extension points, and known limitations.
 
 ## Architectural Status Summary
 
@@ -240,13 +244,13 @@ Stable `firm_id` references are ready for acquisition policies, source/document 
 observations, workspaces, and question context without direct persistence coupling. Exact revision
 pins are available when historical recognition semantics matter.
 
-Known limitations: exact identifier/domain normalization, forward-only lightweight relationships,
-no inverse-edge or corporate-action policy, no automatic discovery, proof seed data without live
-refresh, no firm/source join repository yet, and a local unauthenticated single-user console.
+Known limitations: exact identifier/domain normalization, no relationship graph or corporate-action
+policy, no automatic discovery, proof seed data without live refresh, no firm/source join
+repository yet, and a local unauthenticated single-user console.
 
 Recommended follow-on: attach governed source acquisition policies and source coverage to
-`FirmReference`; validate identifier/domain/relationship policy against real consulting use before
-expanding toward a security master or entity graph.
+`FirmReference`; build business and corporate-network edges only in a separate evidence-backed
+relationship graph whose assertions retain source support, validity, provenance, and confidence.
 """,
     )
 
