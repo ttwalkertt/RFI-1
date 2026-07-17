@@ -44,9 +44,9 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 4409,
+      "destination_size": 4577,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "71977f2d43394173662680c1f487e3f7be51d2dcb79d9f71f4b9d183bb01ad93",
+      "destination_sha256": "b2d2964ce5cf639f940919c5a4e6db229e5f32c97300e8d4516a77796e07e454",
       "content_change": "task roadmap reconciled to seven framework-scale tasks; authoritative-ticket rule preserved and clarified"
     },
     {

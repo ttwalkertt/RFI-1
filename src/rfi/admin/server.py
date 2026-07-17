@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from rfi.admin.field_definitions import field_definitions
 from rfi.concepts import ConceptError, ConceptRepository, ConceptService
 
 MAX_BODY_BYTES = 1_000_000
@@ -207,6 +208,13 @@ validate.onclick=validateForm; cancel.onclick=()=>editor.close(); form.onsubmit=
 search.onkeydown=e=>{if(e.key==='Enter')load()}; load();
 </script></body></html>"""
 
+# The substantial schema-aware console is kept as a browser-native asset so its typed editor can
+# evolve without coupling operator interaction code to the HTTP adapter. The fallback above keeps
+# source archives made before TASK-010 readable, while normal operation always uses this asset.
+_CONSOLE_ASSET = Path(__file__).with_name("console.html")
+if _CONSOLE_ASSET.exists():
+    CONSOLE_HTML = _CONSOLE_ASSET.read_text(encoding="utf-8")
+
 
 class AdminConsole(ThreadingHTTPServer):
     """HTTP composition root; all catalog work is delegated to the public service."""
@@ -255,6 +263,9 @@ class AdminHandler(BaseHTTPRequestHandler):
                 return
             if method == "GET" and path == "/health":
                 self._send_json(HTTPStatus.OK, {"status": "ok", "bind": "local-default"})
+                return
+            if method == "GET" and path == "/api/field-definitions":
+                self._send_json(HTTPStatus.OK, {"fields": field_definitions()})
                 return
             if not path.startswith("/api/"):
                 self._error(HTTPStatus.NOT_FOUND, "unknown browser request")
@@ -330,7 +341,34 @@ class AdminHandler(BaseHTTPRequestHandler):
         return query.get(name, [""])[0]
 
     def _error(self, status: HTTPStatus, message: str) -> None:
-        self._send_json(status, {"error": message, "status": int(status)})
+        self._send_json(
+            status,
+            {
+                "error": message,
+                "error_code": self._error_code(message, status),
+                "status": int(status),
+            },
+        )
+
+    @staticmethod
+    def _error_code(message: str, status: HTTPStatus) -> str:
+        """Classify failures so the GUI can present focused recovery guidance."""
+        text = message.casefold()
+        if "current revision has changed" in text:
+            return "revision_conflict"
+        if "duplicate" in text:
+            return "duplicate"
+        if "validity interval" in text or "iso date" in text:
+            return "invalid_date_interval"
+        if "deterministic" in text or "required_inputs" in text:
+            return "invalid_deterministic_method"
+        if "method" in text or "result shape" in text:
+            return "invalid_method"
+        if "unit" in text:
+            return "incompatible_unit"
+        if status == HTTPStatus.INTERNAL_SERVER_ERROR:
+            return "persistence_failure"
+        return "invalid_request"
 
     def _send_json(self, status: HTTPStatus, value: Any) -> None:
         self._send(status, _json(value), "application/json; charset=utf-8")

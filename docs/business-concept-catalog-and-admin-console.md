@@ -237,8 +237,9 @@ method and validity end date, saved revision two, and inspected both historical 
 - State vocabularies, event taxonomies, scopes, dimensions, and validation conditions are retained
   configuration, not comprehensive executable semantics.
 - Catalog publication is single-writer and local; there is no lock service or concurrent editing.
-- The console uses JSON text areas for complex methods. This is practical for technical operators,
-  but richer schema-aware controls are likely after the contracts stabilize.
+- The TASK-010 console uses typed controls for common methods and quantity, event, and state samples.
+  Registered extension families and historical generic sample shapes are preserved but do not yet
+  receive bespoke field-by-field editors.
 - There is no authentication, authorization, collaboration, remote hosting, polished responsive
   design, production telemetry, or automatic backup.
 
