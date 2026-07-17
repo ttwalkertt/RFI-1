@@ -49,6 +49,8 @@ class FoundationTests(unittest.TestCase):
                 "acquisition/runtime_config.py",
                 "acquisition/sec_api.py",
                 "admin/__init__.py",
+                "admin/console.html",
+                "admin/field_definitions.py",
                 "admin/server.py",
                 "concepts/__init__.py",
                 "concepts/contracts.py",

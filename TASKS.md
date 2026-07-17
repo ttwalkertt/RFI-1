@@ -14,6 +14,8 @@
 | TASK-006 | Knowledge retrieval, evidence assembly, and source-object browser | Contracts complete; retrieval quality provisional |
 | TASK-007 | Model-guided intelligence with explicit provenance and retrieval traces | Planned |
 | TASK-008 | Consulting workspace, operational hardening, and POC assessment | Provisional |
+| TASK-009 | Extensible business concept catalog and local admin console | Complete |
+| TASK-010 | Admin-console usability and schema-aware concept editor | Complete |
 
 ## Architectural Progression
 
