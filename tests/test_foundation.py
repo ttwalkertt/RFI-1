@@ -38,6 +38,7 @@ class FoundationTests(unittest.TestCase):
             package_files,
             [
                 "__init__.py",
+                "__main__.py",
                 "acquisition/__init__.py",
                 "acquisition/contracts.py",
                 "acquisition/demo.py",
@@ -53,6 +54,7 @@ class FoundationTests(unittest.TestCase):
                 "admin/field_definitions.py",
                 "admin/firms.html",
                 "admin/server.py",
+                "cli.py",
                 "concepts/__init__.py",
                 "concepts/contracts.py",
                 "concepts/derivation.py",

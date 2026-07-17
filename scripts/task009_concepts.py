@@ -34,6 +34,7 @@ from rfi.concepts import (  # noqa: E402
     ObservationService,
     sample_concepts,
 )
+from rfi.firms import FirmRepository  # noqa: E402
 
 
 def emit(value: Any) -> None:
@@ -183,6 +184,7 @@ def request_json(url: str) -> tuple[int, dict[str, Any]]:
 
 def serve_once(state: Path) -> dict[str, Any]:
     """Start on an ephemeral local port, exercise API/GUI routes, and shut down cleanly."""
+    FirmRepository.initialize(state / "firm-catalog")
     server = create_admin_server(state, port=0)
     host, port = server.server_address
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -499,6 +501,7 @@ def main() -> int:
     elif arguments.command == "verify":
         emit(repository.verify())
     elif arguments.command == "serve":
+        FirmRepository.initialize(arguments.state / "firm-catalog")
         server = create_admin_server(arguments.state, arguments.host, arguments.port)
         host, port = server.server_address
         print(f"RFI Admin Console: http://{host}:{port}", flush=True)
