@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from rfi.admin.field_definitions import field_definitions
 from rfi.concepts import ConceptError, ConceptRepository, ConceptService
+from rfi.firms import FirmError, FirmRepository, FirmService, sample_firms
 
 MAX_BODY_BYTES = 1_000_000
 
@@ -214,6 +215,8 @@ search.onkeydown=e=>{if(e.key==='Enter')load()}; load();
 _CONSOLE_ASSET = Path(__file__).with_name("console.html")
 if _CONSOLE_ASSET.exists():
     CONSOLE_HTML = _CONSOLE_ASSET.read_text(encoding="utf-8")
+_FIRMS_ASSET = Path(__file__).with_name("firms.html")
+FIRMS_HTML = _FIRMS_ASSET.read_text(encoding="utf-8")
 
 
 class AdminConsole(ThreadingHTTPServer):
@@ -225,8 +228,10 @@ class AdminConsole(ThreadingHTTPServer):
         self,
         address: tuple[str, int],
         service: ConceptService,
+        firm_service: FirmService,
     ) -> None:
         self.service = service
+        self.firm_service = firm_service
         super().__init__(address, AdminHandler)
 
 
@@ -261,6 +266,9 @@ class AdminHandler(BaseHTTPRequestHandler):
             if method == "GET" and path in {"/", "/concepts"}:
                 self._send(HTTPStatus.OK, CONSOLE_HTML.encode(), "text/html; charset=utf-8")
                 return
+            if method == "GET" and path == "/firms":
+                self._send(HTTPStatus.OK, FIRMS_HTML.encode(), "text/html; charset=utf-8")
+                return
             if method == "GET" and path == "/health":
                 self._send_json(HTTPStatus.OK, {"status": "ok", "bind": "local-default"})
                 return
@@ -271,7 +279,14 @@ class AdminHandler(BaseHTTPRequestHandler):
                 self._error(HTTPStatus.NOT_FOUND, "unknown browser request")
                 return
             self._api(method, path, parse_qs(split.query))
-        except (ConceptError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
+        except (
+            ConceptError,
+            FirmError,
+            ValueError,
+            TypeError,
+            KeyError,
+            json.JSONDecodeError,
+        ) as error:
             self._error(HTTPStatus.BAD_REQUEST, str(error))
         except Exception as error:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, f"request failed: {error}")
@@ -279,6 +294,48 @@ class AdminHandler(BaseHTTPRequestHandler):
     def _api(self, method: str, path: str, query: dict[str, list[str]]) -> None:
         parts = [item for item in path.split("/") if item]
         service = self.server.service
+        firm_service = self.server.firm_service
+        if method == "GET" and parts == ["api", "firms"]:
+            items = firm_service.list_firms(
+                self._first(query, "q"),
+                self._first(query, "status") or None,
+                self._first(query, "sector") or None,
+                self._first(query, "industry") or None,
+            )
+            self._send_json(HTTPStatus.OK, {"items": [asdict(item) for item in items]})
+            return
+        if method == "POST" and parts == ["api", "firms"]:
+            self._send_json(HTTPStatus.CREATED, asdict(firm_service.create(self._body())))
+            return
+        if method == "POST" and parts == ["api", "firms", "validate"]:
+            body = self._body()
+            current = body.pop("current_firm_id", None)
+            self._send_json(HTTPStatus.OK, firm_service.validate(body, current))
+            return
+        if len(parts) >= 3 and parts[:2] == ["api", "firms"]:
+            firm_id = parts[2]
+            if method == "GET" and len(parts) == 3:
+                revision_id = self._first(query, "revision_id") or None
+                self._send_json(HTTPStatus.OK, asdict(firm_service.detail(firm_id, revision_id)))
+                return
+            if method == "GET" and parts[3:] == ["history"]:
+                history = firm_service.history(firm_id)
+                self._send_json(HTTPStatus.OK, {"items": [asdict(item) for item in history]})
+                return
+            body = self._body()
+            expected = body.get("expected_revision_id")
+            if not isinstance(expected, str) or not expected:
+                raise FirmError("expected_revision_id is required")
+            if method == "PUT" and len(parts) == 3:
+                firm = body.get("firm")
+                if not isinstance(firm, dict):
+                    raise FirmError("firm payload is required")
+                result = firm_service.revise(firm_id, firm, expected)
+                self._send_json(HTTPStatus.OK, asdict(result))
+                return
+            if method == "POST" and parts[3:] == ["retire"]:
+                self._send_json(HTTPStatus.OK, asdict(firm_service.retire(firm_id, expected)))
+                return
         if method == "GET" and parts == ["api", "concepts"]:
             items = service.list_concepts(
                 self._first(query, "q"),
@@ -356,6 +413,12 @@ class AdminHandler(BaseHTTPRequestHandler):
         text = message.casefold()
         if "current revision has changed" in text:
             return "revision_conflict"
+        if "current firm revision has changed" in text:
+            return "revision_conflict"
+        if "conflicting firm identifier" in text:
+            return "identifier_conflict"
+        if "conflicting firm domain" in text:
+            return "domain_conflict"
         if "duplicate" in text:
             return "duplicate"
         if "validity interval" in text or "iso date" in text:
@@ -395,4 +458,12 @@ def create_admin_server(
     if not 0 <= port <= 65535:
         raise ConceptError("port must be between 0 and 65535")
     repository = ConceptRepository.initialize(state)
-    return AdminConsole((host, port), ConceptService(repository))
+    firm_repository = FirmRepository.initialize(state / "firm-catalog")
+    if not firm_repository.lookup():
+        for draft in sample_firms():
+            firm_repository.create(draft)
+    return AdminConsole(
+        (host, port),
+        ConceptService(repository),
+        FirmService(firm_repository),
+    )

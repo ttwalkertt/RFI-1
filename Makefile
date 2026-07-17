@@ -1,7 +1,7 @@
 PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 
-.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof lint format-check typecheck import-check docs-check baseline-check build validate review-package
+.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof lint format-check typecheck import-check docs-check baseline-check build validate review-package
 
 setup:
 	$(PYTHON) -m venv .venv
@@ -42,6 +42,9 @@ task009-proof: setup
 task010-proof: setup
 	$(VENV_PYTHON) scripts/task010_admin_console.py fixture-proof
 
+task011-proof: setup
+	$(VENV_PYTHON) scripts/task011_firms.py fixture-proof
+
 lint: setup
 	$(VENV_PYTHON) scripts/quality.py lint
 
@@ -63,7 +66,7 @@ baseline-check: setup
 build: setup
 	$(VENV_PYTHON) scripts/build_source_archive.py
 
-validate: test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof lint format-check typecheck import-check docs-check baseline-check build
+validate: test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof lint format-check typecheck import-check docs-check baseline-check build
 
 review-package: setup
-	$(VENV_PYTHON) scripts/generate_task010_review.py
+	$(VENV_PYTHON) scripts/generate_task011_review.py

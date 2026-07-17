@@ -38,6 +38,12 @@ the codebase has enough behavior to justify the dependency.
 `make build` creates and verifies a source snapshot at `.artifacts/build/rfi-1-source.zip`.
 It is a reviewable bootstrap build artifact, not a published application distribution.
 
+## TASK-011 target-firm workflow
+
+Run `make task011-proof` for the seeded HDD firm catalog, conflict, revision, restart, and stable
+reference proof. The existing local admin server exposes Target Firms at `/firms`; its public API
+is documented in the [target-firm catalog guide](target-firm-catalog-and-admin-editor.md).
+
 ## Acquisition operator workflow
 
 The substrate accepts repository state through a caller-selected directory. It never contacts a

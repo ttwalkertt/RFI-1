@@ -4,6 +4,10 @@ TASK-010 turns the Concept Catalog into the reference interaction model for futu
 tabs. The normal workflow is List/Search → Detail/Browser → Edit/Create Revision → Validate →
 Preview → Save New Revision.
 
+TASK-011 applies this model to the Target Firms tab: the shell, visual language, contextual-help
+behavior, repeated typed rows, page validation summary, preview semantics, dirty-state protection,
+and local-only dependency footprint are shared conventions rather than a second GUI style.
+
 ## Operator interaction model
 
 Every significant field has an info control backed by `rfi.admin.field_definitions`. Help opens on
