@@ -207,6 +207,10 @@ class FirmAdminConsoleTests(unittest.TestCase):
             "error-summary",
         ):
             self.assertIn(marker, shell)
+        self.assertIn('<a href="/concepts">Concept Catalog</a>', shell)
+        self.assertIn('<a href="/firms" aria-current="page">', shell)
+        self.assertEqual(shell.count('aria-current="page"'), 1)
+        self.assertIn("nav a:hover{background:#ffffff14}", shell)
         self.assertNotIn("JSON array", shell)
         self.assertNotIn("name=\"identifiers\"", shell)
         self.assertNotIn("Firm relationships", shell)
