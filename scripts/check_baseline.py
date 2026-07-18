@@ -79,6 +79,7 @@ def main() -> int:
         "acquisition/sec_form_10k.py",
         "acquisition/sec_provider.py",
         "admin/__init__.py",
+        "admin/admin_preferences.js",
         "admin/console.html",
         "admin/field_definitions.py",
         "admin/firms.html",

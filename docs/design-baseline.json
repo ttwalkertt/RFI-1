@@ -17,10 +17,10 @@
       "source": "README.md",
       "destination": "README.md",
       "source_size": 5104,
-      "destination_size": 5403,
+      "destination_size": 5500,
       "source_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
-      "destination_sha256": "31d219ac8547c10e8e4aae0c081fe2799f2051444104050411f7dc85d991f070",
-      "content_change": "documentation index extended for TASK-016 retrieval and durable backlog governance"
+      "destination_sha256": "a397f9e183b6b26a427ffdbc5e46cdd87107afdc9d779f2fb50a2fc0b3c97bbf",
+      "content_change": "documentation index extended through TASK-017 admin preferences"
     },
     {
       "source": "DESIGN_PRINCIPLES.md",
@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 5186,
+      "destination_size": 5272,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "f05373e21d464c8740243c87d0f9bea7c13af519f16fd980354553afc61d85c1",
-      "content_change": "task roadmap reconciled through TASK-016 and distinguished from backlog and roadmap governance"
+      "destination_sha256": "9e6819a8b84314ca3f23c733008d35ab24a1b0f1f8211c1b99105937e00e7f23",
+      "content_change": "task roadmap reconciled through completed TASK-017 and distinguished from backlog and roadmap governance"
     },
     {
       "source": "ROADMAP.md",
