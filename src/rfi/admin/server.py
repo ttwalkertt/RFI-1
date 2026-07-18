@@ -13,6 +13,12 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from rfi.admin.field_definitions import field_definitions
 from rfi.concepts import ConceptError, ConceptRepository, ConceptService
 from rfi.firms import FirmError, FirmRepository, FirmService
+from rfi.source_profiles import (
+    SourceProfileError,
+    SourceProfileRepository,
+    SourceProfileService,
+    load_canonical_template,
+)
 
 MAX_BODY_BYTES = 1_000_000
 
@@ -217,6 +223,8 @@ if _CONSOLE_ASSET.exists():
     CONSOLE_HTML = _CONSOLE_ASSET.read_text(encoding="utf-8")
 _FIRMS_ASSET = Path(__file__).with_name("firms.html")
 FIRMS_HTML = _FIRMS_ASSET.read_text(encoding="utf-8")
+_SOURCE_PROFILES_ASSET = Path(__file__).with_name("source_profiles.html")
+SOURCE_PROFILES_HTML = _SOURCE_PROFILES_ASSET.read_text(encoding="utf-8")
 
 
 class AdminConsole(ThreadingHTTPServer):
@@ -229,9 +237,11 @@ class AdminConsole(ThreadingHTTPServer):
         address: tuple[str, int],
         service: ConceptService,
         firm_service: FirmService,
+        source_profile_service: SourceProfileService,
     ) -> None:
         self.service = service
         self.firm_service = firm_service
+        self.source_profile_service = source_profile_service
         super().__init__(address, AdminHandler)
 
 
@@ -269,6 +279,13 @@ class AdminHandler(BaseHTTPRequestHandler):
             if method == "GET" and path == "/firms":
                 self._send(HTTPStatus.OK, FIRMS_HTML.encode(), "text/html; charset=utf-8")
                 return
+            if method == "GET" and path == "/source-profiles":
+                self._send(
+                    HTTPStatus.OK,
+                    SOURCE_PROFILES_HTML.encode(),
+                    "text/html; charset=utf-8",
+                )
+                return
             if method == "GET" and path == "/health":
                 self._send_json(HTTPStatus.OK, {"status": "ok", "bind": "local-default"})
                 return
@@ -282,6 +299,7 @@ class AdminHandler(BaseHTTPRequestHandler):
         except (
             ConceptError,
             FirmError,
+            SourceProfileError,
             ValueError,
             TypeError,
             KeyError,
@@ -295,6 +313,13 @@ class AdminHandler(BaseHTTPRequestHandler):
         parts = [item for item in path.split("/") if item]
         service = self.server.service
         firm_service = self.server.firm_service
+        source_profile_service = self.server.source_profile_service
+        if method == "GET" and parts == ["api", "source-profile-template"]:
+            self._send_json(
+                HTTPStatus.OK,
+                source_profile_service.canonical_template(),
+            )
+            return
         if method == "GET" and parts == ["api", "firms"]:
             items = firm_service.list_firms(
                 self._first(query, "q"),
@@ -317,6 +342,38 @@ class AdminHandler(BaseHTTPRequestHandler):
             return
         if len(parts) >= 3 and parts[:2] == ["api", "firms"]:
             firm_id = parts[2]
+            if parts[3:] == ["source-profile"]:
+                if method == "GET":
+                    revision_id = self._first(query, "revision_id") or None
+                    profile = source_profile_service.detail(firm_id, revision_id)
+                    self._send_json(HTTPStatus.OK, asdict(profile))
+                    return
+                body = self._body()
+                if method == "PUT":
+                    expected = body.get("expected_revision_id")
+                    if expected is not None and not isinstance(expected, str):
+                        raise SourceProfileError(
+                            "expected source-profile revision identifier must be a string or null"
+                        )
+                    profile = body.get("profile")
+                    if not isinstance(profile, dict):
+                        raise SourceProfileError("source-profile payload is required")
+                    result = source_profile_service.publish(firm_id, profile, expected)
+                    self._send_json(HTTPStatus.OK, asdict(result))
+                    return
+            if method == "GET" and parts[3:] == ["source-profile", "history"]:
+                history = source_profile_service.history(firm_id)
+                self._send_json(
+                    HTTPStatus.OK,
+                    {"items": [asdict(item) for item in history]},
+                )
+                return
+            if method == "POST" and parts[3:] == ["source-profile", "validate"]:
+                self._send_json(
+                    HTTPStatus.OK,
+                    source_profile_service.validate(firm_id, self._body()),
+                )
+                return
             if method == "GET" and len(parts) == 3:
                 revision_id = self._first(query, "revision_id") or None
                 self._send_json(HTTPStatus.OK, asdict(firm_service.detail(firm_id, revision_id)))
@@ -462,8 +519,16 @@ def create_admin_server(
         raise ConceptError("port must be between 0 and 65535")
     repository = ConceptRepository.open(state)
     firm_repository = FirmRepository.open(state / "firm-catalog")
+    template = load_canonical_template()
+    source_profile_state = state / "source-profiles"
+    source_profile_repository = (
+        SourceProfileRepository.open(source_profile_state, template)
+        if source_profile_state.exists()
+        else SourceProfileRepository.initialize(source_profile_state, template)
+    )
     return AdminConsole(
         (host, port),
         ConceptService(repository),
         FirmService(firm_repository),
+        SourceProfileService(source_profile_repository, firm_repository, template),
     )

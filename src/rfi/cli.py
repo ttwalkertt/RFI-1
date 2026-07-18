@@ -15,6 +15,11 @@ from rfi.catalog_import import (
 )
 from rfi.concepts import ConceptError, ConceptRepository, sample_concepts
 from rfi.firms import FirmError, FirmRepository, sample_firms
+from rfi.source_profiles import (
+    SourceProfileError,
+    SourceProfileRepository,
+    load_canonical_template,
+)
 
 DEFAULT_STATE = Path(".artifacts/runtime/rfi-1")
 
@@ -109,15 +114,22 @@ def initialize(state: Path) -> None:
     """Initialize missing catalogs without changing valid existing catalogs."""
     concept_exists = (state / "catalog.json").exists()
     firm_state = state / "firm-catalog"
+    source_profile_state = state / "source-profiles"
     firm_exists = (firm_state / "catalog.json").exists()
+    source_profiles_exist = (source_profile_state / "catalog.json").exists()
     if concept_exists:
         ConceptRepository.open(state)
     if firm_exists:
         FirmRepository.open(firm_state)
+    template = load_canonical_template()
+    if source_profiles_exist:
+        SourceProfileRepository.open(source_profile_state, template)
     if not concept_exists:
         ConceptRepository.initialize(state)
     if not firm_exists:
         FirmRepository.initialize(firm_state)
+    if not source_profiles_exist:
+        SourceProfileRepository.initialize(source_profile_state, template)
     changes = []
     concept_change = (
         "concept catalog already existed" if concept_exists else "created concept catalog"
@@ -125,13 +137,20 @@ def initialize(state: Path) -> None:
     firm_change = (
         "target-firm catalog already existed" if firm_exists else "created target-firm catalog"
     )
-    changes.extend((concept_change, firm_change))
+    profile_change = (
+        "firm source-profile catalog already existed"
+        if source_profiles_exist
+        else "created firm source-profile catalog"
+    )
+    changes.extend((concept_change, firm_change, profile_change))
     print(f"RFI-1 state: {state}")
     for change in changes:
         print(f"- {change}")
 
 
-def _open_state(state: Path) -> tuple[ConceptRepository, FirmRepository]:
+def _open_state(
+    state: Path,
+) -> tuple[ConceptRepository, FirmRepository, SourceProfileRepository]:
     """Open complete application state or explain the required first-run action."""
     missing = []
     if not (state / "catalog.json").is_file():
@@ -143,12 +162,23 @@ def _open_state(state: Path) -> tuple[ConceptRepository, FirmRepository]:
             f"state is not initialized at {state} (missing {', '.join(missing)}); "
             "run 'rfi init' with the same --state path"
         )
-    return ConceptRepository.open(state), FirmRepository.open(state / "firm-catalog")
+    template = load_canonical_template()
+    source_profile_state = state / "source-profiles"
+    source_profiles = (
+        SourceProfileRepository.open(source_profile_state, template)
+        if (source_profile_state / "catalog.json").is_file()
+        else SourceProfileRepository.initialize(source_profile_state, template)
+    )
+    return (
+        ConceptRepository.open(state),
+        FirmRepository.open(state / "firm-catalog"),
+        source_profiles,
+    )
 
 
 def seed(state: Path, files: tuple[Path, ...] = ()) -> None:
     """Add only missing starter records to verified initialized state."""
-    concepts, firms = _open_state(state)
+    concepts, firms, _source_profiles = _open_state(state)
     imported = import_catalogs(files, firms, sample_firms()) if files else None
     existing_concepts = {item.concept_id for item in concepts.lookup()}
     existing_firms = {item.firm_id for item in firms.lookup()}
@@ -207,7 +237,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 seed(arguments.state, tuple(arguments.file))
         else:
             serve(arguments.state, arguments.host, arguments.port)
-    except (ApplicationError, CatalogImportError, ConceptError, FirmError, OSError) as error:
+    except (
+        ApplicationError,
+        CatalogImportError,
+        ConceptError,
+        FirmError,
+        SourceProfileError,
+        OSError,
+    ) as error:
         print(f"rfi: error: {error}", file=sys.stderr)
         print("Use 'rfi --help' or 'rfi <command> --help' for usage.", file=sys.stderr)
         return 2

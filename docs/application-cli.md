@@ -1,7 +1,8 @@
 # Stable RFI-1 application CLI
 
 TASK-012 provides one supported operator entry point for local application state and the integrated
-concept and target-firm admin console. The installed `rfi` command and `python -m rfi` call the same
+concept, target-firm, and source-profile admin console. The installed `rfi` command and
+`python -m rfi` call the same
 implementation. Run `rfi --help` and `rfi <command> --help` to discover options and examples.
 
 ## Command structure
@@ -38,8 +39,8 @@ Launch the integrated console:
 .venv/bin/rfi admin
 ```
 
-Open the displayed URL. The concept catalog is at `/` or `/concepts`; Target Firms is at `/firms`.
-Press Ctrl-C to stop cleanly.
+Open the displayed URL. The concept catalog is at `/` or `/concepts`, Target Firms is at `/firms`,
+and firm acquisition configuration is at `/source-profiles`. Press Ctrl-C to stop cleanly.
 
 ## Normal repeat use
 
@@ -91,8 +92,9 @@ catalog readable and byte-for-byte unchanged.
 
 ## Failure behavior and boundaries
 
-`seed` and `admin` require both catalogs to have been initialized. Missing state explains how to
-run `init`; incompatible or corrupt state fails closed through existing repository verification;
+`seed` and `admin` require concept and target-firm catalogs to have been initialized. The additive
+source-profile catalog is initialized empty when older valid application state is opened. Missing
+core state explains how to run `init`; incompatible or corrupt state fails closed through existing repository verification;
 invalid ports, inaccessible paths, and bind failures produce an operator-facing error and nonzero
 exit. Startup never repairs, migrates, or seeds state.
 
@@ -109,6 +111,6 @@ packaging is introduced.
 - Concept and firm persistence: **Complete for current schemas**; incompatible state fails closed.
 - Operational deployment: **Not started**; the server is a foreground local development service.
 - Architectural change: lifecycle composition moved to a stable package entry point, and server
-  creation now opens verified state without hidden mutation.
+creation now opens verified core state and initializes only missing additive source-profile state.
 - Next milestone: use the stable operator surface for focused workflow feedback before expanding
   application operations or deployment concerns.
