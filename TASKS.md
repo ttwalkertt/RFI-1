@@ -3,6 +3,9 @@
 > The unit of work is an architectural milestone, not an implementation milestone.
 >
 > Each milestone receives its own detailed task ticket before implementation. The task ticket remains authoritative.
+>
+> This file records authorized implementation work. Unscheduled observations and ideas belong in
+> `BACKLOG.md`; intended direction and sequencing belong in `ROADMAP.md`.
 
 | Task | Architectural Milestone | Status |
 |---|---|---|
@@ -21,6 +24,7 @@
 | TASK-013 | External target-firm catalog import | Complete |
 | TASK-014 | Firm source profiles and canonical acquisition template | Complete |
 | TASK-015 | Pull Workflow shared by GUI, CLI, and REST API | Complete |
+| TASK-016 | Deterministic SEC Form 10-K retrieval vertical slice | Complete |
 
 ## Architectural Progression
 

@@ -56,6 +56,9 @@ rfi pull --all-configured
 
 The complete structured result is printed as JSON. Unsupported retrieval modes are retained as
 explicit skipped results with an operator diagnostic; they do not trigger hidden fallback logic.
+An enabled `sec_10k` artifact with an identifier candidate containing a valid SEC CIK is selected
+through the `sec-form-10k` capability and uses the governed runtime request identity described in
+[deterministic SEC Form 10-K retrieval](deterministic-sec-form-10k-retrieval.md).
 See [Pull Workflow](pull-workflow.md) for planning, outcomes, ingress, and limitations.
 
 ## Normal repeat use

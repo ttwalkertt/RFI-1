@@ -134,8 +134,11 @@ The following documents define the project.
 | `RFI_MANIFESTO.md` | Statement of philosophy and intent |
 | `ARCHITECTURE.md` *(planned)* | Stable architectural concepts |
 | `ACQUISITION_POC_GUIDANCE.md` | Design guidance and hard invariants for the acquisition proof of concept |
+| `docs/deterministic-sec-form-10k-retrieval.md` | Current artifact-semantic SEC Form 10-K retrieval boundary and operator proof |
 | `DESIGN_PRINCIPLES.md` *(planned)* | Enduring engineering principles |
+| `BACKLOG.md` | Unscheduled candidates, review observations, deferred improvements, and future ideas |
 | `ROADMAP.md` *(planned)* | Capability roadmap |
+| `TASKS.md` | Authorized implementation work and task status |
 | `TASK-XXX` | Incremental implementation work items |
 
 ---

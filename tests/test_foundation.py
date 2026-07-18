@@ -20,7 +20,7 @@ class FoundationTests(unittest.TestCase):
 
     def test_imported_design_baseline_matches_recorded_destinations(self) -> None:
         manifest = json.loads((ROOT / "docs" / "design-baseline.json").read_text())
-        self.assertEqual(len(manifest["documents"]), 7)
+        self.assertEqual(len(manifest["documents"]), 8)
         for document in manifest["documents"]:
             destination = ROOT / document["destination"]
             digest = hashlib.sha256(destination.read_bytes()).hexdigest()
@@ -50,6 +50,8 @@ class FoundationTests(unittest.TestCase):
                 "acquisition/repository.py",
                 "acquisition/runtime_config.py",
                 "acquisition/sec_api.py",
+                "acquisition/sec_form_10k.py",
+                "acquisition/sec_provider.py",
                 "admin/__init__.py",
                 "admin/console.html",
                 "admin/field_definitions.py",
@@ -80,6 +82,7 @@ class FoundationTests(unittest.TestCase):
                 "knowledge/derivation.py",
                 "knowledge/repository.py",
                 "pull/__init__.py",
+                "pull/adapters.py",
                 "pull/contracts.py",
                 "pull/planning.py",
                 "pull/repository.py",

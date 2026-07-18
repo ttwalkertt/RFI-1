@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from rfi.firms.contracts import FirmRevision
+from rfi.pull.adapters import RetrievalAdapterRegistry
 from rfi.source_profiles.contracts import (
     AcquisitionTemplate,
     RetrievalCandidate,
@@ -37,9 +38,11 @@ class PlannedFirm:
 class PullPlanner:
     """Expand enabled profile items and classify adapter availability."""
 
-    def __init__(self, template: AcquisitionTemplate, available_modes: tuple[str, ...]) -> None:
+    def __init__(
+        self, template: AcquisitionTemplate, adapters: RetrievalAdapterRegistry
+    ) -> None:
         self._template = template
-        self._available_modes = frozenset(available_modes)
+        self._adapters = adapters
         self._artifacts = {item.artifact_id: item for item in template.artifacts}
 
     def plan(
@@ -64,7 +67,7 @@ class PullPlanner:
             runnable = tuple(
                 candidate
                 for candidate in item.retrieval_candidates
-                if candidate.mode in self._available_modes
+                if self._adapters.compatible(item.artifact_id, candidate)
             )
             if not item.retrieval_candidates:
                 diagnostic = "No retrieval candidate configured."

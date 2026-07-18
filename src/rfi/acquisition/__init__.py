@@ -36,6 +36,16 @@ from rfi.acquisition.fixture_adapters import (
 )
 from rfi.acquisition.repository import AcquisitionRepository
 from rfi.acquisition.runtime_config import load_runtime_configuration
+from rfi.acquisition.sec_form_10k import SecForm10KAdapter
+from rfi.acquisition.sec_provider import (
+    SecFilingMetadata,
+    SecHttpResponse,
+    SecProviderClient,
+    SecResponseTooLarge,
+    SecRetrievedDocument,
+    SecTransport,
+    SecUrllibTransport,
+)
 from rfi.acquisition.sec_api import (
     SecApiAdapter,
     credential_from_environment,
@@ -67,6 +77,14 @@ __all__ = [
     "RetrievalResult",
     "RunStatus",
     "SecApiAdapter",
+    "SecFilingMetadata",
+    "SecForm10KAdapter",
+    "SecHttpResponse",
+    "SecProviderClient",
+    "SecResponseTooLarge",
+    "SecRetrievedDocument",
+    "SecTransport",
+    "SecUrllibTransport",
     "SourceProfile",
     "credential_from_environment",
     "fixture_profiles",

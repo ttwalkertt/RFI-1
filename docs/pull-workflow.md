@@ -36,10 +36,13 @@ candidates retain profile priority order, and the workflow attempts runnable can
 produces success, duplicate, or no change. A failed candidate does not prevent a later candidate,
 artifact, or firm from executing.
 
-The initial executable adapter coverage is deliberately narrow:
+Executable adapter coverage is selected through explicit artifact-semantic capability
+declarations:
 
-- `direct_url`: runnable through `DirectUrlAdapter`;
-- `feed`, `identifier`, `listing_page`, and `discovery`: explicit stubs.
+- any canonical artifact configured with `direct_url` is runnable through `DirectUrlAdapter`;
+- canonical `sec_10k` configured with `identifier` is runnable through the artifact-specific
+  `SecForm10KAdapter`; and
+- remaining feed, identifier, listing-page, and discovery combinations remain explicit stubs.
 
 An enabled item without a candidate is a `configuration_problem`. An item whose candidates all
 use unsupported modes is `skipped` with the durable diagnostic:
@@ -51,10 +54,15 @@ without expanding TASK-015 into dozens of retrieval implementations or fabricati
 
 ## Acquisition and repository ingress
 
-For each runnable candidate, the workflow translates the snapshotted firm, artifact, profile
-revision, and candidate into a governed acquisition `SourceProfile`. It registers that source in
-the existing `AcquisitionRepository`, selects the adapter through `AdapterRegistry`, and invokes
-the existing `AcquisitionEngine`.
+For each runnable candidate, the workflow first selects exactly one declared retrieval capability,
+then translates the snapshotted firm, artifact, profile revision, candidate, and adapter identity
+into a governed acquisition `SourceProfile`. It registers that source in the existing
+`AcquisitionRepository`, projects only the already-selected source adapter into the
+mechanism-keyed `AdapterRegistry`, and invokes the existing `AcquisitionEngine`. Retrieval
+capability uniqueness is determined by canonical artifact identity plus candidate mode, not by the
+downstream acquisition mechanism. Distinct artifact-semantic adapters may therefore share a
+mechanism without creating a multiple-match policy; overlapping artifact/mode claims still fail
+closed during registry construction.
 
 Adapters return exact `RetrievalResult` bytes. `AcquisitionEngine` calls the existing public
 repository ingress, which derives content-addressed artifact identity, stores immutable whole
@@ -107,10 +115,11 @@ stage progress. It contains no retrieval planning or repository calls.
 
 ### Operator console
 
-The existing console has one new top-level **Pull Sources** tab at `/pull-sources`. It lists only
-firms with saved profiles, supports one/many/all selection, displays enabled/runnable/incomplete
-counts, launches the REST workflow initiator, polls status, and renders terminal firm and artifact
-results. It is not a second application.
+The existing console has one top-level **Pull Sources** tab at `/pull-sources`. It lists only firms
+with saved profiles, supports one/many/all selection, displays enabled/runnable/incomplete counts,
+shows registered adapter capabilities, launches the REST workflow initiator, polls status, and
+renders adapter identity, filing provenance, diagnostics, and terminal results. It is not a second
+application.
 
 ## Verification and limitations
 
@@ -139,7 +148,9 @@ chunking, embeddings, semantic search, report generation, or automatic refresh.
   results, aggregation, and shared initiation.
 - Interface integration: **Complete** for CLI, local REST API, and the existing operator console.
 - Direct URL retrieval: **Usable with Limitations** for exact whole-artifact HTTP(S) retrieval.
-- Remaining retrieval modes: **Provisional stubs** with explicit operator-visible skip results.
+- Identifier-based canonical Form 10-K retrieval: **Complete** for latest unamended primary filing.
+- Remaining retrieval capability combinations: **Provisional stubs** with explicit
+  operator-visible skip results.
 - Acquisition engine and repository ingress: **Complete and reused**; no parallel evidence path
   was introduced.
 - Operational execution: **Usable with Limitations** as a local single-process workflow, not a

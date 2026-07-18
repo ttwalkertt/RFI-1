@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from rfi.acquisition.contracts import JsonValue
+
 
 class PullError(RuntimeError):
     """Raised when a pull request or durable run identity is invalid."""
@@ -79,10 +81,12 @@ class RetrievalAttemptResult:
 
     mode: str
     priority: int
+    adapter_id: str
     acquisition_run_id: str | None
     status: str
     diagnostic: str
     artifact_ids: tuple[str, ...] = ()
+    details: dict[str, JsonValue] | None = None
 
 
 @dataclass(frozen=True)

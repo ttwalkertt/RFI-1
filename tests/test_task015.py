@@ -15,7 +15,6 @@ from rfi.acquisition import (
     AcquisitionRepository,
     AdapterCandidate,
     AdapterFailure,
-    AdapterRegistry,
     DirectUrlAdapter,
     DiscoveryPage,
     FailureClass,
@@ -33,6 +32,9 @@ from rfi.pull import (
     PullStage,
     PullStatus,
     PullWorkflow,
+    RetrievalAdapterCapability,
+    RetrievalAdapterRegistration,
+    RetrievalAdapterRegistry,
 )
 from rfi.source_profiles import (
     RetrievalCandidate,
@@ -45,6 +47,18 @@ from rfi.source_profiles import (
 
 def fixed_clock() -> str:
     return "2026-07-18T12:00:00Z"
+
+
+def retrieval_registry(adapter: object) -> RetrievalAdapterRegistry:
+    """Register one generic direct-URL capability for TASK-015 regression tests."""
+    return RetrievalAdapterRegistry(
+        (
+            RetrievalAdapterRegistration(
+                RetrievalAdapterCapability("direct-url", (), ("direct_url",)),
+                adapter,  # type: ignore[arg-type]
+            ),
+        )
+    )
 
 
 class ScriptedDirectAdapter:
@@ -137,7 +151,7 @@ class PullWorkflowCase(unittest.TestCase):
             self.profiles,
             self.template,
             self.acquisition,
-            AdapterRegistry((self.adapter,)),
+            retrieval_registry(self.adapter),
             PullRunRepository(self.root / "pull-workflows"),
             fixed_clock,
             iter((f"run{index}" for index in range(20))).__next__,
@@ -299,7 +313,7 @@ class PullWorkflowCase(unittest.TestCase):
             self.profiles,
             self.template,
             self.acquisition,
-            AdapterRegistry((adapter,)),
+            retrieval_registry(adapter),
             PullRunRepository(self.root / "production-pull-runs"),
             fixed_clock,
             lambda: "1production",

@@ -17,10 +17,10 @@
       "source": "README.md",
       "destination": "README.md",
       "source_size": 5104,
-      "destination_size": 5104,
+      "destination_size": 5403,
       "source_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
-      "destination_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
-      "content_change": "none"
+      "destination_sha256": "31d219ac8547c10e8e4aae0c081fe2799f2051444104050411f7dc85d991f070",
+      "content_change": "documentation index extended for TASK-016 retrieval and durable backlog governance"
     },
     {
       "source": "DESIGN_PRINCIPLES.md",
@@ -41,22 +41,31 @@
       "content_change": "none"
     },
     {
+      "source": "BACKLOG.md",
+      "destination": "BACKLOG.md",
+      "source_size": 8702,
+      "destination_size": 8702,
+      "source_sha256": "2c002f2cd05370e9b98760227cd681fe8d4cb43dcb3c0407bbaa22b6684ce755",
+      "destination_sha256": "2c002f2cd05370e9b98760227cd681fe8d4cb43dcb3c0407bbaa22b6684ce755",
+      "content_change": "repository-authored backlog governance introduced after TASK-016 review"
+    },
+    {
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 4934,
+      "destination_size": 5186,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "6f0fb1c3236eb496f93fcd622fa1caaa5b044357bc6c6f4222742861617f1402",
-      "content_change": "task roadmap reconciled to completed architectural milestones through TASK-015; authoritative-ticket rule preserved and clarified"
+      "destination_sha256": "f05373e21d464c8740243c87d0f9bea7c13af519f16fd980354553afc61d85c1",
+      "content_change": "task roadmap reconciled through TASK-016 and distinguished from backlog and roadmap governance"
     },
     {
       "source": "ROADMAP.md",
       "destination": "ROADMAP.md",
       "source_size": 3371,
-      "destination_size": 3371,
+      "destination_size": 3509,
       "source_sha256": "1de0192a023e8c046f2cdedc2fe61592345d2e06b324c9b49b2c2b25424dfdad",
-      "destination_sha256": "1de0192a023e8c046f2cdedc2fe61592345d2e06b324c9b49b2c2b25424dfdad",
-      "content_change": "none"
+      "destination_sha256": "cf1f71eb5da2107d15de1cb52a815a4e68ebd3b436124e45d39e26aec16abcc1",
+      "content_change": "roadmap role distinguished from unscheduled backlog candidates and authorized tasks"
     },
     {
       "source": "ARCHITECTURE.md",

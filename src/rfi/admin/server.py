@@ -329,6 +329,12 @@ class AdminHandler(BaseHTTPRequestHandler):
         firm_service = self.server.firm_service
         source_profile_service = self.server.source_profile_service
         pull_workflow = self.server.pull_workflow
+        if method == "GET" and parts == ["api", "pulls", "adapters"]:
+            self._send_json(
+                HTTPStatus.OK,
+                {"items": list(pull_workflow.adapter_capabilities())},
+            )
+            return
         if method == "GET" and parts == ["api", "pulls", "firms"]:
             self._send_json(
                 HTTPStatus.OK,

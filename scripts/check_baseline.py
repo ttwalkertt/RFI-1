@@ -22,8 +22,8 @@ def main() -> int:
     errors: list[str] = []
     data = json.loads(MANIFEST.read_text(encoding="utf-8"))
     documents = data.get("documents", [])
-    if len(documents) != 7:
-        errors.append(f"expected 7 design documents, found {len(documents)}")
+    if len(documents) != 8:
+        errors.append(f"expected 8 design documents, found {len(documents)}")
     for document in documents:
         destination = ROOT / document["destination"]
         if not destination.is_file():
@@ -76,6 +76,8 @@ def main() -> int:
         "acquisition/repository.py",
         "acquisition/runtime_config.py",
         "acquisition/sec_api.py",
+        "acquisition/sec_form_10k.py",
+        "acquisition/sec_provider.py",
         "admin/__init__.py",
         "admin/console.html",
         "admin/field_definitions.py",
@@ -106,6 +108,7 @@ def main() -> int:
         "knowledge/derivation.py",
         "knowledge/repository.py",
         "pull/__init__.py",
+        "pull/adapters.py",
         "pull/contracts.py",
         "pull/planning.py",
         "pull/repository.py",

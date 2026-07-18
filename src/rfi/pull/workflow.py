@@ -13,11 +13,11 @@ from typing import Any, Callable
 from rfi.acquisition import (
     AcquisitionEngine,
     AcquisitionRepository,
-    AdapterRegistry,
     RunStatus,
     SourceProfile,
 )
 from rfi.firms.contracts import FirmCatalog
+from rfi.pull.adapters import RetrievalAdapterRegistry
 from rfi.pull.contracts import (
     ArtifactOutcome,
     ArtifactPullResult,
@@ -54,7 +54,7 @@ class PullWorkflow:
         profiles: SourceProfileCatalog,
         template: AcquisitionTemplate,
         acquisition: AcquisitionRepository,
-        adapters: AdapterRegistry,
+        adapters: RetrievalAdapterRegistry,
         runs: PullRunRepository,
         clock: Callable[[], str] = utc_now,
         identifier_factory: Callable[[], str] = lambda: uuid.uuid4().hex,
@@ -91,6 +91,10 @@ class PullWorkflow:
                 )
             )
         return tuple(sorted(result, key=lambda item: item.firm_id))
+
+    def adapter_capabilities(self) -> tuple[dict[str, object], ...]:
+        """Expose deterministic adapter declarations for operator inspection."""
+        return self._adapters.registrations()
 
     def initiate(self, request: PullRequest) -> str:
         """Durably receive a request before any resolution or retrieval begins."""
@@ -214,8 +218,7 @@ class PullWorkflow:
         return tuple(self._firms.get(firm_id) for firm_id in request.firm_ids)
 
     def _planner(self) -> PullPlanner:
-        registrations = tuple(self._adapters.registrations())
-        return PullPlanner(self._template, registrations)
+        return PullPlanner(self._template, self._adapters)
 
     def _execute_firm(self, run_id: str, plan: PlannedFirm) -> FirmPullResult:
         artifacts = tuple(
@@ -281,6 +284,8 @@ class PullWorkflow:
         candidate: RetrievalCandidate,
     ) -> tuple[RetrievalAttemptResult, ArtifactOutcome]:
         candidate_value = self._candidate_value(candidate)
+        registration = self._adapters.select(artifact.artifact_id, candidate)
+        adapter_id = registration.capability.adapter_id
         revision_id = (
             firm.profile.source_profile_revision_id if firm.profile is not None else "defaults"
         )
@@ -289,24 +294,29 @@ class PullWorkflow:
             artifact.artifact_id,
             revision_id,
             candidate_value,
+            adapter_id,
         )
-        document_id = f"document-{firm.firm.firm_id}-{artifact.artifact_id}"
         source = SourceProfile(
             source_id=source_id,
             name=f"{firm.firm.canonical_name}: {artifact.label}",
             enabled=True,
-            mechanism=candidate.mode,
+            mechanism=registration.source_adapter.mechanism,
             configuration=candidate_value,
             policy={
                 "firm_id": firm.firm.firm_id,
                 "artifact_id": artifact.artifact_id,
                 "source_profile_revision_id": revision_id,
-                "document_id": document_id,
+                "retrieval_adapter_id": adapter_id,
+                "document_id": f"document-{firm.firm.firm_id}-{artifact.artifact_id}",
             },
         )
         try:
             self._acquisition.register_source(source)
-            engine = AcquisitionEngine(self._acquisition, self._adapters, self._clock)
+            engine = AcquisitionEngine(
+                self._acquisition,
+                self._adapters.acquisition_registry(adapter_id),
+                self._clock,
+            )
             result = engine.run_source(
                 source_id,
                 "workflow-"
@@ -315,13 +325,16 @@ class PullWorkflow:
             artifact_ids = self._artifact_ids(result)
             outcome = self._engine_outcome(result)
             diagnostic = self._engine_diagnostic(result, outcome)
+            details = self._attempt_details(result, adapter_id)
             attempt = RetrievalAttemptResult(
                 candidate.mode,
                 candidate.priority,
+                adapter_id,
                 result.run_id,
                 result.status.value,
                 diagnostic,
                 artifact_ids,
+                details,
             )
             return attempt, outcome
         except Exception as error:
@@ -329,9 +342,11 @@ class PullWorkflow:
                 RetrievalAttemptResult(
                     candidate.mode,
                     candidate.priority,
+                    adapter_id,
                     None,
                     "failed",
                     str(error),
+                    details={"adapter_id": adapter_id},
                 ),
                 ArtifactOutcome.RETRIEVAL_FAILURE,
             )
@@ -347,6 +362,45 @@ class PullWorkflow:
                 }
             )
         )
+
+    def _attempt_details(self, result: Any, adapter_id: str) -> dict[str, Any]:
+        attempt_ids = {item.attempt_id for item in result.outcomes if item.attempt_id}
+        records = [
+            record
+            for record in self._acquisition.history()
+            if record.get("attempt_id") in attempt_ids
+            and record.get("record_type") == "retrieval_attempt"
+        ]
+        documents = sorted(
+            {str(record["document_id"]) for record in records if record.get("document_id")}
+        )
+        candidates = sorted(
+            {str(record["candidate_id"]) for record in records if record.get("candidate_id")}
+        )
+        provenance = []
+        for record in records:
+            candidate = record.get("candidate", {})
+            discovery = candidate.get("provenance", {}) if isinstance(candidate, dict) else {}
+            provenance.append(
+                {
+                    "document_id": record.get("document_id"),
+                    "candidate_id": record.get("candidate_id"),
+                    "provider_identifiers": discovery.get("provider_identifiers", {}),
+                    "locations": discovery.get("locations", []),
+                    "metadata": discovery.get("metadata", {}),
+                    "retrieval_provider_identifiers": record.get(
+                        "retrieval_provider_identifiers", {}
+                    ),
+                    "retrieval_diagnostics": record.get("diagnostics", {}),
+                }
+            )
+        return {
+            "adapter_id": adapter_id,
+            "document_ids": documents,
+            "candidate_ids": candidates,
+            "provenance": provenance,
+            "engine_diagnostics": list(result.diagnostics),
+        }
 
     @staticmethod
     def _engine_outcome(result: Any) -> ArtifactOutcome:
@@ -399,8 +453,7 @@ class PullWorkflow:
             ],
         }
 
-    @staticmethod
-    def _plan_record(plan: PlannedFirm) -> dict[str, Any]:
+    def _plan_record(self, plan: PlannedFirm) -> dict[str, Any]:
         return {
             "firm_id": plan.firm.firm_id,
             "source_profile_revision_id": (
@@ -411,6 +464,16 @@ class PullWorkflow:
                 {
                     "artifact_id": item.artifact_id,
                     "candidate_modes": [value.mode for value in item.candidates],
+                    "adapter_selections": [
+                        {
+                            "priority": value.priority,
+                            "adapter_id": plan_adapter.capability.adapter_id,
+                        }
+                        for value in item.runnable_candidates
+                        for plan_adapter in self._adapters.compatible(
+                            item.artifact_id, value
+                        )
+                    ],
                     "runnable_priorities": [
                         value.priority for value in item.runnable_candidates
                     ],
@@ -430,6 +493,7 @@ class PullWorkflow:
         artifact_id: str,
         revision_id: str,
         candidate: dict[str, Any],
+        adapter_id: str,
     ) -> str:
         payload = json.dumps(
             {
@@ -437,6 +501,7 @@ class PullWorkflow:
                 "artifact_id": artifact_id,
                 "revision_id": revision_id,
                 "candidate": candidate,
+                "adapter_id": adapter_id,
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -492,10 +557,12 @@ class PullWorkflow:
                     RetrievalAttemptResult(
                         item["mode"],
                         item["priority"],
+                        item.get("adapter_id", item["mode"]),
                         item["acquisition_run_id"],
                         item["status"],
                         item["diagnostic"],
                         tuple(item.get("artifact_ids", ())),
+                        item.get("details"),
                     )
                     for item in artifact["attempts"]
                 )

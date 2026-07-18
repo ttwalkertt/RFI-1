@@ -20,7 +20,6 @@ from rfi.acquisition import (  # noqa: E402
     AcquisitionRepository,
     AdapterCandidate,
     AdapterFailure,
-    AdapterRegistry,
     DiscoveryPage,
     FailureClass,
     RetrievalResult,
@@ -34,6 +33,9 @@ from rfi.pull import (  # noqa: E402
     PullStage,
     PullStatus,
     PullWorkflow,
+    RetrievalAdapterCapability,
+    RetrievalAdapterRegistration,
+    RetrievalAdapterRegistry,
 )
 from rfi.source_profiles import (  # noqa: E402
     RetrievalCandidate,
@@ -148,7 +150,16 @@ def fixture_proof() -> dict[str, Any]:
             profiles,
             template,
             acquisition,
-            AdapterRegistry((adapter,)),
+            RetrievalAdapterRegistry(
+                (
+                    RetrievalAdapterRegistration(
+                        RetrievalAdapterCapability(
+                            "direct-url", (), ("direct_url",)
+                        ),
+                        adapter,
+                    ),
+                )
+            ),
             PullRunRepository(root / "pull-workflows"),
             clock,
             identifiers.__next__,

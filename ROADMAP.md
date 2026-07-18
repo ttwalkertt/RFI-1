@@ -6,6 +6,9 @@
 >
 > It is intentionally lightweight and is **not** a project plan or a commitment.
 > Implementation will be guided by experience gained in each preceding phase.
+>
+> Unscheduled candidates belong in `BACKLOG.md`. Authorized implementation work belongs in
+> `TASKS.md` and its governing task tickets.
 
 ---
 

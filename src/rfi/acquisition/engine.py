@@ -55,11 +55,16 @@ class AdapterFailure(RuntimeError):
     """Expected source-boundary failure with stable classification and retry guidance."""
 
     def __init__(
-        self, classification: FailureClass, message: str, retryable: bool
+        self,
+        classification: FailureClass,
+        message: str,
+        retryable: bool,
+        code: str | None = None,
     ) -> None:
         super().__init__(message)
         self.classification = classification
         self.retryable = retryable
+        self.code = code or classification.value
 
 
 @dataclass(frozen=True)
@@ -412,6 +417,7 @@ class AcquisitionEngine:
                         profile.mechanism,
                         {
                             "failure_class": error.classification.value,
+                            "failure_code": error.code,
                             "message": str(error),
                             "retryable": error.retryable,
                         },
@@ -597,6 +603,7 @@ class AcquisitionEngine:
         """Render adapter failure without leaking runtime configuration."""
         return {
             "failure_class": error.classification.value,
+            "failure_code": error.code,
             "message": str(error),
             "retryable": error.retryable,
             "context": context,

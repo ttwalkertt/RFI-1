@@ -137,8 +137,10 @@ source-profile catalog alongside existing application state.
   publication, history inspection, and cross-firm isolation.
 - Administrative configuration: **Complete** for template-driven category, item, and candidate
   editing in the local console.
-- Acquisition execution and retrieved source objects: **Not started** by design.
+- Acquisition execution: **Usable with limitations** through the shared Pull Workflow; direct URL
+  and identifier-based canonical Form 10-K capabilities are currently implemented.
+- Retrieved source objects: **Not started**; immutable acquisition evidence remains separate.
 - Important limitation: the console is a local single-operator interface and no template migration
   mechanism exists because the repository currently owns one template version.
-- Next architectural milestone: define acquisition execution as a separate consumer of published
-  profile configuration while preserving retrieved provenance and source-object boundaries.
+- Next architectural milestone: extend artifact-semantic retrieval coverage from observed source
+  behavior while preserving profile, retrieved-provenance, and source-object boundaries.
