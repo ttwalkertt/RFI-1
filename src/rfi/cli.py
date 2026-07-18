@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from typing import Sequence
 
@@ -15,6 +17,7 @@ from rfi.catalog_import import (
 )
 from rfi.concepts import ConceptError, ConceptRepository, sample_concepts
 from rfi.firms import FirmError, FirmRepository, sample_firms
+from rfi.pull import PullError, PullRequest, PullStatus, create_pull_workflow
 from rfi.source_profiles import (
     SourceProfileError,
     SourceProfileRepository,
@@ -54,6 +57,7 @@ def parser() -> argparse.ArgumentParser:
             "  rfi init\n"
             "  rfi seed\n"
             "  rfi admin\n"
+            "  rfi pull --firm seagate\n"
             "  python -m rfi admin --state /path/to/state --port 9000\n\n"
             "Run init once for a state location. Seed is optional and always explicit. "
             "Use admin for normal repeat operation."
@@ -107,6 +111,35 @@ def parser() -> argparse.ArgumentParser:
     _add_state(admin)
     admin.add_argument("--host", default="127.0.0.1", help="server bind host (default: 127.0.0.1)")
     admin.add_argument("--port", type=int, default=8765, help="server port (default: 8765)")
+    pull = commands.add_parser(
+        "pull",
+        help="retrieve enabled artifacts through the shared Pull Workflow",
+        description=(
+            "Run the durable Pull Workflow for selected firms or every firm with a "
+            "saved source profile. Each artifact and firm executes independently."
+        ),
+        epilog=(
+            "examples:\n"
+            "  rfi pull --firm seagate\n"
+            "  rfi pull --firm seagate --firm ibm\n"
+            "  rfi pull --all-configured"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    _add_state(pull)
+    selection = pull.add_mutually_exclusive_group(required=True)
+    selection.add_argument(
+        "--firm",
+        action="append",
+        default=[],
+        metavar="FIRM_ID",
+        help="firm to pull (repeat for multiple firms)",
+    )
+    selection.add_argument(
+        "--all-configured",
+        action="store_true",
+        help="pull every firm with a saved source profile",
+    )
     return value
 
 
@@ -222,6 +255,14 @@ def serve(state: Path, host: str, port: int) -> None:
         server.server_close()
 
 
+def pull_sources(state: Path, firm_ids: tuple[str, ...], all_configured: bool) -> int:
+    """Run the shared Pull Workflow and print its durable structured result."""
+    _open_state(state)
+    result = create_pull_workflow(state).run(PullRequest(firm_ids, all_configured))
+    print(json.dumps(asdict(result), indent=2, sort_keys=True))
+    return 0 if result.status == PullStatus.COMPLETED else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run one stable RFI-1 application operation with actionable failures."""
     arguments = parser().parse_args(argv)
@@ -235,14 +276,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(canonical_template(), end="")
             else:
                 seed(arguments.state, tuple(arguments.file))
-        else:
+        elif arguments.command == "admin":
             serve(arguments.state, arguments.host, arguments.port)
+        else:
+            return pull_sources(
+                arguments.state,
+                tuple(arguments.firm),
+                arguments.all_configured,
+            )
     except (
         ApplicationError,
         CatalogImportError,
         ConceptError,
         FirmError,
         SourceProfileError,
+        PullError,
         OSError,
     ) as error:
         print(f"rfi: error: {error}", file=sys.stderr)

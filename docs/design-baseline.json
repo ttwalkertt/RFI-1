@@ -44,10 +44,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 4861,
+      "destination_size": 4934,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "e842853917e23104bcf63ac079b112e09025247e55a78b8c3c5a711c6692d962",
-      "content_change": "task roadmap reconciled to completed architectural milestones through TASK-014; authoritative-ticket rule preserved and clarified"
+      "destination_sha256": "6f0fb1c3236eb496f93fcd622fa1caaa5b044357bc6c6f4222742861617f1402",
+      "content_change": "task roadmap reconciled to completed architectural milestones through TASK-015; authoritative-ticket rule preserved and clarified"
     },
     {
       "source": "ROADMAP.md",

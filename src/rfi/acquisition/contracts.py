@@ -203,6 +203,7 @@ class AcquisitionReceipt:
     document_id: str
     checkpoint: Checkpoint | None
     idempotent: bool
+    artifact_created: bool
 
 
 @dataclass(frozen=True)

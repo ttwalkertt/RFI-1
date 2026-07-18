@@ -20,6 +20,7 @@
 | TASK-012 | Stable application CLI and operator help | Complete |
 | TASK-013 | External target-firm catalog import | Complete |
 | TASK-014 | Firm source profiles and canonical acquisition template | Complete |
+| TASK-015 | Pull Workflow shared by GUI, CLI, and REST API | Complete |
 
 ## Architectural Progression
 

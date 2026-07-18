@@ -383,6 +383,9 @@ class AcquisitionEngine:
                     if receipt.idempotent:
                         unchanged += 1
                         observed = "unchanged"
+                    elif not receipt.artifact_created:
+                        duplicates += 1
+                        observed = "duplicate"
                     else:
                         durable += 1
                         observed = "acquired"
