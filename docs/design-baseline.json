@@ -17,10 +17,10 @@
       "source": "README.md",
       "destination": "README.md",
       "source_size": 5104,
-      "destination_size": 5500,
+      "destination_size": 5633,
       "source_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
-      "destination_sha256": "a397f9e183b6b26a427ffdbc5e46cdd87107afdc9d779f2fb50a2fc0b3c97bbf",
-      "content_change": "documentation index extended through TASK-017 admin preferences"
+      "destination_sha256": "4ab12463acdc00b6fac9c4cde68ebd8021e5995b72263c721e1811aa86eb0aff",
+      "content_change": "documentation index extended through TASK-018 artifact query and browser"
     },
     {
       "source": "DESIGN_PRINCIPLES.md",
@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 5272,
+      "destination_size": 5354,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "9e6819a8b84314ca3f23c733008d35ab24a1b0f1f8211c1b99105937e00e7f23",
-      "content_change": "task roadmap reconciled through completed TASK-017 and distinguished from backlog and roadmap governance"
+      "destination_sha256": "291228912751b6c449bf01f298ebb5b2e9f781e60f1792c11dc4ff769642e025",
+      "content_change": "task roadmap reconciled through completed TASK-018 and distinguished from backlog and roadmap governance"
     },
     {
       "source": "ROADMAP.md",
@@ -71,10 +71,10 @@
       "source": "ARCHITECTURE.md",
       "destination": "ARCHITECTURE.md",
       "source_size": 4889,
-      "destination_size": 4889,
+      "destination_size": 5651,
       "source_sha256": "b1035d87d8f620ace89e3aaae5ca65b0c21cf93c6e1ca91c824c1e623b20aa9f",
-      "destination_sha256": "b1035d87d8f620ace89e3aaae5ca65b0c21cf93c6e1ca91c824c1e623b20aa9f",
-      "content_change": "none"
+      "destination_sha256": "90473086689693ccaacdca7cad3bb8e9d2732afbcd48cf5528e874f7fd76dea0",
+      "content_change": "repository read and isolated stored-content inspection architecture added by TASK-018"
     }
   ]
 }

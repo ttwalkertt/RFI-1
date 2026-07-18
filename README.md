@@ -137,6 +137,7 @@ The following documents define the project.
 | `docs/deterministic-sec-form-10k-retrieval.md` | Current artifact-semantic SEC Form 10-K retrieval boundary and operator proof |
 | `DESIGN_PRINCIPLES.md` *(planned)* | Enduring engineering principles |
 | `docs/admin-preferences.md` | Browser-local admin preference contract and authority boundary |
+| `docs/artifact-query-service-and-browser.md` | Repository-owned artifact query, browser, content, and preview-security contracts |
 | `BACKLOG.md` | Unscheduled candidates, review observations, deferred improvements, and future ideas |
 | `ROADMAP.md` *(planned)* | Capability roadmap |
 | `TASKS.md` | Authorized implementation work and task status |

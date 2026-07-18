@@ -237,6 +237,20 @@ The repository remains the durable foundation.
 
 # Architectural Characteristics
 
+## Repository read and inspection
+
+Durable evidence is consumed through repository-owned read contracts rather than physical storage
+or provider-specific metadata. Typed query, normalized summary/detail, and exact stored-content
+contracts separate repository semantics from browser, planning, reporting, and intelligence
+projections. Source-effective chronology defines latest and oldest; ingestion time remains an
+operational fact. Operator inspection uses the same contracts future automated consumers use.
+
+Stored external content remains untrusted even after retention. Exact repository bytes are the
+authoritative inspection copy and execute behind a capability-denying sandbox. Original provider
+locations are provenance, not a substitute read path.
+
+---
+
 An RFI implementation should strive for:
 
 - evidence-backed reasoning

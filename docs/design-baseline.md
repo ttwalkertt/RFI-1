@@ -20,5 +20,10 @@ documents, reconciled project records, and the repository-authored backlog.
 Task tickets in `tasks/` govern implementation scope. If a ticket and the lightweight task
 roadmap differ, the detailed ticket is authoritative.
 
+TASK-018 extends the current architectural baseline with repository-owned artifact read contracts,
+source-effective ordering, and isolated stored-content inspection. The durable detail is recorded
+in [`artifact-query-service-and-browser.md`](artifact-query-service-and-browser.md) and
+[`ADR-0014`](decisions/0014-repository-owned-artifact-query-and-isolated-preview.md).
+
 `BACKLOG.md` cannot authorize implementation or imply sequence. Backlog candidates move into
 `ROADMAP.md` or `TASKS.md` only through explicit triage and governance decisions.
