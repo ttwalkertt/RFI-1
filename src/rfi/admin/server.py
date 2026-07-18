@@ -11,7 +11,14 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from rfi.acquisition import AcquisitionRepository
 from rfi.admin.field_definitions import field_definitions
+from rfi.artifacts import (
+    ArtifactOrder,
+    ArtifactQuery,
+    ArtifactQueryError,
+    ArtifactQueryService,
+)
 from rfi.concepts import ConceptError, ConceptRepository, ConceptService
 from rfi.firms import FirmError, FirmRepository, FirmService
 from rfi.pull import PullError, PullRequest, PullWorkflow, create_pull_workflow
@@ -230,6 +237,8 @@ _SOURCE_PROFILES_ASSET = Path(__file__).with_name("source_profiles.html")
 SOURCE_PROFILES_HTML = _SOURCE_PROFILES_ASSET.read_text(encoding="utf-8")
 _PULL_SOURCES_ASSET = Path(__file__).with_name("pull_sources.html")
 PULL_SOURCES_HTML = _PULL_SOURCES_ASSET.read_text(encoding="utf-8")
+_ARTIFACT_BROWSER_ASSET = Path(__file__).with_name("artifact_browser.html")
+ARTIFACT_BROWSER_HTML = _ARTIFACT_BROWSER_ASSET.read_text(encoding="utf-8")
 
 
 class AdminConsole(ThreadingHTTPServer):
@@ -244,11 +253,13 @@ class AdminConsole(ThreadingHTTPServer):
         firm_service: FirmService,
         source_profile_service: SourceProfileService,
         pull_workflow: PullWorkflow,
+        artifact_query_service: ArtifactQueryService,
     ) -> None:
         self.service = service
         self.firm_service = firm_service
         self.source_profile_service = source_profile_service
         self.pull_workflow = pull_workflow
+        self.artifact_query_service = artifact_query_service
         super().__init__(address, AdminHandler)
 
 
@@ -300,6 +311,13 @@ class AdminHandler(BaseHTTPRequestHandler):
                     "text/html; charset=utf-8",
                 )
                 return
+            if method == "GET" and path == "/artifacts":
+                self._send(
+                    HTTPStatus.OK,
+                    ARTIFACT_BROWSER_HTML.encode(),
+                    "text/html; charset=utf-8",
+                )
+                return
             if method == "GET" and path == "/admin/admin_preferences.js":
                 self._send(
                     HTTPStatus.OK,
@@ -322,12 +340,21 @@ class AdminHandler(BaseHTTPRequestHandler):
             FirmError,
             SourceProfileError,
             PullError,
+            ArtifactQueryError,
             ValueError,
             TypeError,
             KeyError,
             json.JSONDecodeError,
         ) as error:
-            self._error(HTTPStatus.BAD_REQUEST, str(error))
+            if isinstance(error, ArtifactQueryError):
+                status = HTTPStatus.NOT_FOUND if error.code in {
+                    "unknown_firm", "unknown_document_id", "missing_stored_content"
+                } else HTTPStatus.CONFLICT if error.code in {
+                    "stale_cursor", "checksum_mismatch"
+                } else HTTPStatus.BAD_REQUEST
+                self._error(status, str(error), error.code)
+            else:
+                self._error(HTTPStatus.BAD_REQUEST, str(error))
         except Exception as error:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, f"request failed: {error}")
 
@@ -337,6 +364,54 @@ class AdminHandler(BaseHTTPRequestHandler):
         firm_service = self.server.firm_service
         source_profile_service = self.server.source_profile_service
         pull_workflow = self.server.pull_workflow
+        artifacts = self.server.artifact_query_service
+        if method == "GET" and parts == ["api", "artifacts", "firms"]:
+            self._send_json(HTTPStatus.OK, {"items": list(artifacts.firms())})
+            return
+        if method == "GET" and parts == ["api", "artifacts", "families"]:
+            firm_id = self._first(query, "firm_id")
+            self._send_json(HTTPStatus.OK, {"items": list(artifacts.families(firm_id))})
+            return
+        if method == "GET" and parts == ["api", "artifacts", "types"]:
+            firm_id = self._first(query, "firm_id")
+            family_id = self._first(query, "family_id")
+            self._send_json(
+                HTTPStatus.OK,
+                {"items": list(artifacts.canonical_types(firm_id, family_id))},
+            )
+            return
+        if method == "GET" and parts == ["api", "artifacts"]:
+            order_text = self._first(query, "order") or ArtifactOrder.NEWEST.value
+            try:
+                order = ArtifactOrder(order_text)
+            except ValueError as error:
+                raise ArtifactQueryError(
+                    "invalid_query", "order must be newest or oldest"
+                ) from error
+            limit_text = self._first(query, "limit") or "50"
+            page = artifacts.query(
+                ArtifactQuery(
+                    firm_ids=self._query_values(query, "firm_id"),
+                    family_ids=self._query_values(query, "family_id"),
+                    canonical_artifact_ids=self._query_values(query, "canonical_artifact_id"),
+                    provider_ids=self._query_values(query, "provider"),
+                    source_effective_from=self._first(query, "date_from") or None,
+                    source_effective_through=self._first(query, "date_through") or None,
+                    order=order,
+                    limit=int(limit_text),
+                    cursor=self._first(query, "cursor") or None,
+                )
+            )
+            self._send_json(HTTPStatus.OK, asdict(page))
+            return
+        if len(parts) >= 3 and parts[:2] == ["api", "artifacts"]:
+            document_id = parts[2]
+            if method == "GET" and parts[3:] == ["content"]:
+                self._send_artifact_content(artifacts.content(document_id))
+                return
+            if method == "GET" and len(parts) == 3:
+                self._send_json(HTTPStatus.OK, asdict(artifacts.detail(document_id)))
+                return
         if method == "GET" and parts == ["api", "pulls", "adapters"]:
             self._send_json(
                 HTTPStatus.OK,
@@ -529,12 +604,16 @@ class AdminHandler(BaseHTTPRequestHandler):
     def _first(self, query: dict[str, list[str]], name: str) -> str:
         return query.get(name, [""])[0]
 
-    def _error(self, status: HTTPStatus, message: str) -> None:
+    @staticmethod
+    def _query_values(query: dict[str, list[str]], name: str) -> tuple[str, ...]:
+        return tuple(value for value in query.get(name, []) if value)
+
+    def _error(self, status: HTTPStatus, message: str, error_code: str | None = None) -> None:
         self._send_json(
             status,
             {
                 "error": message,
-                "error_code": self._error_code(message, status),
+                "error_code": error_code or self._error_code(message, status),
                 "status": int(status),
             },
         )
@@ -568,6 +647,53 @@ class AdminHandler(BaseHTTPRequestHandler):
     def _send_json(self, status: HTTPStatus, value: Any) -> None:
         self._send(status, _json(value), "application/json; charset=utf-8")
 
+    def _send_artifact_content(self, value: Any) -> None:
+        """Serve exact bytes with an origin-isolating policy for hostile stored content."""
+        media_type = value.media_type.lower()
+        allowed = {
+            "text/html", "application/xhtml+xml", "application/pdf", "text/plain",
+            "text/csv", "application/json", "application/xml", "text/xml",
+        }
+        if media_type not in allowed and not media_type.startswith("text/"):
+            media_type = "application/octet-stream"
+        content = value.content
+        status = HTTPStatus.OK
+        content_range = None
+        range_header = self.headers.get("Range")
+        if range_header:
+            if not range_header.startswith("bytes=") or "," in range_header:
+                raise ArtifactQueryError("invalid_query", "unsupported content range")
+            try:
+                start_text, end_text = range_header[6:].split("-", 1)
+                start = int(start_text) if start_text else 0
+                end = int(end_text) if end_text else len(content) - 1
+            except ValueError as error:
+                raise ArtifactQueryError("invalid_query", "invalid content range") from error
+            if start < 0 or end < start or end >= len(content):
+                raise ArtifactQueryError("invalid_query", "content range is outside stored bytes")
+            content = content[start : end + 1]
+            status = HTTPStatus.PARTIAL_CONTENT
+            content_range = f"bytes {start}-{end}/{len(value.content)}"
+        self.send_response(status)
+        self.send_header("Content-Type", media_type)
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header("Accept-Ranges", "bytes")
+        if content_range:
+            self.send_header("Content-Range", content_range)
+        self.send_header("Content-Disposition", f'inline; filename="{value.document_id}"')
+        self.send_header("Cache-Control", "private, immutable")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        self.send_header(
+            "Content-Security-Policy",
+            "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; "
+            "media-src data: blob:; frame-ancestors 'self'",
+        )
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        self.end_headers()
+        self.wfile.write(content)
+
     def _send(self, status: HTTPStatus, body: bytes, content_type: str) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
@@ -598,10 +724,13 @@ def create_admin_server(
         if source_profile_state.exists()
         else SourceProfileRepository.initialize(source_profile_state, template)
     )
+    acquisition_repository = AcquisitionRepository(state / "acquisition")
+    firm_service = FirmService(firm_repository)
     return AdminConsole(
         (host, port),
         ConceptService(repository),
-        FirmService(firm_repository),
+        firm_service,
         SourceProfileService(source_profile_repository, firm_repository, template),
         create_pull_workflow(state),
+        ArtifactQueryService(acquisition_repository, firm_repository, template),
     )
