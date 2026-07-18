@@ -82,6 +82,9 @@ class AcquisitionRepository:
         if checkpoint is not None:
             self._validate_checkpoint(candidate.source_id, checkpoint)
         artifact_id = f"artifact-{sha256_bytes(result.content)}"
+        artifact_created = not (
+            self._layout.artifacts / f"{artifact_id}.metadata.json"
+        ).exists()
         metadata = {
             "schema_version": _SCHEMA,
             "record_type": "artifact",
@@ -130,6 +133,7 @@ class AcquisitionRepository:
             document_id=candidate.document_id,
             checkpoint=checkpoint,
             idempotent=not created,
+            artifact_created=artifact_created,
         )
 
     def record_outcome(

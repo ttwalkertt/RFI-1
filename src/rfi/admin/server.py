@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import asdict
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,6 +14,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from rfi.admin.field_definitions import field_definitions
 from rfi.concepts import ConceptError, ConceptRepository, ConceptService
 from rfi.firms import FirmError, FirmRepository, FirmService
+from rfi.pull import PullError, PullRequest, PullWorkflow, create_pull_workflow
 from rfi.source_profiles import (
     SourceProfileError,
     SourceProfileRepository,
@@ -225,6 +227,8 @@ _FIRMS_ASSET = Path(__file__).with_name("firms.html")
 FIRMS_HTML = _FIRMS_ASSET.read_text(encoding="utf-8")
 _SOURCE_PROFILES_ASSET = Path(__file__).with_name("source_profiles.html")
 SOURCE_PROFILES_HTML = _SOURCE_PROFILES_ASSET.read_text(encoding="utf-8")
+_PULL_SOURCES_ASSET = Path(__file__).with_name("pull_sources.html")
+PULL_SOURCES_HTML = _PULL_SOURCES_ASSET.read_text(encoding="utf-8")
 
 
 class AdminConsole(ThreadingHTTPServer):
@@ -238,10 +242,12 @@ class AdminConsole(ThreadingHTTPServer):
         service: ConceptService,
         firm_service: FirmService,
         source_profile_service: SourceProfileService,
+        pull_workflow: PullWorkflow,
     ) -> None:
         self.service = service
         self.firm_service = firm_service
         self.source_profile_service = source_profile_service
+        self.pull_workflow = pull_workflow
         super().__init__(address, AdminHandler)
 
 
@@ -286,6 +292,13 @@ class AdminHandler(BaseHTTPRequestHandler):
                     "text/html; charset=utf-8",
                 )
                 return
+            if method == "GET" and path == "/pull-sources":
+                self._send(
+                    HTTPStatus.OK,
+                    PULL_SOURCES_HTML.encode(),
+                    "text/html; charset=utf-8",
+                )
+                return
             if method == "GET" and path == "/health":
                 self._send_json(HTTPStatus.OK, {"status": "ok", "bind": "local-default"})
                 return
@@ -300,6 +313,7 @@ class AdminHandler(BaseHTTPRequestHandler):
             ConceptError,
             FirmError,
             SourceProfileError,
+            PullError,
             ValueError,
             TypeError,
             KeyError,
@@ -314,6 +328,50 @@ class AdminHandler(BaseHTTPRequestHandler):
         service = self.server.service
         firm_service = self.server.firm_service
         source_profile_service = self.server.source_profile_service
+        pull_workflow = self.server.pull_workflow
+        if method == "GET" and parts == ["api", "pulls", "firms"]:
+            self._send_json(
+                HTTPStatus.OK,
+                {"items": [asdict(item) for item in pull_workflow.configured_firms()]},
+            )
+            return
+        if method == "POST" and parts == ["api", "pulls"]:
+            body = self._body()
+            firm_ids = body.get("firm_ids", [])
+            if not isinstance(firm_ids, list) or any(
+                not isinstance(item, str) for item in firm_ids
+            ):
+                raise PullError("firm_ids must be an array of strings")
+            all_configured = body.get("all_configured", False)
+            if not isinstance(all_configured, bool):
+                raise PullError("all_configured must be true or false")
+            run_id = pull_workflow.initiate(
+                PullRequest(tuple(firm_ids), all_configured)
+            )
+            threading.Thread(
+                target=pull_workflow.execute,
+                args=(run_id,),
+                name=f"rfi-{run_id}",
+                daemon=True,
+            ).start()
+            self._send_json(
+                HTTPStatus.ACCEPTED,
+                {
+                    "run_id": run_id,
+                    "status": "running",
+                    "status_url": f"/api/pulls/{run_id}",
+                    "results_url": f"/api/pulls/{run_id}/results",
+                },
+            )
+            return
+        if len(parts) >= 3 and parts[:2] == ["api", "pulls"]:
+            run_id = parts[2]
+            if method == "GET" and len(parts) == 3:
+                self._send_json(HTTPStatus.OK, pull_workflow.status(run_id))
+                return
+            if method == "GET" and parts[3:] == ["results"]:
+                self._send_json(HTTPStatus.OK, pull_workflow.results(run_id))
+                return
         if method == "GET" and parts == ["api", "source-profile-template"]:
             self._send_json(
                 HTTPStatus.OK,
@@ -531,4 +589,5 @@ def create_admin_server(
         ConceptService(repository),
         FirmService(firm_repository),
         SourceProfileService(source_profile_repository, firm_repository, template),
+        create_pull_workflow(state),
     )

@@ -22,6 +22,7 @@ from rfi.acquisition.engine import (
     FailureClass,
     RunStatus,
 )
+from rfi.acquisition.direct_url import DirectUrlAdapter
 from rfi.acquisition.edgar import (
     EdgarAdapter,
     load_edgar_profiles,
@@ -55,6 +56,7 @@ __all__ = [
     "Checkpoint",
     "DiscoveryProvenance",
     "DiscoveryPage",
+    "DirectUrlAdapter",
     "EngineFailurePoint",
     "EdgarAdapter",
     "FailurePoint",

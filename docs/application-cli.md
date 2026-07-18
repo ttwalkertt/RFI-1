@@ -12,6 +12,7 @@ rfi init [--state PATH]
 rfi seed [--state PATH] [-f FILE | --file FILE ...]
 rfi seed --print-schema
 rfi admin [--state PATH] [--host HOST] [--port PORT]
+rfi pull (--firm FIRM_ID ... | --all-configured) [--state PATH]
 ```
 
 The default state is `.artifacts/runtime/rfi-1`, the default host is `127.0.0.1`, and the default
@@ -41,6 +42,21 @@ Launch the integrated console:
 
 Open the displayed URL. The concept catalog is at `/` or `/concepts`, Target Firms is at `/firms`,
 and firm acquisition configuration is at `/source-profiles`. Press Ctrl-C to stop cleanly.
+The shared Pull Workflow is available at `/pull-sources`.
+
+## Pull Workflow
+
+Run enabled source-profile artifacts through the same durable workflow used by REST and GUI:
+
+```sh
+rfi pull --firm seagate
+rfi pull --firm seagate --firm ibm
+rfi pull --all-configured
+```
+
+The complete structured result is printed as JSON. Unsupported retrieval modes are retained as
+explicit skipped results with an operator diagnostic; they do not trigger hidden fallback logic.
+See [Pull Workflow](pull-workflow.md) for planning, outcomes, ingress, and limitations.
 
 ## Normal repeat use
 

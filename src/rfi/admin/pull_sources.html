@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RFI Operator Console · Pull Sources</title>
+  <style>
+    :root{--ink:#17212b;--muted:#607083;--line:#d7dee7;--blue:#2359d1;--paper:#fff;
+      --wash:#f4f7fb;--ok:#176b3a;--ok-bg:#e7f6ec;--warn:#9c3d20;--warn-bg:#fff0eb}
+    *{box-sizing:border-box}body{margin:0;color:var(--ink);background:var(--wash);
+      font:15px/1.45 ui-sans-serif,system-ui,-apple-system,sans-serif}
+    header{min-height:64px;padding:0 24px;display:flex;align-items:center;gap:28px;color:#fff;
+      background:#172334}header strong{font-size:18px}nav{display:flex;gap:10px}nav a{color:#fff;
+      text-decoration:none;padding:20px 8px 17px;border-bottom:3px solid transparent;
+      font-weight:700}nav a:hover{background:#ffffff14}nav a[aria-current]{border-color:#7db0ff}
+    main{max-width:1280px;margin:auto;padding:22px}h1{margin-bottom:3px}.muted{color:var(--muted)}
+    button{cursor:pointer;border:1px solid #aeb9c7;border-radius:7px;padding:10px 15px;
+      background:#fff;color:var(--ink);font:inherit;font-weight:650}button.primary{color:#fff;
+      border-color:var(--blue);background:var(--blue)}button:disabled{cursor:not-allowed;opacity:.55}
+    .toolbar,.panel,.notice{background:var(--paper);border:1px solid var(--line);border-radius:10px}
+    .toolbar{display:flex;align-items:center;gap:10px;padding:14px;margin:18px 0}.toolbar .spacer{flex:1}
+    .panel{overflow:hidden;margin-bottom:16px}.firm{display:grid;grid-template-columns:32px 1fr auto;
+      gap:12px;align-items:center;padding:14px 17px;border-bottom:1px solid var(--line)}
+    .firm:last-child{border:0}.counts{display:flex;gap:7px;flex-wrap:wrap}.badge{padding:4px 9px;
+      border-radius:16px;background:#e8eef8;font-size:12px}.notice{padding:13px 15px;margin:14px 0}
+    .success{color:var(--ok);background:var(--ok-bg)}.error{color:var(--warn);background:var(--warn-bg)}
+    .hidden{display:none}.progress{height:10px;border-radius:9px;background:#e6ebf1;overflow:hidden}
+    .progress span{display:block;height:100%;background:var(--blue);transition:width .25s}.result{padding:14px 17px;
+      border-top:1px solid var(--line)}.result h3{margin:0 0 6px}.artifact{display:grid;
+      grid-template-columns:minmax(190px,1fr) 170px 2fr;gap:12px;padding:8px 0;border-top:1px solid #edf0f4}
+    @media(max-width:760px){nav{flex-wrap:wrap}.firm,.artifact{grid-template-columns:1fr}.toolbar{flex-wrap:wrap}}
+  </style>
+</head>
+<body>
+<header><strong>RFI Operator Console</strong><nav aria-label="Operator sections"><a href="/concepts">Concept Catalog</a><a href="/firms">Target Firms</a><a href="/source-profiles">Source Profiles</a><a href="/pull-sources" aria-current="page">Pull Sources</a></nav></header>
+<main>
+  <h1>Pull Sources</h1><p class="muted">Run the shared Pull Workflow for one, many, or all configured firms.</p>
+  <div id="message" class="notice hidden" role="status"></div>
+  <section class="toolbar"><button id="select-all">Select all</button><button id="clear">Clear</button><span id="selected" class="muted">0 selected</span><span class="spacer"></span><button id="pull" class="primary" disabled>Pull selected firms</button></section>
+  <section class="panel"><div id="firms"><p class="muted" style="padding:16px">Loading configured firms…</p></div></section>
+  <section id="progress-panel" class="panel hidden"><div style="padding:16px"><strong id="progress-title">Workflow progress</strong><p id="progress-stage" class="muted"></p><div class="progress"><span id="progress-bar" style="width:0"></span></div></div></section>
+  <section id="results" class="panel hidden"></section>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let firms=[],selected=new Set(),poller=null;
+async function api(path,options={}){const response=await fetch(path,{headers:{'Content-Type':'application/json'},...options});const data=await response.json();if(!response.ok)throw new Error(data.error||'Request failed');return data}
+function updateSelection(){$('selected').textContent=`${selected.size} selected`;$('pull').disabled=!selected.size;document.querySelectorAll('[data-firm]').forEach(x=>x.checked=selected.has(x.dataset.firm))}
+function renderFirms(){$('firms').innerHTML=firms.map(x=>`<label class="firm"><input type="checkbox" data-firm="${esc(x.firm_id)}"><span><strong>${esc(x.canonical_name)}</strong><br><span class="muted">${esc(x.firm_id)} · profile r${x.source_profile_revision_number}</span></span><span class="counts"><span class="badge">${x.enabled_artifacts} enabled</span><span class="badge">${x.runnable_artifacts} runnable</span><span class="badge">${x.incomplete_artifacts} incomplete</span></span></label>`).join('')||'<p class="muted" style="padding:16px">No firms have a saved source profile.</p>';document.querySelectorAll('[data-firm]').forEach(x=>x.onchange=()=>{x.checked?selected.add(x.dataset.firm):selected.delete(x.dataset.firm);updateSelection()});updateSelection()}
+async function load(){try{firms=(await api('/api/pulls/firms')).items;renderFirms()}catch(error){show(error.message,true)}}
+function show(message,error=false){$('message').textContent=message;$('message').className='notice '+(error?'error':'success')}
+async function launch(){try{$('pull').disabled=true;$('results').classList.add('hidden');const started=await api('/api/pulls',{method:'POST',body:JSON.stringify({firm_ids:[...selected],all_configured:false})});$('progress-panel').classList.remove('hidden');show(`Started ${started.run_id}.`);await poll(started.run_id)}catch(error){show(error.message,true);updateSelection()}}
+async function poll(runId){const status=await api('/api/pulls/'+encodeURIComponent(runId)),stages=['receive_request','resolve_firms','snapshot_source_profile_revisions','expand_enabled_artifacts','determine_attemptability','execute_retrieval','ingest_successful_artifacts','record_results','summarize_execution'],done=status.completed_stages.length;$('progress-title').textContent=`${runId} · ${status.status}`;$('progress-stage').textContent=status.current_stage.replaceAll('_',' ');$('progress-bar').style.width=Math.round(done/stages.length*100)+'%';if(status.status==='running'){poller=setTimeout(()=>poll(runId),250);return}renderResults(await api('/api/pulls/'+encodeURIComponent(runId)+'/results'));updateSelection()}
+function renderResults(run){$('results').classList.remove('hidden');$('results').innerHTML=`<div style="padding:16px"><h2>Completed results</h2><p><strong>${esc(run.status)}</strong> · ${run.summary.firms} firms · ${run.summary.artifacts} enabled artifacts · ${run.summary.success} success · ${run.summary.duplicate} duplicate · ${run.summary.no_change} no change · ${run.summary.skipped} skipped · ${run.summary.configuration_problem} configuration problems · ${run.summary.retrieval_failure} retrieval failures</p></div>`+run.firms.map(f=>`<div class="result"><h3>${esc(f.canonical_name)} · ${esc(f.status)}</h3><p class="muted">${esc(f.firm_id)} · snapshotted profile r${f.source_profile_revision_number}</p>${f.artifacts.map(a=>`<div class="artifact"><strong>${esc(a.label)}</strong><span class="badge">${esc(a.outcome)}</span><span>${esc(a.diagnostic)}</span></div>`).join('')||'<p>No enabled artifacts.</p>'}</div>`).join('')}
+$('select-all').onclick=()=>{selected=new Set(firms.map(x=>x.firm_id));updateSelection()};$('clear').onclick=()=>{selected.clear();updateSelection()};$('pull').onclick=launch;load();
+</script>
+</body>
+</html>

@@ -324,6 +324,7 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "acquisition/__init__.py",
                 "acquisition/contracts.py",
                 "acquisition/demo.py",
+                "acquisition/direct_url.py",
                 "acquisition/edgar.py",
                 "acquisition/engine.py",
                 "acquisition/fixture_adapters.py",
@@ -356,6 +357,11 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "knowledge/contracts.py",
                 "knowledge/derivation.py",
                 "knowledge/repository.py",
+                "pull/__init__.py",
+                "pull/contracts.py",
+                "pull/planning.py",
+                "pull/repository.py",
+                "pull/workflow.py",
                 "retrieval/__init__.py",
                 "retrieval/contracts.py",
                 "retrieval/evidence.py",
@@ -382,7 +388,7 @@ class ScopeBoundaryTests(unittest.TestCase):
         provider_neutral = "\n".join(
             path.read_text(encoding="utf-8")
             for path in (SRC / "rfi" / "acquisition").glob("*.py")
-            if path.name not in {"edgar.py", "sec_api.py"}
+            if path.name not in {"direct_url.py", "edgar.py", "sec_api.py"}
         ).lower()
         for term in ("requests", "urllib.request", "http.client", "socket"):
             with self.subTest(provider_neutral_term=term):
