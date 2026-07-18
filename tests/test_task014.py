@@ -368,6 +368,11 @@ class SourceProfileAdminTests(unittest.TestCase):
             "openState.artifacts.has(artifact.artifact_id)",
             "function compareFirms(a,b)",
             "sortedFirms=[...firms.items].sort(compareFirms)",
+            'id="save" class="primary" disabled',
+            "function profileSnapshot()",
+            "function updateDirtyState()",
+            "profileSnapshot()===cleanProfile",
+            "cleanProfile=profileSnapshot()",
         ):
             self.assertIn(marker, html)
         self.assertNotIn("sec_10k", html)
