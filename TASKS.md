@@ -25,6 +25,7 @@
 | TASK-014 | Firm source profiles and canonical acquisition template | Complete |
 | TASK-015 | Pull Workflow shared by GUI, CLI, and REST API | Complete |
 | TASK-016 | Deterministic SEC Form 10-K retrieval vertical slice | Complete |
+| TASK-017 | Reusable admin preference store and remembered firm context | Complete |
 
 ## Architectural Progression
 

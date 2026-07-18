@@ -12,7 +12,7 @@ dependencies = ["PyYAML>=6.0,<7"]
 rfi = "rfi.cli:main"
 
 [tool.setuptools.package-data]
-rfi = ["admin/*.html", "resources/*.yaml"]
+rfi = ["admin/*.html", "admin/*.js", "resources/*.yaml"]
 
 [tool.rfi]
 source-root = "src"

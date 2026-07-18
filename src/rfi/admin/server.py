@@ -23,6 +23,7 @@ from rfi.source_profiles import (
 )
 
 MAX_BODY_BYTES = 1_000_000
+ADMIN_PREFERENCES_JS = (Path(__file__).parent / "admin_preferences.js").read_bytes()
 
 
 def _json(value: Any) -> bytes:
@@ -297,6 +298,13 @@ class AdminHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK,
                     PULL_SOURCES_HTML.encode(),
                     "text/html; charset=utf-8",
+                )
+                return
+            if method == "GET" and path == "/admin/admin_preferences.js":
+                self._send(
+                    HTTPStatus.OK,
+                    ADMIN_PREFERENCES_JS,
+                    "text/javascript; charset=utf-8",
                 )
                 return
             if method == "GET" and path == "/health":
