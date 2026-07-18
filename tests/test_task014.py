@@ -363,6 +363,11 @@ class SourceProfileAdminTests(unittest.TestCase):
             "item-summary",
             "/api/source-profile-template",
             "event.stopPropagation()",
+            "function captureOpenState()",
+            "openState.categories.has(categoryIndex)",
+            "openState.artifacts.has(artifact.artifact_id)",
+            "function compareFirms(a,b)",
+            "sortedFirms=[...firms.items].sort(compareFirms)",
         ):
             self.assertIn(marker, html)
         self.assertNotIn("sec_10k", html)
