@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RFI Admin Console · Firm Source Profiles</title>
+  <style>
+    :root{--ink:#17212b;--muted:#607083;--line:#d7dee7;--blue:#2359d1;--paper:#fff;
+      --wash:#f4f7fb;--ok:#176b3a;--ok-bg:#e7f6ec;--warn:#9c3d20;--warn-bg:#fff0eb}
+    *{box-sizing:border-box}body{margin:0;color:var(--ink);background:var(--wash);
+      font:15px/1.45 ui-sans-serif,system-ui,-apple-system,sans-serif}
+    header{min-height:64px;padding:0 24px;display:flex;align-items:center;gap:28px;color:#fff;
+      background:#172334}header strong{font-size:18px}nav{display:flex;gap:10px}nav a{color:#fff;
+      text-decoration:none;padding:20px 8px 17px;border-bottom:3px solid transparent;
+      font-weight:700}nav a:hover{background:#ffffff14}nav a[aria-current]{border-color:#7db0ff}
+    main{max-width:1280px;margin:auto;padding:22px}.page-head{display:flex;justify-content:space-between;
+      align-items:end;gap:18px;margin-bottom:16px}.page-head h1{margin:0;font-size:25px}.muted{color:var(--muted)}
+    button,input,select,textarea{font:inherit}button{cursor:pointer;border:1px solid #aeb9c7;
+      border-radius:7px;padding:9px 14px;background:#fff;color:var(--ink);font-weight:650}
+    button.primary{color:#fff;border-color:var(--blue);background:var(--blue)}button.danger{color:#a13026}
+    input,select,textarea{width:100%;border:1px solid #aeb9c7;border-radius:6px;padding:9px;
+      background:#fff}textarea{min-height:72px;resize:vertical}.toolbar,.panel,.notice{background:var(--paper);
+      border:1px solid var(--line);border-radius:10px}.toolbar{display:flex;gap:12px;align-items:end;
+      padding:15px;margin-bottom:16px}.toolbar label{flex:1}.panel{padding:18px}.notice{padding:12px 15px;
+      margin-bottom:14px}.success{color:var(--ok);background:var(--ok-bg)}.error{color:var(--warn);
+      background:var(--warn-bg)}.hidden{display:none!important}.context{display:flex;justify-content:space-between;
+      gap:15px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:15px}
+    .badge{display:inline-block;padding:3px 8px;border-radius:16px;background:#e8eef8;font-size:12px}
+    details.category{border:1px solid var(--line);border-radius:9px;margin:12px 0;background:#fff}
+    details.category>summary{padding:14px 16px;font-weight:750;background:#f7f9fc;cursor:pointer}
+    .category-description{margin:0;padding:10px 16px;color:var(--muted);border-top:1px solid var(--line)}
+    details.artifact{border-top:1px solid var(--line)}details.artifact>summary{display:grid;
+      grid-template-columns:32px minmax(130px,180px) 1fr auto auto;gap:10px;align-items:center;
+      padding:11px 16px;cursor:pointer;list-style:none}details.artifact>summary::-webkit-details-marker{display:none}
+    .artifact-body{padding:15px 22px 18px 58px;background:#fbfcfe}.artifact-body>p{margin-top:0}
+    .candidate{border:1px solid #bdc7d3;border-radius:8px;margin:10px 0;background:#fff}
+    .candidate-head{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;
+      border-bottom:1px solid var(--line)}.candidate-fields{display:grid;
+      grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px;padding:13px}
+    label{display:flex;flex-direction:column;gap:5px;font-weight:650}.wide{grid-column:1/-1}
+    .actions{position:sticky;bottom:0;display:flex;justify-content:space-between;gap:12px;
+      padding:14px 0 2px;background:linear-gradient(transparent,#fff 25%)}#history{display:flex;gap:7px;
+      flex-wrap:wrap}.enabled{width:18px;height:18px}.empty{padding:20px;color:var(--muted)}
+    @media(max-width:780px){main{padding:12px}.page-head,.toolbar,.context{align-items:stretch;
+      flex-direction:column}details.artifact>summary{grid-template-columns:28px 1fr auto}
+      details.artifact>summary .label,details.artifact>summary .address{grid-column:2/-1}
+      .artifact-body{padding-left:18px}.candidate-fields{grid-template-columns:1fr}.wide{grid-column:1}}
+  </style>
+</head>
+<body>
+<header><strong>RFI Admin Console</strong><nav aria-label="Admin sections"><a href="/concepts">Concept Catalog</a><a href="/firms">Target Firms</a><a href="/source-profiles" aria-current="page">Source Profiles</a></nav></header>
+<main>
+  <div class="page-head"><div><h1>Firm Source Profiles</h1><p class="muted">Configure future acquisition intent independently from target-firm identity and retrieved source objects.</p></div></div>
+  <div id="message" class="notice hidden" role="status"></div>
+  <section class="toolbar"><label>Target firm<select id="firm"></select></label><button id="reload">Reload profile</button></section>
+  <section class="panel">
+    <div id="profile-context" class="context"><span class="muted">Select a firm.</span></div>
+    <label>Profile-level operator notes<textarea id="profile-notes" placeholder="Acquisition-planning context; never retrieved evidence"></textarea></label>
+    <div id="catalog"></div>
+    <h3>Source-profile revision history</h3><div id="history"></div>
+    <div class="actions"><span id="draft-state" class="muted">Canonical defaults are not a saved revision.</span><div><button id="validate">Validate</button> <button id="save" class="primary">Save source-profile revision</button></div></div>
+  </section>
+</main>
+<script>
+'use strict';
+let template=null,profile=null,currentFirm='',historical=false;
+const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clone=x=>JSON.parse(JSON.stringify(x));
+async function api(path,options={}){const response=await fetch(path,{headers:{'Content-Type':'application/json'},...options});let data;try{data=await response.json()}catch{data={error:'Unreadable server response'}}if(!response.ok)throw new Error(data.error||'Request failed');return data}
+function message(text,error=false){$('message').textContent=text;$('message').className='notice '+(error?'error':'success')}
+function itemById(id){return profile.items.find(x=>x.artifact_id===id)}
+function artifactById(id){for(const category of template.categories){const found=category.items.find(x=>x.artifact_id===id);if(found)return found}}
+function modeById(id){return template.retrieval_modes.find(x=>x.mode===id)}
+function fieldByName(name){return template.retrieval_fields.find(x=>x.name===name)}
+function summary(item){const count=item.retrieval_candidates.length;if(count)return `${count} candidate${count===1?'':'s'}`;return item.enabled?'not configured':'disabled'}
+function candidateValue(candidate,name){const value=candidate[name];return Array.isArray(value)?value.join(', '):(value??'')}
+function fieldControl(itemIndex,candidateIndex,candidate,name){const def=fieldByName(name);if(!def)return'';const value=candidateValue(candidate,name),wide=def.multiple||name==='operator_notes';if(name==='operator_notes')return `<label class="${wide?'wide':''}">${esc(def.label)}<textarea data-i="${itemIndex}" data-c="${candidateIndex}" data-f="${name}" title="${esc(def.description)}">${esc(value)}</textarea></label>`;return `<label class="${wide?'wide':''}">${esc(def.label)}<input data-i="${itemIndex}" data-c="${candidateIndex}" data-f="${name}" type="${def.value_type==='integer'?'number':def.value_type==='url'?'url':'text'}" value="${esc(value)}" title="${esc(def.description)}" ${name==='priority'?'min="1"':''}></label>`}
+function candidateCard(itemIndex,candidateIndex,candidate,artifact){const mode=modeById(candidate.mode),fields=mode.supported_fields.map(name=>fieldControl(itemIndex,candidateIndex,candidate,name)).join('');return `<div class="candidate"><div class="candidate-head"><label>Retrieval mode<select class="candidate-mode" data-i="${itemIndex}" data-c="${candidateIndex}">${artifact.supported_retrieval_modes.map(id=>{const value=modeById(id);return `<option value="${esc(id)}" ${id===candidate.mode?'selected':''}>${esc(value.label)}</option>`}).join('')}</select></label><button class="danger remove-candidate" data-i="${itemIndex}" data-c="${candidateIndex}">Remove candidate</button></div><div class="candidate-fields">${fields}</div></div>`}
+function render(){if(!profile||!template)return;$('profile-notes').value=profile.operator_notes||'';$('profile-context').innerHTML=`<div><strong>${esc(currentFirm)}</strong> <span class="badge">${profile.is_default?'canonical defaults':`profile r${profile.revision_number}`}</span>${historical?' <span class="badge">historical · inspect only</span>':''}<p class="muted">Editing this profile never creates a target-firm revision.</p></div>`;$('catalog').innerHTML=template.categories.map((category,categoryIndex)=>`<details class="category" ${categoryIndex===0?'open':''}><summary>${esc(category.label)} · ${category.items.length}</summary><p class="category-description">${esc(category.description)}</p>${category.items.map(artifact=>{const item=itemById(artifact.artifact_id),index=profile.items.indexOf(item);return `<details class="artifact" data-id="${esc(artifact.artifact_id)}"><summary><input class="enabled" data-i="${index}" type="checkbox" ${item.enabled?'checked':''} aria-label="Enable ${esc(artifact.short_name)}"><strong>${esc(artifact.short_name)}</strong><span class="label">${esc(artifact.label)}</span><span class="badge address">${esc(artifact.addressability)}</span><span class="badge item-summary">${esc(summary(item))}</span></summary><div class="artifact-body"><p>${esc(artifact.description)}</p><label>Item operator notes<textarea class="item-notes" data-i="${index}">${esc(item.operator_notes||'')}</textarea></label><div class="candidate-list">${item.retrieval_candidates.map((candidate,candidateIndex)=>candidateCard(index,candidateIndex,candidate,artifact)).join('')||'<p class="muted">No retrieval candidates configured.</p>'}</div><button class="add-candidate" data-i="${index}">Add prioritized retrieval candidate</button></div></details>`}).join('')}</details>`).join('');bind();$('save').disabled=historical;$('validate').disabled=historical;$('profile-notes').disabled=historical;$('draft-state').textContent=historical?'Historical revisions are read-only.':profile.is_default?'Canonical defaults are displayed; no source-profile revision exists yet.':'Changes will append a new immutable source-profile revision.'}
+function bind(){$('catalog').querySelectorAll('.enabled').forEach(x=>{x.onclick=event=>event.stopPropagation();x.onchange=()=>{const item=profile.items[+x.dataset.i];item.enabled=x.checked;x.closest('summary').querySelector('.item-summary').textContent=summary(item)}});$('catalog').querySelectorAll('.item-notes').forEach(x=>x.oninput=()=>profile.items[+x.dataset.i].operator_notes=x.value);$('catalog').querySelectorAll('[data-f]').forEach(x=>x.oninput=()=>{const candidate=profile.items[+x.dataset.i].retrieval_candidates[+x.dataset.c],name=x.dataset.f;candidate[name]=fieldByName(name).multiple?x.value.split(',').map(v=>v.trim()).filter(Boolean):name==='priority'?Number(x.value):x.value});$('catalog').querySelectorAll('.candidate-mode').forEach(x=>x.onchange=()=>{const item=profile.items[+x.dataset.i],candidate=item.retrieval_candidates[+x.dataset.c],priority=candidate.priority;item.retrieval_candidates[+x.dataset.c]={mode:x.value,priority,url:'',locator:'',preferred_domains:[],discovery_hints:[],expected_media_type:'',parser_hint:'',operator_notes:''};render()});$('catalog').querySelectorAll('.add-candidate').forEach(x=>x.onclick=()=>{const item=profile.items[+x.dataset.i],artifact=artifactById(item.artifact_id),priority=Math.max(0,...item.retrieval_candidates.map(c=>c.priority||0))+1;item.retrieval_candidates.push({mode:artifact.supported_retrieval_modes[0],priority,url:'',locator:'',preferred_domains:[],discovery_hints:[],expected_media_type:'',parser_hint:'',operator_notes:''});render()});$('catalog').querySelectorAll('.remove-candidate').forEach(x=>x.onclick=()=>{profile.items[+x.dataset.i].retrieval_candidates.splice(+x.dataset.c,1);render()})}
+async function loadProfile(revision=''){if(!currentFirm)return;try{profile=await api(`/api/firms/${encodeURIComponent(currentFirm)}/source-profile${revision?'?revision_id='+encodeURIComponent(revision):''}`);historical=Boolean(revision);render();const history=await api(`/api/firms/${encodeURIComponent(currentFirm)}/source-profile/history`);$('history').innerHTML=history.items.map(x=>`<button class="history" data-revision="${esc(x.source_profile_revision_id)}">r${x.revision_number} · ${esc(x.updated_at.slice(0,10))}</button>`).join('')||'<span class="muted">No saved revisions.</span>';$('history').querySelectorAll('button').forEach(x=>x.onclick=()=>loadProfile(x.dataset.revision))}catch(error){message(error.message,true)}}
+async function validate(){profile.operator_notes=$('profile-notes').value;const result=await api(`/api/firms/${encodeURIComponent(currentFirm)}/source-profile/validate`,{method:'POST',body:JSON.stringify({items:profile.items,operator_notes:profile.operator_notes})});if(!result.valid){message(result.errors.join(' '),true);return false}message('Source-profile draft is valid. No revision has been saved.');return true}
+async function save(){if(!await validate())return;try{const result=await api(`/api/firms/${encodeURIComponent(currentFirm)}/source-profile`,{method:'PUT',body:JSON.stringify({expected_revision_id:profile.source_profile_revision_id,profile:{items:profile.items,operator_notes:profile.operator_notes}})});message(`Saved source-profile revision r${result.revision_number}; target-firm identity was not revised.`);await loadProfile()}catch(error){message(error.message,true)}}
+async function init(){try{template=await api('/api/source-profile-template');const firms=await api('/api/firms');$('firm').innerHTML=firms.items.map(x=>`<option value="${esc(x.firm_id)}">${esc(x.canonical_name)} · ${esc(x.firm_id)}</option>`).join('');const requested=new URLSearchParams(location.search).get('firm_id');currentFirm=requested&&firms.items.some(x=>x.firm_id===requested)?requested:(firms.items[0]?.firm_id||'');$('firm').value=currentFirm;$('firm').onchange=()=>{currentFirm=$('firm').value;loadProfile()};$('reload').onclick=()=>loadProfile();$('profile-notes').oninput=()=>{if(profile)profile.operator_notes=$('profile-notes').value};$('validate').onclick=validate;$('save').onclick=save;if(currentFirm)await loadProfile();else $('catalog').innerHTML='<p class="empty">Create a target firm before configuring a source profile.</p>'}catch(error){message(error.message,true)}}init();
+</script>
+</body>
+</html>

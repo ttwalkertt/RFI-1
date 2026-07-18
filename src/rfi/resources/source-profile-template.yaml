@@ -1,0 +1,168 @@
+schema_version: 1
+
+# This file is application data and the single acquisition-catalog authority. Keep list order
+# stable. Python validates this schema but does not duplicate the categories or artifact items.
+retrieval_fields:
+  - name: priority
+    label: Priority
+    description: Positive integer ordering among candidates for this artifact.
+    type: integer
+    multiple: false
+  - name: url
+    label: URL or endpoint
+    description: Configured retrieval, feed, listing, archive, or portal URL.
+    type: url
+    multiple: false
+  - name: locator
+    label: Stable locator
+    description: Stable identifier such as a CIK, account, publication, API key name, or form.
+    type: string
+    multiple: false
+  - name: preferred_domains
+    label: Preferred domains
+    description: Domains that bound or rank discovery without becoming retrieved provenance.
+    type: string
+    multiple: true
+  - name: discovery_hints
+    label: Discovery hints
+    description: Bounded search phrases or operator guidance for future discovery.
+    type: string
+    multiple: true
+  - name: expected_media_type
+    label: Expected media type
+    description: Optional expected response or artifact media type.
+    type: string
+    multiple: false
+  - name: parser_hint
+    label: Parser or adapter hint
+    description: Optional future adapter or parser routing guidance.
+    type: string
+    multiple: false
+  - name: operator_notes
+    label: Candidate notes
+    description: Operator context about this candidate; never retrieved evidence.
+    type: string
+    multiple: false
+
+retrieval_modes:
+  - mode: direct_url
+    label: Direct URL
+    description: A stable artifact or API endpoint can be addressed directly.
+    supported_fields: [priority, url, expected_media_type, parser_hint, operator_notes]
+    required_fields: [url]
+    required_any: []
+  - mode: feed
+    label: Feed
+    description: A stable RSS, Atom, API, or publication feed exposes artifacts.
+    supported_fields: [priority, url, locator, expected_media_type, parser_hint, operator_notes]
+    required_fields: []
+    required_any: [url, locator]
+  - mode: identifier
+    label: Stable identifier
+    description: A registry, platform, or adapter can locate artifacts from a stable identifier.
+    supported_fields: [priority, locator, url, parser_hint, operator_notes]
+    required_fields: [locator]
+    required_any: []
+  - mode: listing_page
+    label: Listing or portal
+    description: A stable page exists but individual artifacts must be discovered beneath it.
+    supported_fields: [priority, url, preferred_domains, discovery_hints, parser_hint, operator_notes]
+    required_fields: [url]
+    required_any: []
+  - mode: discovery
+    label: Bounded discovery
+    description: Search is bounded by preferred domains, phrases, or operator guidance.
+    supported_fields: [priority, preferred_domains, discovery_hints, parser_hint, operator_notes]
+    required_fields: []
+    required_any: [preferred_domains, discovery_hints]
+
+categories:
+  - id: regulatory_financial
+    label: Regulatory and financial
+    description: Statutory, exchange, ownership, and annual financial reporting.
+    order: 10
+    items:
+      - {id: sec_10k, short_name: 10-K, label: Annual report on Form 10-K, description: US annual statutory filing., default_enabled: false, addressability: deterministic, supported_retrieval_modes: [identifier, feed, direct_url], order: 10}
+      - {id: sec_10q, short_name: 10-Q, label: Quarterly report on Form 10-Q, description: US quarterly statutory filing., default_enabled: false, addressability: deterministic, supported_retrieval_modes: [identifier, feed, direct_url], order: 20}
+      - {id: sec_8k, short_name: 8-K, label: Current report on Form 8-K, description: US current-event statutory filing., default_enabled: false, addressability: deterministic, supported_retrieval_modes: [identifier, feed, direct_url], order: 30}
+      - {id: sec_20f, short_name: 20-F, label: Annual report on Form 20-F, description: Foreign private issuer annual filing., default_enabled: false, addressability: deterministic, supported_retrieval_modes: [identifier, feed, direct_url], order: 40}
+      - {id: sec_6k, short_name: 6-K, label: Report of foreign private issuer on Form 6-K, description: Foreign private issuer current report., default_enabled: false, addressability: deterministic, supported_retrieval_modes: [identifier, feed, direct_url], order: 50}
+      - {id: proxy_statement, short_name: Proxy, label: Proxy statement, description: Shareholder voting and governance filing., default_enabled: false, addressability: deterministic, supported_retrieval_modes: [identifier, feed, direct_url], order: 60}
+      - {id: ownership_insider, short_name: Ownership, label: Ownership and insider filings, description: Beneficial ownership and insider transaction filings., default_enabled: false, addressability: deterministic, supported_retrieval_modes: [identifier, feed, direct_url], order: 70}
+      - {id: other_statutory, short_name: Other filing, label: Other statutory or exchange filing, description: Other regulator or exchange disclosures., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [identifier, feed, listing_page, discovery], order: 80}
+      - {id: annual_report, short_name: Annual report, label: Published annual report, description: Designed annual report outside or alongside a statutory filing., default_enabled: true, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 90}
+
+  - id: earnings_investor
+    label: Earnings and investor materials
+    description: Periodic results, calls, presentations, and investor events.
+    order: 20
+    items:
+      - {id: earnings_release, short_name: Earnings release, label: Earnings release, description: Company-issued periodic results announcement., default_enabled: true, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, feed, direct_url], order: 10}
+      - {id: earnings_transcript, short_name: Call transcript, label: Earnings-call transcript, description: Written record of an earnings call., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 20}
+      - {id: earnings_audio, short_name: Call audio, label: Earnings-call audio or webcast, description: Audio or webcast recording of an earnings event., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 30}
+      - {id: prepared_remarks, short_name: Prepared remarks, label: Earnings-call prepared remarks, description: Management remarks published for an earnings event., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 40}
+      - {id: earnings_presentation, short_name: Earnings deck, label: Earnings presentation, description: Presentation accompanying periodic results., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url], order: 50}
+      - {id: supplemental_tables, short_name: Financial tables, label: Supplemental financial tables, description: Supplemental schedules and operating metrics., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url], order: 60}
+      - {id: investor_day, short_name: Investor day, label: Investor-day presentation, description: Materials from a company investor day., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 70}
+      - {id: analyst_presentation, short_name: Analyst deck, label: Analyst or conference presentation, description: Investor presentation outside periodic earnings., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 80}
+
+  - id: corporate_communications
+    label: Corporate communications
+    description: Company-authored news, commentary, customer, and partner materials.
+    order: 30
+    items:
+      - {id: press_release, short_name: Press release, label: Corporate press release, description: Formal company announcement., default_enabled: true, addressability: semi-deterministic, supported_retrieval_modes: [feed, listing_page, direct_url], order: 10}
+      - {id: corporate_news, short_name: News item, label: Corporate news item, description: Company news outside the formal press-release stream., default_enabled: true, addressability: semi-deterministic, supported_retrieval_modes: [feed, listing_page, direct_url], order: 20}
+      - {id: corporate_blog, short_name: Corp blog, label: Corporate blog, description: General company-authored blog content., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [feed, listing_page, direct_url], order: 30}
+      - {id: engineering_blog, short_name: Eng blog, label: Engineering blog, description: Engineering-authored technical posts., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [feed, listing_page, discovery], order: 40}
+      - {id: executive_commentary, short_name: Executive note, label: Executive commentary, description: Public commentary authored by company executives., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [feed, listing_page, discovery], order: 50}
+      - {id: customer_case_study, short_name: Case study, label: Customer case study, description: Company-published customer outcome or deployment story., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, discovery], order: 60}
+      - {id: partner_announcement, short_name: Partner news, label: Partner announcement, description: Company or partner announcement of a relationship., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [listing_page, feed, discovery], order: 70}
+
+  - id: product_technical
+    label: Product and technical material
+    description: Product, architecture, deployment, support, lifecycle, and technical documents.
+    order: 40
+    items:
+      - {id: product_page, short_name: Product page, label: Product page, description: Canonical company product description., default_enabled: true, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 10}
+      - {id: product_data_sheet, short_name: Data sheet, label: Product data sheet, description: Structured product specifications., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 20}
+      - {id: architecture_guide, short_name: Architecture, label: Architecture guide, description: System or solution architecture guidance., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 30}
+      - {id: deployment_guide, short_name: Deployment, label: Deployment guide, description: Product installation or deployment guidance., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 40}
+      - {id: product_manual, short_name: Manual, label: Product manual, description: Product operation and reference manual., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 50}
+      - {id: compatibility_matrix, short_name: Compatibility, label: Compatibility matrix, description: Supported product or platform combinations., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url], order: 60}
+      - {id: support_bulletin, short_name: Support bulletin, label: Support bulletin, description: Product support notice or advisory., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [feed, listing_page, direct_url], order: 70}
+      - {id: release_note, short_name: Release note, label: Firmware or software release note, description: Changes in a firmware or software release., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [feed, listing_page, direct_url], order: 80}
+      - {id: end_of_life_notice, short_name: EOL notice, label: End-of-life notice, description: Product lifecycle or discontinuation notice., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 90}
+      - {id: technical_white_paper, short_name: White paper, label: Technical white paper, description: Company-authored technical position or solution paper., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 100}
+
+  - id: social_public
+    label: Social and public commentary
+    description: Official and attributable public posts, videos, and webinars.
+    order: 50
+    items:
+      - {id: x_post, short_name: X post, label: X post or thread, description: Post from an official or named public account., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [identifier, feed, discovery], order: 10}
+      - {id: medium_article, short_name: Medium, label: Medium article, description: Attributable company or employee Medium article., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [feed, identifier, discovery], order: 20}
+      - {id: linkedin_post, short_name: LinkedIn, label: LinkedIn post, description: Official company or attributable executive post., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [identifier, discovery], order: 30}
+      - {id: official_video, short_name: Video, label: Official video, description: Video published through an official company channel., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [identifier, feed, listing_page, discovery], order: 40}
+      - {id: webinar, short_name: Webinar, label: Webinar, description: Company-hosted or attributable webinar recording or material., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [listing_page, feed, discovery], order: 50}
+
+  - id: conferences_research
+    label: Conferences and research
+    description: External events, standards work, technical research, and patents.
+    order: 60
+    items:
+      - {id: conference_presentation, short_name: Conf deck, label: Conference presentation, description: Slides presented at an external conference., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 10}
+      - {id: conference_video, short_name: Conf video, label: Conference video, description: Recording of a company or employee conference session., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [listing_page, direct_url, discovery], order: 20}
+      - {id: standards_contribution, short_name: Standards, label: Standards contribution, description: Contribution to an industry or technical standards body., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [identifier, listing_page, discovery], order: 30}
+      - {id: technical_paper, short_name: Tech paper, label: Technical paper, description: Research paper authored or coauthored by firm personnel., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [identifier, feed, discovery], order: 40}
+      - {id: patent, short_name: Patent, label: Patent or patent application, description: Published patent record connected to the firm., default_enabled: false, addressability: deterministic, supported_retrieval_modes: [identifier, feed, direct_url], order: 50}
+
+  - id: market_organizational
+    label: Market and organizational signals
+    description: Hiring, public-sector, expansion, and regulatory signals.
+    order: 70
+    items:
+      - {id: job_posting, short_name: Job posting, label: Job posting, description: Public role opening that signals organizational demand., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [listing_page, feed, discovery], order: 10}
+      - {id: government_contract, short_name: Gov contract, label: Government contract or procurement notice, description: Public procurement or contract award notice., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [identifier, feed, listing_page, discovery], order: 20}
+      - {id: expansion_notice, short_name: Expansion, label: Subsidy, grant, permit, or expansion notice, description: Public notice of funded or permitted physical expansion., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [feed, listing_page, discovery], order: 30}
+      - {id: regulatory_notice, short_name: Regulatory, label: Regulatory or export-control notice, description: Public regulatory action or export-control notice., default_enabled: false, addressability: discovery-based, supported_retrieval_modes: [identifier, feed, listing_page, discovery], order: 40}

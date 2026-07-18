@@ -17,6 +17,9 @@
 | TASK-009 | Extensible business concept catalog and local admin console | Complete |
 | TASK-010 | Admin-console usability and schema-aware concept editor | Complete |
 | TASK-011 | Target firm catalog, browser, and admin editor | Complete |
+| TASK-012 | Stable application CLI and operator help | Complete |
+| TASK-013 | External target-firm catalog import | Complete |
+| TASK-014 | Firm source profiles and canonical acquisition template | Complete |
 
 ## Architectural Progression
 

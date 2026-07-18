@@ -11,6 +11,9 @@ dependencies = ["PyYAML>=6.0,<7"]
 [project.scripts]
 rfi = "rfi.cli:main"
 
+[tool.setuptools.package-data]
+rfi = ["admin/*.html", "resources/*.yaml"]
+
 [tool.rfi]
 source-root = "src"
 test-root = "tests"
