@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 5723,
+      "destination_size": 5793,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "b30e8bb4532941248ce49a754952ed91b62551cab21363f77d140316aa44d465",
-      "content_change": "task roadmap reconciled through completed TASK-023 mailing lists"
+      "destination_sha256": "c01437ab182e2cebc5c32e46230405a24ac9e9e902bd4c3f9d167c16758d0b95",
+      "content_change": "task roadmap reconciled through completed TASK-024 navigation"
     },
     {
       "source": "ROADMAP.md",

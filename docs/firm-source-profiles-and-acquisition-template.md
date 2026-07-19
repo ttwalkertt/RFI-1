@@ -108,6 +108,13 @@ Saving appends only a source-profile revision. Historical profile revisions are 
 Canonical defaults remain visible and editable before revision 1 without being represented as
 stored state.
 
+The page accepts optional `firm_id` and `artifact_id` query parameters for operator navigation.
+A valid explicit firm takes precedence over remembered browser context. After loading that firm's
+current profile, the page opens the requested canonical artifact and its category, scrolls it into
+view, and focuses/highlights it. These parameters are disposable navigation state: loading them
+does not validate, save, publish a revision, or initiate acquisition. Unknown identity fails
+safely, and an unknown firm never applies an artifact target to a fallback firm.
+
 ## Explicit non-goals
 
 TASK-014 does not retrieve networks or files; schedule, poll, or discover sources; parse artifacts;
