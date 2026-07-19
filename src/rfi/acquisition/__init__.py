@@ -37,6 +37,11 @@ from rfi.acquisition.fixture_adapters import (
 from rfi.acquisition.repository import AcquisitionRepository
 from rfi.acquisition.runtime_config import load_runtime_configuration
 from rfi.acquisition.sec_form_10k import SecForm10KAdapter
+from rfi.acquisition.sec_form_10q import SecForm10QAdapter
+from rfi.acquisition.sec_form_20f import SecForm20FAdapter
+from rfi.acquisition.sec_form_6k import SecForm6KAdapter
+from rfi.acquisition.sec_form_8k import SecForm8KAdapter
+from rfi.acquisition.sec_numbered_form import SecNumberedFormAdapter
 from rfi.acquisition.sec_provider import (
     SecFilingMetadata,
     SecHttpResponse,
@@ -79,6 +84,11 @@ __all__ = [
     "SecApiAdapter",
     "SecFilingMetadata",
     "SecForm10KAdapter",
+    "SecForm10QAdapter",
+    "SecForm20FAdapter",
+    "SecForm6KAdapter",
+    "SecForm8KAdapter",
+    "SecNumberedFormAdapter",
     "SecHttpResponse",
     "SecProviderClient",
     "SecResponseTooLarge",

@@ -43,5 +43,10 @@ bytes, and verified backup/restore covers both authorities. See
 [`sqlite-structured-state-repository.md`](sqlite-structured-state-repository.md) and
 [`ADR-0017`](decisions/0017-fresh-sqlite-structured-state-foundation.md).
 
+TASK-022 adds artifact-specific Form 10-Q, Form 8-K, Form 20-F, and Form 6-K retrieval while
+preserving Form 10-K and the SQLite-independent acquisition boundary. See
+[`additional-sec-numbered-form-adapters.md`](additional-sec-numbered-form-adapters.md) and
+[`ADR-0018`](decisions/0018-artifact-specific-sec-numbered-form-adapters.md).
+
 `BACKLOG.md` cannot authorize implementation or imply sequence. Backlog candidates move into
 `ROADMAP.md` or `TASKS.md` only through explicit triage and governance decisions.

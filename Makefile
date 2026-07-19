@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 VENV_STAMP := .venv/.rfi-installed
 
-.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task014-proof task015-proof task016-proof task017-proof task018-proof task019-proof task021-test task012-test task013-test task015-test task016-test task017-test task018-test task019-test lint format-check typecheck import-check docs-check baseline-check build validate review-package
+.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task014-proof task015-proof task016-proof task017-proof task018-proof task019-proof task022-proof task021-test task022-test task012-test task013-test task015-test task016-test task017-test task018-test task019-test lint format-check typecheck import-check docs-check baseline-check build validate review-package
 
 setup: $(VENV_STAMP)
 
@@ -70,6 +70,9 @@ task018-proof: setup
 task019-proof: setup
 	PYTHONPATH=src $(VENV_PYTHON) scripts/task019_artifact_observations.py
 
+task022-proof: setup
+	env -u RFI_SEC_USER_AGENT PYTHONPATH=src $(VENV_PYTHON) scripts/task022_sec_forms.py fixture-proof
+
 task012-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task012 -v
 
@@ -94,6 +97,9 @@ task019-test: setup
 task021-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task021 -v
 
+task022-test: setup
+	env -u RFI_SEC_USER_AGENT PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task022 -v
+
 lint: setup
 	$(VENV_PYTHON) scripts/quality.py lint
 
@@ -115,7 +121,7 @@ baseline-check: setup
 build: setup
 	$(VENV_PYTHON) scripts/build_source_archive.py
 
-validate: test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task014-proof task015-proof task016-proof task017-proof task018-proof task019-proof lint format-check typecheck import-check docs-check baseline-check build
+validate: test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task014-proof task015-proof task016-proof task017-proof task018-proof task019-proof task022-proof lint format-check typecheck import-check docs-check baseline-check build
 
 review-package: setup
-	$(VENV_PYTHON) scripts/generate_task021_review.py
+	$(VENV_PYTHON) scripts/generate_task022_review.py
