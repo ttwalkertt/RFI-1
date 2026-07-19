@@ -10,8 +10,9 @@ deterministic configuration, and policy. `CandidateDocument` separately carries 
 `candidate_id` and `document_id`. `DiscoveryProvenance` and `RetrievalResult` retain provider
 identifiers and mutable locations as attributes; neither can define repository identity.
 
-The repository derives `artifact_id` from the SHA-256 digest of exact bytes. A caller supplies a
-stable `attempt_id` for each materially distinct retrieval activity. These five identity domains
+The repository derives `artifact_id` from the SHA-256 digest of exact bytes. Every successful
+acquisition creates a separate immutable `observation_id`, and a caller supplies a stable
+`attempt_id` for each materially distinct retrieval activity. These identity domains
 are never interchangeable:
 
 | Identity | Owner | Meaning |
@@ -19,13 +20,15 @@ are never interchangeable:
 | `source_id` | repository governance | configured acquisition source |
 | `document_id` | repository domain | stable logical source document |
 | `artifact_id` | repository evidence | one exact byte sequence |
+| `observation_id` | repository evidence | one successful acquisition observation |
 | `attempt_id` | repository history | one materially distinct activity |
 | provider identifiers | external provider | provenance attributes only |
 
 ## Authoritative and derived state
 
 Authoritative state consists of governed source records, immutable artifact bytes and integrity
-metadata, immutable retrieval-attempt records, and immutable checkpoint-advance events. The
+metadata, immutable artifact-observation records, immutable retrieval-attempt records, and
+immutable checkpoint-advance events. The
 document index and checkpoint view are derived. Their physical layout is intentionally private to
 the filesystem implementation.
 
@@ -44,10 +47,11 @@ mechanism, diagnostics, and artifact/checkpoint relationships where applicable.
 A successful operation orders effects as follows:
 
 1. store exact artifact bytes and immutable integrity metadata;
-2. append the successful retrieval-attempt record;
-3. atomically publish the derived document index;
-4. append the authoritative checkpoint event;
-5. atomically publish the derived checkpoint view.
+2. store the immutable successful acquisition observation;
+3. append the successful retrieval-attempt record;
+4. atomically publish the derived document index;
+5. append the authoritative checkpoint event;
+6. atomically publish the derived checkpoint view.
 
 The checkpoint event is the durable progress fact. It cannot exist until artifact, retrieval
 history, and index publication succeeded. A failure before artifact durability leaves nothing. A

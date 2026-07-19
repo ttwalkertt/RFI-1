@@ -93,6 +93,7 @@ class RepositoryLayout:
         self.authoritative = root / "authoritative"
         self.sources = self.authoritative / "sources"
         self.artifacts = self.authoritative / "artifacts"
+        self.observations = self.authoritative / "artifact-observations"
         self.ledger = self.authoritative / "retrieval-ledger"
         self.derived = root / "derived"
         self.index = self.derived / "document-index.json"
@@ -100,5 +101,11 @@ class RepositoryLayout:
 
     def initialize(self) -> None:
         """Create private storage directories without establishing domain records."""
-        for path in (self.sources, self.artifacts, self.ledger, self.derived):
+        for path in (
+            self.sources,
+            self.artifacts,
+            self.observations,
+            self.ledger,
+            self.derived,
+        ):
             path.mkdir(parents=True, exist_ok=True)

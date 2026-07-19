@@ -199,6 +199,7 @@ class AcquisitionReceipt:
     """Repository result after all requested durable effects succeeded."""
 
     attempt_id: str
+    observation_id: str
     artifact_id: str
     document_id: str
     checkpoint: Checkpoint | None

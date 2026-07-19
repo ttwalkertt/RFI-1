@@ -14,11 +14,13 @@ from rfi.acquisition.contracts import IntegrityError
 from rfi.artifacts.contracts import (
     ArtifactContent,
     ArtifactDetail,
+    ArtifactObservation,
     ArtifactOrder,
     ArtifactPage,
     ArtifactQuery,
     ArtifactQueryError,
     ArtifactSummary,
+    ObservationSelection,
     ProvenanceLocation,
     SourceEffectiveOrder,
 )
@@ -134,36 +136,56 @@ class ArtifactQueryService:
             for artifact_id in sorted(grouped, key=lambda value: self._artifacts[value].order)
         )
 
-    def detail(self, document_id: str) -> ArtifactDetail:
-        """Resolve one logical repository document to its current immutable stored artifact."""
-        _, summaries, records, sources, metadata = self._state()
+    def detail(
+        self,
+        document_id: str,
+        observation: str | ObservationSelection = ObservationSelection.LAST,
+    ) -> ArtifactDetail:
+        """Resolve one artifact and exactly one of its immutable observations."""
+        snapshot, summaries, _records, observations, _sources, metadata = self._state()
         summary = next((item for item in summaries if item.document_id == document_id), None)
         if summary is None:
             raise ArtifactQueryError("unknown_document_id", f"unknown document ID: {document_id}")
-        matching = [
-            item
-            for item in records
-            if item.get("record_type") == "retrieval_attempt"
-            and item.get("outcome") == "success"
-            and item.get("document_id") == document_id
-            and item.get("artifact_id") == summary.artifact_id
-        ]
-        record = max(
-            matching,
-            key=lambda item: (str(item.get("occurred_at", "")), item["attempt_id"]),
+        matching = sorted(
+            [
+                item
+                for item in observations
+                if item.get("document_id") == document_id
+                and item.get("artifact_id") == summary.artifact_id
+            ],
+            key=self._observation_key,
         )
-        source = sources.get(str(record["source_id"]), {})
-        discovery = record.get("candidate", {}).get("provenance", {})
-        locations = tuple(
-            ProvenanceLocation(
-                str(value),
-                "original_artifact"
-                if index == len(discovery.get("locations", [])) - 1
-                else "discovery",
+        if not matching:
+            raise ArtifactQueryError(
+                "repository_read_failure", "artifact has no readable observation"
             )
-            for index, value in enumerate(discovery.get("locations", []))
-            if isinstance(value, str) and value
+        index = self._observation_index(matching, str(observation))
+        record = matching[index]
+        value = self._observation(record)
+        cursor = self._encode_observation_cursor(
+            snapshot, document_id, summary.artifact_id, value.observation_id, index
         )
+        return self._detail(summary, value, cursor, index, len(matching), metadata)
+
+    def next(self, cursor: str) -> ArtifactDetail:
+        """Navigate to the next observation in the cursor's immutable snapshot."""
+        return self._navigate_observation(cursor, 1)
+
+    def previous(self, cursor: str) -> ArtifactDetail:
+        """Navigate to the previous observation in the cursor's immutable snapshot."""
+        return self._navigate_observation(cursor, -1)
+
+    def _detail(
+        self,
+        summary: ArtifactSummary,
+        observation: ArtifactObservation,
+        cursor: str,
+        index: int,
+        count: int,
+        metadata: dict[str, dict[str, Any]],
+    ) -> ArtifactDetail:
+        """Build detail without merging metadata across observations."""
+        locations = observation.provenance_locations
         original = next(
             (
                 item.location
@@ -175,18 +197,113 @@ class ArtifactQueryService:
         artifact_meta = metadata.get(summary.artifact_id, {})
         return ArtifactDetail(
             summary,
+            observation,
+            cursor,
+            index > 0,
+            index + 1 < count,
             locations,
-            self._text(discovery.get("metadata", {}).get("adapter_id"))
-            or self._text(source.get("policy", {}).get("retrieval_adapter_id")),
-            str(record.get("mechanism", "")),
-            self._text(source.get("policy", {}).get("source_profile_revision_id")),
-            str(record.get("candidate_id", "")),
-            str(record.get("source_id", "")),
+            observation.retrieval_adapter_id,
+            observation.retrieval_mechanism,
+            observation.source_profile_revision_id,
+            observation.candidate_id,
+            observation.source_id,
             "verified" if artifact_meta else "unavailable",
             original is not None,
             original,
-            dict(discovery.get("metadata", {})),
+            observation.metadata,
         )
+
+    def _observation(self, record: dict[str, Any]) -> ArtifactObservation:
+        """Normalize one observation record without consulting adjacent observations."""
+        discovery = record.get("candidate", {}).get("provenance", {})
+        raw_locations = discovery.get("locations", [])
+        locations = tuple(
+            ProvenanceLocation(
+                str(value),
+                "original_artifact" if index == len(raw_locations) - 1 else "discovery",
+            )
+            for index, value in enumerate(raw_locations)
+            if isinstance(value, str) and value
+        )
+        provider_ids = {
+            str(key): str(value)
+            for key, value in discovery.get("provider_identifiers", {}).items()
+            if isinstance(key, str) and isinstance(value, str)
+        }
+        provider_ids.update(
+            {
+                str(key): str(value)
+                for key, value in record.get("retrieval_provider_identifiers", {}).items()
+                if isinstance(key, str) and isinstance(value, str)
+            }
+        )
+        return ArtifactObservation(
+            str(record["observation_id"]),
+            str(record["attempt_id"]),
+            str(record["artifact_id"]),
+            str(record["document_id"]),
+            str(record.get("observed_at", "")),
+            self._text(record.get("retrieval_adapter_id")),
+            str(record.get("mechanism", "")),
+            self._text(record.get("source_profile_revision_id")),
+            str(record.get("candidate_id", "")),
+            str(record.get("source_id", "")),
+            locations,
+            provider_ids,
+            dict(record.get("diagnostics", {})),
+            dict(discovery.get("metadata", {})),
+            str(record.get("outcome", "")),
+        )
+
+    def _navigate_observation(self, cursor: str, delta: int) -> ArtifactDetail:
+        """Resolve one snapshot-bound cursor and move by one observation."""
+        payload = self._decode_observation_cursor(cursor)
+        snapshot, summaries, _records, observations, _sources, metadata = self._state()
+        if payload.get("snapshot") != snapshot:
+            raise ArtifactQueryError(
+                "stale_cursor", "repository changed; restart observation navigation"
+            )
+        document_id = payload.get("document_id")
+        artifact_id = payload.get("artifact_id")
+        index = payload.get("index")
+        if (
+            not isinstance(document_id, str)
+            or not isinstance(artifact_id, str)
+            or isinstance(index, bool)
+            or not isinstance(index, int)
+        ):
+            raise ArtifactQueryError("invalid_cursor", "observation cursor is malformed")
+        summary = next(
+            (
+                item
+                for item in summaries
+                if item.document_id == document_id and item.artifact_id == artifact_id
+            ),
+            None,
+        )
+        matching = sorted(
+            (
+                item
+                for item in observations
+                if item.get("document_id") == document_id
+                and item.get("artifact_id") == artifact_id
+            ),
+            key=self._observation_key,
+        )
+        if summary is None or not 0 <= index < len(matching):
+            raise ArtifactQueryError("invalid_cursor", "observation cursor target is invalid")
+        if matching[index].get("observation_id") != payload.get("observation_id"):
+            raise ArtifactQueryError("invalid_cursor", "observation cursor target is invalid")
+        target = index + delta
+        if not 0 <= target < len(matching):
+            raise ArtifactQueryError(
+                "observation_boundary", "no observation exists in that direction"
+            )
+        value = self._observation(matching[target])
+        next_cursor = self._encode_observation_cursor(
+            snapshot, document_id, artifact_id, value.observation_id, target
+        )
+        return self._detail(summary, value, next_cursor, target, len(matching), metadata)
 
     def content(self, document_id: str) -> ArtifactContent:
         """Return exact stored bytes after repository-owned integrity verification."""
@@ -207,7 +324,7 @@ class ArtifactQueryService:
         )
 
     def _snapshot_summaries(self) -> tuple[str, tuple[ArtifactSummary, ...]]:
-        snapshot, summaries, _, _, _ = self._state()
+        snapshot, summaries, _, _, _, _ = self._state()
         return snapshot, summaries
 
     def _state(
@@ -216,11 +333,13 @@ class ArtifactQueryService:
         str,
         tuple[ArtifactSummary, ...],
         list[dict[str, Any]],
+        list[dict[str, Any]],
         dict[str, dict[str, Any]],
         dict[str, dict[str, Any]],
     ]:
         try:
             records = self._repository.history()
+            observations = self._repository.observations()
             source_records = self._repository.sources()
             artifact_records = self._repository.artifact_metadata()
         except IntegrityError as error:
@@ -228,7 +347,12 @@ class ArtifactQueryService:
                 "repository_read_failure", "repository state cannot be read"
             ) from error
         snapshot_bytes = json.dumps(
-            {"sources": source_records, "records": records, "artifacts": artifact_records},
+            {
+                "sources": source_records,
+                "records": records,
+                "observations": observations,
+                "artifacts": artifact_records,
+            },
             sort_keys=True,
             separators=(",", ":"),
         ).encode()
@@ -236,12 +360,10 @@ class ArtifactQueryService:
         sources = {str(item["source_id"]): item for item in source_records}
         metadata = {str(item["artifact_id"]): item for item in artifact_records}
         latest_by_document: dict[str, dict[str, Any]] = {}
-        for record in records:
-            if (
-                record.get("record_type") != "retrieval_attempt"
-                or record.get("outcome") != "success"
-            ):
+        for observation in observations:
+            if observation.get("outcome") != "success":
                 continue
+            record = {**observation, "occurred_at": observation.get("observed_at", "")}
             document_id = str(record.get("document_id", ""))
             prior = latest_by_document.get(document_id)
             version_key = (
@@ -259,7 +381,7 @@ class ArtifactQueryService:
             self._summary(record, sources.get(str(record.get("source_id")), {}), metadata)
             for record in latest_by_document.values()
         )
-        return snapshot, summaries, records, sources, metadata
+        return snapshot, summaries, records, observations, sources, metadata
 
     def _summary(
         self,
@@ -429,6 +551,56 @@ class ArtifactQueryService:
     @staticmethod
     def _text(value: Any) -> str | None:
         return value if isinstance(value, str) and value else None
+
+    @staticmethod
+    def _observation_key(item: dict[str, Any]) -> tuple[str, str]:
+        return str(item.get("observed_at", "")), str(item.get("observation_id", ""))
+
+    @staticmethod
+    def _observation_index(items: list[dict[str, Any]], selection: str) -> int:
+        if selection == ObservationSelection.FIRST.value:
+            return 0
+        if selection == ObservationSelection.LAST.value:
+            return len(items) - 1
+        for index, item in enumerate(items):
+            if item.get("observation_id") == selection:
+                return index
+        raise ArtifactQueryError(
+            "unknown_observation_id", f"unknown observation ID: {selection}"
+        )
+
+    @staticmethod
+    def _encode_observation_cursor(
+        snapshot: str,
+        document_id: str,
+        artifact_id: str,
+        observation_id: str,
+        index: int,
+    ) -> str:
+        payload = json.dumps(
+            {
+                "snapshot": snapshot,
+                "document_id": document_id,
+                "artifact_id": artifact_id,
+                "observation_id": observation_id,
+                "index": index,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        return base64.urlsafe_b64encode(payload).decode().rstrip("=")
+
+    @staticmethod
+    def _decode_observation_cursor(cursor: str) -> dict[str, Any]:
+        if not cursor or len(cursor) > 2048:
+            raise ArtifactQueryError("invalid_cursor", "observation cursor is malformed")
+        try:
+            payload = json.loads(base64.urlsafe_b64decode(cursor + "===").decode())
+        except (ValueError, UnicodeError, json.JSONDecodeError) as error:
+            raise ArtifactQueryError("invalid_cursor", "observation cursor is malformed") from error
+        if not isinstance(payload, dict):
+            raise ArtifactQueryError("invalid_cursor", "observation cursor is malformed")
+        return payload
 
     def _cursor_offset(self, query: ArtifactQuery, snapshot: str) -> int:
         if not query.cursor:

@@ -24,7 +24,9 @@ canonical firm/artifact authorities; handlers and browser JavaScript never inspe
 
 One logical repository document is one query result. When the same document has multiple retained
 byte revisions, detail resolves its most recently ingested immutable revision while preserving
-every prior attempt in authoritative history. Cross-document “latest” never uses ingestion time.
+every prior attempt in authoritative history. TASK-019 extends that detail with first, last, and
+explicit immutable observation selection for the resolved artifact. Cross-document “latest” never
+uses ingestion time.
 It orders by normalized source-effective value, provider-neutral secondary identity, repository
 document ID, and immutable artifact ID. SEC acceptance time is preferred, followed by filing date;
 publication or observation time supports other artifact families. Retrieval time is an explicit

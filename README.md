@@ -138,6 +138,7 @@ The following documents define the project.
 | `DESIGN_PRINCIPLES.md` *(planned)* | Enduring engineering principles |
 | `docs/admin-preferences.md` | Browser-local admin preference contract and authority boundary |
 | `docs/artifact-query-service-and-browser.md` | Repository-owned artifact query, browser, content, and preview-security contracts |
+| `docs/multiple-artifact-observations.md` | Artifact, acquisition-observation, attempt identity, replay, and navigation contracts |
 | `BACKLOG.md` | Unscheduled candidates, review observations, deferred improvements, and future ideas |
 | `ROADMAP.md` *(planned)* | Capability roadmap |
 | `TASKS.md` | Authorized implementation work and task status |

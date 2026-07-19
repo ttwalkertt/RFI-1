@@ -47,9 +47,10 @@ position; equal boundary positions are valid and tie breakers are stable. Exact 
 semantics are recorded once per candidate/outcome identity as duplicate discovery. Reuse of one
 candidate identity with different semantics is malformed output and fails observably.
 
-Repository attempt identity is a hash of repository candidate identity, document identity,
-revision, and material outcome. Provider identifiers do not enter repository identity. Equivalent
-operations therefore repeat idempotently. A revision uses a new candidate/revision identity and
+Repository attempt identity is a hash of engine run identity, repository candidate identity,
+document identity, revision, and material outcome. Provider identifiers do not enter repository
+identity. Retrying the same run therefore repeats idempotently; a distinct run records a distinct
+attempt and, on success, a distinct artifact observation. A revision uses a new candidate/revision identity and
 immutable artifact while retaining the stable repository document identity, so the derived index
 relates both artifacts without changing prior records.
 

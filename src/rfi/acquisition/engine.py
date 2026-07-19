@@ -312,7 +312,7 @@ class AcquisitionEngine:
                         )
                         break
                     duplicates += 1
-                    attempt_id = self._attempt_id(candidate, "duplicate")
+                    attempt_id = self._attempt_id(run_id, candidate, "duplicate")
                     repository_candidate = self._repository_candidate(profile, candidate)
                     created = self._repository.record_outcome(
                         attempt_id,
@@ -353,7 +353,7 @@ class AcquisitionEngine:
                 repository_candidate = self._repository_candidate(profile, candidate)
                 if candidate.disposition == "skip":
                     skips += 1
-                    attempt_id = self._attempt_id(candidate, "skip")
+                    attempt_id = self._attempt_id(run_id, candidate, "skip")
                     created = self._repository.record_outcome(
                         attempt_id,
                         repository_candidate,
@@ -380,7 +380,7 @@ class AcquisitionEngine:
                     result = adapter.retrieve(profile, candidate)
                     if not isinstance(result, RetrievalResult):
                         raise ContractError("adapter retrieval did not return RetrievalResult")
-                    attempt_id = self._attempt_id(candidate, "success")
+                    attempt_id = self._attempt_id(run_id, candidate, "success")
                     receipt = self._repository.record_success(
                         attempt_id, repository_candidate, result
                     )
@@ -408,7 +408,9 @@ class AcquisitionEngine:
                     )
                 except AdapterFailure as error:
                     failures += 1
-                    failed_id = self._attempt_id(candidate, error.classification.value)
+                    failed_id = self._attempt_id(
+                        run_id, candidate, error.classification.value
+                    )
                     self._repository.record_outcome(
                         failed_id,
                         repository_candidate,
@@ -570,10 +572,11 @@ class AcquisitionEngine:
         )
 
     @staticmethod
-    def _attempt_id(candidate: AdapterCandidate, outcome: str) -> str:
-        """Derive operation identity without treating provider identity as repository identity."""
+    def _attempt_id(run_id: str, candidate: AdapterCandidate, outcome: str) -> str:
+        """Derive run-bound attempt identity without using provider identity."""
         payload = json.dumps(
             {
+                "run_id": run_id,
                 "candidate_id": candidate.candidate_id,
                 "document_id": candidate.document_id,
                 "revision": candidate.revision,

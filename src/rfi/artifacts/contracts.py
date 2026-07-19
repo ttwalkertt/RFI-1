@@ -22,6 +22,13 @@ class ArtifactOrder(StrEnum):
     OLDEST = "oldest"
 
 
+class ObservationSelection(StrEnum):
+    """Named observation selectors accepted by artifact detail."""
+
+    FIRST = "first"
+    LAST = "last"
+
+
 @dataclass(frozen=True)
 class ArtifactQuery:
     """Bounded typed artifact query; no persistence-shaped predicates are accepted."""
@@ -84,10 +91,35 @@ class ProvenanceLocation:
 
 
 @dataclass(frozen=True)
+class ArtifactObservation:
+    """One immutable acquisition observation for one immutable artifact."""
+
+    observation_id: str
+    acquisition_attempt_id: str
+    artifact_id: str
+    document_id: str
+    observed_at: str
+    retrieval_adapter_id: str | None
+    retrieval_mechanism: str
+    source_profile_revision_id: str | None
+    candidate_id: str
+    source_id: str
+    provenance_locations: tuple[ProvenanceLocation, ...]
+    provider_identifiers: dict[str, str]
+    diagnostics: dict[str, Any]
+    metadata: dict[str, Any]
+    status: str
+
+
+@dataclass(frozen=True)
 class ArtifactDetail:
     """Normalized operator inspection contract for one repository document."""
 
     summary: ArtifactSummary
+    observation: ArtifactObservation
+    observation_cursor: str
+    has_previous_observation: bool
+    has_next_observation: bool
     provenance_locations: tuple[ProvenanceLocation, ...]
     retrieval_adapter_id: str | None
     retrieval_mechanism: str
@@ -119,4 +151,3 @@ class ArtifactContent:
     content: bytes
     media_type: str
     checksum_sha256: str
-

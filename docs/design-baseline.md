@@ -25,5 +25,11 @@ source-effective ordering, and isolated stored-content inspection. The durable d
 in [`artifact-query-service-and-browser.md`](artifact-query-service-and-browser.md) and
 [`ADR-0014`](decisions/0014-repository-owned-artifact-query-and-isolated-preview.md).
 
+TASK-019 corrects acquisition identity by separating immutable artifact observations from
+content-addressed artifacts and run-bound acquisition attempts. Detail and browser contracts now
+support exact snapshot-bound observation selection and navigation. See
+[`multiple-artifact-observations.md`](multiple-artifact-observations.md) and
+[`ADR-0015`](decisions/0015-multiple-immutable-artifact-observations.md).
+
 `BACKLOG.md` cannot authorize implementation or imply sequence. Backlog candidates move into
 `ROADMAP.md` or `TASKS.md` only through explicit triage and governance decisions.

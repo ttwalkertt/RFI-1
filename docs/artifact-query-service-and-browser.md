@@ -23,10 +23,12 @@ of the ordinary query path.
 
 `ArtifactSummary` contains repository document/artifact identity, firm and canonical semantics,
 normalized source-effective ordering, provider metadata, ingestion time, media type, size,
-checksum, durable status, and stored-content availability. `ArtifactDetail` adds provenance,
-adapter/acquisition context, profile revision, provider-native metadata, integrity, and the
-separately labeled original-source location. `ArtifactContent` carries only integrity-verified
-stored bytes and controlled media metadata.
+checksum, durable status, and stored-content availability. `ArtifactDetail` adds exactly one
+selected immutable `ArtifactObservation`, provenance, adapter/acquisition context, profile
+revision, provider-native metadata, integrity, and the separately labeled original-source
+location. Selection accepts `first`, `last`, or an explicit observation ID and performs no
+metadata merging. `ArtifactContent` carries only integrity-verified stored bytes and controlled
+media metadata.
 
 ## Source-effective ordering
 
@@ -47,6 +49,11 @@ snapshot digest, a typed-query fingerprint, and the next offset. It is size-boun
 shape and validated on use. A malformed cursor returns `invalid_cursor`; changed authoritative
 state returns `stale_cursor`. The browser restarts expansion rather than combining revisions.
 
+Artifact detail separately returns an opaque artifact-local observation cursor. `next` and
+`previous` bind the snapshot, document, artifact, selected observation, and position. Any
+authoritative change returns `stale_cursor`; malformed, mismatched, and boundary navigation fails
+explicitly.
+
 ## Tree and interaction projection
 
 The operator console route `/artifacts` lazily expands:
@@ -59,6 +66,9 @@ Counts mean durable logical documents. Provider form names never define tree nod
 source-effective order, 25 at a time, with Load more continuation. The desktop view is a draggable
 split pane; narrow screens stack the panes. Selection fills normalized metadata and remaining
 space with preview. Split and metadata-collapse preferences are disposable browser-local state.
+
+Artifact detail defaults to the last observation. Previous/Next replaces only observation
+metadata. The stored-content URL and preview remain fixed while artifact identity is unchanged.
 
 ## Content and preview boundary
 
@@ -79,14 +89,16 @@ with provider adapters unavailable, with network blocked, and after replay/rebui
 ## Failure semantics
 
 Stable codes include `invalid_query`, `unsupported_filter`, `unknown_firm`,
-`unknown_artifact_family`, `unknown_canonical_artifact`, `unknown_document_id`, `invalid_cursor`,
-`stale_cursor`, `repository_read_failure`, `malformed_provenance`, `missing_stored_content`, and
+`unknown_artifact_family`, `unknown_canonical_artifact`, `unknown_document_id`,
+`unknown_observation_id`, `invalid_cursor`, `stale_cursor`, `observation_boundary`,
+`repository_read_failure`, `malformed_provenance`, `missing_stored_content`, and
 `checksum_mismatch`. Unsupported inline media is a successful detail/content state with a safe UI
 fallback, not invented rendering.
 
 ## Limitations
 
 Current queries scan the POC authoritative record set; performance indexing awaits measured need.
-The service returns the current immutable revision of each logical document, not an attempt-history
-browser. There is no search, extraction, arbitrary metadata query, repair, mutation, annotation,
-or Bring Repository Up to Date planner.
+The service returns the current immutable revision of each logical document and navigates only
+that artifact's observations; it is not a cross-artifact attempt-history browser. There is no
+search, extraction, arbitrary metadata query, repair, mutation, annotation, or Bring Repository Up
+to Date planner.
