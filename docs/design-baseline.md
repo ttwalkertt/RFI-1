@@ -37,5 +37,11 @@ repository/query contracts. No migration is implemented. See
 [`storage_architecture_design_draft.md`](storage_architecture_design_draft.md) and
 [`ADR-0016`](decisions/0016-hybrid-sqlite-structured-state.md).
 
+TASK-021 implements that direction for fresh repositories without migrating disposable POC state.
+The database owns structured application state, the content-addressed filesystem owns artifact
+bytes, and verified backup/restore covers both authorities. See
+[`sqlite-structured-state-repository.md`](sqlite-structured-state-repository.md) and
+[`ADR-0017`](decisions/0017-fresh-sqlite-structured-state-foundation.md).
+
 `BACKLOG.md` cannot authorize implementation or imply sequence. Backlog candidates move into
 `ROADMAP.md` or `TASKS.md` only through explicit triage and governance decisions.

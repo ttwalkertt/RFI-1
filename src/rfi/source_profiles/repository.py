@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
-import tempfile
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +19,8 @@ from rfi.source_profiles.contracts import (
     SourceProfileItem,
     SourceProfileRevision,
 )
+from rfi.storage import RepositoryDatabase, StorageError, state_root_for
+from rfi.storage.sqlite import canonical_json
 
 _SCHEMA_VERSION = 1
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
@@ -38,12 +38,13 @@ def _now() -> str:
 
 
 class SourceProfileRepository:
-    """Independent profile authority with immutable revisions and atomic current pointers."""
+    """Independent profile authority persisted in shared SQLite state."""
 
     def __init__(self, root: Path, template: AcquisitionTemplate) -> None:
         self.root = root
         self.revisions_root = root / "revisions"
         self.pointer = root / "catalog.json"
+        self._database = RepositoryDatabase(state_root_for(root))
         self.template = template
         self._artifacts = {item.artifact_id: item for item in template.artifacts}
         self._modes = {item.mode: item for item in template.retrieval_modes}
@@ -53,21 +54,21 @@ class SourceProfileRepository:
         cls, root: Path, template: AcquisitionTemplate
     ) -> SourceProfileRepository:
         """Initialize empty profile state without overwriting existing history."""
+        try:
+            RepositoryDatabase.initialize(state_root_for(root))
+        except StorageError as error:
+            raise SourceProfileError(str(error)) from error
         repository = cls(root, template)
-        if repository.pointer.exists():
-            repository.verify()
-            return repository
-        root.mkdir(parents=True, exist_ok=True)
-        repository.revisions_root.mkdir(exist_ok=True)
-        repository._atomic_json(
-            repository.pointer,
-            {"schema_version": _SCHEMA_VERSION, "current_revisions": {}, "revision_history": {}},
-        )
+        repository.verify()
         return repository
 
     @classmethod
     def open(cls, root: Path, template: AcquisitionTemplate) -> SourceProfileRepository:
         """Open only state that passes complete chain and template validation."""
+        try:
+            RepositoryDatabase.open(state_root_for(root))
+        except StorageError as error:
+            raise SourceProfileError(str(error)) from error
         repository = cls(root, template)
         repository.verify()
         return repository
@@ -95,23 +96,71 @@ class SourceProfileRepository:
             timestamp if current is None else current.created_at,
             timestamp,
         )
-        path = self._revision_path(revision.source_profile_revision_id)
-        existed = path.exists()
-        self._write_revision(revision)
-        try:
-            if fail_before_publish:
-                raise SourceProfileError(
-                    "injected interrupted write before source-profile publication"
-                )
-            state["current_revisions"][draft.firm_id] = revision.source_profile_revision_id
-            state["revision_history"].setdefault(draft.firm_id, []).append(
-                revision.source_profile_revision_id
+        if fail_before_publish:
+            raise SourceProfileError(
+                "injected interrupted write before source-profile publication"
             )
-            self._atomic_json(self.pointer, state)
-        except Exception:
-            if not existed:
-                path.unlink(missing_ok=True)
-            raise
+        try:
+            with self._database.transaction() as connection:
+                payload = canonical_json(asdict(revision))
+                connection.execute(
+                    "INSERT INTO source_profile_revisions VALUES (?,?,?,?,?,?)",
+                    (
+                        revision.source_profile_revision_id,
+                        revision.firm_id,
+                        revision.revision_number,
+                        revision.supersedes_revision_id,
+                        revision.created_at,
+                        payload,
+                    ),
+                )
+                for ordinal, item in enumerate(revision.items):
+                    connection.execute(
+                        "INSERT INTO source_profile_items VALUES (?,?,?,?,?)",
+                        (
+                            revision.source_profile_revision_id,
+                            item.artifact_id,
+                            ordinal,
+                            int(item.enabled),
+                            item.operator_notes,
+                        ),
+                    )
+                    connection.executemany(
+                        "INSERT INTO retrieval_candidates VALUES (?,?,?,?,?)",
+                        (
+                            (
+                                revision.source_profile_revision_id,
+                                item.artifact_id,
+                                candidate.priority,
+                                candidate.mode,
+                                canonical_json(asdict(candidate)),
+                            )
+                            for candidate in item.retrieval_candidates
+                        ),
+                    )
+                if current_id is None:
+                    connection.execute(
+                        "INSERT INTO source_profiles VALUES (?,?)",
+                        (revision.firm_id, revision.source_profile_revision_id),
+                    )
+                else:
+                    changed = connection.execute(
+                        "UPDATE source_profiles SET current_revision_id = ? "
+                        "WHERE firm_id = ? AND current_revision_id = ?",
+                        (
+                            revision.source_profile_revision_id,
+                            revision.firm_id,
+                            current_id,
+                        ),
+                    ).rowcount
+                    if changed != 1:
+                        raise SourceProfileError(
+                            "invalid source-profile update: current source-profile revision "
+                            "has changed"
+                        )
+                self._database.advance_revision(connection)
+        except StorageError as error:
+            raise SourceProfileError(str(error)) from error
         return revision
 
     def validate(self, draft: SourceProfileDraft) -> None:
@@ -211,11 +260,6 @@ class SourceProfileRepository:
                 raise SourceProfileError(f"current source-profile revision mismatch: {firm_id}")
         if set(state["current_revisions"]) != set(state["revision_history"]):
             raise SourceProfileError("source-profile current and history firms differ")
-        files = {path.stem for path in self.revisions_root.glob("*.json")}
-        if files != referenced:
-            raise SourceProfileError(
-                "source-profile catalog contains missing or unreferenced revision files"
-            )
         return {
             "profiles": len(state["current_revisions"]),
             "revisions": revisions,
@@ -338,14 +382,22 @@ class SourceProfileRepository:
             )
 
     def _state(self) -> dict[str, Any]:
-        value = self._load_json(self.pointer)
-        if value.get("schema_version") != _SCHEMA_VERSION:
-            raise SourceProfileError("unsupported or corrupt source-profile catalog schema")
-        if not isinstance(value.get("current_revisions"), dict) or not isinstance(
-            value.get("revision_history"), dict
-        ):
-            raise SourceProfileError("source-profile catalog pointer is malformed")
-        return value
+        with self._database.connect(read_only=True) as connection:
+            current = connection.execute(
+                "SELECT firm_id,current_revision_id FROM source_profiles ORDER BY firm_id"
+            ).fetchall()
+            revisions = connection.execute(
+                "SELECT firm_id,revision_id FROM source_profile_revisions "
+                "ORDER BY firm_id,revision_number"
+            ).fetchall()
+        history: dict[str, list[str]] = {}
+        for row in revisions:
+            history.setdefault(str(row[0]), []).append(str(row[1]))
+        return {
+            "schema_version": _SCHEMA_VERSION,
+            "current_revisions": {str(row[0]): str(row[1]) for row in current},
+            "revision_history": history,
+        }
 
     def _revision_path(self, revision_id: str) -> Path:
         if not revision_id.startswith("source-profile-revision-"):
@@ -353,18 +405,20 @@ class SourceProfileRepository:
         return self.revisions_root / f"{revision_id}.json"
 
     def _write_revision(self, revision: SourceProfileRevision) -> None:
-        path = self._revision_path(revision.source_profile_revision_id)
-        content = _canonical(asdict(revision))
-        if path.exists() and path.read_bytes() != content:
-            raise SourceProfileError(
-                f"attempted source-profile historical mutation: "
-                f"{revision.source_profile_revision_id}"
-            )
-        if not path.exists():
-            self._atomic_json(path, asdict(revision))
+        raise SourceProfileError("source-profile revisions require transactional publication")
 
     def _load_revision(self, revision_id: str) -> SourceProfileRevision:
-        value = self._load_json(self._revision_path(revision_id))
+        with self._database.connect(read_only=True) as connection:
+            row = connection.execute(
+                "SELECT canonical_json FROM source_profile_revisions WHERE revision_id = ?",
+                (revision_id,),
+            ).fetchone()
+        if row is None:
+            raise SourceProfileError(f"unknown source-profile revision: {revision_id}")
+        try:
+            value = json.loads(str(row[0]))
+        except json.JSONDecodeError as error:
+            raise SourceProfileError("cannot read source-profile structured state") from error
 
         def candidate(value: dict[str, Any]) -> RetrievalCandidate:
             fields = dict(value)
@@ -384,27 +438,3 @@ class SourceProfileRepository:
             for item in value["items"]
         )
         return SourceProfileRevision(**value)
-
-    def _load_json(self, path: Path) -> dict[str, Any]:
-        try:
-            value = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            raise SourceProfileError(
-                f"cannot read source-profile state {path.name}: {error}"
-            ) from error
-        if not isinstance(value, dict):
-            raise SourceProfileError(f"source-profile state is not an object: {path.name}")
-        return value
-
-    def _atomic_json(self, path: Path, value: Any) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-        temporary = Path(name)
-        try:
-            with os.fdopen(descriptor, "wb") as stream:
-                stream.write(_canonical(value))
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(temporary, path)
-        finally:
-            temporary.unlink(missing_ok=True)

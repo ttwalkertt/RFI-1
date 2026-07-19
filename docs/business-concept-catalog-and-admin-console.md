@@ -15,7 +15,7 @@ Operator / programmatic caller
               v
        ConceptRepository
        - immutable revisions
-       - atomic current pointer
+       - transactional current selector
        - definition validity
 
 ConceptRevision + ObservationMethod
@@ -59,24 +59,22 @@ related concepts, samples, and warnings. Creation converts editable intent into 
 - an explicit predecessor identity; and
 - the complete definition and method snapshot.
 
-The repository-controlled default location is:
+TASK-021 stores the aggregate in the application SQLite database:
 
 ```text
-.artifacts/runtime/TASK-009/catalog/
-  catalog.json
-  revisions/concept-revision-<sha256>.json
+.artifacts/runtime/rfi-1/repository.sqlite3
+  concepts
+  concept_revisions
 ```
 
-`catalog.json` is an atomic current-revision and ordered-history pointer. Revision files are
-immutable. A write publishes the new revision file before atomically replacing the pointer. An
-injected interruption before pointer publication removes the uncommitted file and leaves the
-previous catalog readable. Integrity verification checks schema, stable identities, revision
-sequence, predecessor links, content digests, current selection, missing files, and orphan files.
-Corrupt state fails closed.
+Revision rows are immutable, while `concepts.current_revision_id` selects the current definition.
+A write inserts history, changes the selector, and advances the repository revision in one SQLite
+transaction. An injected interruption rolls the transaction back and leaves the prior catalog
+readable. Integrity verification checks schema, stable identities, revision sequence, predecessor
+links, canonical payloads, and current selection. Corrupt state fails closed.
 
-Back up the complete catalog directory while the local single-writer server is stopped. Copying
-only `catalog.json` or only revision files is not a complete backup. The catalog has no secret or
-credential fields.
+Use `rfi backup` for a SQLite-safe snapshot of all application structured state and immutable
+content. The catalog has no secret or credential fields.
 
 ## Revision time and business validity
 

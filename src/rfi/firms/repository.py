@@ -5,9 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 import re
-import tempfile
 from dataclasses import asdict
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -21,6 +19,8 @@ from rfi.firms.contracts import (
     FirmStatus,
     SourceDiscoveryHint,
 )
+from rfi.storage import RepositoryDatabase, StorageError, state_root_for
+from rfi.storage.sqlite import canonical_json
 
 _SCHEMA_VERSION = 2
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
@@ -57,49 +57,45 @@ def _unique(values: tuple[str, ...], label: str) -> tuple[str, ...]:
 
 
 class FirmRepository:
-    """Firm authority with immutable revisions and an atomic current pointer."""
+    """Firm authority with immutable revisions in shared SQLite state."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
-        self.revisions_root = root / "revisions"
-        self.pointer = root / "catalog.json"
+        self.revisions_root = root / "revisions"  # retained only as a legacy diagnostic path
+        self.pointer = root / "catalog.json"  # retained only as a legacy diagnostic path
+        self._database = RepositoryDatabase(state_root_for(root))
 
     @classmethod
     def initialize(cls, root: Path) -> FirmRepository:
         """Initialize empty state without overwriting an existing catalog."""
+        try:
+            RepositoryDatabase.initialize(state_root_for(root))
+        except StorageError as error:
+            raise FirmError(str(error)) from error
         repository = cls(root)
-        if repository.pointer.exists():
-            repository.verify()
-            return repository
-        root.mkdir(parents=True, exist_ok=True)
-        repository.revisions_root.mkdir(exist_ok=True)
-        repository._atomic_json(
-            repository.pointer,
-            {"schema_version": _SCHEMA_VERSION, "current_revisions": {}, "revision_history": {}},
-        )
+        repository.verify()
         return repository
 
     @classmethod
     def open(cls, root: Path) -> FirmRepository:
         """Open only state that passes complete integrity validation."""
+        try:
+            RepositoryDatabase.open(state_root_for(root))
+        except StorageError as error:
+            raise FirmError(str(error)) from error
         repository = cls(root)
         repository.verify()
         return repository
 
     def create(self, draft: FirmDraft, fail_before_publish: bool = False) -> FirmRevision:
         """Create a firm identity and its first immutable revision."""
-        state = self._state()
         self.validate(draft)
-        if draft.firm_id in state["current_revisions"]:
+        if draft.firm_id in self._state()["current_revisions"]:
             raise FirmError(f"duplicate firm identifier: {draft.firm_id}")
         revision = self._revision(draft, 1, None, _now(), _now())
-        self._write_revision(revision)
         if fail_before_publish:
-            self._revision_path(revision.revision_id).unlink(missing_ok=True)
             raise FirmError("injected interrupted write before firm catalog publication")
-        state["current_revisions"][draft.firm_id] = revision.revision_id
-        state["revision_history"][draft.firm_id] = [revision.revision_id]
-        self._atomic_json(self.pointer, state)
+        self._publish(revision, create=True)
         return revision
 
     def create_batch(
@@ -142,34 +138,19 @@ class FirmRepository:
         revisions = tuple(
             self._revision(draft, 1, None, timestamp, timestamp) for draft in ordered
         )
-        created_paths: list[Path] = []
         try:
-            for revision in revisions:
-                path = self._revision_path(revision.revision_id)
-                existed = path.exists()
-                self._write_revision(revision)
-                if not existed:
-                    created_paths.append(path)
-                if (
-                    fail_after_revision_count is not None
-                    and len(created_paths) >= fail_after_revision_count
-                ):
-                    raise FirmError("injected batch persistence failure before publication")
-            published = {
-                "schema_version": state["schema_version"],
-                "current_revisions": dict(state["current_revisions"]),
-                "revision_history": {
-                    key: list(value) for key, value in state["revision_history"].items()
-                },
-            }
-            for revision in revisions:
-                published["current_revisions"][revision.firm_id] = revision.revision_id
-                published["revision_history"][revision.firm_id] = [revision.revision_id]
-            self._atomic_json(self.pointer, published)
-        except Exception:
-            for path in created_paths:
-                path.unlink(missing_ok=True)
-            raise
+            with self._database.transaction() as connection:
+                for count, revision in enumerate(revisions, start=1):
+                    self._insert_revision(connection, revision)
+                    connection.execute(
+                        "INSERT INTO firms(firm_id,current_revision_id) VALUES (?,?)",
+                        (revision.firm_id, revision.revision_id),
+                    )
+                    if fail_after_revision_count is not None and count >= fail_after_revision_count:
+                        raise FirmError("injected batch persistence failure before publication")
+                self._database.advance_revision(connection)
+        except StorageError as error:
+            raise FirmError(str(error)) from error
         return revisions
 
     def validate(self, draft: FirmDraft, current_firm_id: str | None = None) -> None:
@@ -219,13 +200,9 @@ class FirmRepository:
             current.created_at,
             _now(),
         )
-        self._write_revision(revision)
         if fail_before_publish:
-            self._revision_path(revision.revision_id).unlink(missing_ok=True)
             raise FirmError("injected interrupted write before firm catalog publication")
-        state["current_revisions"][firm_id] = revision.revision_id
-        state["revision_history"][firm_id].append(revision.revision_id)
-        self._atomic_json(self.pointer, state)
+        self._publish(revision, create=False)
         return revision
 
     def retire(self, firm_id: str, expected_revision_id: str) -> FirmRevision:
@@ -323,9 +300,6 @@ class FirmRepository:
                 revisions += 1
             if state["current_revisions"].get(firm_id) != history[-1]:
                 raise FirmError(f"current firm revision mismatch: {firm_id}")
-        files = {path.stem for path in self.revisions_root.glob("*.json")}
-        if files != referenced:
-            raise FirmError("firm catalog contains missing or unreferenced revision files")
         return {"firms": len(state["current_revisions"]), "revisions": revisions, "result": "PASS"}
 
     @staticmethod
@@ -442,14 +416,25 @@ class FirmRepository:
             raise FirmError(f"firm revision digest mismatch: {revision.revision_id}")
 
     def _state(self) -> dict[str, Any]:
-        value = self._load_json(self.pointer)
-        if value.get("schema_version") != _SCHEMA_VERSION:
-            raise FirmError("unsupported or corrupt firm catalog schema")
-        if not isinstance(value.get("current_revisions"), dict) or not isinstance(
-            value.get("revision_history"), dict
-        ):
-            raise FirmError("firm catalog pointer is malformed")
-        return value
+        try:
+            with self._database.connect(read_only=True) as connection:
+                current = connection.execute(
+                    "SELECT firm_id,current_revision_id FROM firms ORDER BY firm_id"
+                ).fetchall()
+                revisions = connection.execute(
+                    "SELECT firm_id,revision_id FROM firm_revisions "
+                    "ORDER BY firm_id,revision_number"
+                ).fetchall()
+        except Exception as error:
+            raise FirmError("cannot read firm catalog state") from error
+        history: dict[str, list[str]] = {}
+        for row in revisions:
+            history.setdefault(str(row[0]), []).append(str(row[1]))
+        return {
+            "schema_version": _SCHEMA_VERSION,
+            "current_revisions": {str(row[0]): str(row[1]) for row in current},
+            "revision_history": history,
+        }
 
     def _revision_path(self, revision_id: str) -> Path:
         if not revision_id.startswith("firm-revision-"):
@@ -457,15 +442,20 @@ class FirmRepository:
         return self.revisions_root / f"{revision_id}.json"
 
     def _write_revision(self, revision: FirmRevision) -> None:
-        path = self._revision_path(revision.revision_id)
-        content = _canonical(asdict(revision))
-        if path.exists() and path.read_bytes() != content:
-            raise FirmError(f"attempted firm historical mutation: {revision.revision_id}")
-        if not path.exists():
-            self._atomic_json(path, asdict(revision))
+        self._publish(revision, create=revision.revision_number == 1)
 
     def _load_revision(self, revision_id: str) -> FirmRevision:
-        value = self._load_json(self._revision_path(revision_id))
+        with self._database.connect(read_only=True) as connection:
+            row = connection.execute(
+                "SELECT canonical_json FROM firm_revisions WHERE revision_id = ?",
+                (revision_id,),
+            ).fetchone()
+        if row is None:
+            raise FirmError(f"unknown firm revision: {revision_id}")
+        try:
+            value = json.loads(str(row[0]))
+        except json.JSONDecodeError as error:
+            raise FirmError("cannot read firm revision structured state") from error
         value.setdefault("relevance", 0.0)
         value["status"] = FirmStatus(value["status"])
         value["aliases"] = tuple(value["aliases"])
@@ -477,24 +467,68 @@ class FirmRepository:
         )
         return FirmRevision(**value)
 
-    def _load_json(self, path: Path) -> dict[str, Any]:
+    def _publish(self, revision: FirmRevision, *, create: bool) -> None:
         try:
-            value = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            raise FirmError(f"cannot read firm catalog state {path.name}: {error}") from error
-        if not isinstance(value, dict):
-            raise FirmError(f"firm catalog state is not an object: {path.name}")
-        return value
+            with self._database.transaction() as connection:
+                self._insert_revision(connection, revision)
+                if create:
+                    connection.execute(
+                        "INSERT INTO firms(firm_id,current_revision_id) VALUES (?,?)",
+                        (revision.firm_id, revision.revision_id),
+                    )
+                else:
+                    changed = connection.execute(
+                        "UPDATE firms SET current_revision_id = ? WHERE firm_id = ? "
+                        "AND current_revision_id = ?",
+                        (
+                            revision.revision_id,
+                            revision.firm_id,
+                            revision.supersedes_revision_id,
+                        ),
+                    ).rowcount
+                    if changed != 1:
+                        raise FirmError(
+                            "invalid revision update: current firm revision has changed"
+                        )
+                self._database.advance_revision(connection)
+        except StorageError as error:
+            raise FirmError(str(error)) from error
 
-    def _atomic_json(self, path: Path, value: Any) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-        temporary = Path(name)
-        try:
-            with os.fdopen(descriptor, "wb") as stream:
-                stream.write(_canonical(value))
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(temporary, path)
-        finally:
-            temporary.unlink(missing_ok=True)
+    def _insert_revision(self, connection: Any, revision: FirmRevision) -> None:
+        payload = canonical_json(asdict(revision))
+        prior = connection.execute(
+            "SELECT canonical_json FROM firm_revisions WHERE revision_id = ?",
+            (revision.revision_id,),
+        ).fetchone()
+        if prior is not None:
+            if str(prior[0]) != payload:
+                raise FirmError(f"attempted firm historical mutation: {revision.revision_id}")
+            return
+        connection.execute(
+            "INSERT INTO firm_revisions VALUES (?,?,?,?,?,?,?)",
+            (
+                revision.revision_id,
+                revision.firm_id,
+                revision.revision_number,
+                revision.supersedes_revision_id,
+                revision.status.value,
+                revision.created_at,
+                payload,
+            ),
+        )
+        connection.executemany(
+            "INSERT INTO firm_identifiers VALUES (?,?,?,?)",
+            (
+                (
+                    revision.revision_id,
+                    item.kind,
+                    item.market or "",
+                    item.value,
+                )
+                for item in revision.identifiers
+            ),
+        )
+        connection.executemany(
+            "INSERT INTO firm_domains VALUES (?,?)",
+            ((revision.revision_id, item) for item in revision.domains),
+        )

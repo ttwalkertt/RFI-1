@@ -346,17 +346,7 @@ class ArtifactQueryService:
             raise ArtifactQueryError(
                 "repository_read_failure", "repository state cannot be read"
             ) from error
-        snapshot_bytes = json.dumps(
-            {
-                "sources": source_records,
-                "records": records,
-                "observations": observations,
-                "artifacts": artifact_records,
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-        snapshot = hashlib.sha256(snapshot_bytes).hexdigest()
+        snapshot = f"sqlite-revision-{self._repository.repository_revision()}"
         sources = {str(item["source_id"]): item for item in source_records}
         metadata = {str(item["artifact_id"]): item for item in artifact_records}
         latest_by_document: dict[str, dict[str, Any]] = {}

@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Complete
 
 ## Objective
 
@@ -698,6 +698,139 @@ Update TASK-021 as the durable completion record with:
 Review `BACKLOG.md`.
 
 Add only genuine newly discovered unscheduled work.
+
+## Implementation Resolution
+
+TASK-021 implements the TASK-020 hybrid authority decision as a new repository format rather than
+a migration. Fresh application state contains one `repository.sqlite3` structured authority and a
+`content/sha256/` immutable-byte authority. Known legacy catalog, acquisition, and pull markers are
+rejected before initialization or open; they are never imported, rewritten, deleted, dual-read, or
+dual-written.
+
+Schema version 1 persists concepts, firms and recognition indexes, source-profile revisions and
+candidates, governed sources, acquisition attempts, artifacts, logical documents, immutable
+`ArtifactObservation` rows, checkpoint events/current checkpoints, pull runs, repository identity,
+and the monotonic authority revision. Strict tables, primary/unique keys, foreign keys, checks, and
+query indexes enforce generic guarantees. Canonical JSON text preserves exact public-contract
+projection. No table declares a BLOB column and artifact bytes never enter SQLite.
+
+The existing deterministic sample catalog is the bounded firm treatment. `rfi init` remains empty;
+explicit repeat-safe `rfi seed` creates missing sample concepts/firms. The existing firms-only YAML
+import remains an explicit catalog-authoring contract and was not broadened into migration tooling.
+
+## Transaction and Authority Model
+
+Every structured write uses a short `BEGIN IMMEDIATE` transaction and advances
+`repository_state.authority_revision` when reader-visible state changes. Concept, firm,
+source-profile, pull, acquisition-attempt, artifact/observation, document, and checkpoint
+publication is atomic at its logical repository boundary. Connections enable foreign keys, WAL,
+`synchronous=FULL`, and a 5-second busy timeout; read-only operations use read-only connections
+where practical.
+
+Artifact publication is deliberately bytes-first: exclusively create and flush the digest-named
+content object, then transactionally publish the artifact reference and related structured state.
+A rolled-back structured write can leave only a detectable orphan. A committed reference to
+missing or checksum-invalid content is corruption. `rfi verify` reports both disagreement classes
+without adopting, deleting, or rewriting evidence.
+
+## Repository Contract Preservation
+
+Public repository constructors, domain records, firm/source-profile services, pull workflow,
+acquisition engine, query summaries/details/content, latest/oldest lookup, source-effective
+ordering, first/last/explicit observation selection, previous/next navigation, byte-range serving,
+isolated HTML preview, and read-only browser behavior remain compatible. Database schema remains
+private and all values enter SQL through parameters.
+
+Query and observation cursors bind to the opaque `sqlite-revision-N` repository snapshot token.
+Any intervening authoritative mutation produces `stale_cursor`; a continuation never mixes
+repository revisions. Same-run retries remain idempotent, while two distinct successful pulls of
+unchanged bytes create one artifact, two observations, two attempts, and one content object.
+
+## Backup, Restore, and Fresh-State Proof
+
+`rfi backup` verifies both authorities, uses SQLite's online backup API, and writes a ZIP containing
+the database, all referenced content, and a format/schema/member size-and-SHA-256 manifest.
+`rfi restore` requires a fresh destination, rejects duplicate, extra, unsafe, or mismatched
+members, and validates schema compatibility, SQLite integrity, foreign keys, structured
+relationships, content references, sizes, and checksums before reporting success.
+
+Focused TASK-021 tests prove clean and repeated initialization, explicit seed behavior, schema and
+PRAGMA configuration, foreign-key enforcement, absence of BLOB declarations, incompatible-version
+failure, legacy-state rejection, rollback/orphan detection, duplicate identity separation,
+restart/query equivalence, stale cursors, missing content, parameter boundaries, sanitized CLI
+failure, and backup/restore equivalence. TASK-016, TASK-018, and TASK-019 operator proofs provide
+fresh SQLite SEC Form 10-K ingress, browser/network isolation, query semantics, and duplicate-pull
+evidence.
+
+## Files Changed and Rationale
+
+- `src/rfi/storage/`: schema/version, connection/transaction, initialization, legacy detection,
+  hybrid backup, and restore ownership.
+- `src/rfi/{concepts,firms,source_profiles,acquisition,pull}/repository.py`: SQLite-backed
+  persistence behind established repository contracts.
+- `src/rfi/artifacts/service.py`, `src/rfi/acquisition/engine.py`, `src/rfi/admin/server.py`, and
+  `src/rfi/cli.py`: revision-bound snapshots, structured integrity propagation, composition, and
+  operator initialize/verify/backup/restore surfaces.
+- `tests/` and `scripts/task014_source_profiles.py`: TASK-021 proofs and existing-contract fixtures
+  reconciled with private SQLite persistence.
+- `scripts/generate_task021_review.py` and `Makefile`: focused/full/copied-tree evidence capture and
+  final checksummed review-package generation.
+- `README.md`, governing architecture/roadmap/task/backlog records, ADR-0016/ADR-0017, storage and
+  subsystem documentation, and design-baseline records: implemented authority and current
+  persistence semantics.
+
+## Validation Results
+
+- `PYTHONPATH=src .venv/bin/python -m unittest tests.test_task021 -v`: PASS, 8 tests.
+- `make validate`: PASS, 209 tests plus all TASK-002 through TASK-019 applicable operator proofs,
+  offline adapter proofs, lint, format, typecheck, import, docs, baseline, and source ZIP integrity.
+- `.venv/bin/python scripts/quality.py lint|format|typecheck`: PASS, 137 Python files.
+- `.venv/bin/python scripts/check_docs.py`: PASS, 78 Markdown files and 25 local links.
+- `.venv/bin/python scripts/check_baseline.py`: PASS, 8 design documents, 6 boundaries, and the
+  complete product-file inventory.
+- `git diff --check`: PASS.
+- Isolated copied-tree validation: PASS, 209 tests plus TASK-018/TASK-019 proofs, quality, docs,
+  and baseline checks without Git, credentials, retained state, caches, or artifacts.
+- Sensitive-output scan: PASS, 363 files scanned and zero findings.
+- Preliminary complete review package: PASS, 64 checksummed members; ZIP integrity PASS;
+  SHA-256 `f51732ccc0d1d45da6f685a7c506bb5c15791d308f922bdd5d7804717006a558`.
+- The review package is regenerated once more from this completed durable record; its final
+  checksum is recorded in the delivered `.zip.sha256` sidecar and final handoff.
+
+## Remaining Legacy Persistence and Limitations
+
+`rfi.acquisition.persistence` remains only as a historical helper module used by no new application
+repository authority. Knowledge generations, retrieval/source-object rebuildable stores, and
+independently portable workspace history retain their pre-existing physical stores because they
+are separate authority or projection boundaries outside TASK-021; `rfi init` does not initialize
+them. Historical tests may retain terminology or construct component-shaped paths, but those paths
+resolve to the one shared SQLite application database.
+
+The implementation targets local one-host operation and does not provide multi-host writers, HA,
+PITR, general legacy import, automatic integrity repair, speculative schema migrations, or artifact
+BLOB storage. PostgreSQL evaluation remains triggered by demonstrated multi-host or sustained
+concurrent writers, remote service operation, HA, or PITR needs. Legacy import tooling requires a
+material retained corpus and a separately authorized ticket. BACKLOG.md was reviewed; no genuine
+newly discovered unscheduled work was added.
+
+## Architectural Status Summary
+
+| Subsystem | Status | Evidence / boundary |
+| --- | --- | --- |
+| SQLite schema/version foundation | Complete | Strict schema version 1, configured connections, incompatible versions fail closed |
+| Structured application repositories | Complete | Existing contracts backed by one SQLite authority |
+| Immutable artifact content | Complete | Content-addressed filesystem remains exact-byte authority; no BLOBs |
+| Artifact/observation/attempt identity | Complete | One artifact can have multiple immutable observations and independent attempts |
+| Query and browser compatibility | Complete | Source-effective ordering, revision-bound cursors, selection/navigation, isolated preview |
+| Backup, restore, and integrity | Complete | Online SQLite snapshot plus checksummed content manifest and fresh restore |
+| Legacy POC migration | Intentionally not implemented | Fresh-state detection rejects legacy-only and mixed authority |
+| Knowledge/workspace physical consolidation | Out of scope | Independent pre-existing lifecycle boundaries retained |
+| PostgreSQL | Deferred | Only on documented concurrency, remote-service, HA, or PITR triggers |
+
+Architectural change: authoritative application structured state is now SQLite rather than
+repository-managed JSON files, while immutable artifact bytes remain content-addressed filesystem
+evidence. The next storage milestone is evidence-triggered schema evolution, material legacy import,
+or PostgreSQL evaluation—not general cleanup.
 
 Potential deferred items include:
 

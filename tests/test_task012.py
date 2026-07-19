@@ -60,7 +60,7 @@ class StableApplicationCliTests(unittest.TestCase):
     def test_fresh_and_repeated_init_and_seed_are_safe_and_explicit(self) -> None:
         code, first, _ = self.run_cli("init", "--state", str(self.state))
         self.assertEqual(code, 0)
-        self.assertIn("created concept catalog", first)
+        self.assertIn("created authoritative SQLite repository", first)
         code, repeated, _ = self.run_cli("init", "--state", str(self.state))
         self.assertEqual(code, 0)
         self.assertIn("already existed", repeated)
@@ -118,7 +118,7 @@ class StableApplicationCliTests(unittest.TestCase):
         (self.state / "catalog.json").write_text("{}\n", encoding="utf-8")
         code, _, errors = self.run_cli("init", "--state", str(self.state))
         self.assertEqual(code, 2)
-        self.assertIn("schema", errors)
+        self.assertIn("cannot be mixed", errors)
 
 
 if __name__ == "__main__":

@@ -75,10 +75,10 @@ this configuration but must create its own retrieval and provenance records.
 
 ## Independent immutable aggregate
 
-Firm source profiles are stored under the application state's `source-profiles/` directory. The
-aggregate is keyed by the stable `firm_id`, but it has its own catalog pointer, revision files,
-content-derived revision identifiers, revision numbers, timestamps, supersession chain, atomic
-publication, optimistic concurrency check, and integrity verification.
+Firm source profiles are stored in the application SQLite database. The aggregate is keyed by the
+stable `firm_id` and has its own immutable revision rows, content-derived revision identifiers,
+revision numbers, timestamps, supersession chain, transactional current selector, optimistic
+concurrency check, and integrity verification.
 
 The profile repository never writes the target-firm repository. The profile service reads the firm
 catalog only to reject unknown firms. Conversely, target-firm create, revise, import, and retire
@@ -89,7 +89,7 @@ Before the first profile is saved, the service returns a view with `revision_num
 revision identifier or timestamps, `is_default: true`, and each canonical item's template default.
 This view is not stored and does not appear in history. The first save creates revision 1. Later
 saves append revisions; previous revisions remain readable. Validation and interrupted publication
-leave the prior pointer and revision set unchanged.
+leave the prior selector and revision set unchanged.
 
 Profile entries are normalized to canonical template order, missing entries receive canonical
 defaults, and candidates are sorted by priority. Each firm's history and future acquisition

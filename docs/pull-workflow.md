@@ -19,7 +19,7 @@ Every run records the same ordered stages:
 8. record results; and
 9. summarize execution.
 
-The durable journal lives below the selected application state at `pull-workflows/runs/`. It
+The durable run record lives in the selected application's SQLite `pull_runs` table. It
 preserves the request, exact profile snapshot, inspectable plan, ordered stage events, per-candidate
 diagnostics, per-artifact results, per-firm aggregation, and run summary. Progress/status reads do
 not depend on a live HTTP request or browser state.
@@ -66,8 +66,8 @@ closed during registry construction.
 
 Adapters return exact `RetrievalResult` bytes. `AcquisitionEngine` calls the existing public
 repository ingress, which derives content-addressed artifact identity, stores immutable whole
-bytes and metadata, appends retrieval history, updates the derived document index, and advances
-source checkpoints in the established order. The workflow does not know or use the repository's
+bytes outside SQLite, and transactionally publishes metadata, attempt/observation history,
+document projection, and source checkpoints. The workflow does not know or use the repository's
 private artifact layout and creates no alternate evidence store.
 
 The repository receipt distinguishes an idempotent retry within one engine run from a newly

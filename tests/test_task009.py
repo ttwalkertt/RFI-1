@@ -148,8 +148,8 @@ class ConceptCatalogTests(unittest.TestCase):
         self.assertEqual(self.repository.get(first.concept_id).revision_id, second.revision_id)
         corrupt = self.root / "corrupt"
         shutil.copytree(self.state, corrupt)
-        (corrupt / "catalog.json").write_text("not-json", encoding="utf-8")
-        with self.assertRaisesRegex(ConceptError, "cannot read catalog"):
+        (corrupt / "repository.sqlite3").write_bytes(b"not-sqlite")
+        with self.assertRaisesRegex(ConceptError, "database"):
             ConceptRepository.open(corrupt)
 
     def test_interrupted_write_does_not_publish(self) -> None:

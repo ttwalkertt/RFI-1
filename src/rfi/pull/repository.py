@@ -1,77 +1,90 @@
-"""Durable, operator-readable execution journal for Pull Workflow runs."""
+"""SQLite-backed durable Pull Workflow execution journal."""
 
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
 from rfi.pull.contracts import PullError
+from rfi.storage import RepositoryDatabase, StorageError, state_root_for
+from rfi.storage.sqlite import canonical_json
 
 
 class PullRunRepository:
-    """Persist current run progress and terminal results independently by run ID."""
+    """Persist current run progress and terminal results transactionally by run ID."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
-        self.runs = root / "runs"
-        self.runs.mkdir(parents=True, exist_ok=True)
+        self.runs = root / "runs"  # legacy diagnostic location; never authoritative
+        try:
+            self._database = RepositoryDatabase.initialize(state_root_for(root))
+        except StorageError as error:
+            raise PullError(str(error)) from error
 
     def create(self, run_id: str, value: dict[str, Any]) -> None:
-        """Create one durable run identity without replacing an existing run."""
-        path = self._path(run_id)
-        content = self._content(value)
+        self._validate_id(run_id)
         try:
-            with path.open("xb") as output:
-                output.write(content)
-                output.flush()
-                os.fsync(output.fileno())
-        except FileExistsError as error:
-            raise PullError(f"pull run already exists: {run_id}") from error
+            with self._database.transaction() as connection:
+                connection.execute(
+                    "INSERT INTO pull_runs VALUES (?,?,?,?,?)",
+                    (
+                        run_id,
+                        str(value.get("status", "")),
+                        str(value.get("requested_at", "")),
+                        str(value.get("completed_at", "")),
+                        canonical_json(value),
+                    ),
+                )
+                self._database.advance_revision(connection)
+        except StorageError as error:
+            code = "pull run already exists" if error.code == "integrity_constraint" else str(error)
+            message = f"{code}: {run_id}" if error.code == "integrity_constraint" else code
+            raise PullError(message) from error
 
     def save(self, run_id: str, value: dict[str, Any]) -> None:
-        """Atomically publish updated progress for an existing run."""
-        path = self._path(run_id)
-        if not path.is_file():
-            raise PullError(f"unknown pull run: {run_id}")
-        descriptor, temporary = tempfile.mkstemp(prefix=f".{run_id}-", dir=self.runs)
+        self._validate_id(run_id)
         try:
-            with os.fdopen(descriptor, "wb") as output:
-                output.write(self._content(value))
-                output.flush()
-                os.fsync(output.fileno())
-            os.replace(temporary, path)
-        finally:
-            if os.path.exists(temporary):
-                os.unlink(temporary)
+            with self._database.transaction() as connection:
+                changed = connection.execute(
+                    "UPDATE pull_runs SET status=?,completed_at=?,canonical_json=? WHERE run_id=?",
+                    (
+                        str(value.get("status", "")),
+                        str(value.get("completed_at", "")),
+                        canonical_json(value),
+                        run_id,
+                    ),
+                ).rowcount
+                if changed != 1:
+                    raise PullError(f"unknown pull run: {run_id}")
+                self._database.advance_revision(connection)
+        except StorageError as error:
+            raise PullError(str(error)) from error
 
     def get(self, run_id: str) -> dict[str, Any]:
-        """Read one durable run record."""
-        path = self._path(run_id)
-        if not path.is_file():
+        self._validate_id(run_id)
+        with self._database.connect(read_only=True) as connection:
+            row = connection.execute(
+                "SELECT canonical_json FROM pull_runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+        if row is None:
             raise PullError(f"unknown pull run: {run_id}")
-        value = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            value = json.loads(str(row[0]))
+        except json.JSONDecodeError as error:
+            raise PullError(f"invalid pull run record: {run_id}") from error
         if not isinstance(value, dict) or value.get("run_id") != run_id:
             raise PullError(f"invalid pull run record: {run_id}")
         return value
 
     def list(self) -> tuple[dict[str, Any], ...]:
-        """Return all durable run records newest first."""
-        return tuple(
-            sorted(
-                (self.get(path.stem) for path in self.runs.glob("*.json")),
-                key=lambda item: str(item.get("requested_at", "")),
-                reverse=True,
-            )
-        )
-
-    def _path(self, run_id: str) -> Path:
-        if not run_id.startswith("pull-") or not run_id[5:].isalnum():
-            raise PullError(f"invalid pull run identifier: {run_id}")
-        return self.runs / f"{run_id}.json"
+        with self._database.connect(read_only=True) as connection:
+            rows = connection.execute(
+                "SELECT canonical_json FROM pull_runs ORDER BY requested_at DESC,run_id DESC"
+            ).fetchall()
+        return tuple(json.loads(str(row[0])) for row in rows)
 
     @staticmethod
-    def _content(value: dict[str, Any]) -> bytes:
-        return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
+    def _validate_id(run_id: str) -> None:
+        if not run_id.startswith("pull-") or not run_id[5:].isalnum():
+            raise PullError(f"invalid pull run identifier: {run_id}")

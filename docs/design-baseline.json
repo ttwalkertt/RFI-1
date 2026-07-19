@@ -17,10 +17,10 @@
       "source": "README.md",
       "destination": "README.md",
       "source_size": 5104,
-      "destination_size": 5893,
+      "destination_size": 6130,
       "source_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
-      "destination_sha256": "c2878c81142f0911a6baed91f498dd3a093d4b1952f9c035639b858460e7611a",
-      "content_change": "documentation index extended through TASK-020 structured storage review"
+      "destination_sha256": "bd2dd4a929e9821ee61c5ffff93dd1db51c0af42a5793c1199df5805d5b8164c",
+      "content_change": "documentation index and current status extended through TASK-021 SQLite foundation"
     },
     {
       "source": "DESIGN_PRINCIPLES.md",
@@ -44,37 +44,37 @@
       "source": "BACKLOG.md",
       "destination": "BACKLOG.md",
       "source_size": 8702,
-      "destination_size": 10079,
+      "destination_size": 10151,
       "source_sha256": "2c002f2cd05370e9b98760227cd681fe8d4cb43dcb3c0407bbaa22b6684ce755",
-      "destination_sha256": "2bbc568370bd21232d49bc11f93e419fe85ef8250052e59cc168331a02ad4da3",
-      "content_change": "repository-authored backlog governance and TASK-020 migration candidate"
+      "destination_sha256": "d8df9d4b8660b78865c18763df0ac21a79fe2de7ffba2bb7e02aa1c1b00cd4d5",
+      "content_change": "repository backlog reconciled after TASK-021 fresh-state implementation"
     },
     {
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 5497,
+      "destination_size": 5569,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "ddbb3d9be2078a41f392b236d1a4ae11444ce275f61da002442996d089ff6798",
-      "content_change": "task roadmap reconciled through completed TASK-020 and distinguished from backlog and roadmap governance"
+      "destination_sha256": "26e2e895bd55a699034090175b14c6e7a5a0a6c842b0f6332126da5352da50ec",
+      "content_change": "task roadmap reconciled through completed TASK-021 SQLite foundation"
     },
     {
       "source": "ROADMAP.md",
       "destination": "ROADMAP.md",
       "source_size": 3371,
-      "destination_size": 3961,
+      "destination_size": 3938,
       "source_sha256": "1de0192a023e8c046f2cdedc2fe61592345d2e06b324c9b49b2c2b25424dfdad",
-      "destination_sha256": "149a967bd94469fa1162d4c3911c38fbbcb7a7a3cc746f149069939e877200a8",
-      "content_change": "roadmap role and TASK-020 hybrid structured-storage direction recorded"
+      "destination_sha256": "b620e412f1fe51ab71b53814ed0d23d6d0f4c21aa378ef2e30eec5730373f15e",
+      "content_change": "roadmap updated for implemented TASK-021 hybrid structured-state foundation"
     },
     {
       "source": "ARCHITECTURE.md",
       "destination": "ARCHITECTURE.md",
       "source_size": 4889,
-      "destination_size": 6809,
+      "destination_size": 6764,
       "source_sha256": "b1035d87d8f620ace89e3aaae5ca65b0c21cf93c6e1ca91c824c1e623b20aa9f",
-      "destination_sha256": "ddf3f297d72c5450f5fe4f421f70695c02273ec0c4f1eb0e1879a3f9396819e5",
-      "content_change": "repository architecture extended through TASK-020 hybrid SQLite and immutable-byte direction"
+      "destination_sha256": "d7c4079833e7fb961e8b31be74118ede0997303647aee0f4d304883505f6cae6",
+      "content_change": "repository architecture extended through implemented TASK-021 SQLite and immutable-byte authority"
     }
   ]
 }

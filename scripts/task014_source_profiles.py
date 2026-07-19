@@ -93,7 +93,7 @@ def fixture_proof() -> dict[str, Any]:
             replace(proof_draft("seagate"), operator_notes="Second revision."),
             first.source_profile_revision_id,
         )
-        prior_files = sorted(path.name for path in profiles.revisions_root.iterdir())
+        prior_history = tuple(profiles.history("seagate"))
         rollback_error = ""
         try:
             profiles.publish(
@@ -144,8 +144,7 @@ def fixture_proof() -> dict[str, Any]:
             "history_readable": len(profiles.history("seagate")) == 2,
             "rollback_preserved_current": profiles.get("seagate")
             == second
-            and {path.name for path in profiles.revisions_root.iterdir()}
-            == {*prior_files, f"{other.source_profile_revision_id}.json"},
+            and tuple(profiles.history("seagate")) == prior_history,
             "rollback_was_injected": "interrupted write" in rollback_error,
             "cross_firm_isolation": other.revision_number == 1
             and len(profiles.history("western-digital")) == 1,

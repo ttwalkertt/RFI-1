@@ -239,7 +239,7 @@ class SourceProfileRepositoryTests(unittest.TestCase):
 
     def test_failed_publication_rolls_back_and_profiles_are_isolated(self) -> None:
         first = self.repository.publish(configured_draft(), None)
-        before_files = tuple((self.root / "profiles/revisions").iterdir())
+        before_history = self.repository.history("seagate")
         with self.assertRaisesRegex(SourceProfileError, "interrupted write"):
             self.repository.publish(
                 replace(configured_draft(), operator_notes="Must roll back."),
@@ -250,7 +250,7 @@ class SourceProfileRepositoryTests(unittest.TestCase):
             self.repository.get("seagate").source_profile_revision_id,
             first.source_profile_revision_id,
         )
-        self.assertEqual(tuple((self.root / "profiles/revisions").iterdir()), before_files)
+        self.assertEqual(self.repository.history("seagate"), before_history)
         other = self.repository.publish(configured_draft("western-digital"), None)
         self.assertEqual(other.revision_number, 1)
         self.assertEqual(len(self.repository.history("seagate")), 1)
