@@ -348,7 +348,8 @@ class AdminHandler(BaseHTTPRequestHandler):
         ) as error:
             if isinstance(error, ArtifactQueryError):
                 status = HTTPStatus.NOT_FOUND if error.code in {
-                    "unknown_firm", "unknown_document_id", "missing_stored_content"
+                    "unknown_firm", "unknown_document_id", "unknown_observation_id",
+                    "missing_stored_content"
                 } else HTTPStatus.CONFLICT if error.code in {
                     "stale_cursor", "checksum_mismatch"
                 } else HTTPStatus.BAD_REQUEST
@@ -410,7 +411,22 @@ class AdminHandler(BaseHTTPRequestHandler):
                 self._send_artifact_content(artifacts.content(document_id))
                 return
             if method == "GET" and len(parts) == 3:
-                self._send_json(HTTPStatus.OK, asdict(artifacts.detail(document_id)))
+                selection = self._first(query, "observation") or "last"
+                self._send_json(
+                    HTTPStatus.OK, asdict(artifacts.detail(document_id, selection))
+                )
+                return
+            if method == "GET" and parts[3:] == ["observations", "next"]:
+                self._send_json(
+                    HTTPStatus.OK,
+                    asdict(artifacts.next(self._first(query, "cursor"))),
+                )
+                return
+            if method == "GET" and parts[3:] == ["observations", "previous"]:
+                self._send_json(
+                    HTTPStatus.OK,
+                    asdict(artifacts.previous(self._first(query, "cursor"))),
+                )
                 return
         if method == "GET" and parts == ["api", "pulls", "adapters"]:
             self._send_json(

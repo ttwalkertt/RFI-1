@@ -70,10 +70,11 @@ bytes and metadata, appends retrieval history, updates the derived document inde
 source checkpoints in the established order. The workflow does not know or use the repository's
 private artifact layout and creates no alternate evidence store.
 
-The repository receipt distinguishes an idempotent attempt from a newly observed attempt whose
-exact artifact bytes already exist. This permits the workflow to report `no_change` and
-`duplicate` honestly while retaining the existing immutable artifact identity and successful
-retrieval ledger contract.
+The repository receipt distinguishes an idempotent retry within one engine run from a newly
+observed attempt whose exact artifact bytes already exist. A distinct successful pull appends an
+immutable observation even when content is unchanged. This permits the workflow to report
+`no_change` and `duplicate` honestly while retaining the existing immutable artifact identity,
+stored bytes, and successful retrieval ledger contract.
 
 ## Aggregation semantics
 

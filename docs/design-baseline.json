@@ -17,10 +17,10 @@
       "source": "README.md",
       "destination": "README.md",
       "source_size": 5104,
-      "destination_size": 5633,
+      "destination_size": 5766,
       "source_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
-      "destination_sha256": "4ab12463acdc00b6fac9c4cde68ebd8021e5995b72263c721e1811aa86eb0aff",
-      "content_change": "documentation index extended through TASK-018 artifact query and browser"
+      "destination_sha256": "55b0ddb885b7dbf4f65c1c9a790dbe6bf6fc5118ac610b704bbe738b437e6a87",
+      "content_change": "documentation index extended through TASK-019 artifact observations"
     },
     {
       "source": "DESIGN_PRINCIPLES.md",
@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 5354,
+      "destination_size": 5421,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "291228912751b6c449bf01f298ebb5b2e9f781e60f1792c11dc4ff769642e025",
-      "content_change": "task roadmap reconciled through completed TASK-018 and distinguished from backlog and roadmap governance"
+      "destination_sha256": "6dc3aa715b8eb4adbe46c84b8d06353436a12ab15a35d5830035dbf32bb4ee73",
+      "content_change": "task roadmap reconciled through completed TASK-019 and distinguished from backlog and roadmap governance"
     },
     {
       "source": "ROADMAP.md",
@@ -71,10 +71,10 @@
       "source": "ARCHITECTURE.md",
       "destination": "ARCHITECTURE.md",
       "source_size": 4889,
-      "destination_size": 5651,
+      "destination_size": 6005,
       "source_sha256": "b1035d87d8f620ace89e3aaae5ca65b0c21cf93c6e1ca91c824c1e623b20aa9f",
-      "destination_sha256": "90473086689693ccaacdca7cad3bb8e9d2732afbcd48cf5528e874f7fd76dea0",
-      "content_change": "repository read and isolated stored-content inspection architecture added by TASK-018"
+      "destination_sha256": "4c48b4a254bf5fe785963c408948dc63caa91cc06f194d74cef04504118aafa2",
+      "content_change": "repository read, isolated preview, and multiple artifact-observation architecture extended through TASK-019"
     }
   ]
 }

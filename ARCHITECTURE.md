@@ -144,6 +144,11 @@ Examples:
 
 Artifacts retain provenance and are never modified.
 
+One artifact may have many immutable `ArtifactObservation` records describing separate successful
+acquisition events for the same bytes. These acquisition observations own retrieval time,
+adapter, diagnostics, and provenance; they never redefine or copy artifact content. They are
+distinct from the extracted knowledge observations in the next section.
+
 ---
 
 ## Observations

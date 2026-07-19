@@ -205,7 +205,7 @@ class FailureAndResumptionTests(EngineCase):
         self.feed.transient_retrieval_failures.clear()
         resumed = self.engine.run_source("source-fixture-feed", "resume")
         self.assertEqual(resumed.status, RunStatus.COMPLETE)
-        self.assertEqual(resumed.unchanged, 1)
+        self.assertEqual(resumed.duplicates, 3)
         self.assertEqual(resumed.checkpoint_after.position, 3)
         self.assertTrue(all(item in self.repository.history() for item in durable_history))
         self.assertEqual(len(self.repository.document_index()["documents"]), 3)
@@ -228,7 +228,7 @@ class FailureAndResumptionTests(EngineCase):
         self.feed.transient_discovery_failures.clear()
         resumed = self.engine.run_source("source-fixture-feed", "after-page-resume")
         self.assertEqual(resumed.status, RunStatus.COMPLETE)
-        self.assertEqual(resumed.unchanged, 2)
+        self.assertEqual(resumed.duplicates, 4)
         self.assertEqual(resumed.checkpoint_after.position, 3)
 
     def test_failure_after_all_candidates_before_checkpoint_is_safe(self) -> None:
@@ -242,7 +242,7 @@ class FailureAndResumptionTests(EngineCase):
         self.assertIsNone(partial.checkpoint_after)
         resumed = self.engine.run_source("source-fixture-catalog", "checkpoint-resume")
         self.assertEqual(resumed.status, RunStatus.COMPLETE)
-        self.assertEqual(resumed.unchanged, 2)
+        self.assertEqual(resumed.duplicates, 2)
         self.assertEqual(resumed.checkpoint_after.position, 3)
 
     def test_permanent_failure_is_blocked_and_classified(self) -> None:
@@ -267,7 +267,9 @@ class ReplayIntegrityAndConflictTests(EngineCase):
         profile = fixture_profiles()[0]
         candidate = self.catalog.discover(profile, None).candidates[1]
         repository_candidate = self.engine._repository_candidate(profile, candidate)
-        attempt_id = self.engine._attempt_id(candidate, "success")
+        attempt_id = self.engine._attempt_id(
+            f"run-{profile.source_id}-conflict", candidate, "success"
+        )
         self.repository.record_outcome(
             attempt_id,
             repository_candidate,

@@ -184,3 +184,11 @@ model-facing projection, raw draft, claim mappings, iteration decisions, and sto
 the [TASK-007 subsystem guide](model-guided-source-grounded-intelligence.md) for contracts,
 retention, runtime policy, failure semantics, and limitations. `make review-package` creates the
 TASK-007 review package.
+
+## TASK-019 artifact observation workflow
+
+Run `make task019-test` for duplicate-pull, observation selection/navigation, stale-cursor,
+replay, legacy compatibility, browser API, and unchanged-byte regressions. Run
+`make task019-proof` for the concise architectural proof. `make validate` includes both TASK-018
+and TASK-019 proofs, and `make review-package` regenerates the complete TASK-019 directory, ZIP,
+checksum, isolated-tree evidence, integrity records, and sensitive-output scan.

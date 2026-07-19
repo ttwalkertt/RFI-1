@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import asdict
 from pathlib import Path
@@ -82,6 +83,7 @@ class AcquisitionRepository:
         if checkpoint is not None:
             self._validate_checkpoint(candidate.source_id, checkpoint)
         artifact_id = f"artifact-{sha256_bytes(result.content)}"
+        observation_id = self._observation_id(attempt_id, artifact_id)
         artifact_created = not (
             self._layout.artifacts / f"{artifact_id}.metadata.json"
         ).exists()
@@ -104,12 +106,34 @@ class AcquisitionRepository:
             "occurred_at": result.retrieved_at,
             "mechanism": result.mechanism,
             "artifact_id": artifact_id,
+            "observation_id": observation_id,
             "candidate": candidate.to_dict(),
             "retrieval_provider_identifiers": result.provider_identifiers,
             "diagnostics": result.diagnostics,
             "checkpoint_requested": checkpoint.to_dict() if checkpoint else None,
         }
         self._assert_record_compatible(f"attempt-{attempt_id}", attempt)
+        observation = {
+            "schema_version": _SCHEMA,
+            "record_type": "artifact_observation",
+            "observation_id": observation_id,
+            "attempt_id": attempt_id,
+            "artifact_id": artifact_id,
+            "document_id": candidate.document_id,
+            "source_id": candidate.source_id,
+            "candidate_id": candidate.candidate_id,
+            "outcome": RetrievalOutcome.SUCCESS.value,
+            "observed_at": result.retrieved_at,
+            "mechanism": result.mechanism,
+            "candidate": candidate.to_dict(),
+            "retrieval_provider_identifiers": result.provider_identifiers,
+            "diagnostics": result.diagnostics,
+            "source_profile_revision_id": source.get("policy", {}).get(
+                "source_profile_revision_id"
+            ),
+            "retrieval_adapter_id": source.get("policy", {}).get("retrieval_adapter_id"),
+        }
+        self._assert_observation_compatible(observation_id, observation)
         if fail_at == FailurePoint.BEFORE_ARTIFACT:
             self._fail(fail_at)
 
@@ -117,6 +141,7 @@ class AcquisitionRepository:
         if fail_at == FailurePoint.AFTER_ARTIFACT:
             self._fail(fail_at)
 
+        self._store_observation(observation_id, observation)
         created = self._append_record(f"attempt-{attempt_id}", attempt)
         if fail_at == FailurePoint.BEFORE_INDEX:
             self._fail(fail_at)
@@ -129,6 +154,7 @@ class AcquisitionRepository:
             self._advance_checkpoint(candidate.source_id, attempt_id, checkpoint)
         return AcquisitionReceipt(
             attempt_id=attempt_id,
+            observation_id=observation_id,
             artifact_id=artifact_id,
             document_id=candidate.document_id,
             checkpoint=checkpoint,
@@ -196,6 +222,38 @@ class AcquisitionRepository:
             for path in sorted(self._layout.artifacts.glob("*.metadata.json"))
         ]
 
+    def observations(self) -> list[dict[str, Any]]:
+        """Return immutable artifact observations in chronological deterministic order.
+
+        Successful records created before TASK-019 are projected without mutating legacy state.
+        """
+        explicit = [
+            load_json(path)
+            for path in sorted(self._layout.observations.glob("*.json"))
+        ]
+        by_attempt: dict[str, dict[str, Any]] = {}
+        for observation in explicit:
+            if observation.get("record_type") != "artifact_observation":
+                raise IntegrityError("observation store contains an invalid record type")
+            observation_id = observation.get("observation_id")
+            attempt_id = observation.get("attempt_id")
+            if not isinstance(observation_id, str) or not isinstance(attempt_id, str):
+                raise IntegrityError("observation store contains an invalid identity")
+            if attempt_id in by_attempt:
+                raise IntegrityError(f"attempt has multiple observations: {attempt_id}")
+            by_attempt[attempt_id] = observation
+        for attempt in self.history():
+            if (
+                attempt.get("record_type") == "retrieval_attempt"
+                and attempt.get("outcome") == RetrievalOutcome.SUCCESS.value
+                and attempt["attempt_id"] not in by_attempt
+            ):
+                by_attempt[attempt["attempt_id"]] = self._legacy_observation(attempt)
+        return sorted(
+            by_attempt.values(),
+            key=lambda item: (str(item.get("observed_at", "")), str(item["observation_id"])),
+        )
+
     def read_artifact(self, artifact_id: str) -> bytes:
         """Return exact stored evidence after independently checking its integrity."""
         require_identifier(artifact_id, "artifact_id")
@@ -221,6 +279,13 @@ class AcquisitionRepository:
             content = (self._layout.artifacts / f"{artifact_id}.content").read_bytes()
             self._verify_artifact_record(metadata, content)
         records = self.history()
+        observations = self.observations()
+        observation_by_attempt = {item["attempt_id"]: item for item in observations}
+        attempt_ids = {
+            item["attempt_id"]
+            for item in records
+            if item["record_type"] == "retrieval_attempt"
+        }
         attempts = 0
         checkpoints = 0
         for record in records:
@@ -232,10 +297,25 @@ class AcquisitionRepository:
                 if record["outcome"] == RetrievalOutcome.SUCCESS.value:
                     if artifact_id not in metadata_by_id:
                         raise IntegrityError(f"attempt references absent artifact: {artifact_id}")
+                    observation = observation_by_attempt.get(record["attempt_id"])
+                    if observation is None:
+                        raise IntegrityError("successful attempt lacks an artifact observation")
+                    if (
+                        observation.get("artifact_id") != artifact_id
+                        or observation.get("document_id") != record.get("document_id")
+                    ):
+                        raise IntegrityError("artifact observation disagrees with its attempt")
                 elif artifact_id is not None:
                     raise IntegrityError("non-successful attempt references an artifact")
             else:
                 checkpoints += 1
+        for observation in observations:
+            if observation["attempt_id"] not in attempt_ids:
+                raise IntegrityError("artifact observation references an absent attempt")
+            if observation.get("artifact_id") not in metadata_by_id:
+                raise IntegrityError("artifact observation references an absent artifact")
+            if observation.get("source_id") not in source_ids:
+                raise IntegrityError("artifact observation references an unknown source")
         if include_derived:
             expected_index = self._derive_index(records)
             expected_checkpoints = self._derive_checkpoints(records)
@@ -252,6 +332,7 @@ class AcquisitionRepository:
             "sources": len(source_ids),
             "artifacts": len(metadata_by_id),
             "attempts": attempts,
+            "observations": len(observations),
             "checkpoint_events": checkpoints,
             "result": "PASS",
         }
@@ -326,6 +407,61 @@ class AcquisitionRepository:
         metadata_path, content_path = self._artifact_paths(artifact_id)
         create_immutable(content_path, content)
         create_immutable(metadata_path, canonical_json(metadata))
+
+    def _store_observation(
+        self, observation_id: str, observation: dict[str, Any]
+    ) -> None:
+        """Create one immutable acquisition observation separate from artifact bytes."""
+        create_immutable(
+            self._layout.observations / f"{observation_id}.json",
+            canonical_json(observation),
+        )
+
+    def _assert_observation_compatible(
+        self, observation_id: str, observation: dict[str, Any]
+    ) -> None:
+        """Reject reuse of an observation identity with different semantics."""
+        path = self._layout.observations / f"{observation_id}.json"
+        if path.is_file() and path.read_bytes() != canonical_json(observation):
+            raise ConflictError(
+                f"immutable observation identity already differs: {observation_id}"
+            )
+
+    @staticmethod
+    def _observation_id(attempt_id: str, artifact_id: str) -> str:
+        """Derive a separate immutable observation identity for one successful attempt."""
+        payload = canonical_json({"attempt_id": attempt_id, "artifact_id": artifact_id})
+        return f"observation-{hashlib.sha256(payload).hexdigest()}"
+
+    def _legacy_observation(self, attempt: dict[str, Any]) -> dict[str, Any]:
+        """Project a pre-TASK-019 successful attempt as a read-only observation."""
+        source = self.source(str(attempt["source_id"]))
+        observation_id = self._observation_id(
+            str(attempt["attempt_id"]), str(attempt["artifact_id"])
+        )
+        return {
+            "schema_version": int(attempt.get("schema_version", _SCHEMA)),
+            "record_type": "artifact_observation",
+            "observation_id": observation_id,
+            "attempt_id": attempt["attempt_id"],
+            "artifact_id": attempt["artifact_id"],
+            "document_id": attempt["document_id"],
+            "source_id": attempt["source_id"],
+            "candidate_id": attempt["candidate_id"],
+            "outcome": attempt["outcome"],
+            "observed_at": attempt["occurred_at"],
+            "mechanism": attempt["mechanism"],
+            "candidate": attempt["candidate"],
+            "retrieval_provider_identifiers": attempt.get(
+                "retrieval_provider_identifiers", {}
+            ),
+            "diagnostics": attempt.get("diagnostics", {}),
+            "source_profile_revision_id": source.get("policy", {}).get(
+                "source_profile_revision_id"
+            ),
+            "retrieval_adapter_id": source.get("policy", {}).get("retrieval_adapter_id"),
+            "legacy_projection": True,
+        }
 
     def _artifact_paths(self, artifact_id: str) -> tuple[Path, Path]:
         """Resolve private artifact paths without exposing them in public contracts."""
