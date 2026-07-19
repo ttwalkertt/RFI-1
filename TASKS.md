@@ -30,6 +30,7 @@
 | TASK-019 | Multiple immutable artifact observations | Complete |
 | TASK-020 | Structured repository storage architecture review | Complete |
 | TASK-021 | SQLite structured-state repository foundation | Complete |
+| TASK-022 | Additional SEC numbered-form retrieval adapters | Complete |
 
 ## Architectural Progression
 

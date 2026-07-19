@@ -11,6 +11,10 @@ from rfi.acquisition import (
 from rfi.acquisition.edgar import USER_AGENT_VARIABLE, user_agent_from_environment
 from rfi.acquisition.runtime_config import load_runtime_configuration
 from rfi.acquisition.sec_form_10k import SecForm10KAdapter
+from rfi.acquisition.sec_form_10q import SecForm10QAdapter
+from rfi.acquisition.sec_form_20f import SecForm20FAdapter
+from rfi.acquisition.sec_form_6k import SecForm6KAdapter
+from rfi.acquisition.sec_form_8k import SecForm8KAdapter
 from rfi.acquisition.sec_provider import SecProviderClient
 from rfi.firms import FirmRepository
 from rfi.pull.adapters import (
@@ -52,20 +56,30 @@ def create_pull_workflow(state: Path) -> PullWorkflow:
             f"env:{USER_AGENT_VARIABLE}", runtime
         )
 
-    sec_10k = SecForm10KAdapter(SecProviderClient(sec_user_agent), utc_now)
+    provider = SecProviderClient(sec_user_agent)
+    numbered_forms = (
+        SecForm10KAdapter(provider, utc_now),
+        SecForm10QAdapter(provider, utc_now),
+        SecForm8KAdapter(provider, utc_now),
+        SecForm20FAdapter(provider, utc_now),
+        SecForm6KAdapter(provider, utc_now),
+    )
     adapters = RetrievalAdapterRegistry(
         (
             RetrievalAdapterRegistration(
                 RetrievalAdapterCapability("direct-url", (), ("direct_url",)),
                 direct_url,
             ),
-            RetrievalAdapterRegistration(
-                RetrievalAdapterCapability(
-                    sec_10k.adapter_id,
-                    sec_10k.artifact_ids,
-                    sec_10k.retrieval_modes,
-                ),
-                sec_10k,
+            *(
+                RetrievalAdapterRegistration(
+                    RetrievalAdapterCapability(
+                        adapter.adapter_id,
+                        adapter.artifact_ids,
+                        adapter.retrieval_modes,
+                    ),
+                    adapter,
+                )
+                for adapter in numbered_forms
             ),
         )
     )

@@ -50,6 +50,11 @@ not imported or operated as a fallback authority. A future server database is ju
 demonstrated multi-host writers, sustained write concurrency, high availability, or point-in-time
 recovery requirements.
 
+Artifact-specific deterministic SEC retrieval now covers Form 10-K, Form 10-Q, Form 8-K, Form
+20-F, and Form 6-K. Concrete adapters own canonical form and amendment policy; a shared bounded
+provider owns SEC transport mechanics. All retrieved bytes enter through public acquisition and
+repository contracts, and no adapter depends on SQLite or persistence layout.
+
 ---
 
 # Architectural Separation

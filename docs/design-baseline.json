@@ -17,10 +17,10 @@
       "source": "README.md",
       "destination": "README.md",
       "source_size": 5104,
-      "destination_size": 6130,
+      "destination_size": 6274,
       "source_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
-      "destination_sha256": "bd2dd4a929e9821ee61c5ffff93dd1db51c0af42a5793c1199df5805d5b8164c",
-      "content_change": "documentation index and current status extended through TASK-021 SQLite foundation"
+      "destination_sha256": "85886c56746901683eb69f446c82f6c44ebb911025973c2c5a2eb02c31a97da6",
+      "content_change": "documentation index and current status extended through TASK-022 SEC adapters"
     },
     {
       "source": "DESIGN_PRINCIPLES.md",
@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 5569,
+      "destination_size": 5643,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "26e2e895bd55a699034090175b14c6e7a5a0a6c842b0f6332126da5352da50ec",
-      "content_change": "task roadmap reconciled through completed TASK-021 SQLite foundation"
+      "destination_sha256": "085a12dc1d50aae4de2fd73d2717d08a6529cdd3a18ea492109947accc43e41e",
+      "content_change": "task roadmap reconciled through completed TASK-022 SEC adapters"
     },
     {
       "source": "ROADMAP.md",
@@ -71,10 +71,10 @@
       "source": "ARCHITECTURE.md",
       "destination": "ARCHITECTURE.md",
       "source_size": 4889,
-      "destination_size": 6764,
+      "destination_size": 7129,
       "source_sha256": "b1035d87d8f620ace89e3aaae5ca65b0c21cf93c6e1ca91c824c1e623b20aa9f",
-      "destination_sha256": "d7c4079833e7fb961e8b31be74118ede0997303647aee0f4d304883505f6cae6",
-      "content_change": "repository architecture extended through implemented TASK-021 SQLite and immutable-byte authority"
+      "destination_sha256": "19bee48e71540a59da2f19d86cc075fc9cd1fd132756c41f8cc354f04152d6e5",
+      "content_change": "repository architecture extended through TASK-022 artifact-specific SEC retrieval"
     }
   ]
 }

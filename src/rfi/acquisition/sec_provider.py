@@ -206,8 +206,6 @@ class SecProviderClient:
         if not _ACCESSION.fullmatch(accession_number):
             raise self._malformed("SEC filing accession number is malformed")
         accession_digits = accession_number.replace("-", "")
-        if accession_digits[:10].lstrip("0") != normalized:
-            raise self._malformed("SEC accession issuer identity conflicts with the filing CIK")
         if not _PRIMARY_DOCUMENT.fullmatch(primary_document) or ".." in primary_document:
             raise self._malformed("SEC primary-document identity is unsafe or malformed")
         path = (
