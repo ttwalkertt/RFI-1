@@ -32,6 +32,7 @@
 | TASK-021 | SQLite structured-state repository foundation | Complete |
 | TASK-022 | Additional SEC numbered-form retrieval adapters | Complete |
 | TASK-023 | Bounded Linux kernel mailing-list intelligence stream | Complete |
+| TASK-024 | Pull-result configuration repair navigation | Complete |
 
 ## Architectural Progression
 

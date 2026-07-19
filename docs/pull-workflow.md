@@ -89,6 +89,14 @@ failure-bearing outcomes. A firm or run is:
 Unsupported-mode skips are explicit accepted results, not silent failures. A firm with no enabled
 artifacts completes with zero artifact attempts.
 
+In the Pull Sources browser, artifact-level `configuration_problem` outcomes that carry both the
+firm and canonical artifact identity are repair links. The ordinary same-tab link targets
+`/source-profiles?firm_id=...&artifact_id=...`; other statuses remain presentation-only. This keeps
+pull results read-only while routing configuration work to the existing source-profile authority
+and retaining normal browser history behavior. A completed run is recorded as
+`/pull-sources?run_id=...`; loading that history URL rehydrates the durable results, so Back from
+the editor returns to the result that initiated the repair.
+
 ## Interfaces
 
 ### CLI
