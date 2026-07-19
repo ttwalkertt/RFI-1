@@ -31,5 +31,11 @@ support exact snapshot-bound observation selection and navigation. See
 [`multiple-artifact-observations.md`](multiple-artifact-observations.md) and
 [`ADR-0015`](decisions/0015-multiple-immutable-artifact-observations.md).
 
+TASK-020 selects the storage direction for a later migration: SQLite authority for structured
+runtime records, content-addressed filesystem authority for immutable bytes, and unchanged public
+repository/query contracts. No migration is implemented. See
+[`storage_architecture_design_draft.md`](storage_architecture_design_draft.md) and
+[`ADR-0016`](decisions/0016-hybrid-sqlite-structured-state.md).
+
 `BACKLOG.md` cannot authorize implementation or imply sequence. Backlog candidates move into
 `ROADMAP.md` or `TASKS.md` only through explicit triage and governance decisions.

@@ -32,6 +32,12 @@ Focus areas:
 
 Success is measured by reliable acquisition and replay rather than downstream intelligence.
 
+Storage direction after TASK-020: migrate authoritative structured state to an explicit hybrid
+SQLite/file architecture only through a separately authorized milestone. Exact artifact bytes
+remain content-addressed filesystem evidence. The migration must preserve public contracts, use
+offline reconciliation and one authority cutover, and prove backup/restore and rollback. A server
+database remains trigger-driven rather than a current prerequisite.
+
 ---
 
 # Phase 1 — Observations

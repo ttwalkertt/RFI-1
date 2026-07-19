@@ -135,6 +135,7 @@ The following documents define the project.
 | `ARCHITECTURE.md` *(planned)* | Stable architectural concepts |
 | `ACQUISITION_POC_GUIDANCE.md` | Design guidance and hard invariants for the acquisition proof of concept |
 | `docs/deterministic-sec-form-10k-retrieval.md` | Current artifact-semantic SEC Form 10-K retrieval boundary and operator proof |
+| `docs/storage_architecture_design_draft.md` | TASK-020 structured storage comparison and hybrid SQLite/file recommendation |
 | `DESIGN_PRINCIPLES.md` *(planned)* | Enduring engineering principles |
 | `docs/admin-preferences.md` | Browser-local admin preference contract and authority boundary |
 | `docs/artifact-query-service-and-browser.md` | Repository-owned artifact query, browser, content, and preview-security contracts |
