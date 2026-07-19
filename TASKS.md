@@ -31,6 +31,7 @@
 | TASK-020 | Structured repository storage architecture review | Complete |
 | TASK-021 | SQLite structured-state repository foundation | Complete |
 | TASK-022 | Additional SEC numbered-form retrieval adapters | Complete |
+| TASK-023 | Bounded Linux kernel mailing-list intelligence stream | Complete |
 
 ## Architectural Progression
 

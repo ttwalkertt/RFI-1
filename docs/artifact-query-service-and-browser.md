@@ -67,6 +67,12 @@ source-effective order, 25 at a time, with Load more continuation. The desktop v
 split pane; narrow screens stack the panes. Selection fills normalized metadata and remaining
 space with preview. Split and metadata-collapse preferences are disposable browser-local state.
 
+TASK-023 extends the same browser with sibling repository projections. `Firm artifacts` retains the
+tree above. `Development mailing lists` expands source, discussions or incomplete material,
+discussion root, and direct reply branches. Message children are fetched lazily from
+`MailingListQueryService`; browser code never parses raw email to infer relationships. Message
+selection reuses the exact stored-content response and normalized detail pane.
+
 Artifact detail defaults to the last observation. Previous/Next replaces only observation
 metadata. The stored-content URL and preview remain fixed while artifact identity is unchanged.
 

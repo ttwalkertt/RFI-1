@@ -370,6 +370,9 @@ class ArtifactQueryService:
         summaries = tuple(
             self._summary(record, sources.get(str(record.get("source_id")), {}), metadata)
             for record in latest_by_document.values()
+            if sources.get(str(record.get("source_id")), {}).get("policy", {}).get(
+                "repository_projection", "firm-artifact"
+            ) == "firm-artifact"
         )
         return snapshot, summaries, records, observations, sources, metadata
 

@@ -272,6 +272,18 @@ Stored external content remains untrusted even after retention. Exact repository
 authoritative inspection copy and execute behind a capability-denying sandbox. Original provider
 locations are provenance, not a substitute read path.
 
+## Development mailing-list evidence
+
+Selected development email is retained as ordinary immutable repository evidence. Bounded seed
+discovery is distinct from connected ancestor closure and bounded descendant expansion. Durable
+SQLite acquisition manifests retain why each message was selected; reply edges and discussions are
+rebuildable header-derived state. Every connected member has one complete acyclic path to its stored
+root. Missing connectors and cycles fail closed, and descendant limits remain visible frontiers.
+
+The artifact browser is one repository browser with sibling firm-artifact and development-mailing-
+list projections. Both consume repository-owned query and exact-content contracts. SQLite remains
+the sole structured authority; no graph persistence or browser-owned threading exists.
+
 ---
 
 An RFI implementation should strive for:

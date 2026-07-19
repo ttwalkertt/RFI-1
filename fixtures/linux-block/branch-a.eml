@@ -1,0 +1,9 @@
+Message-ID: <task023-a@kernel.example>
+Subject: Re: [PATCH 0/2] block: deterministic queue update
+From: Reviewer A <reviewer-a@example.com>
+Date: Thu, 16 Jul 2026 10:00:00 +0000
+To: linux-block@vger.kernel.org
+In-Reply-To: <task023-root@kernel.example>
+References: <task023-root@kernel.example>
+
+Please clarify the lifetime rule in patch one.

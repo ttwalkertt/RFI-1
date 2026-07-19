@@ -17,10 +17,10 @@
       "source": "README.md",
       "destination": "README.md",
       "source_size": 5104,
-      "destination_size": 6274,
+      "destination_size": 6449,
       "source_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
-      "destination_sha256": "85886c56746901683eb69f446c82f6c44ebb911025973c2c5a2eb02c31a97da6",
-      "content_change": "documentation index and current status extended through TASK-022 SEC adapters"
+      "destination_sha256": "a6eba77da1f44894f55d66509b7060d9a87a492200074fa20d3a94b9ec4aff01",
+      "content_change": "documentation index and status extended through TASK-023 mailing lists"
     },
     {
       "source": "DESIGN_PRINCIPLES.md",
@@ -53,28 +53,28 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 5643,
+      "destination_size": 5723,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "085a12dc1d50aae4de2fd73d2717d08a6529cdd3a18ea492109947accc43e41e",
-      "content_change": "task roadmap reconciled through completed TASK-022 SEC adapters"
+      "destination_sha256": "b30e8bb4532941248ce49a754952ed91b62551cab21363f77d140316aa44d465",
+      "content_change": "task roadmap reconciled through completed TASK-023 mailing lists"
     },
     {
       "source": "ROADMAP.md",
       "destination": "ROADMAP.md",
       "source_size": 3371,
-      "destination_size": 3938,
+      "destination_size": 4412,
       "source_sha256": "1de0192a023e8c046f2cdedc2fe61592345d2e06b324c9b49b2c2b25424dfdad",
-      "destination_sha256": "b620e412f1fe51ab71b53814ed0d23d6d0f4c21aa378ef2e30eec5730373f15e",
-      "content_change": "roadmap updated for implemented TASK-021 hybrid structured-state foundation"
+      "destination_sha256": "b5867e3379c74ccdd9b169ebff2fe9d56295d5431f8db6718cbf25921818f66b",
+      "content_change": "roadmap updated through TASK-023 bounded mailing-list stream"
     },
     {
       "source": "ARCHITECTURE.md",
       "destination": "ARCHITECTURE.md",
       "source_size": 4889,
-      "destination_size": 7129,
+      "destination_size": 7941,
       "source_sha256": "b1035d87d8f620ace89e3aaae5ca65b0c21cf93c6e1ca91c824c1e623b20aa9f",
-      "destination_sha256": "19bee48e71540a59da2f19d86cc075fc9cd1fd132756c41f8cc354f04152d6e5",
-      "content_change": "repository architecture extended through TASK-022 artifact-specific SEC retrieval"
+      "destination_sha256": "992a3f659a991f6104c160cd3533e3fa10250500c51358907a34b7481c3f2c72",
+      "content_change": "repository architecture extended through TASK-023 mailing-list projections"
     }
   ]
 }

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -205,6 +205,80 @@ CREATE TABLE pull_runs (
     completed_at TEXT NOT NULL,
     canonical_json TEXT NOT NULL
 ) STRICT;
+CREATE TABLE mailing_list_sources (
+    source_id TEXT PRIMARY KEY REFERENCES governed_sources(source_id),
+    list_id TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    archive_base_url TEXT NOT NULL,
+    canonical_json TEXT NOT NULL
+) STRICT;
+CREATE TABLE mailing_list_runs (
+    run_id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL REFERENCES mailing_list_sources(source_id),
+    requested_at TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('connected','truncated','incomplete','quarantined')),
+    seed_limit INTEGER NOT NULL CHECK (seed_limit > 0),
+    context_limit INTEGER NOT NULL CHECK (context_limit > 0),
+    seed_count INTEGER NOT NULL CHECK (seed_count >= 0),
+    message_count INTEGER NOT NULL CHECK (message_count >= 0),
+    canonical_json TEXT NOT NULL
+) STRICT;
+CREATE TABLE mailing_list_run_items (
+    run_id TEXT NOT NULL REFERENCES mailing_list_runs(run_id),
+    source_id TEXT NOT NULL REFERENCES mailing_list_sources(source_id),
+    external_message_id TEXT NOT NULL,
+    artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+    document_id TEXT NOT NULL REFERENCES documents(document_id),
+    inclusion_reason TEXT NOT NULL CHECK (inclusion_reason IN
+      ('seed_match','explicit_request','ancestor_context','descendant_context',
+       'relationship_context')),
+    is_seed INTEGER NOT NULL CHECK (is_seed IN (0,1)),
+    connectivity_state TEXT NOT NULL CHECK (connectivity_state IN
+      ('connected','truncated','incomplete','quarantined')),
+    PRIMARY KEY (run_id, external_message_id)
+) STRICT;
+CREATE TABLE mailing_list_messages (
+    message_key TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL REFERENCES mailing_list_sources(source_id),
+    external_message_id TEXT NOT NULL,
+    artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+    document_id TEXT NOT NULL REFERENCES documents(document_id),
+    subject TEXT NOT NULL,
+    normalized_subject TEXT NOT NULL,
+    sender TEXT NOT NULL,
+    message_date TEXT,
+    text_content TEXT NOT NULL,
+    connectivity_state TEXT NOT NULL CHECK (connectivity_state IN
+      ('connected','truncated','incomplete','quarantined')),
+    canonical_json TEXT NOT NULL,
+    UNIQUE (source_id, external_message_id)
+) STRICT;
+CREATE TABLE mailing_list_relationships (
+    child_message_key TEXT PRIMARY KEY REFERENCES mailing_list_messages(message_key),
+    parent_external_message_id TEXT NOT NULL,
+    parent_message_key TEXT REFERENCES mailing_list_messages(message_key),
+    authority TEXT NOT NULL CHECK (authority IN ('header','archive','inferred')),
+    certainty TEXT NOT NULL CHECK (certainty IN ('direct','heuristic','unresolved')),
+    CHECK ((parent_message_key IS NULL) = (certainty = 'unresolved'))
+) STRICT;
+CREATE TABLE mailing_list_discussions (
+    discussion_id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL REFERENCES mailing_list_sources(source_id),
+    root_message_key TEXT NOT NULL UNIQUE REFERENCES mailing_list_messages(message_key),
+    connectivity_state TEXT NOT NULL CHECK (connectivity_state IN
+      ('connected','truncated','incomplete','quarantined')),
+    descendant_truncated INTEGER NOT NULL CHECK (descendant_truncated IN (0,1)),
+    message_count INTEGER NOT NULL CHECK (message_count > 0),
+    first_message_at TEXT,
+    last_message_at TEXT,
+    canonical_json TEXT NOT NULL
+) STRICT;
+CREATE TABLE mailing_list_discussion_members (
+    discussion_id TEXT NOT NULL REFERENCES mailing_list_discussions(discussion_id),
+    message_key TEXT NOT NULL UNIQUE REFERENCES mailing_list_messages(message_key),
+    depth INTEGER NOT NULL CHECK (depth >= 0),
+    PRIMARY KEY (discussion_id, message_key)
+) STRICT;
 CREATE INDEX artifacts_sha256 ON artifacts(sha256);
 CREATE INDEX attempts_document_time ON acquisition_attempts(document_id, occurred_at, attempt_id);
 CREATE INDEX attempts_source_time ON acquisition_attempts(source_id, occurred_at, attempt_id);
@@ -213,7 +287,22 @@ ON artifact_observations(artifact_id, observed_at, observation_id);
 CREATE INDEX observations_document_order
 ON artifact_observations(document_id, observed_at, observation_id);
 CREATE INDEX pull_runs_requested ON pull_runs(requested_at DESC, run_id DESC);
+CREATE INDEX mailing_list_runs_source_time
+ON mailing_list_runs(source_id, requested_at DESC, run_id DESC);
+CREATE INDEX mailing_list_items_message
+ON mailing_list_run_items(source_id, external_message_id, run_id);
+CREATE INDEX mailing_list_messages_source_date
+ON mailing_list_messages(source_id, message_date DESC, message_key);
+CREATE INDEX mailing_list_relationship_parent
+ON mailing_list_relationships(parent_message_key, child_message_key);
+CREATE INDEX mailing_list_discussions_source_date
+ON mailing_list_discussions(source_id, last_message_at DESC, discussion_id);
 """
+
+_MIGRATE_V1_TO_V2 = _SCHEMA[
+    _SCHEMA.index("CREATE TABLE mailing_list_sources") :
+    _SCHEMA.index("CREATE INDEX artifacts_sha256")
+] + _SCHEMA[_SCHEMA.index("CREATE INDEX mailing_list_runs_source_time") :]
 
 
 class RepositoryDatabase:
@@ -233,6 +322,7 @@ class RepositoryDatabase:
                     "legacy_state_detected",
                     "legacy structured state cannot be mixed with SQLite authority",
                 )
+            database.migrate()
             database.validate()
             return database
         legacy = database.legacy_entries()
@@ -281,8 +371,47 @@ class RepositoryDatabase:
                 "legacy_state_detected",
                 "legacy structured state cannot be mixed with SQLite authority",
             )
+        database.migrate()
         database.validate()
         return database
+
+    def migrate(self) -> bool:
+        """Upgrade the only supported prior structured-state schema in place."""
+        try:
+            with self.connect() as connection:
+                row = connection.execute(
+                    "SELECT schema_version FROM schema_metadata WHERE singleton = 1"
+                ).fetchone()
+                if row is None:
+                    raise StorageError(
+                        "uninitialized_state", "repository schema metadata is absent"
+                    )
+                version = int(row[0])
+                if version == SCHEMA_VERSION:
+                    return False
+                if version != 1:
+                    raise StorageError(
+                        "incompatible_schema",
+                        f"repository schema version {version} is unsupported; "
+                        f"expected {SCHEMA_VERSION}",
+                    )
+                connection.execute("BEGIN IMMEDIATE")
+                for statement in _MIGRATE_V1_TO_V2.split(";"):
+                    if statement.strip():
+                        connection.execute(statement)
+                connection.execute(
+                    "UPDATE schema_metadata SET schema_version = ?, applied_at = ? "
+                    "WHERE singleton = 1",
+                    (SCHEMA_VERSION, utc_now()),
+                )
+                connection.commit()
+            return True
+        except StorageError:
+            raise
+        except sqlite3.Error as error:
+            raise StorageError(
+                "migration_failed", "repository schema migration failed"
+            ) from error
 
     def connect(self, *, read_only: bool = False) -> sqlite3.Connection:
         try:

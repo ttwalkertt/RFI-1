@@ -1,0 +1,7 @@
+Message-ID: <task023-cycle-b@kernel.example>
+Subject: Re: block: invalid cycle
+From: Cycle B <b@example.com>
+Date: Fri, 17 Jul 2026 10:01:00 +0000
+In-Reply-To: <task023-cycle-a@kernel.example>
+
+Cycle member B.

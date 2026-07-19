@@ -1,0 +1,7 @@
+Message-ID: <task023-root@kernel.example>
+Subject: [PATCH 0/2] block: deterministic queue update
+From: Maintainer One <maintainer@example.com>
+Date: Wed, 01 Jul 2026 09:00:00 +0000
+To: linux-block@vger.kernel.org
+
+Introduce the bounded queue update series.

@@ -18,6 +18,16 @@ from rfi.catalog_import import (
 )
 from rfi.concepts import ConceptError, ConceptRepository, sample_concepts
 from rfi.firms import FirmError, FirmRepository, sample_firms
+from rfi.mailing_lists import (
+    AcquisitionLimits,
+    LINUX_BLOCK_SOURCE,
+    LoreArchive,
+    MailingListAcquisitionService,
+    MailingListError,
+    MailingListQueryService,
+    MailingListRepository,
+    SelectionCriteria,
+)
 from rfi.pull import PullError, PullRequest, PullStatus, create_pull_workflow
 from rfi.source_profiles import (
     SourceProfileError,
@@ -162,6 +172,42 @@ def parser() -> argparse.ArgumentParser:
         "verify", help="verify SQLite, relationships, and immutable content"
     )
     _add_state(verify)
+    mailing = commands.add_parser(
+        "mailing-list",
+        help="configure, acquire, rebuild, and query bounded mailing-list evidence",
+        description=(
+            "Operate the bounded development-mailing-list vertical. Acquisition always "
+            "requires explicit selection criteria and hard seed/context limits."
+        ),
+    )
+    _add_state(mailing)
+    mailing_actions = mailing.add_subparsers(dest="mailing_action", required=True)
+    mailing_actions.add_parser("configure-linux-block", help="register the governed Lore source")
+    for name in ("preview", "acquire"):
+        action = mailing_actions.add_parser(name, help=f"{name} a bounded live Lore acquisition")
+        action.add_argument("--source", default=LINUX_BLOCK_SOURCE.source_id)
+        action.add_argument("--message-id", action="append", default=[], metavar="MESSAGE_ID")
+        action.add_argument("--query")
+        action.add_argument("--date-from")
+        action.add_argument("--date-through")
+        action.add_argument("--topic", action="append", default=[])
+        action.add_argument("--seed-limit", type=int, default=10)
+        action.add_argument("--context-limit", type=int, default=100)
+        action.add_argument("--descendant-depth", type=int, default=0)
+        action.add_argument(
+            "--live", action="store_true", required=True,
+            help="explicitly authorize the separately gated public-archive path",
+        )
+    sources = mailing_actions.add_parser("sources", help="list configured mailing-list sources")
+    discussions = mailing_actions.add_parser("discussions", help="list retained discussions")
+    discussions.add_argument("--source", default=LINUX_BLOCK_SOURCE.source_id)
+    discussions.add_argument("--limit", type=int, default=25)
+    search = mailing_actions.add_parser("search", help="search retained message metadata and text")
+    search.add_argument("text")
+    search.add_argument("--source")
+    search.add_argument("--limit", type=int, default=50)
+    mailing_actions.add_parser("incomplete", help="list incomplete or quarantined material")
+    mailing_actions.add_parser("rebuild", help="rebuild discussion indexes without network access")
     return value
 
 
@@ -265,7 +311,57 @@ def verify_state(state: Path) -> None:
     database = RepositoryDatabase.open(state).validate()
     acquisition = AcquisitionRepository(state / "acquisition")
     result = acquisition.verify_integrity()
-    print(json.dumps({"database": database, "repository": result}, indent=2, sort_keys=True))
+    mailing_lists = MailingListRepository(state).validate_connectivity()
+    print(json.dumps({"database": database, "repository": result,
+                      "mailing_lists": mailing_lists}, indent=2, sort_keys=True))
+
+
+def mailing_list_operation(arguments: argparse.Namespace) -> None:
+    """Run one bounded mailing-list operator action through public contracts."""
+    _open_state(arguments.state)
+    repository = MailingListRepository(arguments.state)
+    action = arguments.mailing_action
+    if action == "configure-linux-block":
+        created = repository.configure_source(LINUX_BLOCK_SOURCE)
+        print(json.dumps({"source": asdict(LINUX_BLOCK_SOURCE), "created": created}, indent=2))
+        return
+    query = MailingListQueryService(repository)
+    if action == "sources":
+        print(json.dumps({"items": query.sources()}, indent=2))
+        return
+    if action == "discussions":
+        print(json.dumps({"items": [asdict(item) for item in query.discussions(
+            arguments.source, arguments.limit)]}, indent=2, default=str))
+        return
+    if action == "search":
+        print(json.dumps({"items": [asdict(item) for item in query.search(
+            arguments.text, arguments.source, arguments.limit)]}, indent=2, default=str))
+        return
+    if action == "incomplete":
+        print(json.dumps({"items": [asdict(item) for item in query.incomplete()]},
+                         indent=2, default=str))
+        return
+    acquisition = MailingListAcquisitionService(
+        repository,
+        LoreArchive(repository.source(arguments.source).archive_base_url)
+        if action in {"preview", "acquire"} else LoreArchive(LINUX_BLOCK_SOURCE.archive_base_url),
+    )
+    if action == "rebuild":
+        print(json.dumps(acquisition.rebuild(), indent=2))
+        return
+    criteria = SelectionCriteria(
+        tuple(arguments.message_id), arguments.query, arguments.date_from,
+        arguments.date_through, tuple(arguments.topic),
+    )
+    limits = AcquisitionLimits(
+        arguments.seed_limit, arguments.context_limit, arguments.descendant_depth
+    )
+    result = (
+        acquisition.preview(arguments.source, criteria, limits)
+        if action == "preview"
+        else acquisition.acquire(arguments.source, criteria, limits)
+    )
+    print(json.dumps(asdict(result), indent=2, sort_keys=True, default=str))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -294,6 +390,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(create_backup(arguments.state, arguments.output), indent=2))
         elif arguments.command == "restore":
             print(json.dumps(restore_backup(arguments.input, arguments.state), indent=2))
+        elif arguments.command == "mailing-list":
+            mailing_list_operation(arguments)
         else:
             verify_state(arguments.state)
     except (
@@ -303,6 +401,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         FirmError,
         SourceProfileError,
         PullError,
+        MailingListError,
         StorageError,
         OSError,
     ) as error:
