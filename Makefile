@@ -115,4 +115,4 @@ build: setup
 validate: test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task014-proof task015-proof task016-proof task017-proof task018-proof task019-proof lint format-check typecheck import-check docs-check baseline-check build
 
 review-package: setup
-	$(VENV_PYTHON) scripts/generate_task019_review.py
+	$(VENV_PYTHON) scripts/generate_task020_review.py

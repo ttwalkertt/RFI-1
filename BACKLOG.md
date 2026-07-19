@@ -136,3 +136,16 @@ Trigger: A prioritized canonical artifact cannot be retrieved through a determin
 Constraints: Define bounded candidate generation, uncertainty, operator diagnostics, replayable provenance, failure semantics, and repository ingress before implementation; do not introduce probabilistic selection into the deterministic SEC path.  
 Disposition: Retain as unscheduled architecture work; require separate governance and validation criteria.  
 Comments: Discovery flexibility must not weaken deterministic adapters or repository evidence authority.
+
+### BLG-007 — Hybrid SQLite structured-state migration
+
+Backlog ID: BLG-007
+Title: Hybrid SQLite structured-state migration
+Status: Candidate
+Area: Repository persistence and operations
+Source: TASK-020 structured repository storage architecture review
+Problem: Authoritative structured state remains fragmented across custom JSON records, catalog pointers, generation directories, and replay implementations without cross-record transactions.
+Potential value: Make structured publication transactional and index-backed, reduce custom storage mechanics, and improve backup/restore consistency while preserving immutable artifact bytes and public contracts.
+Trigger: Explicit authorization of a migration milestone, or the addition of another structured authority, material query latency, concurrent-writer need, cross-file integrity incident, or unmet backup/restore objective.
+Constraints: SQLite structured authority plus content-addressed filesystem byte authority; no database BLOB migration; no permanent dual-write; offline shadow import and differential validation; verified backup/restore; one atomic authority cutover; preserve repository/query contracts and authority classes; PostgreSQL only on documented scale or operations triggers.
+Disposition: Retain as the recommended next architectural milestone; TASK-020 authorizes the direction but not implementation.

@@ -28,6 +28,7 @@
 | TASK-017 | Reusable admin preference store and remembered firm context | Complete |
 | TASK-018 | Artifact repository query service and read-only browser | Complete |
 | TASK-019 | Multiple immutable artifact observations | Complete |
+| TASK-020 | Structured repository storage architecture review | Complete |
 
 ## Architectural Progression
 
