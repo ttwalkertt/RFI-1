@@ -127,18 +127,17 @@ class ArtifactAndLedgerTests(RepositoryCase):
 
     def test_artifact_corruption_is_detected(self) -> None:
         receipt = self.succeed()
-        content_path = self.state / "authoritative/artifacts" / f"{receipt.artifact_id}.content"
+        digest = receipt.artifact_id.removeprefix("artifact-")
+        content_path = next(self.repository.content_root.rglob(digest))
         content_path.chmod(0o644)
         content_path.write_bytes(b"corrupt")
         with self.assertRaises(IntegrityError):
             self.repository.verify_integrity()
 
-    def test_derived_index_corruption_is_reported_not_silently_repaired(self) -> None:
+    def test_relational_document_projection_has_no_mutable_pointer_file(self) -> None:
         self.succeed()
-        index_path = self.state / "derived/document-index.json"
-        index_path.write_text('{"schema_version":1,"documents":{}}\n', encoding="utf-8")
-        with self.assertRaises(IntegrityError):
-            self.repository.verify_integrity()
+        self.assertFalse((self.state / "derived/document-index.json").exists())
+        self.assertEqual(len(self.repository.document_index()["documents"]), 1)
         self.assertEqual(self.repository.replay().documents, 1)
         self.assertEqual(self.repository.verify_integrity()["result"], "PASS")
 
@@ -207,8 +206,7 @@ class LifecycleReplayTests(RepositoryCase):
         artifact = self.repository.read_artifact(receipt.artifact_id)
         first = self.repository.replay()
         self.repository.delete_derived_state()
-        with self.assertRaises(IntegrityError):
-            self.repository.document_index()
+        self.assertEqual(self.repository.document_index(), original_index)
         second = self.repository.replay()
         self.assertEqual(self.repository.document_index(), original_index)
         self.assertEqual(self.repository.history(), history)
@@ -262,9 +260,8 @@ class LifecycleReplayTests(RepositoryCase):
         self.repository.delete_derived_state()
         with self.assertRaises(PartialFailure):
             self.repository.replay(FailurePoint.DURING_REPLAY)
-        with self.assertRaises(IntegrityError):
-            self.repository.document_index()
-        self.assertEqual(self.repository.checkpoints()["sources"], {})
+        self.assertEqual(len(self.repository.document_index()["documents"]), 1)
+        self.assertIn(self.candidate.source_id, self.repository.checkpoints()["sources"])
 
 
 class FailureOrderingTests(RepositoryCase):
@@ -285,26 +282,28 @@ class FailureOrderingTests(RepositoryCase):
 
     def test_failure_after_artifact_preserves_orphan_evidence_but_no_success(self) -> None:
         self.inject(FailurePoint.AFTER_ARTIFACT)
-        self.assertEqual(len(self.repository.artifact_metadata()), 1)
+        self.assertEqual(len(self.repository.artifact_metadata()), 0)
         self.assertEqual(self.repository.history(), [])
         self.assertEqual(self.repository.checkpoints()["sources"], {})
+        with self.assertRaisesRegex(IntegrityError, "orphaned"):
+            self.repository.verify_integrity()
 
     def test_failure_before_index_leaves_replayable_ledger_without_progress(self) -> None:
         self.inject(FailurePoint.BEFORE_INDEX)
-        self.assertEqual(len(self.repository.history()), 1)
-        with self.assertRaises(IntegrityError):
-            self.repository.document_index()
+        self.assertEqual(len(self.repository.history()), 0)
+        self.assertEqual(self.repository.document_index()["documents"], {})
         self.assertEqual(self.repository.checkpoints()["sources"], {})
-        self.assertEqual(self.repository.replay().documents, 1)
+        with self.assertRaisesRegex(IntegrityError, "orphaned"):
+            self.repository.replay()
 
     def test_failure_before_checkpoint_has_index_but_does_not_advance(self) -> None:
         self.inject(FailurePoint.BEFORE_CHECKPOINT)
-        self.assertEqual(len(self.repository.document_index()["documents"]), 1)
+        self.assertEqual(len(self.repository.document_index()["documents"]), 0)
         self.assertEqual(self.repository.checkpoints()["sources"], {})
         retry = self.repository.record_success(
             "attempt-before_checkpoint", self.candidate, self.result, self.checkpoint
         )
-        self.assertTrue(retry.idempotent)
+        self.assertFalse(retry.idempotent)
         self.assertEqual(
             self.repository.checkpoints()["sources"][self.candidate.source_id]["position"], 7
         )
@@ -383,6 +382,9 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "source_profiles/repository.py",
                 "source_profiles/service.py",
                 "source_profiles/template.py",
+                "storage/__init__.py",
+                "storage/backup.py",
+                "storage/sqlite.py",
                 "workspace/__init__.py",
                 "workspace/contracts.py",
                 "workspace/repository.py",

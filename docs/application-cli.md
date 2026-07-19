@@ -13,6 +13,9 @@ rfi seed [--state PATH] [-f FILE | --file FILE ...]
 rfi seed --print-schema
 rfi admin [--state PATH] [--host HOST] [--port PORT]
 rfi pull (--firm FIRM_ID ... | --all-configured) [--state PATH]
+rfi verify [--state PATH]
+rfi backup [--state PATH] --output ZIP
+rfi restore --input ZIP [--state FRESH_PATH]
 ```
 
 The default state is `.artifacts/runtime/rfi-1`, the default host is `127.0.0.1`, and the default
@@ -104,32 +107,41 @@ catalog types.
 searchable. Relevance is ordinary prioritization data—not a classification, taxonomy, role,
 status, sector, or industry—and has no category labels.
 
-New firms from every supplied file publish through one repository batch transaction. Revision
-artifacts are staged first and one canonical catalog pointer is published only after all staging
-succeeds. A persistence failure removes every artifact staged by that batch and leaves the prior
-catalog readable and byte-for-byte unchanged.
+New firms from every supplied file publish through one SQLite transaction. A persistence failure
+rolls back every row in that batch and leaves the prior catalog and repository revision unchanged.
+
+## Integrity, backup, and restore
+
+`rfi verify` checks the SQLite schema version, database integrity, foreign keys, structured
+relationships, content references, sizes, checksums, and orphan inventory. It reports problems but
+does not repair or discard evidence.
+
+`rfi backup` creates a new ZIP using SQLite's online backup API and includes every immutable
+content object plus a checksummed member manifest. `rfi restore` accepts only a fresh destination,
+verifies the complete archive, and re-runs schema and hybrid integrity checks before success.
 
 ## Failure behavior and boundaries
 
-`seed` and `admin` require concept and target-firm catalogs to have been initialized. The additive
-source-profile catalog is initialized empty when older valid application state is opened. Missing
-core state explains how to run `init`; incompatible or corrupt state fails closed through existing repository verification;
+All normal commands require compatible initialized SQLite state. Missing core state explains how
+to run `init`; incompatible, corrupt, legacy-only, or mixed legacy/SQLite state fails closed;
 invalid ports, inaccessible paths, and bind failures produce an operator-facing error and nonzero
 exit. Startup never repairs, migrates, or seeds state.
 
 The CLI composes existing concept and firm repositories, sample providers, services, and admin
 server. Persistence and public-service responsibilities remain in their established packages.
 The local console remains unauthenticated, single-operator oriented, and is not a deployment or
-daemon. No automatic browser launch, background scheduling, schema migration, or production
-packaging is introduced.
+daemon. No automatic browser launch, background scheduling, legacy migration, or production
+packaging is introduced. Schema-version infrastructure exists, but version 1 has no speculative
+migration.
 
 ## Architectural Status Summary
 
 - Application lifecycle CLI: **Complete** for explicit local initialization, seeding, and startup.
 - Integrated admin console: **Complete** for concept and target-firm local operation.
-- Concept and firm persistence: **Complete for current schemas**; incompatible state fails closed.
+- Application structured persistence: **Complete for schema version 1**; SQLite is authoritative
+  and incompatible or legacy state fails closed.
 - Operational deployment: **Not started**; the server is a foreground local development service.
-- Architectural change: lifecycle composition moved to a stable package entry point, and server
-creation now opens verified core state and initializes only missing additive source-profile state.
-- Next milestone: use the stable operator surface for focused workflow feedback before expanding
-  application operations or deployment concerns.
+- Architectural change: TASK-021 replaced disposable structured-file persistence with one fresh
+  SQLite authority while preserving explicit seed and public service behavior.
+- Next milestone: gather operating evidence before considering schema evolution, PostgreSQL, or
+  legacy import tooling.

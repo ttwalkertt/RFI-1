@@ -735,11 +735,7 @@ def create_admin_server(
     firm_repository = FirmRepository.open(state / "firm-catalog")
     template = load_canonical_template()
     source_profile_state = state / "source-profiles"
-    source_profile_repository = (
-        SourceProfileRepository.open(source_profile_state, template)
-        if source_profile_state.exists()
-        else SourceProfileRepository.initialize(source_profile_state, template)
-    )
+    source_profile_repository = SourceProfileRepository.open(source_profile_state, template)
     acquisition_repository = AcquisitionRepository(state / "acquisition")
     firm_service = FirmService(firm_repository)
     return AdminConsole(

@@ -15,6 +15,7 @@ from rfi.acquisition import (
     RetrievalResult,
     SourceProfile,
 )
+from rfi.acquisition.contracts import IntegrityError
 from rfi.admin import create_admin_server
 from rfi.artifacts import ArtifactQueryError, ArtifactQueryService
 from rfi.concepts import ConceptRepository
@@ -109,9 +110,9 @@ class MultipleArtifactObservationTests(unittest.TestCase):
         self.assertEqual(len(self.repository.observations()), 2)
         self.assertEqual(self.repository.read_artifact(first_artifact), stored_before)
         self.assertEqual(stored_before, self.content)
-        content_files = list(
-            (self.state / "acquisition/authoritative/artifacts").glob("*.content")
-        )
+        content_files = [
+            item for item in self.repository.content_root.rglob("*") if item.is_file()
+        ]
         self.assertEqual(len(content_files), 1)
         self.assertEqual(self.repository.verify_integrity()["observations"], 2)
 
@@ -163,23 +164,11 @@ class MultipleArtifactObservationTests(unittest.TestCase):
             [artifact_id],
         )
 
-    def test_legacy_successful_attempt_projects_without_repository_mutation(self) -> None:
-        _artifact_id, observation_id = self.acquire(1)
-        observation_path = (
-            self.state
-            / "acquisition/authoritative/artifact-observations"
-            / f"{observation_id}.json"
-        )
-        observation_path.unlink()
-        repository = AcquisitionRepository(self.state / "acquisition")
-
-        projected = repository.observations()
-
-        self.assertEqual(len(projected), 1)
-        self.assertTrue(projected[0]["legacy_projection"])
-        self.assertFalse(observation_path.exists())
-        self.assertEqual(repository.replay().documents, 1)
-        self.assertEqual(repository.verify_integrity()["result"], "PASS")
+    def test_legacy_structured_state_is_rejected_without_projection(self) -> None:
+        legacy = self.state / "legacy"
+        (legacy / "authoritative").mkdir(parents=True)
+        with self.assertRaisesRegex(IntegrityError, "automatic migration is unsupported"):
+            AcquisitionRepository(legacy)
 
     def test_browser_defaults_to_last_and_preserves_preview_during_navigation(self) -> None:
         html = (Path(__file__).parents[1] / "src/rfi/admin/artifact_browser.html").read_text()

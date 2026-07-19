@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted as the TASK-020 architecture recommendation. No migration is implemented.
+Accepted as the TASK-020 architecture recommendation; implemented for fresh state by ADR-0017 and
+TASK-021 without legacy migration.
 
 ## Context
 

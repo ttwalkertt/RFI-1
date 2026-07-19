@@ -52,16 +52,19 @@ entity.
 
 Creation or editing publishes a complete immutable `FirmRevision` with a content-derived identity,
 monotonic revision number, exact predecessor, creation/update times, and stable `firm_id`. The
-repository stores an atomically replaced current/history pointer plus immutable revision files:
+repository stores an immutable revision history plus a transactional current selector:
 
 ```text
-<admin-concept-state>/firm-catalog/
-  catalog.json
-  revisions/firm-revision-<sha256>.json
+<application-state>/repository.sqlite3
+  firms
+  firm_revisions
+  firm_identifiers
+  firm_domains
 ```
 
-Writes publish a revision file before replacing the pointer. Restart verification checks schema,
-file inventory, revision sequence, predecessor chain, current selection, and content digest.
+Writes publish the revision, recognition indexes, current selector, and repository revision in one
+SQLite transaction. Restart verification checks schema, relationships, revision sequence,
+predecessor chain, current selection, and canonical payload.
 Optimistic `expected_revision_id` checks prevent stale editors from overwriting a newer revision.
 Retirement appends history; it never deletes identity.
 

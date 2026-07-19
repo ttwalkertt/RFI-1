@@ -29,6 +29,7 @@
 | TASK-018 | Artifact repository query service and read-only browser | Complete |
 | TASK-019 | Multiple immutable artifact observations | Complete |
 | TASK-020 | Structured repository storage architecture review | Complete |
+| TASK-021 | SQLite structured-state repository foundation | Complete |
 
 ## Architectural Progression
 

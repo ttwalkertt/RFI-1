@@ -20,6 +20,7 @@ if str(SRC) not in sys.path:
 from rfi.catalog_import import import_catalogs  # noqa: E402
 from rfi.cli import main  # noqa: E402
 from rfi.firms import FirmError, FirmRepository  # noqa: E402
+from rfi.storage import RepositoryDatabase  # noqa: E402
 
 
 class ExternalCatalogImportTests(unittest.TestCase):
@@ -128,13 +129,13 @@ class ExternalCatalogImportTests(unittest.TestCase):
                 value = self.catalog(f"invalid-relevance-{index}", f"BAD{index}")
                 value["firms"][0]["relevance"] = invalid
                 path = self.write(f"invalid-relevance-{index}.yaml", value)
-                pointer = (state / "firm-catalog/catalog.json").read_bytes()
+                revision = RepositoryDatabase.open(state).revision()
                 code, _, errors = self.run_cli(
                     "seed", "--state", str(state), "-f", str(path)
                 )
                 self.assertEqual(code, 2)
                 self.assertIn("relevance", errors)
-                self.assertEqual((state / "firm-catalog/catalog.json").read_bytes(), pointer)
+                self.assertEqual(RepositoryDatabase.open(state).revision(), revision)
                 self.assertEqual(FirmRepository.open(state / "firm-catalog").lookup(), ())
 
     def test_injected_batch_persistence_failure_restores_exact_repository(self) -> None:
@@ -143,17 +144,10 @@ class ExternalCatalogImportTests(unittest.TestCase):
         value["firms"].append(copy.deepcopy(self.catalog("atomic-second", "ATOM2")["firms"][0]))
         path = self.write("atomic.yaml", value)
         repository = FirmRepository.open(self.state / "firm-catalog")
-        pointer_before = repository.pointer.read_bytes()
-        revisions_before = {
-            item.name: item.read_bytes() for item in repository.revisions_root.iterdir()
-        }
+        revision_before = RepositoryDatabase.open(self.state).revision()
         with self.assertRaisesRegex(FirmError, "injected batch persistence failure"):
             import_catalogs((path,), repository, fail_after_revision_count=1)
-        self.assertEqual(repository.pointer.read_bytes(), pointer_before)
-        self.assertEqual(
-            {item.name: item.read_bytes() for item in repository.revisions_root.iterdir()},
-            revisions_before,
-        )
+        self.assertEqual(RepositoryDatabase.open(self.state).revision(), revision_before)
         self.assertEqual(repository.lookup(), ())
         self.assertEqual(FirmRepository.open(repository.root).verify()["result"], "PASS")
 
@@ -198,13 +192,11 @@ class ExternalCatalogImportTests(unittest.TestCase):
         second = self.catalog("second-external", "SAME")["firms"][0]
         value["firms"].append(second)
         path = self.write("identifier-conflict.yaml", value)
-        pointer = (self.state / "firm-catalog/catalog.json").read_bytes()
-        revisions = tuple((self.state / "firm-catalog/revisions").iterdir())
+        revision = RepositoryDatabase.open(self.state).revision()
         code, _, errors = self.run_cli("seed", "--state", str(self.state), "-f", str(path))
         self.assertEqual(code, 2)
         self.assertIn("conflicting firm identifier", errors)
-        self.assertEqual((self.state / "firm-catalog/catalog.json").read_bytes(), pointer)
-        self.assertEqual(tuple((self.state / "firm-catalog/revisions").iterdir()), revisions)
+        self.assertEqual(RepositoryDatabase.open(self.state).revision(), revision)
         self.assertEqual(FirmRepository.open(self.state / "firm-catalog").lookup(), ())
 
     def test_malformed_unsupported_empty_and_unreadable_files_are_actionable(self) -> None:

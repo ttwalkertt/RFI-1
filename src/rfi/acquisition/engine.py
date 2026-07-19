@@ -232,11 +232,39 @@ class AcquisitionEngine:
     ) -> AcquisitionRunResult:
         """Execute one bounded source run and return only observed outcomes."""
         require_identifier(run_key, "run_key")
-        profile = self._load_profile(source_id)
-        adapter = self._adapters.select(profile)
         started = self._clock()
         run_id = f"run-{source_id}-{run_key}"
-        checkpoint_before = self._checkpoint(source_id)
+        try:
+            profile = self._load_profile(source_id)
+            adapter = self._adapters.select(profile)
+            checkpoint_before = self._checkpoint(source_id)
+        except (IntegrityError, ConflictError) as error:
+            return AcquisitionRunResult(
+                run_id,
+                source_id,
+                "unknown",
+                started,
+                self._clock(),
+                RunStatus.FAILED,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                None,
+                None,
+                (),
+                (),
+                (
+                    self._diagnostic(
+                        FailureClass.REPOSITORY_INTEGRITY, str(error), False
+                    ),
+                ),
+            )
         continuation: str | None = None
         continuations: list[str] = []
         seen_tokens: set[str] = set()

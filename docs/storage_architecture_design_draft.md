@@ -623,6 +623,19 @@ The recommendation relies on product capabilities documented by their maintainer
 
 Product documentation supports capability comparison; repository evidence determines fit.
 
+## TASK-021 implementation resolution
+
+TASK-021 implemented the selected hybrid model as a fresh-state foundation. It deliberately did
+not execute the migration and rollback sequence below because the POC state was disposable and no
+material retained corpus justified import tooling. New application state has one SQLite structured
+authority, one immutable content authority, explicit schema version 1, revision-bound cursors, and
+verified hybrid backup/restore. Legacy file state is rejected and never silently mixed.
+
+The migration sections remain the TASK-020 analysis for a future material legacy corpus; they do
+not describe the TASK-021 cutover mechanism. See
+[`sqlite-structured-state-repository.md`](sqlite-structured-state-repository.md) and ADR-0017 for
+the implemented schema and transaction model.
+
 ## Final recommendation and go/no-go
 
 **Recommendation: adopt a relational database-backed architecture using explicit hybrid authority.**
@@ -645,22 +658,22 @@ Product documentation supports capability comparison; repository evidence determ
 
 ## Architectural Status Summary
 
-| Subsystem | Status after TASK-020 | Architectural boundary |
+| Subsystem | Status after TASK-021 | Architectural boundary |
 | --- | --- | --- |
 | Immutable artifact store | Complete | Exact content-addressed bytes remain filesystem authority. |
-| Acquisition structured state | Usable with Limitations | File authority remains active; relational migration recommended. |
+| Acquisition structured state | Complete for schema version 1 | SQLite is authoritative; public contracts remain the boundary. |
 | Artifact observations and attempts | Complete | Identity contracts preserved; future rows remain immutable/append-only. |
 | Artifact query service | Complete | Storage-independent contract is the migration compatibility gate. |
-| Firm, concept, and source-profile catalogs | Usable with Limitations | Semantics complete; repeated JSON pointer mechanics are migration candidates. |
+| Firm, concept, and source-profile catalogs | Complete for schema version 1 | Immutable revisions and current selectors publish transactionally in SQLite. |
 | Source-object catalog | Complete, rebuildable | Existing SQLite use validates embedded relational fit; not authority. |
 | Knowledge store | Provisional | Interpretive authority remains separate; physical database boundary unresolved. |
 | Retrieval index | Provisional, rebuildable | Remains disposable and must never become authority. |
 | Workspace | Usable with Limitations | Independent event authority retained; separate SQLite workspace recommended. |
-| Structured storage target | Decision complete | Explicit hybrid SQLite/file authority recommended; no migration implemented. |
-| Migration implementation | Not Started | Requires separate ticket, backup/restore proof, differential validation, and cutover. |
+| Structured storage target | Complete for fresh state | Explicit hybrid SQLite/file authority implemented and verified. |
+| Legacy migration implementation | Not Started by policy | Requires a new ticket only if material retained state later justifies it. |
 | Server database | Deferred | PostgreSQL only on explicit concurrency/operations triggers. |
 
-Architectural change: project direction now favors SQLite authority for structured state while
-retaining immutable byte evidence on the filesystem. The next architectural milestone should be a
-bounded storage-migration design and implementation task, beginning with complete inventory,
-differential contract fixtures, schema ownership, and rehearsed rollback.
+Architectural change: fresh application repositories now use SQLite authority for structured state
+while retaining immutable byte evidence on the filesystem. The next storage milestone is driven by
+operating evidence: a versioned schema change, material legacy corpus, or documented PostgreSQL
+trigger—not general cleanup or speculative migration.

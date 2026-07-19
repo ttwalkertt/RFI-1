@@ -23,15 +23,15 @@ AcquisitionAttempt 1 ── observes ── 1 ArtifactObservation n ── belon
 
 ## Durable behavior and compatibility
 
-Successful ingress writes exact artifact bytes and metadata first, then the immutable observation,
-then the immutable successful attempt, then rebuildable document/checkpoint views in the existing
-order. A distinct successful attempt that returns an existing checksum appends an observation and
-attempt but creates no artifact metadata or content file.
+Successful ingress writes or verifies exact artifact bytes first, then publishes artifact metadata,
+the immutable attempt and observation, document/checkpoint projections, and repository revision in
+one SQLite transaction. A distinct successful attempt that returns an existing checksum appends an
+observation and attempt but creates no artifact row or content file.
 
-The observation store is authoritative and independently integrity checked. Every observation must
+The SQLite observation table is authoritative and independently integrity checked. Every observation must
 reference an existing source, successful attempt, and artifact with the same document relationship.
-Existing pre-TASK-019 successful attempt records remain replayable: the repository exposes a
-deterministic read-only legacy observation projection and never migrates or rewrites them.
+Fresh TASK-021 repositories contain no pre-TASK-019 records. Legacy file state is rejected rather
+than projected or migrated, so no compatibility path creates a second structured authority.
 
 Document index and checkpoint replay remain attempt-derived. Multiple observations of the same
 artifact do not duplicate the artifact in the document index. Repeated identical content does not
@@ -45,7 +45,7 @@ The selected `ArtifactObservation` is returned without merging adjacent metadata
 
 The detail also returns an opaque cursor plus previous/next availability. `next(cursor)` and
 `previous(cursor)` bind document ID, artifact ID, observation ID, index, and the authoritative
-repository snapshot digest. Any source, attempt, observation, or artifact change produces the
+repository revision token. Any source, attempt, observation, or artifact change produces the
 structured `stale_cursor` result. Malformed, mismatched, and boundary cursors fail explicitly.
 
 Navigation is confined to observations belonging to the selected immutable artifact. Artifact

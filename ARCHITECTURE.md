@@ -39,16 +39,16 @@ The repository is expected to outlive any individual AI model, retrieval techniq
 
 ## Structured storage direction
 
-Structured runtime state and immutable source bytes have distinct storage authority. TASK-020
-selects an explicit hybrid target for a later migration: SQLite should own authoritative
-structured records and relationships, while content-addressed filesystem objects remain
-authoritative for exact acquired bytes. Version-controlled governance and configuration remain
-files; rebuildable indexes remain non-authoritative.
+Structured runtime state and immutable source bytes have distinct storage authority. TASK-021
+implements the explicit hybrid model for fresh application repositories: SQLite owns authoritative
+structured records and relationships, while content-addressed filesystem objects own exact
+acquired bytes. Version-controlled governance and configuration remain files; rebuildable indexes
+remain non-authoritative.
 
-This direction does not change current file authority until a separately authorized, validated
-cutover. Public repository and query contracts isolate consumers from physical storage. A future
-server database is justified only by demonstrated multi-host writers, sustained write concurrency,
-high availability, or point-in-time recovery requirements.
+Public repository and query contracts isolate consumers from physical storage. Legacy POC state is
+not imported or operated as a fallback authority. A future server database is justified only by
+demonstrated multi-host writers, sustained write concurrency, high availability, or point-in-time
+recovery requirements.
 
 ---
 

@@ -313,7 +313,9 @@ class ReplayIntegrityAndConflictTests(EngineCase):
     def test_artifact_corruption_after_engine_run_is_detected(self) -> None:
         self.engine.run_source("source-fixture-catalog", "corruption")
         artifact_id = self.repository.artifact_metadata()[0]["artifact_id"]
-        path = self.state / "authoritative/artifacts" / f"{artifact_id}.content"
+        path = next(
+            self.repository.content_root.rglob(artifact_id.removeprefix("artifact-"))
+        )
         path.chmod(0o644)
         path.write_bytes(b"corrupted")
         with self.assertRaises(IntegrityError):
@@ -321,9 +323,11 @@ class ReplayIntegrityAndConflictTests(EngineCase):
 
     def test_repository_integrity_failure_is_structured(self) -> None:
         self.engine.run_source("source-fixture-catalog", "before-corruption")
-        ledger = sorted((self.state / "authoritative/retrieval-ledger").glob("*.json"))[0]
-        ledger.chmod(0o644)
-        ledger.write_text("not-json\n", encoding="utf-8")
+        with self.repository._database.connect() as connection:
+            connection.execute(
+                "UPDATE governed_sources SET canonical_json='not-json' "
+                "WHERE source_id='source-fixture-catalog'"
+            )
         self.catalog.state = "revised"
         result = self.engine.run_source("source-fixture-catalog", "after-corruption")
         self.assertEqual(result.status, RunStatus.FAILED)

@@ -1,10 +1,9 @@
-"""Repository-owned acquisition lifecycle, replay, and inspection behavior."""
+"""SQLite-backed acquisition repository with filesystem byte authority."""
 
 from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -24,48 +23,83 @@ from rfi.acquisition.contracts import (
     require_identifier,
     validate_json,
 )
-from rfi.acquisition.persistence import (
-    RepositoryLayout,
-    atomic_replace,
-    canonical_json,
-    create_immutable,
-    load_json,
-    sha256_bytes,
-)
+from rfi.acquisition.persistence import create_immutable, sha256_bytes
+from rfi.storage import RepositoryDatabase, StorageError, state_root_for
+from rfi.storage.sqlite import canonical_json, utc_now
 
 _SCHEMA = 1
 
 
 class AcquisitionRepository:
-    """Single-owner POC repository for durable acquisition state."""
+    """Public acquisition contract backed by authoritative SQLite structured state."""
 
     def __init__(self, root: Path) -> None:
-        self._layout = RepositoryLayout(root)
-        self._layout.initialize()
+        self._root = root
+        self._state_root = state_root_for(root)
+        try:
+            self._database = RepositoryDatabase.initialize(self._state_root)
+        except StorageError as error:
+            raise IntegrityError(str(error)) from error
+        self._content_root = self._state_root / "content" / "sha256"
+        self._content_root.mkdir(parents=True, exist_ok=True)
 
     @property
     def root(self) -> Path:
-        """Return the repository-state boundary, not its private object layout."""
-        return self._layout.root
+        """Return the caller-selected repository boundary."""
+        return self._root
+
+    @property
+    def database_path(self) -> Path:
+        """Return the private database location for operational tooling."""
+        return self._database.path
+
+    @property
+    def content_root(self) -> Path:
+        """Return the private immutable content root for integrity tooling."""
+        return self._content_root
 
     def register_source(self, profile: SourceProfile) -> bool:
-        """Register one immutable governed profile; exact repetition is idempotent."""
+        """Register one immutable governed source; exact repetition is idempotent."""
         record = {"schema_version": _SCHEMA, "record_type": "source", **profile.to_dict()}
-        return create_immutable(
-            self._layout.sources / f"{profile.source_id}.json", canonical_json(record)
-        )
+        payload = canonical_json(record)
+        try:
+            with self._database.transaction() as connection:
+                prior = connection.execute(
+                    "SELECT canonical_json FROM governed_sources WHERE source_id = ?",
+                    (profile.source_id,),
+                ).fetchone()
+                if prior is not None:
+                    if str(prior[0]) != payload:
+                        raise ConflictError(
+                            f"immutable governed source already differs: {profile.source_id}"
+                        )
+                    return False
+                connection.execute(
+                    "INSERT INTO governed_sources(source_id,enabled,mechanism,canonical_json) "
+                    "VALUES (?,?,?,?)",
+                    (profile.source_id, int(profile.enabled), profile.mechanism, payload),
+                )
+                self._database.advance_revision(connection)
+            return True
+        except StorageError as error:
+            raise IntegrityError(str(error)) from error
 
     def sources(self) -> list[dict[str, Any]]:
-        """Return governed source records in deterministic order."""
-        return [load_json(path) for path in sorted(self._layout.sources.glob("*.json"))]
+        with self._database.connect(read_only=True) as connection:
+            rows = connection.execute(
+                "SELECT canonical_json FROM governed_sources ORDER BY source_id"
+            ).fetchall()
+        return [self._decode(row[0], "governed source") for row in rows]
 
     def source(self, source_id: str) -> dict[str, Any]:
-        """Return a governed source or reject an unknown identity."""
         require_identifier(source_id, "source_id")
-        path = self._layout.sources / f"{source_id}.json"
-        if not path.is_file():
+        with self._database.connect(read_only=True) as connection:
+            row = connection.execute(
+                "SELECT canonical_json FROM governed_sources WHERE source_id = ?", (source_id,)
+            ).fetchone()
+        if row is None:
             raise ContractError(f"unknown governed source: {source_id}")
-        return load_json(path)
+        return self._decode(row[0], "governed source")
 
     def record_success(
         self,
@@ -75,26 +109,18 @@ class AcquisitionRepository:
         checkpoint: Checkpoint | None = None,
         fail_at: FailurePoint | None = None,
     ) -> AcquisitionReceipt:
-        """Persist evidence, history, derived access, and then source progress."""
+        """Write bytes first, then publish all structured success facts atomically."""
         require_identifier(attempt_id, "attempt_id")
         source = self.source(candidate.source_id)
         if not source["enabled"]:
             raise ContractError(f"source is disabled: {candidate.source_id}")
         if checkpoint is not None:
             self._validate_checkpoint(candidate.source_id, checkpoint)
-        artifact_id = f"artifact-{sha256_bytes(result.content)}"
+        digest = sha256_bytes(result.content)
+        artifact_id = f"artifact-{digest}"
         observation_id = self._observation_id(attempt_id, artifact_id)
-        artifact_created = not (
-            self._layout.artifacts / f"{artifact_id}.metadata.json"
-        ).exists()
-        metadata = {
-            "schema_version": _SCHEMA,
-            "record_type": "artifact",
-            "artifact_id": artifact_id,
-            "sha256": sha256_bytes(result.content),
-            "size": len(result.content),
-            "media_type": result.media_type.lower(),
-        }
+        content_reference = f"sha256/{digest[:2]}/{digest}"
+        content_path = self._content_root / digest[:2] / digest
         attempt = {
             "schema_version": _SCHEMA,
             "record_type": "retrieval_attempt",
@@ -112,7 +138,6 @@ class AcquisitionRepository:
             "diagnostics": result.diagnostics,
             "checkpoint_requested": checkpoint.to_dict() if checkpoint else None,
         }
-        self._assert_record_compatible(f"attempt-{attempt_id}", attempt)
         observation = {
             "schema_version": _SCHEMA,
             "record_type": "artifact_observation",
@@ -133,34 +158,131 @@ class AcquisitionRepository:
             ),
             "retrieval_adapter_id": source.get("policy", {}).get("retrieval_adapter_id"),
         }
-        self._assert_observation_compatible(observation_id, observation)
+        attempt_payload = canonical_json(attempt)
+        observation_payload = canonical_json(observation)
+        with self._database.connect(read_only=True) as connection:
+            preexisting = connection.execute(
+                "SELECT canonical_json FROM acquisition_attempts WHERE attempt_id = ?",
+                (attempt_id,),
+            ).fetchone()
+        if preexisting is not None:
+            if str(preexisting[0]) != attempt_payload:
+                raise ConflictError(f"immutable attempt identity already differs: {attempt_id}")
+            return AcquisitionReceipt(
+                attempt_id,
+                observation_id,
+                artifact_id,
+                candidate.document_id,
+                checkpoint,
+                True,
+                False,
+            )
         if fail_at == FailurePoint.BEFORE_ARTIFACT:
             self._fail(fail_at)
-
-        self._store_artifact(artifact_id, result.content, metadata)
+        content_created = create_immutable(content_path, result.content)
         if fail_at == FailurePoint.AFTER_ARTIFACT:
             self._fail(fail_at)
-
-        self._store_observation(observation_id, observation)
-        created = self._append_record(f"attempt-{attempt_id}", attempt)
-        if fail_at == FailurePoint.BEFORE_INDEX:
-            self._fail(fail_at)
-
-        self._write_derived_index(self._derive_index(self.history()))
-        if fail_at == FailurePoint.BEFORE_CHECKPOINT:
-            self._fail(fail_at)
-
-        if checkpoint is not None:
-            self._advance_checkpoint(candidate.source_id, attempt_id, checkpoint)
-        return AcquisitionReceipt(
-            attempt_id=attempt_id,
-            observation_id=observation_id,
-            artifact_id=artifact_id,
-            document_id=candidate.document_id,
-            checkpoint=checkpoint,
-            idempotent=not created,
-            artifact_created=artifact_created,
-        )
+        try:
+            with self._database.transaction() as connection:
+                prior = connection.execute(
+                    "SELECT canonical_json FROM acquisition_attempts WHERE attempt_id = ?",
+                    (attempt_id,),
+                ).fetchone()
+                if prior is not None:
+                    if str(prior[0]) != attempt_payload:
+                        raise ConflictError(
+                            f"immutable attempt identity already differs: {attempt_id}"
+                        )
+                    return AcquisitionReceipt(
+                        attempt_id,
+                        observation_id,
+                        artifact_id,
+                        candidate.document_id,
+                        checkpoint,
+                        True,
+                        False,
+                    )
+                existing_artifact = connection.execute(
+                    "SELECT sha256,byte_count,media_type,content_reference FROM artifacts "
+                    "WHERE artifact_id = ?",
+                    (artifact_id,),
+                ).fetchone()
+                artifact_created = existing_artifact is None
+                if existing_artifact is None:
+                    connection.execute(
+                        "INSERT INTO artifacts VALUES (?,?,?,?,?,?)",
+                        (
+                            artifact_id,
+                            digest,
+                            len(result.content),
+                            result.media_type.lower(),
+                            content_reference,
+                            result.retrieved_at,
+                        ),
+                    )
+                elif tuple(existing_artifact) != (
+                    digest,
+                    len(result.content),
+                    result.media_type.lower(),
+                    content_reference,
+                ):
+                    raise ConflictError(f"immutable artifact already differs: {artifact_id}")
+                connection.execute(
+                    "INSERT INTO acquisition_attempts VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        attempt_id,
+                        candidate.source_id,
+                        candidate.candidate_id,
+                        candidate.document_id,
+                        RetrievalOutcome.SUCCESS.value,
+                        result.retrieved_at,
+                        result.mechanism,
+                        artifact_id,
+                        observation_id,
+                        attempt_payload,
+                    ),
+                )
+                connection.execute(
+                    "INSERT INTO artifact_observations VALUES (?,?,?,?,?,?,?)",
+                    (
+                        observation_id,
+                        attempt_id,
+                        artifact_id,
+                        candidate.document_id,
+                        candidate.source_id,
+                        result.retrieved_at,
+                        observation_payload,
+                    ),
+                )
+                connection.execute(
+                    "INSERT INTO documents(document_id,current_artifact_id,durable_status) "
+                    "VALUES (?,?,'durable') ON CONFLICT(document_id) DO UPDATE SET "
+                    "current_artifact_id=excluded.current_artifact_id",
+                    (candidate.document_id, artifact_id),
+                )
+                if checkpoint is not None:
+                    self._insert_checkpoint(
+                        connection, candidate.source_id, attempt_id, checkpoint
+                    )
+                if fail_at in {FailurePoint.BEFORE_INDEX, FailurePoint.BEFORE_CHECKPOINT}:
+                    self._fail(fail_at)
+                self._database.advance_revision(connection)
+            return AcquisitionReceipt(
+                attempt_id,
+                observation_id,
+                artifact_id,
+                candidate.document_id,
+                checkpoint,
+                False,
+                artifact_created,
+            )
+        except StorageError as error:
+            raise IntegrityError(str(error)) from error
+        except BaseException:
+            if content_created:
+                # The bytes-first protocol intentionally retains the orphan for diagnosis.
+                pass
+            raise
 
     def record_outcome(
         self,
@@ -171,7 +293,6 @@ class AcquisitionRepository:
         mechanism: str,
         diagnostics: dict[str, Any],
     ) -> bool:
-        """Append a failed, skipped, or duplicate attempt without advancing progress."""
         require_identifier(attempt_id, "attempt_id")
         if outcome == RetrievalOutcome.SUCCESS:
             raise ContractError("successful outcomes require exact artifact bytes")
@@ -196,408 +317,327 @@ class AcquisitionRepository:
             "diagnostics": diagnostics,
             "checkpoint_requested": None,
         }
-        return self._append_record(f"attempt-{attempt_id}", record)
+        payload = canonical_json(record)
+        try:
+            with self._database.transaction() as connection:
+                prior = connection.execute(
+                    "SELECT canonical_json FROM acquisition_attempts WHERE attempt_id = ?",
+                    (attempt_id,),
+                ).fetchone()
+                if prior is not None:
+                    if str(prior[0]) != payload:
+                        raise ConflictError(
+                            f"immutable attempt identity already differs: {attempt_id}"
+                        )
+                    return False
+                connection.execute(
+                    "INSERT INTO acquisition_attempts VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        attempt_id,
+                        candidate.source_id,
+                        candidate.candidate_id,
+                        candidate.document_id,
+                        outcome.value,
+                        occurred_at,
+                        mechanism,
+                        None,
+                        None,
+                        payload,
+                    ),
+                )
+                self._database.advance_revision(connection)
+            return True
+        except StorageError as error:
+            raise IntegrityError(str(error)) from error
 
     def history(self) -> list[dict[str, Any]]:
-        """Return validated append-only records in deterministic identity order."""
-        records = [load_json(path) for path in sorted(self._layout.ledger.glob("*.json"))]
-        seen: set[tuple[str, str]] = set()
-        for record in records:
-            record_type = record.get("record_type")
-            identity = record.get("attempt_id")
-            if record_type not in {"retrieval_attempt", "checkpoint_advanced"} or not isinstance(
-                identity, str
-            ):
-                raise IntegrityError("ledger contains a record with invalid identity or type")
-            key = (str(record_type), identity)
-            if key in seen:
-                raise IntegrityError(f"ledger contains duplicate identity: {key}")
-            seen.add(key)
-        return records
+        with self._database.connect(read_only=True) as connection:
+            attempts = connection.execute(
+                "SELECT attempt_id,canonical_json FROM acquisition_attempts"
+            ).fetchall()
+            checkpoints = connection.execute(
+                "SELECT event_id,canonical_json FROM checkpoint_events"
+            ).fetchall()
+        records = [(str(row[0]), self._decode(row[1], "attempt")) for row in attempts]
+        records.extend((str(row[0]), self._decode(row[1], "checkpoint")) for row in checkpoints)
+        return [record for _, record in sorted(records, key=lambda item: item[0])]
 
     def artifact_metadata(self) -> list[dict[str, Any]]:
-        """Return all complete immutable artifact metadata records."""
+        with self._database.connect(read_only=True) as connection:
+            rows = connection.execute(
+                "SELECT artifact_id,sha256,byte_count,media_type "
+                "FROM artifacts ORDER BY artifact_id"
+            ).fetchall()
         return [
-            load_json(path)
-            for path in sorted(self._layout.artifacts.glob("*.metadata.json"))
+            {
+                "schema_version": _SCHEMA,
+                "record_type": "artifact",
+                "artifact_id": row[0],
+                "sha256": row[1],
+                "size": row[2],
+                "media_type": row[3],
+            }
+            for row in rows
         ]
 
     def observations(self) -> list[dict[str, Any]]:
-        """Return immutable artifact observations in chronological deterministic order.
-
-        Successful records created before TASK-019 are projected without mutating legacy state.
-        """
-        explicit = [
-            load_json(path)
-            for path in sorted(self._layout.observations.glob("*.json"))
-        ]
-        by_attempt: dict[str, dict[str, Any]] = {}
-        for observation in explicit:
-            if observation.get("record_type") != "artifact_observation":
-                raise IntegrityError("observation store contains an invalid record type")
-            observation_id = observation.get("observation_id")
-            attempt_id = observation.get("attempt_id")
-            if not isinstance(observation_id, str) or not isinstance(attempt_id, str):
-                raise IntegrityError("observation store contains an invalid identity")
-            if attempt_id in by_attempt:
-                raise IntegrityError(f"attempt has multiple observations: {attempt_id}")
-            by_attempt[attempt_id] = observation
-        for attempt in self.history():
-            if (
-                attempt.get("record_type") == "retrieval_attempt"
-                and attempt.get("outcome") == RetrievalOutcome.SUCCESS.value
-                and attempt["attempt_id"] not in by_attempt
-            ):
-                by_attempt[attempt["attempt_id"]] = self._legacy_observation(attempt)
-        return sorted(
-            by_attempt.values(),
-            key=lambda item: (str(item.get("observed_at", "")), str(item["observation_id"])),
-        )
+        with self._database.connect(read_only=True) as connection:
+            rows = connection.execute(
+                "SELECT canonical_json FROM artifact_observations "
+                "ORDER BY observed_at,observation_id"
+            ).fetchall()
+        return [self._decode(row[0], "artifact observation") for row in rows]
 
     def read_artifact(self, artifact_id: str) -> bytes:
-        """Return exact stored evidence after independently checking its integrity."""
         require_identifier(artifact_id, "artifact_id")
-        metadata_path, content_path = self._artifact_paths(artifact_id)
-        if not metadata_path.is_file() or not content_path.is_file():
-            raise IntegrityError(f"artifact is incomplete or absent: {artifact_id}")
-        metadata = load_json(metadata_path)
-        content = content_path.read_bytes()
-        self._verify_artifact_record(metadata, content)
+        with self._database.connect(read_only=True) as connection:
+            row = connection.execute(
+                "SELECT sha256,byte_count,content_reference FROM artifacts WHERE artifact_id = ?",
+                (artifact_id,),
+            ).fetchone()
+        if row is None:
+            raise IntegrityError(f"artifact is absent: {artifact_id}")
+        path = self._content_path(str(row[2]))
+        try:
+            content = path.read_bytes()
+        except OSError as error:
+            raise IntegrityError(f"artifact content is missing: {artifact_id}") from error
+        digest = sha256_bytes(content)
+        if digest != row[0] or len(content) != row[1] or artifact_id != f"artifact-{digest}":
+            raise IntegrityError(f"artifact integrity mismatch: {artifact_id}")
         return content
 
     def verify_integrity(self, include_derived: bool = True) -> dict[str, Any]:
-        """Verify sources, ledger references, artifact hashes, and derived consistency."""
-        source_ids = {record["source_id"] for record in self.sources()}
-        metadata_by_id = {item["artifact_id"]: item for item in self.artifact_metadata()}
-        content_ids = {
-            path.name.removesuffix(".content")
-            for path in self._layout.artifacts.glob("*.content")
-        }
-        if content_ids != set(metadata_by_id):
-            raise IntegrityError("artifact content and metadata inventories differ")
-        for artifact_id, metadata in metadata_by_id.items():
-            content = (self._layout.artifacts / f"{artifact_id}.content").read_bytes()
-            self._verify_artifact_record(metadata, content)
-        records = self.history()
-        observations = self.observations()
-        observation_by_attempt = {item["attempt_id"]: item for item in observations}
-        attempt_ids = {
-            item["attempt_id"]
-            for item in records
-            if item["record_type"] == "retrieval_attempt"
-        }
-        attempts = 0
-        checkpoints = 0
-        for record in records:
-            if record["source_id"] not in source_ids:
-                raise IntegrityError(f"ledger references unknown source: {record['source_id']}")
-            if record["record_type"] == "retrieval_attempt":
-                attempts += 1
-                artifact_id = record["artifact_id"]
-                if record["outcome"] == RetrievalOutcome.SUCCESS.value:
-                    if artifact_id not in metadata_by_id:
-                        raise IntegrityError(f"attempt references absent artifact: {artifact_id}")
-                    observation = observation_by_attempt.get(record["attempt_id"])
-                    if observation is None:
-                        raise IntegrityError("successful attempt lacks an artifact observation")
-                    if (
-                        observation.get("artifact_id") != artifact_id
-                        or observation.get("document_id") != record.get("document_id")
-                    ):
-                        raise IntegrityError("artifact observation disagrees with its attempt")
-                elif artifact_id is not None:
-                    raise IntegrityError("non-successful attempt references an artifact")
-            else:
-                checkpoints += 1
-        for observation in observations:
-            if observation["attempt_id"] not in attempt_ids:
-                raise IntegrityError("artifact observation references an absent attempt")
-            if observation.get("artifact_id") not in metadata_by_id:
-                raise IntegrityError("artifact observation references an absent artifact")
-            if observation.get("source_id") not in source_ids:
-                raise IntegrityError("artifact observation references an unknown source")
-        if include_derived:
-            expected_index = self._derive_index(records)
-            expected_checkpoints = self._derive_checkpoints(records)
-            if self._layout.index.is_file() and load_json(self._layout.index) != expected_index:
-                raise IntegrityError("derived document index disagrees with authoritative records")
-            if (
-                self._layout.checkpoints.is_file()
-                and load_json(self._layout.checkpoints) != expected_checkpoints
-            ):
-                raise IntegrityError(
-                    "derived checkpoint view disagrees with authoritative records"
-                )
-        return {
-            "sources": len(source_ids),
-            "artifacts": len(metadata_by_id),
-            "attempts": attempts,
-            "observations": len(observations),
-            "checkpoint_events": checkpoints,
-            "result": "PASS",
-        }
+        del include_derived
+        try:
+            database = self._database.validate()
+        except StorageError as error:
+            raise IntegrityError(str(error)) from error
+        metadata = self.artifact_metadata()
+        referenced = {str(item["sha256"]) for item in metadata}
+        for item in metadata:
+            self.read_artifact(str(item["artifact_id"]))
+        actual = {path.name for path in self._content_root.glob("*/*") if path.is_file()}
+        missing = referenced - actual
+        orphaned = actual - referenced
+        if missing:
+            raise IntegrityError("structured state references missing content")
+        if orphaned:
+            raise IntegrityError("content store contains orphaned content")
+        with self._database.connect(read_only=True) as connection:
+            counts = {
+                "sources": connection.execute(
+                    "SELECT count(*) FROM governed_sources"
+                ).fetchone()[0],
+                "artifacts": connection.execute("SELECT count(*) FROM artifacts").fetchone()[0],
+                "attempts": connection.execute(
+                    "SELECT count(*) FROM acquisition_attempts"
+                ).fetchone()[0],
+                "observations": connection.execute(
+                    "SELECT count(*) FROM artifact_observations"
+                ).fetchone()[0],
+                "checkpoint_events": connection.execute(
+                    "SELECT count(*) FROM checkpoint_events"
+                ).fetchone()[0],
+            }
+        return {**counts, "database": database["result"], "result": "PASS"}
 
     def document_index(self) -> dict[str, Any]:
-        """Return the disposable document access index."""
-        if not self._layout.index.is_file():
-            raise IntegrityError("document index is absent; run replay")
-        return load_json(self._layout.index)
-
-    def checkpoints(self) -> dict[str, Any]:
-        """Return the disposable source-progress view."""
-        if not self._layout.checkpoints.is_file():
-            return {"schema_version": _SCHEMA, "sources": {}}
-        return load_json(self._layout.checkpoints)
-
-    def advance_checkpoint(
-        self, source_id: str, successful_attempt_id: str, checkpoint: Checkpoint
-    ) -> bool:
-        """Finalize source progress against an already durable successful attempt.
-
-        Engines may need to know that a bounded discovery run completed before publishing its
-        checkpoint. This public operation preserves the TASK-002 ordering invariant while keeping
-        ledger layout and checkpoint-event construction repository-owned.
-        """
-        require_identifier(source_id, "source_id")
-        require_identifier(successful_attempt_id, "attempt_id")
-        self.source(source_id)
-        successful = next(
-            (
-                record
-                for record in self.history()
-                if record["record_type"] == "retrieval_attempt"
-                and record["attempt_id"] == successful_attempt_id
-                and record["outcome"] == RetrievalOutcome.SUCCESS.value
-            ),
-            None,
-        )
-        if successful is None:
-            raise ContractError("checkpoint requires an existing successful retrieval attempt")
-        if successful["source_id"] != source_id:
-            raise ContractError("checkpoint source differs from its successful retrieval attempt")
-        return self._advance_checkpoint(source_id, successful_attempt_id, checkpoint)
-
-    def delete_derived_state(self) -> None:
-        """Remove only rebuildable acquisition views for replay demonstrations."""
-        self._layout.index.unlink(missing_ok=True)
-        self._layout.checkpoints.unlink(missing_ok=True)
-
-    def replay(self, fail_at: FailurePoint | None = None) -> ReplayResult:
-        """Rebuild all derived acquisition state from local authoritative records."""
-        self.verify_integrity(include_derived=False)
-        records = self.history()
-        index = self._derive_index(records)
-        checkpoints = self._derive_checkpoints(records)
-        if fail_at == FailurePoint.DURING_REPLAY:
-            self._fail(fail_at)
-        self._write_derived_index(index)
-        atomic_replace(self._layout.checkpoints, canonical_json(checkpoints))
-        return ReplayResult(
-            documents=len(index["documents"]),
-            checkpoints=len(checkpoints["sources"]),
-            attempts=sum(item["record_type"] == "retrieval_attempt" for item in records),
-            index_sha256=sha256_bytes(canonical_json(index)),
-            checkpoint_sha256=sha256_bytes(canonical_json(checkpoints)),
-        )
-
-    def _store_artifact(
-        self, artifact_id: str, content: bytes, metadata: dict[str, Any]
-    ) -> None:
-        """Create exact bytes before their immutable metadata record."""
-        metadata_path, content_path = self._artifact_paths(artifact_id)
-        create_immutable(content_path, content)
-        create_immutable(metadata_path, canonical_json(metadata))
-
-    def _store_observation(
-        self, observation_id: str, observation: dict[str, Any]
-    ) -> None:
-        """Create one immutable acquisition observation separate from artifact bytes."""
-        create_immutable(
-            self._layout.observations / f"{observation_id}.json",
-            canonical_json(observation),
-        )
-
-    def _assert_observation_compatible(
-        self, observation_id: str, observation: dict[str, Any]
-    ) -> None:
-        """Reject reuse of an observation identity with different semantics."""
-        path = self._layout.observations / f"{observation_id}.json"
-        if path.is_file() and path.read_bytes() != canonical_json(observation):
-            raise ConflictError(
-                f"immutable observation identity already differs: {observation_id}"
-            )
-
-    @staticmethod
-    def _observation_id(attempt_id: str, artifact_id: str) -> str:
-        """Derive a separate immutable observation identity for one successful attempt."""
-        payload = canonical_json({"attempt_id": attempt_id, "artifact_id": artifact_id})
-        return f"observation-{hashlib.sha256(payload).hexdigest()}"
-
-    def _legacy_observation(self, attempt: dict[str, Any]) -> dict[str, Any]:
-        """Project a pre-TASK-019 successful attempt as a read-only observation."""
-        source = self.source(str(attempt["source_id"]))
-        observation_id = self._observation_id(
-            str(attempt["attempt_id"]), str(attempt["artifact_id"])
-        )
-        return {
-            "schema_version": int(attempt.get("schema_version", _SCHEMA)),
-            "record_type": "artifact_observation",
-            "observation_id": observation_id,
-            "attempt_id": attempt["attempt_id"],
-            "artifact_id": attempt["artifact_id"],
-            "document_id": attempt["document_id"],
-            "source_id": attempt["source_id"],
-            "candidate_id": attempt["candidate_id"],
-            "outcome": attempt["outcome"],
-            "observed_at": attempt["occurred_at"],
-            "mechanism": attempt["mechanism"],
-            "candidate": attempt["candidate"],
-            "retrieval_provider_identifiers": attempt.get(
-                "retrieval_provider_identifiers", {}
-            ),
-            "diagnostics": attempt.get("diagnostics", {}),
-            "source_profile_revision_id": source.get("policy", {}).get(
-                "source_profile_revision_id"
-            ),
-            "retrieval_adapter_id": source.get("policy", {}).get("retrieval_adapter_id"),
-            "legacy_projection": True,
-        }
-
-    def _artifact_paths(self, artifact_id: str) -> tuple[Path, Path]:
-        """Resolve private artifact paths without exposing them in public contracts."""
-        return (
-            self._layout.artifacts / f"{artifact_id}.metadata.json",
-            self._layout.artifacts / f"{artifact_id}.content",
-        )
-
-    def _verify_artifact_record(self, metadata: dict[str, Any], content: bytes) -> None:
-        """Validate immutable metadata against exact evidence bytes and identity."""
-        digest = sha256_bytes(content)
-        expected_id = f"artifact-{digest}"
-        if metadata.get("sha256") != digest or metadata.get("artifact_id") != expected_id:
-            raise IntegrityError(f"artifact integrity mismatch: {metadata.get('artifact_id')}")
-        if metadata.get("size") != len(content):
-            raise IntegrityError(f"artifact size mismatch: {metadata.get('artifact_id')}")
-
-    def _append_record(self, record_id: str, record: dict[str, Any]) -> bool:
-        """Append one immutable ledger record; exact identity repetition is idempotent."""
-        return create_immutable(self._layout.ledger / f"{record_id}.json", canonical_json(record))
-
-    def _assert_record_compatible(self, record_id: str, record: dict[str, Any]) -> None:
-        """Reject an existing conflicting attempt before creating additional evidence."""
-        path = self._layout.ledger / f"{record_id}.json"
-        if path.is_file() and path.read_bytes() != canonical_json(record):
-            raise ConflictError(f"immutable ledger identity already differs: {record_id}")
-
-    def _advance_checkpoint(
-        self, source_id: str, attempt_id: str, checkpoint: Checkpoint
-    ) -> bool:
-        """Append progress only after preceding required durable effects exist."""
-        self._validate_checkpoint(source_id, checkpoint)
-        event = {
-            "schema_version": _SCHEMA,
-            "record_type": "checkpoint_advanced",
-            "attempt_id": attempt_id,
-            "source_id": source_id,
-            "checkpoint": checkpoint.to_dict(),
-        }
-        created = self._append_record(f"checkpoint-{attempt_id}", event)
-        atomic_replace(
-            self._layout.checkpoints, canonical_json(self._derive_checkpoints(self.history()))
-        )
-        return created
-
-    def _validate_checkpoint(self, source_id: str, checkpoint: Checkpoint) -> None:
-        """Reject backward or ambiguous progress before creating other durable effects."""
-        current = self._derive_checkpoints(self.history())["sources"].get(source_id)
-        if current is not None:
-            current_position = current["position"]
-            if checkpoint.position < current_position:
-                raise ConflictError("checkpoint position cannot move backward")
-            if checkpoint.position == current_position and checkpoint.cursor != current["cursor"]:
-                raise ConflictError("checkpoint position is already bound to a different cursor")
-
-    def _derive_index(self, records: list[dict[str, Any]]) -> dict[str, Any]:
-        """Derive routine document access solely from authoritative successful attempts."""
         documents: dict[str, dict[str, Any]] = {}
-        attempts: dict[str, dict[str, Any]] = {}
-        for record in records:
-            if record["record_type"] != "retrieval_attempt":
+        for record in self.history():
+            if (
+                record.get("record_type") != "retrieval_attempt"
+                or record.get("outcome") != "success"
+            ):
                 continue
-            attempt_id = record["attempt_id"]
-            if attempt_id in attempts and attempts[attempt_id] != record:
-                raise IntegrityError(f"conflicting attempt identity: {attempt_id}")
-            attempts[attempt_id] = record
-            if record["outcome"] != RetrievalOutcome.SUCCESS.value:
-                continue
-            document_id = record["document_id"]
             entry = documents.setdefault(
-                document_id,
+                str(record["document_id"]),
                 {
-                    "document_id": document_id,
+                    "document_id": record["document_id"],
                     "source_ids": [],
                     "artifacts": [],
                     "attempt_ids": [],
                     "provenance": [],
                 },
             )
-            if record["source_id"] not in entry["source_ids"]:
-                entry["source_ids"].append(record["source_id"])
-            if record["artifact_id"] not in entry["artifacts"]:
-                entry["artifacts"].append(record["artifact_id"])
-            if attempt_id not in entry["attempt_ids"]:
-                entry["attempt_ids"].append(attempt_id)
-                entry["provenance"].append(
-                    {
-                        "attempt_id": attempt_id,
-                        "candidate_id": record["candidate_id"],
-                        "discovery": record["candidate"]["provenance"],
-                        "retrieval_mechanism": record["mechanism"],
-                        "retrieved_at": record["occurred_at"],
-                        "retrieval_provider_identifiers": record[
-                            "retrieval_provider_identifiers"
-                        ],
-                    }
-                )
+            for key, value in (
+                ("source_ids", record["source_id"]),
+                ("artifacts", record["artifact_id"]),
+                ("attempt_ids", record["attempt_id"]),
+            ):
+                if value not in entry[key]:
+                    entry[key].append(value)
+            entry["provenance"].append(
+                {
+                    "attempt_id": record["attempt_id"],
+                    "candidate_id": record["candidate_id"],
+                    "discovery": record["candidate"]["provenance"],
+                    "retrieval_mechanism": record["mechanism"],
+                    "retrieved_at": record["occurred_at"],
+                    "retrieval_provider_identifiers": record[
+                        "retrieval_provider_identifiers"
+                    ],
+                }
+            )
         for entry in documents.values():
             for name in ("source_ids", "artifacts", "attempt_ids"):
                 entry[name].sort()
             entry["provenance"].sort(key=lambda item: item["attempt_id"])
         return {"schema_version": _SCHEMA, "documents": dict(sorted(documents.items()))}
 
-    def _derive_checkpoints(self, records: list[dict[str, Any]]) -> dict[str, Any]:
-        """Derive source progress and reject ambiguous equal-position events."""
-        sources: dict[str, dict[str, Any]] = {}
-        successful_attempts = {
-            record["attempt_id"]: record["source_id"]
-            for record in records
-            if record["record_type"] == "retrieval_attempt"
-            and record["outcome"] == RetrievalOutcome.SUCCESS.value
+    def checkpoints(self) -> dict[str, Any]:
+        with self._database.connect(read_only=True) as connection:
+            rows = connection.execute(
+                "SELECT source_id,position,cursor,event_id "
+                "FROM current_checkpoints ORDER BY source_id"
+            ).fetchall()
+        return {
+            "schema_version": _SCHEMA,
+            "sources": {
+                str(row[0]): {
+                    "position": int(row[1]),
+                    "cursor": row[2],
+                    "attempt_id": str(row[3]).removeprefix("checkpoint-"),
+                }
+                for row in rows
+            },
         }
-        for record in records:
-            if record["record_type"] != "checkpoint_advanced":
-                continue
-            if record["attempt_id"] not in successful_attempts:
-                raise IntegrityError("checkpoint event lacks a successful retrieval attempt")
-            source_id = record["source_id"]
-            if successful_attempts[record["attempt_id"]] != source_id:
-                raise IntegrityError("checkpoint source differs from its retrieval attempt")
-            checkpoint = record["checkpoint"]
-            current = sources.get(source_id)
-            if current is None or checkpoint["position"] > current["position"]:
-                sources[source_id] = {**checkpoint, "attempt_id": record["attempt_id"]}
-            elif checkpoint["position"] == current["position"]:
-                if checkpoint["cursor"] != current["cursor"]:
-                    raise IntegrityError("ambiguous checkpoint cursors at the same position")
-                if record["attempt_id"] < current["attempt_id"]:
-                    sources[source_id] = {**checkpoint, "attempt_id": record["attempt_id"]}
-        return {"schema_version": _SCHEMA, "sources": dict(sorted(sources.items()))}
 
-    def _write_derived_index(self, index: dict[str, Any]) -> None:
-        """Persist the rebuildable document index atomically."""
-        atomic_replace(self._layout.index, canonical_json(index))
+    def advance_checkpoint(
+        self, source_id: str, successful_attempt_id: str, checkpoint: Checkpoint
+    ) -> bool:
+        require_identifier(source_id, "source_id")
+        require_identifier(successful_attempt_id, "attempt_id")
+        self._validate_checkpoint(source_id, checkpoint)
+        try:
+            with self._database.transaction() as connection:
+                attempt = connection.execute(
+                    "SELECT source_id,outcome FROM acquisition_attempts WHERE attempt_id = ?",
+                    (successful_attempt_id,),
+                ).fetchone()
+                if attempt is None or attempt[1] != RetrievalOutcome.SUCCESS.value:
+                    raise ContractError(
+                        "checkpoint requires an existing successful retrieval attempt"
+                    )
+                if attempt[0] != source_id:
+                    raise ContractError(
+                        "checkpoint source differs from its successful retrieval attempt"
+                    )
+                event_id = f"checkpoint-{successful_attempt_id}"
+                prior = connection.execute(
+                    "SELECT canonical_json FROM checkpoint_events WHERE event_id = ?", (event_id,)
+                ).fetchone()
+                event = self._checkpoint_record(source_id, successful_attempt_id, checkpoint)
+                payload = canonical_json(event)
+                if prior is not None:
+                    if str(prior[0]) != payload:
+                        raise ConflictError("immutable checkpoint event already differs")
+                    return False
+                self._insert_checkpoint(connection, source_id, successful_attempt_id, checkpoint)
+                self._database.advance_revision(connection)
+            return True
+        except StorageError as error:
+            raise IntegrityError(str(error)) from error
+
+    def delete_derived_state(self) -> None:
+        """SQLite query projections are transactional and require no deletion."""
+
+    def replay(self, fail_at: FailurePoint | None = None) -> ReplayResult:
+        """Verify authority and return deterministic relational projection digests."""
+        self.verify_integrity()
+        if fail_at == FailurePoint.DURING_REPLAY:
+            self._fail(fail_at)
+        index = self.document_index()
+        checkpoints = self.checkpoints()
+        return ReplayResult(
+            len(index["documents"]),
+            len(checkpoints["sources"]),
+            sum(item.get("record_type") == "retrieval_attempt" for item in self.history()),
+            hashlib.sha256(canonical_json(index).encode()).hexdigest(),
+            hashlib.sha256(canonical_json(checkpoints).encode()).hexdigest(),
+        )
+
+    def repository_revision(self) -> int:
+        return self._database.revision()
+
+    def _validate_checkpoint(self, source_id: str, checkpoint: Checkpoint) -> None:
+        current = self.checkpoints()["sources"].get(source_id)
+        if current is None:
+            return
+        if checkpoint.position < current["position"]:
+            raise ConflictError("checkpoint position cannot move backward")
+        if checkpoint.position == current["position"] and checkpoint.cursor != current["cursor"]:
+            raise ConflictError("checkpoint position is already bound to a different cursor")
+
+    def _insert_checkpoint(
+        self, connection: Any, source_id: str, attempt_id: str, checkpoint: Checkpoint
+    ) -> None:
+        event_id = f"checkpoint-{attempt_id}"
+        event = self._checkpoint_record(source_id, attempt_id, checkpoint)
+        connection.execute(
+            "INSERT INTO checkpoint_events VALUES (?,?,?,?,?,?)",
+            (
+                event_id,
+                source_id,
+                attempt_id,
+                str(checkpoint.position),
+                checkpoint.cursor,
+                canonical_json(event),
+            ),
+        )
+        current = connection.execute(
+            "SELECT position,cursor,event_id FROM current_checkpoints WHERE source_id = ?",
+            (source_id,),
+        ).fetchone()
+        current_position = int(current[0]) if current is not None else None
+        if current is None or checkpoint.position > current_position or (
+            checkpoint.position == current_position and event_id < current[2]
+        ):
+            connection.execute(
+                "INSERT INTO current_checkpoints VALUES (?,?,?,?) "
+                "ON CONFLICT(source_id) DO UPDATE SET event_id=excluded.event_id,"
+                "position=excluded.position,cursor=excluded.cursor",
+                (source_id, event_id, str(checkpoint.position), checkpoint.cursor),
+            )
+
+    @staticmethod
+    def _checkpoint_record(
+        source_id: str, attempt_id: str, checkpoint: Checkpoint
+    ) -> dict[str, Any]:
+        return {
+            "schema_version": _SCHEMA,
+            "record_type": "checkpoint_advanced",
+            "attempt_id": attempt_id,
+            "source_id": source_id,
+            "checkpoint": checkpoint.to_dict(),
+        }
+
+    def _content_path(self, reference: str) -> Path:
+        parts = reference.split("/")
+        if len(parts) != 3 or parts[0] != "sha256" or len(parts[1]) != 2 or len(parts[2]) != 64:
+            raise IntegrityError("artifact content reference is invalid")
+        path = self._state_root / "content" / parts[0] / parts[1] / parts[2]
+        try:
+            path.relative_to(self._state_root / "content")
+        except ValueError as error:
+            raise IntegrityError("artifact content reference is invalid") from error
+        return path
+
+    @staticmethod
+    def _observation_id(attempt_id: str, artifact_id: str) -> str:
+        payload = canonical_json({"attempt_id": attempt_id, "artifact_id": artifact_id}).encode()
+        return f"observation-{hashlib.sha256(payload).hexdigest()}"
+
+    @staticmethod
+    def _decode(value: str, label: str) -> dict[str, Any]:
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError as error:
+            raise IntegrityError(f"{label} structured state is corrupt") from error
+        if not isinstance(decoded, dict):
+            raise IntegrityError(f"{label} structured state is invalid")
+        return decoded
 
     @staticmethod
     def _fail(point: FailurePoint) -> None:
-        """Raise a deterministic observable failure for durability verification."""
         raise PartialFailure(f"injected failure at {point.value}")

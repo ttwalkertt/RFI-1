@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
-import tempfile
 from dataclasses import asdict
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -20,6 +18,8 @@ from rfi.concepts.contracts import (
     MethodKind,
     ObservationMethod,
 )
+from rfi.storage import RepositoryDatabase, StorageError
+from rfi.storage.sqlite import canonical_json
 
 _SCHEMA_VERSION = 1
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
@@ -147,13 +147,14 @@ class MethodRegistry:
 
 
 class ConceptRepository:
-    """Catalog authority with immutable revisions and an atomic current-state pointer."""
+    """Concept authority with immutable revisions in shared SQLite state."""
 
     def __init__(self, root: Path, extension_method_kinds: tuple[str, ...] = ()) -> None:
         self.root = root
         self.revisions_root = root / "revisions"
         self.pointer = root / "catalog.json"
         self.registry = MethodRegistry(extension_method_kinds)
+        self._database = RepositoryDatabase(root)
 
     @classmethod
     def initialize(
@@ -162,20 +163,12 @@ class ConceptRepository:
         extension_method_kinds: tuple[str, ...] = (),
     ) -> ConceptRepository:
         """Initialize an empty catalog without overwriting existing state."""
+        try:
+            RepositoryDatabase.initialize(root)
+        except StorageError as error:
+            raise ConceptError(str(error)) from error
         repository = cls(root, extension_method_kinds)
-        if repository.pointer.exists():
-            repository.verify()
-            return repository
-        root.mkdir(parents=True, exist_ok=True)
-        repository.revisions_root.mkdir(exist_ok=True)
-        repository._atomic_json(
-            repository.pointer,
-            {
-                "schema_version": _SCHEMA_VERSION,
-                "current_revisions": {},
-                "revision_history": {},
-            },
-        )
+        repository.verify()
         return repository
 
     @classmethod
@@ -185,6 +178,10 @@ class ConceptRepository:
         extension_method_kinds: tuple[str, ...] = (),
     ) -> ConceptRepository:
         """Open only state that passes complete integrity validation."""
+        try:
+            RepositoryDatabase.open(root)
+        except StorageError as error:
+            raise ConceptError(str(error)) from error
         repository = cls(root, extension_method_kinds)
         repository.verify()
         return repository
@@ -195,18 +192,13 @@ class ConceptRepository:
         fail_before_publish: bool = False,
     ) -> ConceptRevision:
         """Create a stable concept identity and its first immutable revision."""
-        state = self._state()
         self._validate_draft(draft)
-        if draft.concept_id in state["current_revisions"]:
+        if draft.concept_id in self._state()["current_revisions"]:
             raise ConceptError(f"duplicate concept identifier: {draft.concept_id}")
         revision = self._revision(draft, 1, None, _now(), _now())
-        self._write_revision(revision)
         if fail_before_publish:
-            self._revision_path(revision.revision_id).unlink(missing_ok=True)
             raise ConceptError("injected interrupted write before catalog publication")
-        state["current_revisions"][draft.concept_id] = revision.revision_id
-        state["revision_history"][draft.concept_id] = [revision.revision_id]
-        self._atomic_json(self.pointer, state)
+        self._publish(revision, create=True)
         return revision
 
     def validate(self, draft: ConceptDraft) -> None:
@@ -221,7 +213,6 @@ class ConceptRepository:
         fail_before_publish: bool = False,
     ) -> ConceptRevision:
         """Append a revision using optimistic current-revision validation."""
-        state = self._state()
         if concept_id != draft.concept_id:
             raise ConceptError("a revision cannot change the stable concept identifier")
         current = self.get(concept_id)
@@ -235,13 +226,9 @@ class ConceptRepository:
             current.created_at,
             _now(),
         )
-        self._write_revision(revision)
         if fail_before_publish:
-            self._revision_path(revision.revision_id).unlink(missing_ok=True)
             raise ConceptError("injected interrupted write before catalog publication")
-        state["current_revisions"][concept_id] = revision.revision_id
-        state["revision_history"][concept_id].append(revision.revision_id)
-        self._atomic_json(self.pointer, state)
+        self._publish(revision, create=False)
         return revision
 
     def retire(self, concept_id: str, expected_revision_id: str) -> ConceptRevision:
@@ -330,9 +317,6 @@ class ConceptRepository:
                 revisions += 1
             if state["current_revisions"].get(concept_id) != history[-1]:
                 raise ConceptError(f"current revision mismatch: {concept_id}")
-        files = {path.stem for path in self.revisions_root.glob("*.json")}
-        if files != referenced:
-            raise ConceptError("catalog contains missing or unreferenced revision files")
         return {
             "concepts": len(state["current_revisions"]),
             "revisions": revisions,
@@ -431,14 +415,22 @@ class ConceptRepository:
         return start <= target and (end is None or target <= end)
 
     def _state(self) -> dict[str, Any]:
-        value = self._load_json(self.pointer)
-        if value.get("schema_version") != _SCHEMA_VERSION:
-            raise ConceptError("unsupported or corrupt catalog schema")
-        current = value.get("current_revisions")
-        history = value.get("revision_history")
-        if not isinstance(current, dict) or not isinstance(history, dict):
-            raise ConceptError("catalog pointer is malformed")
-        return value
+        with self._database.connect(read_only=True) as connection:
+            current = connection.execute(
+                "SELECT concept_id,current_revision_id FROM concepts ORDER BY concept_id"
+            ).fetchall()
+            revisions = connection.execute(
+                "SELECT concept_id,revision_id FROM concept_revisions "
+                "ORDER BY concept_id,revision_number"
+            ).fetchall()
+        history: dict[str, list[str]] = {}
+        for row in revisions:
+            history.setdefault(str(row[0]), []).append(str(row[1]))
+        return {
+            "schema_version": _SCHEMA_VERSION,
+            "current_revisions": {str(row[0]): str(row[1]) for row in current},
+            "revision_history": history,
+        }
 
     def _revision_path(self, revision_id: str) -> Path:
         if not revision_id.startswith("concept-revision-"):
@@ -446,16 +438,29 @@ class ConceptRepository:
         return self.revisions_root / f"{revision_id}.json"
 
     def _write_revision(self, revision: ConceptRevision) -> None:
-        path = self._revision_path(revision.revision_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        content = _canonical(asdict(revision))
-        if path.exists() and path.read_bytes() != content:
-            raise ConceptError(f"attempted historical mutation: {revision.revision_id}")
-        if not path.exists():
-            self._atomic_json(path, asdict(revision))
+        with self._database.connect(read_only=True) as connection:
+            prior = connection.execute(
+                "SELECT canonical_json FROM concept_revisions WHERE revision_id = ?",
+                (revision.revision_id,),
+            ).fetchone()
+        if prior is not None:
+            if str(prior[0]) != canonical_json(asdict(revision)):
+                raise ConceptError(f"attempted historical mutation: {revision.revision_id}")
+            return
+        self._publish(revision, create=revision.revision_number == 1)
 
     def _load_revision(self, revision_id: str) -> ConceptRevision:
-        value = self._load_json(self._revision_path(revision_id))
+        with self._database.connect(read_only=True) as connection:
+            row = connection.execute(
+                "SELECT canonical_json FROM concept_revisions WHERE revision_id = ?",
+                (revision_id,),
+            ).fetchone()
+        if row is None:
+            raise ConceptError(f"unknown concept revision: {revision_id}")
+        try:
+            value = json.loads(str(row[0]))
+        except json.JSONDecodeError as error:
+            raise ConceptError("cannot read concept structured state") from error
         value["status"] = ConceptStatus(value["status"])
         value["methods"] = tuple(ObservationMethod(**item) for item in value["methods"])
         for field_name in (
@@ -469,24 +474,38 @@ class ConceptRepository:
             value[field_name] = tuple(value[field_name])
         return ConceptRevision(**value)
 
-    def _load_json(self, path: Path) -> dict[str, Any]:
+    def _publish(self, revision: ConceptRevision, *, create: bool) -> None:
+        payload = canonical_json(asdict(revision))
         try:
-            value = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            raise ConceptError(f"cannot read catalog state {path.name}: {error}") from error
-        if not isinstance(value, dict):
-            raise ConceptError(f"catalog state is not an object: {path.name}")
-        return value
-
-    def _atomic_json(self, path: Path, value: Any) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-        temporary = Path(name)
-        try:
-            with os.fdopen(descriptor, "wb") as stream:
-                stream.write(_canonical(value))
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(temporary, path)
-        finally:
-            temporary.unlink(missing_ok=True)
+            with self._database.transaction() as connection:
+                connection.execute(
+                    "INSERT INTO concept_revisions VALUES (?,?,?,?,?,?)",
+                    (
+                        revision.revision_id,
+                        revision.concept_id,
+                        revision.revision_number,
+                        revision.supersedes_revision_id,
+                        revision.created_at,
+                        payload,
+                    ),
+                )
+                if create:
+                    connection.execute(
+                        "INSERT INTO concepts(concept_id,current_revision_id) VALUES (?,?)",
+                        (revision.concept_id, revision.revision_id),
+                    )
+                else:
+                    changed = connection.execute(
+                        "UPDATE concepts SET current_revision_id = ? WHERE concept_id = ? "
+                        "AND current_revision_id = ?",
+                        (
+                            revision.revision_id,
+                            revision.concept_id,
+                            revision.supersedes_revision_id,
+                        ),
+                    ).rowcount
+                    if changed != 1:
+                        raise ConceptError("invalid revision update: current revision has changed")
+                self._database.advance_revision(connection)
+        except StorageError as error:
+            raise ConceptError(str(error)) from error

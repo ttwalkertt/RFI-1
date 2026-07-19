@@ -125,10 +125,10 @@ class FirmCatalogTests(unittest.TestCase):
             self.repository.create(self.generic("interrupted"), fail_before_publish=True)
         self.assertEqual(self.repository.get(first.firm_id).revision_id, second.revision_id)
         corrupt = self.root / "corrupt"
-        shutil.copytree(self.state, corrupt)
-        (corrupt / "catalog.json").write_text("not-json", encoding="utf-8")
-        with self.assertRaisesRegex(FirmError, "cannot read firm catalog"):
-            FirmRepository.open(corrupt)
+        shutil.copytree(self.root, corrupt)
+        (corrupt / "repository.sqlite3").write_bytes(b"not-sqlite")
+        with self.assertRaisesRegex(FirmError, "database"):
+            FirmRepository.open(corrupt / "firm-catalog")
 
     def test_public_service_and_reference_do_not_couple_future_persistence(self) -> None:
         service = FirmService(self.repository)

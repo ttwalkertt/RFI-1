@@ -9,6 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Sequence
 
+from rfi.acquisition import AcquisitionRepository
 from rfi.admin import create_admin_server
 from rfi.catalog_import import (
     CatalogImportError,
@@ -22,6 +23,13 @@ from rfi.source_profiles import (
     SourceProfileError,
     SourceProfileRepository,
     load_canonical_template,
+)
+from rfi.storage import (
+    DATABASE_NAME,
+    RepositoryDatabase,
+    StorageError,
+    create_backup,
+    restore_backup,
 )
 
 DEFAULT_STATE = Path(".artifacts/runtime/rfi-1")
@@ -140,68 +148,56 @@ def parser() -> argparse.ArgumentParser:
         action="store_true",
         help="pull every firm with a saved source profile",
     )
+    backup = commands.add_parser(
+        "backup", help="create a verified SQLite and content-store backup"
+    )
+    _add_state(backup)
+    backup.add_argument("--output", type=_state, required=True, metavar="ZIP")
+    restore = commands.add_parser(
+        "restore", help="restore a verified backup into fresh state"
+    )
+    _add_state(restore)
+    restore.add_argument("--input", type=_state, required=True, metavar="ZIP")
+    verify = commands.add_parser(
+        "verify", help="verify SQLite, relationships, and immutable content"
+    )
+    _add_state(verify)
     return value
 
 
 def initialize(state: Path) -> None:
-    """Initialize missing catalogs without changing valid existing catalogs."""
-    concept_exists = (state / "catalog.json").exists()
+    """Initialize or validate one fresh authoritative SQLite repository."""
+    existed = (state / DATABASE_NAME).is_file()
+    try:
+        database = RepositoryDatabase.initialize(state)
+    except StorageError as error:
+        raise ApplicationError(str(error)) from error
     firm_state = state / "firm-catalog"
     source_profile_state = state / "source-profiles"
-    firm_exists = (firm_state / "catalog.json").exists()
-    source_profiles_exist = (source_profile_state / "catalog.json").exists()
-    if concept_exists:
-        ConceptRepository.open(state)
-    if firm_exists:
-        FirmRepository.open(firm_state)
     template = load_canonical_template()
-    if source_profiles_exist:
-        SourceProfileRepository.open(source_profile_state, template)
-    if not concept_exists:
-        ConceptRepository.initialize(state)
-    if not firm_exists:
-        FirmRepository.initialize(firm_state)
-    if not source_profiles_exist:
-        SourceProfileRepository.initialize(source_profile_state, template)
-    changes = []
-    concept_change = (
-        "concept catalog already existed" if concept_exists else "created concept catalog"
-    )
-    firm_change = (
-        "target-firm catalog already existed" if firm_exists else "created target-firm catalog"
-    )
-    profile_change = (
-        "firm source-profile catalog already existed"
-        if source_profiles_exist
-        else "created firm source-profile catalog"
-    )
-    changes.extend((concept_change, firm_change, profile_change))
+    ConceptRepository.initialize(state)
+    FirmRepository.initialize(firm_state)
+    SourceProfileRepository.initialize(source_profile_state, template)
     print(f"RFI-1 state: {state}")
-    for change in changes:
-        print(f"- {change}")
+    print(
+        "- compatible SQLite repository already existed"
+        if existed
+        else "- created authoritative SQLite repository and immutable content store"
+    )
+    print(f"- schema version: {database.validate()['schema_version']}")
 
 
 def _open_state(
     state: Path,
 ) -> tuple[ConceptRepository, FirmRepository, SourceProfileRepository]:
     """Open complete application state or explain the required first-run action."""
-    missing = []
-    if not (state / "catalog.json").is_file():
-        missing.append("concept catalog")
-    if not (state / "firm-catalog/catalog.json").is_file():
-        missing.append("target-firm catalog")
-    if missing:
-        raise ApplicationError(
-            f"state is not initialized at {state} (missing {', '.join(missing)}); "
-            "run 'rfi init' with the same --state path"
-        )
+    try:
+        RepositoryDatabase.open(state)
+    except StorageError as error:
+        raise ApplicationError(str(error)) from error
     template = load_canonical_template()
     source_profile_state = state / "source-profiles"
-    source_profiles = (
-        SourceProfileRepository.open(source_profile_state, template)
-        if (source_profile_state / "catalog.json").is_file()
-        else SourceProfileRepository.initialize(source_profile_state, template)
-    )
+    source_profiles = SourceProfileRepository.open(source_profile_state, template)
     return (
         ConceptRepository.open(state),
         FirmRepository.open(state / "firm-catalog"),
@@ -263,6 +259,15 @@ def pull_sources(state: Path, firm_ids: tuple[str, ...], all_configured: bool) -
     return 0 if result.status == PullStatus.COMPLETED else 1
 
 
+def verify_state(state: Path) -> None:
+    """Verify both authorities through repository-owned integrity checks."""
+    _open_state(state)
+    database = RepositoryDatabase.open(state).validate()
+    acquisition = AcquisitionRepository(state / "acquisition")
+    result = acquisition.verify_integrity()
+    print(json.dumps({"database": database, "repository": result}, indent=2, sort_keys=True))
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run one stable RFI-1 application operation with actionable failures."""
     arguments = parser().parse_args(argv)
@@ -278,12 +283,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 seed(arguments.state, tuple(arguments.file))
         elif arguments.command == "admin":
             serve(arguments.state, arguments.host, arguments.port)
-        else:
+        elif arguments.command == "pull":
             return pull_sources(
                 arguments.state,
                 tuple(arguments.firm),
                 arguments.all_configured,
             )
+        elif arguments.command == "backup":
+            _open_state(arguments.state)
+            print(json.dumps(create_backup(arguments.state, arguments.output), indent=2))
+        elif arguments.command == "restore":
+            print(json.dumps(restore_backup(arguments.input, arguments.state), indent=2))
+        else:
+            verify_state(arguments.state)
     except (
         ApplicationError,
         CatalogImportError,
@@ -291,6 +303,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         FirmError,
         SourceProfileError,
         PullError,
+        StorageError,
         OSError,
     ) as error:
         print(f"rfi: error: {error}", file=sys.stderr)

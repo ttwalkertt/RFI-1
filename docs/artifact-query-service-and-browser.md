@@ -44,8 +44,8 @@ does not decide chronology among different documents.
 
 ## Pagination and consistency
 
-Every page reports an authoritative-state SHA-256 snapshot digest. The opaque cursor contains the
-snapshot digest, a typed-query fingerprint, and the next offset. It is size-bounded by the service
+Every page reports an opaque token derived from the authoritative SQLite repository revision. The
+opaque cursor contains that snapshot token, a typed-query fingerprint, and the next offset. It is size-bounded by the service
 shape and validated on use. A malformed cursor returns `invalid_cursor`; changed authoritative
 state returns `stale_cursor`. The browser restarts expansion rather than combining revisions.
 
@@ -84,7 +84,7 @@ PDF and controlled textual media use the stored endpoint. Other binary media rec
 fallback and the explicit stored-document action.
 
 The original source action is provenance convenience only. Preview and query work after restart,
-with provider adapters unavailable, with network blocked, and after replay/rebuild.
+with provider adapters unavailable, with network blocked, and after process restart or replay.
 
 ## Failure semantics
 
@@ -97,7 +97,8 @@ fallback, not invented rendering.
 
 ## Limitations
 
-Current queries scan the POC authoritative record set; performance indexing awaits measured need.
+Current queries project normalized records from parameterized SQLite repository operations; the
+schema includes indexes for demonstrated chronology and observation access paths.
 The service returns the current immutable revision of each logical document and navigates only
 that artifact's observations; it is not a cross-artifact attempt-history browser. There is no
 search, extraction, arbitrary metadata query, repair, mutation, annotation, or Bring Repository Up
