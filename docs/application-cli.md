@@ -16,6 +16,9 @@ rfi pull (--firm FIRM_ID ... | --all-configured) [--state PATH]
 rfi verify [--state PATH]
 rfi backup [--state PATH] --output ZIP
 rfi restore --input ZIP [--state FRESH_PATH]
+rfi mailing-list --state PATH configure-linux-block
+rfi mailing-list --state PATH preview|acquire --live --message-id MESSAGE_ID [limits]
+rfi mailing-list --state PATH sources|discussions|search|incomplete|rebuild
 ```
 
 The default state is `.artifacts/runtime/rfi-1`, the default host is `127.0.0.1`, and the default
@@ -131,14 +134,18 @@ The CLI composes existing concept and firm repositories, sample providers, servi
 server. Persistence and public-service responsibilities remain in their established packages.
 The local console remains unauthenticated, single-operator oriented, and is not a deployment or
 daemon. No automatic browser launch, background scheduling, legacy migration, or production
-packaging is introduced. Schema-version infrastructure exists, but version 1 has no speculative
-migration.
+packaging is introduced. Schema version 2 includes the single supported version-1 mailing-list DDL
+migration; it does not import legacy structured-file repositories.
+
+Mailing-list preview is read-only and displays seeds, context, limits, state, and warnings before
+an explicit acquire. There is no unbounded or archive-wide form. Offline query and rebuild actions
+use retained repository evidence and never instantiate the live adapter.
 
 ## Architectural Status Summary
 
 - Application lifecycle CLI: **Complete** for explicit local initialization, seeding, and startup.
 - Integrated admin console: **Complete** for concept and target-firm local operation.
-- Application structured persistence: **Complete for schema version 1**; SQLite is authoritative
+- Application structured persistence: **Complete for schema version 2**; SQLite is authoritative
   and incompatible or legacy state fails closed.
 - Operational deployment: **Not started**; the server is a foreground local development service.
 - Architectural change: TASK-021 replaced disposable structured-file persistence with one fresh

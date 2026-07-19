@@ -137,6 +137,7 @@ The following documents define the project.
 | `ACQUISITION_POC_GUIDANCE.md` | Design guidance and hard invariants for the acquisition proof of concept |
 | `docs/deterministic-sec-form-10k-retrieval.md` | Current artifact-semantic SEC Form 10-K retrieval boundary and operator proof |
 | `docs/additional-sec-numbered-form-adapters.md` | TASK-022 Form 10-Q, 8-K, 20-F, and 6-K adapter policies, identity, live proof, and limits |
+| `docs/linux-kernel-mailing-list-intelligence-stream.md` | TASK-023 bounded Linux block-layer email acquisition, connectivity, replay, query, and shared-browser projection |
 | `docs/storage_architecture_design_draft.md` | TASK-020 structured storage comparison and hybrid SQLite/file recommendation |
 | `docs/sqlite-structured-state-repository.md` | TASK-021 SQLite schema, transactions, initialization, integrity, and hybrid backup/restore |
 | `DESIGN_PRINCIPLES.md` *(planned)* | Enduring engineering principles |

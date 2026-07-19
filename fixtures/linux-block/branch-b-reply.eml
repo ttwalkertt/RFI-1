@@ -1,0 +1,9 @@
+Message-ID: <task023-b1@kernel.example>
+Subject: Re: [PATCH 0/2] block: deterministic queue update
+From: Author <author@example.com>
+Date: Thu, 16 Jul 2026 11:10:00 +0000
+To: linux-block@vger.kernel.org
+In-Reply-To: <task023-b@kernel.example>
+References: <task023-root@kernel.example> <task023-b@kernel.example>
+
+I will add the ordering explanation in v2.

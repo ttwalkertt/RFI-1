@@ -1,0 +1,9 @@
+Message-ID: <task023-a1@kernel.example>
+Subject: Re: [PATCH 0/2] block: deterministic queue update
+From: Author <author@example.com>
+Date: Thu, 16 Jul 2026 11:00:00 +0000
+To: linux-block@vger.kernel.org
+In-Reply-To: <task023-a@kernel.example>
+References: <task023-root@kernel.example> <task023-a@kernel.example>
+
+The lifetime ends after the final queue reference is released.

@@ -59,6 +59,12 @@ Use `.venv/bin/rfi seed --print-schema` to print the canonical external catalog 
 `.venv/bin/rfi seed --file FILE [-f FILE ...]` to validate and idempotently import curated target
 firms alongside the starter seed. See the application CLI guide for format and failure semantics.
 
+For the bounded Linux block-layer mailing-list vertical, configure the source explicitly and use
+`rfi mailing-list --help`. Preview and acquire require `--live`, explicit selection, and hard
+limits. Offline `sources`, `discussions`, `search`, `incomplete`, and `rebuild` actions never contact
+Lore. Run `make task023-test` and `make task023-proof` for deterministic acceptance evidence. See
+the [mailing-list stream guide](linux-kernel-mailing-list-intelligence-stream.md).
+
 ## TASK-011 target-firm workflow
 
 Run `make task011-proof` for the seeded HDD firm catalog, conflict, revision, restart, and stable

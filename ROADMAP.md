@@ -174,3 +174,11 @@ These items are intentionally exploratory and should not influence near-term arc
 The roadmap is expected to evolve.
 
 The architectural principles are intended to remain comparatively stable, while implementation priorities should be driven by operational experience and evidence gathered during each preceding phase.
+
+## Implemented acquisition verticals
+
+TASK-023 adds a bounded Linux block-layer mailing-list stream. It proves connected discussion
+admission, lossless email evidence, offline relationship reconstruction, and multiple semantic
+projections in the shared artifact browser without archive mirroring or graph persistence. Future
+mailing-list work should be driven by observed needs for archive queries, incremental cursors,
+patch-series semantics, or cross-list relationships.

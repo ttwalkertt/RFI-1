@@ -32,7 +32,8 @@ TASK-021 records.
 ## Repository format and schema
 
 The database is identified by `schema_metadata.schema_name = rfi-structured-state` and schema
-version `1`. `repository_state` owns a random repository identity and `authority_revision`.
+version `2`. Version 1 is upgraded in place by the TASK-023 mailing-list DDL migration.
+`repository_state` owns a random repository identity and `authority_revision`.
 Every committed mutation that can affect repository readers advances that revision. Artifact query
 and observation cursors bind to it and return `stale_cursor` after a change.
 
@@ -47,6 +48,7 @@ The executable DDL is owned by `rfi.storage.sqlite`. Its tables are:
 | Acquisition | `governed_sources`, `acquisition_attempts`, `checkpoint_events`, `current_checkpoints` | immutable activity/history; transactional current progress |
 | Evidence | `artifacts`, `documents`, `artifact_observations` | byte-derived artifact identity; distinct document, observation, and attempt identities |
 | Pull workflow | `pull_runs` | durable lifecycle record updated transactionally |
+| Mailing lists | `mailing_list_sources`, `mailing_list_runs`, `mailing_list_run_items`, `mailing_list_messages`, `mailing_list_relationships`, `mailing_list_discussions`, `mailing_list_discussion_members` | durable bounded manifests plus offline-rebuildable discussion organization |
 
 Primary keys, unique constraints, foreign keys, not-null checks, lifecycle checks, and query indexes
 enforce generic storage guarantees. Canonical JSON text is retained for lossless public-contract

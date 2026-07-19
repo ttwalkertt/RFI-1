@@ -21,6 +21,7 @@ from rfi.artifacts import (
 )
 from rfi.concepts import ConceptError, ConceptRepository, ConceptService
 from rfi.firms import FirmError, FirmRepository, FirmService
+from rfi.mailing_lists import MailingListError, MailingListQueryService, MailingListRepository
 from rfi.pull import PullError, PullRequest, PullWorkflow, create_pull_workflow
 from rfi.source_profiles import (
     SourceProfileError,
@@ -254,12 +255,14 @@ class AdminConsole(ThreadingHTTPServer):
         source_profile_service: SourceProfileService,
         pull_workflow: PullWorkflow,
         artifact_query_service: ArtifactQueryService,
+        mailing_list_query_service: MailingListQueryService,
     ) -> None:
         self.service = service
         self.firm_service = firm_service
         self.source_profile_service = source_profile_service
         self.pull_workflow = pull_workflow
         self.artifact_query_service = artifact_query_service
+        self.mailing_list_query_service = mailing_list_query_service
         super().__init__(address, AdminHandler)
 
 
@@ -341,6 +344,7 @@ class AdminHandler(BaseHTTPRequestHandler):
             SourceProfileError,
             PullError,
             ArtifactQueryError,
+            MailingListError,
             ValueError,
             TypeError,
             KeyError,
@@ -354,6 +358,13 @@ class AdminHandler(BaseHTTPRequestHandler):
                     "stale_cursor", "checksum_mismatch"
                 } else HTTPStatus.BAD_REQUEST
                 self._error(status, str(error), error.code)
+            elif isinstance(error, MailingListError):
+                status = (
+                    HTTPStatus.NOT_FOUND
+                    if error.code.startswith("unknown_")
+                    else HTTPStatus.BAD_REQUEST
+                )
+                self._error(status, str(error), error.code)
             else:
                 self._error(HTTPStatus.BAD_REQUEST, str(error))
         except Exception as error:
@@ -366,6 +377,56 @@ class AdminHandler(BaseHTTPRequestHandler):
         source_profile_service = self.server.source_profile_service
         pull_workflow = self.server.pull_workflow
         artifacts = self.server.artifact_query_service
+        mailing_lists = self.server.mailing_list_query_service
+        if method == "GET" and parts == ["api", "mailing-lists", "sources"]:
+            self._send_json(HTTPStatus.OK, {"items": list(mailing_lists.sources())})
+            return
+        if method == "GET" and parts == ["api", "mailing-lists", "discussions"]:
+            source_id = self._first(query, "source_id")
+            limit = int(self._first(query, "limit") or "25")
+            offset = int(self._first(query, "offset") or "0")
+            self._send_json(HTTPStatus.OK, {"items": [asdict(item) for item in
+                mailing_lists.discussions(source_id, limit, offset)]})
+            return
+        if method == "GET" and parts == ["api", "mailing-lists", "incomplete"]:
+            source_id = self._first(query, "source_id") or None
+            self._send_json(HTTPStatus.OK, {"items": [asdict(item) for item in
+                mailing_lists.incomplete(source_id)]})
+            return
+        if method == "GET" and parts == ["api", "mailing-lists", "search"]:
+            self._send_json(HTTPStatus.OK, {"items": [asdict(item) for item in
+                mailing_lists.search(self._first(query, "q"),
+                                     self._first(query, "source_id") or None)]})
+            return
+        if len(parts) >= 4 and parts[:3] == ["api", "mailing-lists", "discussions"]:
+            discussion_id = parts[3]
+            if method == "GET" and len(parts) == 4:
+                self._send_json(HTTPStatus.OK, asdict(mailing_lists.discussion(discussion_id)))
+                return
+            if method == "GET" and parts[4:] == ["projection"]:
+                limit = int(self._first(query, "limit") or "100")
+                self._send_json(
+                    HTTPStatus.OK, asdict(mailing_lists.projection(discussion_id, limit))
+                )
+                return
+        if len(parts) >= 4 and parts[:3] == ["api", "mailing-lists", "messages"]:
+            message_key = parts[3]
+            if method == "GET" and parts[4:] == ["content"]:
+                self._send_artifact_content(mailing_lists.content(message_key))
+                return
+            if method == "GET" and parts[4:] == ["children"]:
+                limit = int(self._first(query, "limit") or "50")
+                offset = int(self._first(query, "offset") or "0")
+                self._send_json(HTTPStatus.OK, {"items": [asdict(item) for item in
+                    mailing_lists.children(message_key, limit, offset)]})
+                return
+            if method == "GET" and parts[4:] == ["ancestors"]:
+                self._send_json(HTTPStatus.OK, {"items": [asdict(item) for item in
+                    mailing_lists.ancestors(message_key)]})
+                return
+            if method == "GET" and len(parts) == 4:
+                self._send_json(HTTPStatus.OK, asdict(mailing_lists.message(message_key)))
+                return
         if method == "GET" and parts == ["api", "artifacts", "firms"]:
             self._send_json(HTTPStatus.OK, {"items": list(artifacts.firms())})
             return
@@ -745,4 +806,5 @@ def create_admin_server(
         SourceProfileService(source_profile_repository, firm_repository, template),
         create_pull_workflow(state),
         ArtifactQueryService(acquisition_repository, firm_repository, template),
+        MailingListQueryService(MailingListRepository(state)),
     )
