@@ -58,8 +58,16 @@ Launch the integrated console:
 ```
 
 Open the displayed URL. The concept catalog is at `/` or `/concepts`, Target Firms is at `/firms`,
-and firm acquisition configuration is at `/source-profiles`. Press Ctrl-C to stop cleanly.
-The shared Pull Workflow is available at `/pull-sources`.
+firm-owned acquisition configuration is at `/source-profiles`, and repository-global governed
+Lore/public-inbox profiles are at `/external-sources`. Press Ctrl-C to stop cleanly. The shared
+Pull Workflow is available at `/pull-sources`.
+
+Create a Lore source from **External Sources** by entering its stable ID, display name, provider,
+archive/list identity, HTTPS endpoint, User-Agent, pacing, concurrency, timeout, response bound,
+attempt count, and backoff limits. **Validate profile** is non-persistent; **Save governed source**
+is explicit. Saved source identities are immutable because acquisition and stream history refer to
+the stable ID. Use **Clone as new source** to change policy under a new identity, then select that
+repository-global source from Stream Configuration. This is separate from firm-owned profiles.
 
 ## Canonical stream YAML
 

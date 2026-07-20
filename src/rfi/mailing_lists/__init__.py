@@ -19,7 +19,11 @@ from rfi.mailing_lists.contracts import (
 )
 from rfi.mailing_lists.provider import FixtureMailingListArchive, LoreArchive
 from rfi.mailing_lists.repository import MailingListRepository
-from rfi.mailing_lists.service import MailingListAcquisitionService, MailingListQueryService
+from rfi.mailing_lists.service import (
+    MailingListAcquisitionService,
+    MailingListQueryService,
+    MailingListSourceService,
+)
 
 LINUX_BLOCK_SOURCE = MailingListSource(
     "linux-block-lore", "linux-block", "Linux block layer",
@@ -32,6 +36,7 @@ __all__ = [
     "DiscussionProjection", "DiscussionSummary", "FixtureMailingListArchive", "InclusionReason",
     "LINUX_BLOCK_SOURCE", "LoreArchive", "MailingListAcquisitionService", "MailingListError",
     "LoreTransportPolicy", "MailingListQueryService", "MailingListRepository",
+    "MailingListSourceService",
     "MailingListSource", "MessageDetail",
     "MessageSummary", "SelectionCriteria",
 ]

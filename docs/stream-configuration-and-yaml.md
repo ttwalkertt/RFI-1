@@ -7,12 +7,19 @@ and canonical export encodes from it.
 
 ## Browser workflow
 
+First create or inspect repository-global Lore/public-inbox transport authority at
+`/external-sources`. The page validates and explicitly saves stable source identity, display name,
+provider, list/archive identity, endpoint, pacing, concurrency, timeout, response-size bound, and
+retry/backoff policy. Saved identities are immutable; changed policy is cloned to a new source ID
+so prior acquisition meaning is not rewritten. This surface is distinct from `/source-profiles`,
+whose profiles are owned by individual firms.
+
 Open `/streams` and work from top to bottom:
 
 1. **Identity** — enter the display name, description, enabled state, visible stable identity, and
    optional non-executable notes. A new stable identity is suggested from the name; a saved
    identity is locked.
-2. **Input** — choose one governed external source or compatible upstream streams. Selectors lead
+2. **Input** — choose one repository-global governed external source or compatible upstream streams. Selectors lead
    with display names and show stable identities as secondary context. Upstreams also show schema,
    current revision, active membership count, and latest run status.
 3. **Selection** — the common editor offers match-all/match-any, keywords or phrases, authors or

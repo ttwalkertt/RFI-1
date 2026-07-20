@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RFI Operator Console · External Sources</title>
+  <style>
+    :root{--ink:#17212b;--muted:#607083;--line:#d7dee7;--blue:#2359d1;--paper:#fff;
+      --wash:#f4f7fb;--bad:#9c3d20;--good:#17622f}
+    *{box-sizing:border-box}body{margin:0;color:var(--ink);background:var(--wash);
+      font:14px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif}
+    header{height:64px;padding:0 24px;display:flex;align-items:center;gap:28px;color:#fff;
+      background:#172334}header strong{font-size:18px}nav{display:flex;gap:10px}nav a{color:#fff;
+      text-decoration:none;padding:20px 8px 17px;border-bottom:3px solid transparent;
+      font-weight:700}nav a[aria-current]{border-color:#7db0ff}
+    main{max-width:1380px;margin:auto;padding:20px;display:grid;
+      grid-template-columns:310px minmax(0,1fr);gap:18px}.panel{background:var(--paper);
+      border:1px solid var(--line);border-radius:10px;overflow:hidden}.head{padding:16px 18px;
+      border-bottom:1px solid var(--line)}h1,h2,h3{margin:0}.muted{color:var(--muted)}
+    .toolbar,.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.toolbar{margin-top:12px}
+    button{border:1px solid #aeb9c7;border-radius:6px;padding:8px 12px;background:#fff;
+      font:inherit;font-weight:650;cursor:pointer}button.primary{color:#fff;background:var(--blue);
+      border-color:var(--blue)}button:disabled{opacity:.45;cursor:not-allowed}.source{display:block;
+      width:100%;padding:14px 16px;border:0;border-bottom:1px solid var(--line);background:#fff;
+      text-align:left}.source:hover,.source.selected{background:#edf4ff}.body{padding:20px}
+    .notice{padding:13px 15px;margin-bottom:16px;border:1px solid var(--line);border-left:4px
+      solid #5279aa;border-radius:8px;background:#f8fafc}.grid{display:grid;
+      grid-template-columns:1fr 1fr;gap:13px 18px}label{display:flex;flex-direction:column;
+      gap:5px;font-weight:650}.wide{grid-column:1/-1}input,select{width:100%;border:1px solid
+      #b5c0ce;border-radius:6px;padding:9px;font:inherit;background:#fff}fieldset{margin:18px 0;
+      padding:16px;border:1px solid var(--line);border-radius:8px}legend{font-weight:750;padding:0 8px}
+    #message{min-height:24px;margin-top:12px;font-weight:650}.good{color:var(--good)}.bad{color:var(--bad)}
+    .badge{display:inline-block;padding:3px 8px;border-radius:14px;background:#e8eef8;font-size:12px}
+    @media(max-width:900px){main{grid-template-columns:1fr}.grid{grid-template-columns:1fr}
+      .wide{grid-column:1}}
+  </style>
+</head>
+<body>
+<header><strong>RFI Operator Console</strong><!-- operator-navigation --></header>
+<main>
+  <aside class="panel">
+    <div class="head"><h1>External Sources</h1><div class="muted">Repository-global governed profiles</div>
+      <div class="toolbar"><button id="new">New Lore source</button><button id="refresh">Refresh</button></div>
+    </div>
+    <div id="sources"><p class="muted" style="padding:16px">Loading…</p></div>
+  </aside>
+  <section class="panel"><div class="body">
+    <div class="notice"><b>Repository-global authority</b><br>These profiles are shared by every
+      stream and are not owned by a target firm. Firm acquisition settings remain under
+      <a href="/source-profiles">Firm Profiles</a>. Stream definitions reference only the stable
+      source ID and cannot alter transport policy.</div>
+    <h2 id="editor-title">Create governed Lore source</h2>
+    <p id="mode-help" class="muted">Validate the complete transport policy, then save explicitly.</p>
+    <form id="form">
+      <fieldset><legend>Identity and provider</legend><div class="grid">
+        <label>Stable source ID<input name="source_id" required pattern="[a-z][a-z0-9._-]*"
+          placeholder="linux-block-lore"></label>
+        <label>Display name<input name="display_name" required placeholder="Linux block layer"></label>
+        <label>Provider<select name="provider"><option value="lore-public-inbox">Lore / public-inbox</option></select></label>
+        <label>Archive/list identity<input name="list_id" required placeholder="linux-block"></label>
+        <label class="wide">Archive endpoint<input name="archive_base_url" type="url" required
+          placeholder="https://lore.kernel.org/linux-block/"></label>
+      </div></fieldset>
+      <fieldset><legend>Bounded transport policy</legend><div class="grid">
+        <label class="wide">Request User-Agent<input name="user_agent" required></label>
+        <label>Minimum request interval (seconds)<input name="minimum_request_interval_seconds"
+          type="number" min="0.1" max="60" step="0.1" required></label>
+        <label>Maximum concurrency<input name="maximum_concurrency" type="number" min="1" max="4" required></label>
+        <label>Timeout (seconds)<input name="timeout_seconds" type="number" min="1" max="120" step="0.1" required></label>
+        <label>Maximum response bytes<input name="maximum_response_bytes" type="number" min="1024" max="50000000" required></label>
+        <label>Maximum attempts per request<input name="maximum_attempts_per_request" type="number" min="1" max="5" required></label>
+        <label>Initial backoff (seconds)<input name="backoff_initial_seconds" type="number" min="0" max="60" step="0.1" required></label>
+        <label>Maximum backoff (seconds)<input name="backoff_maximum_seconds" type="number" min="0" max="300" step="0.1" required></label>
+      </div></fieldset>
+      <div class="actions"><button id="validate" type="button">Validate profile</button>
+        <button id="clone" type="button" hidden>Clone as new source</button>
+        <button id="save" class="primary" type="submit">Save governed source</button>
+        <a id="use-stream" href="/streams" hidden><button type="button">Use in Stream Configuration</button></a>
+      </div>
+    </form><div id="message" role="status"></div>
+  </div></section>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id),form=$('form');let items=[],selected=null;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(path,options={}){const response=await fetch(path,{headers:{'Content-Type':'application/json'},...options});let data;try{data=await response.json()}catch{data={error:'Unreadable server response'}}if(!response.ok)throw new Error(data.error||'Request failed');return data}
+function message(text,good=false){$('message').textContent=text;$('message').className=good?'good':'bad'}
+function draft(){return {source_id:form.source_id.value.trim(),display_name:form.display_name.value.trim(),provider:form.provider.value,list_id:form.list_id.value.trim(),archive_base_url:form.archive_base_url.value.trim(),transport:{user_agent:form.user_agent.value.trim(),minimum_request_interval_seconds:Number(form.minimum_request_interval_seconds.value),maximum_concurrency:Number(form.maximum_concurrency.value),timeout_seconds:Number(form.timeout_seconds.value),maximum_response_bytes:Number(form.maximum_response_bytes.value),maximum_attempts_per_request:Number(form.maximum_attempts_per_request.value),backoff_initial_seconds:Number(form.backoff_initial_seconds.value),backoff_maximum_seconds:Number(form.backoff_maximum_seconds.value)}}}
+function values(source={}){const transport=source.transport||{};form.source_id.value=source.source_id||'';form.display_name.value=source.display_name||'';form.provider.value=source.provider||'lore-public-inbox';form.list_id.value=source.list_id||'';form.archive_base_url.value=source.archive_base_url||'';form.user_agent.value=transport.user_agent||'RFI-1 bounded-mailing-list/2';form.minimum_request_interval_seconds.value=transport.minimum_request_interval_seconds??1;form.maximum_concurrency.value=transport.maximum_concurrency??1;form.timeout_seconds.value=transport.timeout_seconds??20;form.maximum_response_bytes.value=transport.maximum_response_bytes??5000000;form.maximum_attempts_per_request.value=transport.maximum_attempts_per_request??3;form.backoff_initial_seconds.value=transport.backoff_initial_seconds??1;form.backoff_maximum_seconds.value=transport.backoff_maximum_seconds??30}
+function readonly(value){[...form.elements].filter(x=>x.tagName==='INPUT'||x.tagName==='SELECT').forEach(x=>x.disabled=value);$('validate').disabled=value;$('save').hidden=value;$('clone').hidden=!value;$('use-stream').hidden=!value}
+function reset(source=null){selected=null;values(source||{});if(source)form.source_id.value='';readonly(false);$('editor-title').textContent=source?'Clone governed Lore source':'Create governed Lore source';$('mode-help').textContent=source?'Choose a new stable source ID before saving. The original remains immutable.':'Validate the complete transport policy, then save explicitly.';message('');render()}
+function inspect(id){selected=items.find(x=>x.source_id===id);values(selected);readonly(true);$('editor-title').textContent='Governed Lore source';$('mode-help').textContent='Saved source identities and transport policy are immutable. Clone to make a changed profile without rewriting acquisition history.';$('use-stream').href='/streams?source_id='+encodeURIComponent(id);message('Saved repository-global source loaded.',true);render()}
+function render(){$('sources').innerHTML=items.map(x=>`<button class="source ${selected?.source_id===x.source_id?'selected':''}" onclick="inspect('${esc(x.source_id)}')"><b>${esc(x.display_name)}</b><br><small>${esc(x.source_id)} · ${esc(x.list_id)}</small><br><span class="badge">${x.discussion_count} discussions</span></button>`).join('')||'<p class="muted" style="padding:16px">No governed Lore sources configured.</p>'}
+async function load(){const data=await api('/api/mailing-lists/sources');items=data.items;render()}
+async function validate(){try{await api('/api/external-sources/validate',{method:'POST',body:JSON.stringify(draft())});message('Source profile is valid. Nothing was saved.',true);return true}catch(error){message(error.message);return false}}
+async function save(event){event.preventDefault();if(!await validate())return;try{const result=await api('/api/external-sources',{method:'POST',body:JSON.stringify(draft())});await load();inspect(result.source.source_id);message(result.created?'Governed source saved. It is now selectable from Stream Configuration.':'This exact governed source already exists; nothing changed.',true)}catch(error){message(error.message)}}
+$('new').onclick=()=>reset();$('refresh').onclick=load;$('validate').onclick=validate;$('clone').onclick=()=>reset(selected);form.onsubmit=save;load().then(()=>reset());
+</script>
+</body></html>

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import tempfile
 import threading
 import unittest
@@ -17,7 +18,12 @@ import yaml
 from rfi.admin import create_admin_server
 from rfi.cli import initialize, main
 from rfi.firms import FirmRepository
-from rfi.mailing_lists import LINUX_BLOCK_SOURCE, MailingListRepository
+from rfi.mailing_lists import (
+    LINUX_BLOCK_SOURCE,
+    MailingListError,
+    MailingListRepository,
+    MailingListSourceService,
+)
 from rfi.storage import RepositoryDatabase
 from rfi.streams import (
     StreamDraft,
@@ -283,6 +289,90 @@ class StreamCliAndBrowserCase(unittest.TestCase):
             with self.assertRaises(urllib.error.HTTPError) as raised:
                 urllib.request.urlopen(invalid)
             raised.exception.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def test_repository_global_external_source_operator_path(self) -> None:
+        source = {
+            "source_id": "nvme-lore",
+            "display_name": "Linux NVMe",
+            "provider": "lore-public-inbox",
+            "list_id": "linux-nvme",
+            "archive_base_url": "https://lore.kernel.org/linux-nvme/",
+            "transport": {
+                "user_agent": "RFI-1 operator-test/1",
+                "minimum_request_interval_seconds": 1.5,
+                "maximum_concurrency": 2,
+                "timeout_seconds": 30,
+                "maximum_response_bytes": 4000000,
+                "maximum_attempts_per_request": 4,
+                "backoff_initial_seconds": 2,
+                "backoff_maximum_seconds": 45,
+            },
+        }
+        repository = MailingListRepository(self.state)
+        validated = MailingListSourceService(repository).validate(source)
+        self.assertEqual(validated.source_id, "nvme-lore")
+        self.assertEqual([item.source_id for item in repository.sources()], ["linux-block-lore"])
+
+        server = create_admin_server(self.state, port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            with urllib.request.urlopen(base + "/external-sources") as response:
+                page = response.read().decode()
+            for label in (
+                "Repository-global authority", "Stable source ID", "Archive/list identity",
+                "Archive endpoint", "Minimum request interval", "Maximum concurrency",
+                "Timeout", "Maximum response bytes", "Maximum attempts per request",
+                "Initial backoff", "Maximum backoff", "Validate profile",
+                "Clone as new source", "Use in Stream Configuration",
+            ):
+                self.assertIn(label, page)
+            self.assertIn('href="/source-profiles">Firm Profiles</a>', page)
+
+            def post(path: str, payload: dict[str, object]) -> dict[str, object]:
+                request = urllib.request.Request(
+                    base + path,
+                    data=json.dumps(payload).encode(),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(request) as response:
+                    return json.load(response)
+
+            review = post("/api/external-sources/validate", source)
+            self.assertTrue(review["valid"])
+            self.assertEqual(review["scope"], "repository")
+            self.assertEqual([item.source_id for item in repository.sources()], [
+                "linux-block-lore"
+            ])
+            saved = post("/api/external-sources", source)
+            self.assertTrue(saved["created"])
+            self.assertEqual(saved["mutability"], "immutable_identity")
+            self.assertEqual(repository.source("nvme-lore").transport.maximum_concurrency, 2)
+            changed = json.loads(json.dumps(source))
+            changed["transport"]["maximum_concurrency"] = 3
+            with self.assertRaises(MailingListError) as conflict:
+                MailingListSourceService(repository).create(changed)
+            self.assertEqual(conflict.exception.code, "source_conflict")
+            duplicate_list = json.loads(json.dumps(source))
+            duplicate_list["source_id"] = "other-nvme-lore"
+            with self.assertRaises(MailingListError):
+                MailingListSourceService(repository).create(duplicate_list)
+            self.assertNotIn(
+                "other-nvme-lore",
+                [item["source_id"] for item in repository.artifacts.sources()],
+            )
+
+            with urllib.request.urlopen(base + "/streams?source_id=nvme-lore") as response:
+                streams_page = response.read().decode()
+            self.assertIn("Repository-global external source", streams_page)
+            self.assertIn("Create or inspect governed sources", streams_page)
+            self.assertIn("requestedSource", streams_page)
         finally:
             server.shutdown()
             server.server_close()

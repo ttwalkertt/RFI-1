@@ -27,7 +27,7 @@ from rfi.mailing_lists import (
     MailingListError,
     MailingListQueryService,
     MailingListRepository,
-    MailingListSource,
+    MailingListSourceService,
     SelectionCriteria,
 )
 from rfi.pull import PullError, PullRequest, PullStatus, create_pull_workflow
@@ -407,10 +407,11 @@ def mailing_list_operation(arguments: argparse.Namespace) -> None:
     """Run one bounded mailing-list operator action through public contracts."""
     _open_state(arguments.state)
     repository = MailingListRepository(arguments.state)
+    source_service = MailingListSourceService(repository)
     action = arguments.mailing_action
     if action == "configure-linux-block":
-        created = repository.configure_source(LINUX_BLOCK_SOURCE)
-        print(json.dumps({"source": asdict(LINUX_BLOCK_SOURCE), "created": created}, indent=2))
+        configured, created = source_service.create(asdict(LINUX_BLOCK_SOURCE))
+        print(json.dumps({"source": asdict(configured), "created": created}, indent=2))
         return
     if action == "configure-lore-source":
         policy = LoreTransportPolicy(
@@ -423,14 +424,14 @@ def mailing_list_operation(arguments: argparse.Namespace) -> None:
             arguments.backoff_initial,
             arguments.backoff_maximum,
         )
-        configured = MailingListSource(
-            arguments.source,
-            arguments.list_id,
-            arguments.display_name,
-            arguments.archive_base_url,
-            transport=policy,
-        )
-        created = repository.configure_source(configured)
+        configured, created = source_service.create({
+            "source_id": arguments.source,
+            "list_id": arguments.list_id,
+            "display_name": arguments.display_name,
+            "archive_base_url": arguments.archive_base_url,
+            "provider": "lore-public-inbox",
+            "transport": asdict(policy),
+        })
         print(json.dumps({"source": asdict(configured), "created": created}, indent=2))
         return
     query = MailingListQueryService(repository)

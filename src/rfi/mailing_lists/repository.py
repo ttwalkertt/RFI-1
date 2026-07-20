@@ -15,7 +15,7 @@ from rfi.acquisition import (
     RetrievalResult,
     SourceProfile,
 )
-from rfi.acquisition.contracts import ConflictError, IntegrityError
+from rfi.acquisition.contracts import ConflictError, ContractError, IntegrityError
 from rfi.mailing_lists.contracts import (
     AcquisitionRunStatus,
     AcquisitionManifest,
@@ -61,6 +61,16 @@ class MailingListRepository:
         """Register one immutable source in the shared governed-source authority."""
         if not source.archive_base_url.startswith("https://"):
             raise MailingListError("invalid_source", "archive URL must use HTTPS")
+        with self._database.connect(read_only=True) as connection:
+            list_owner = connection.execute(
+                "SELECT source_id FROM mailing_list_sources WHERE list_id = ?",
+                (source.list_id,),
+            ).fetchone()
+        if list_owner is not None and str(list_owner[0]) != source.source_id:
+            raise MailingListError(
+                "source_conflict",
+                f"archive/list identity is already governed by source: {list_owner[0]}",
+            )
         profile = SourceProfile(
             source.source_id,
             source.display_name,
@@ -75,7 +85,12 @@ class MailingListRepository:
                 "transport": asdict(source.transport),
             },
         )
-        self._artifacts.register_source(profile)
+        try:
+            self._artifacts.register_source(profile)
+        except ConflictError as error:
+            raise MailingListError("source_conflict", str(error)) from error
+        except (ContractError, IntegrityError) as error:
+            raise MailingListError("invalid_source", str(error)) from error
         payload = canonical_json(asdict(source))
         try:
             with self._database.transaction() as connection:
