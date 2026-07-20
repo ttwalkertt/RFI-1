@@ -22,10 +22,12 @@ from rfi.mailing_lists import (
     AcquisitionLimits,
     LINUX_BLOCK_SOURCE,
     LoreArchive,
+    LoreTransportPolicy,
     MailingListAcquisitionService,
     MailingListError,
     MailingListQueryService,
     MailingListRepository,
+    MailingListSource,
     SelectionCriteria,
 )
 from rfi.pull import PullError, PullRequest, PullStatus, create_pull_workflow
@@ -41,6 +43,7 @@ from rfi.storage import (
     create_backup,
     restore_backup,
 )
+from rfi.streams import StreamError, StreamRepository, StreamService, draft_from_dict
 
 DEFAULT_STATE = Path(".artifacts/runtime/rfi-1")
 
@@ -182,7 +185,39 @@ def parser() -> argparse.ArgumentParser:
     )
     _add_state(mailing)
     mailing_actions = mailing.add_subparsers(dest="mailing_action", required=True)
-    mailing_actions.add_parser("configure-linux-block", help="register the governed Lore source")
+    mailing_actions.add_parser("configure-linux-block", help="register the default governed source")
+    configure_lore = mailing_actions.add_parser(
+        "configure-lore-source", help="register one governed Lore source and transport policy"
+    )
+    configure_lore.add_argument("--source", required=True)
+    configure_lore.add_argument("--list-id", required=True)
+    configure_lore.add_argument("--display-name", required=True)
+    configure_lore.add_argument("--archive-base-url", required=True)
+    configure_lore.add_argument("--user-agent", default=LoreTransportPolicy.user_agent)
+    configure_lore.add_argument(
+        "--minimum-request-interval", type=float,
+        default=LoreTransportPolicy.minimum_request_interval_seconds,
+    )
+    configure_lore.add_argument(
+        "--maximum-concurrency", type=int, default=LoreTransportPolicy.maximum_concurrency
+    )
+    configure_lore.add_argument(
+        "--timeout", type=float, default=LoreTransportPolicy.timeout_seconds
+    )
+    configure_lore.add_argument(
+        "--maximum-response-bytes", type=int,
+        default=LoreTransportPolicy.maximum_response_bytes,
+    )
+    configure_lore.add_argument(
+        "--maximum-attempts", type=int,
+        default=LoreTransportPolicy.maximum_attempts_per_request,
+    )
+    configure_lore.add_argument(
+        "--backoff-initial", type=float, default=LoreTransportPolicy.backoff_initial_seconds
+    )
+    configure_lore.add_argument(
+        "--backoff-maximum", type=float, default=LoreTransportPolicy.backoff_maximum_seconds
+    )
     for name in ("preview", "acquire"):
         action = mailing_actions.add_parser(name, help=f"{name} a bounded live Lore acquisition")
         action.add_argument("--source", default=LINUX_BLOCK_SOURCE.source_id)
@@ -208,6 +243,31 @@ def parser() -> argparse.ArgumentParser:
     search.add_argument("--limit", type=int, default=50)
     mailing_actions.add_parser("incomplete", help="list incomplete or quarantined material")
     mailing_actions.add_parser("rebuild", help="rebuild discussion indexes without network access")
+    streams = commands.add_parser(
+        "stream",
+        help="configure, validate, execute, inspect, and rebuild artifact streams",
+        description="Operate revisioned bounded artifact streams through shared service contracts.",
+    )
+    _add_state(streams)
+    stream_actions = streams.add_subparsers(dest="stream_action", required=True)
+    stream_actions.add_parser("list", help="list current stream definitions and status")
+    stream_actions.add_parser("capabilities", help="list registered schema fields and expansions")
+    for name in ("validate", "preview", "save"):
+        action = stream_actions.add_parser(name, help=f"{name} a JSON stream definition")
+        action.add_argument("--file", type=_state, required=True, metavar="JSON")
+        if name == "save":
+            action.add_argument("--expected-revision")
+        if name == "preview":
+            action.add_argument("--limit", type=int, default=25)
+    for name in ("run", "run-chain", "memberships"):
+        action = stream_actions.add_parser(name, help=f"{name} for one saved stream")
+        action.add_argument("stream_id")
+        if name == "memberships":
+            action.add_argument("--run-id")
+            action.add_argument("--limit", type=int, default=100)
+    inspect = stream_actions.add_parser("inspect-run", help="inspect one durable stream run")
+    inspect.add_argument("run_id")
+    stream_actions.add_parser("rebuild", help="rebuild memberships and lineage without network")
     return value
 
 
@@ -325,6 +385,27 @@ def mailing_list_operation(arguments: argparse.Namespace) -> None:
         created = repository.configure_source(LINUX_BLOCK_SOURCE)
         print(json.dumps({"source": asdict(LINUX_BLOCK_SOURCE), "created": created}, indent=2))
         return
+    if action == "configure-lore-source":
+        policy = LoreTransportPolicy(
+            arguments.user_agent,
+            arguments.minimum_request_interval,
+            arguments.maximum_concurrency,
+            arguments.timeout,
+            arguments.maximum_response_bytes,
+            arguments.maximum_attempts,
+            arguments.backoff_initial,
+            arguments.backoff_maximum,
+        )
+        configured = MailingListSource(
+            arguments.source,
+            arguments.list_id,
+            arguments.display_name,
+            arguments.archive_base_url,
+            transport=policy,
+        )
+        created = repository.configure_source(configured)
+        print(json.dumps({"source": asdict(configured), "created": created}, indent=2))
+        return
     query = MailingListQueryService(repository)
     if action == "sources":
         print(json.dumps({"items": query.sources()}, indent=2))
@@ -343,8 +424,8 @@ def mailing_list_operation(arguments: argparse.Namespace) -> None:
         return
     acquisition = MailingListAcquisitionService(
         repository,
-        LoreArchive(repository.source(arguments.source).archive_base_url)
-        if action in {"preview", "acquire"} else LoreArchive(LINUX_BLOCK_SOURCE.archive_base_url),
+        LoreArchive(repository.source(arguments.source))
+        if action in {"preview", "acquire"} else LoreArchive(LINUX_BLOCK_SOURCE),
     )
     if action == "rebuild":
         print(json.dumps(acquisition.rebuild(), indent=2))
@@ -362,6 +443,44 @@ def mailing_list_operation(arguments: argparse.Namespace) -> None:
         else acquisition.acquire(arguments.source, criteria, limits)
     )
     print(json.dumps(asdict(result), indent=2, sort_keys=True, default=str))
+
+
+def stream_operation(arguments: argparse.Namespace) -> None:
+    """Run one stream operation through the same service used by the admin page."""
+    _open_state(arguments.state)
+    service = StreamService(StreamRepository(arguments.state))
+    action = arguments.stream_action
+    if action == "list":
+        value: object = {"items": [asdict(item) for item in service.list_streams()]}
+    elif action == "capabilities":
+        value = {"items": [asdict(item) for item in service.capabilities()]}
+    elif action in {"validate", "preview", "save"}:
+        try:
+            raw = json.loads(arguments.file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ApplicationError("stream definition must be a readable JSON object") from error
+        if not isinstance(raw, dict):
+            raise ApplicationError("stream definition JSON must be an object")
+        draft = draft_from_dict(raw)
+        if action == "validate":
+            value = asdict(service.validate(draft))
+        elif action == "preview":
+            value = asdict(service.preview(draft, arguments.limit))
+        else:
+            value = asdict(service.save(draft, arguments.expected_revision))
+    elif action == "run":
+        value = asdict(service.run(arguments.stream_id))
+    elif action == "run-chain":
+        value = {"items": [asdict(item) for item in service.run_chain(arguments.stream_id)]}
+    elif action == "memberships":
+        value = {"items": [asdict(item) for item in service.repository.memberships(
+            arguments.stream_id, arguments.run_id, arguments.limit
+        )]}
+    elif action == "inspect-run":
+        value = asdict(service.repository.run(arguments.run_id))
+    else:
+        value = service.rebuild()
+    print(json.dumps(value, indent=2, sort_keys=True, default=str))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -392,6 +511,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(restore_backup(arguments.input, arguments.state), indent=2))
         elif arguments.command == "mailing-list":
             mailing_list_operation(arguments)
+        elif arguments.command == "stream":
+            stream_operation(arguments)
         else:
             verify_state(arguments.state)
     except (
@@ -402,6 +523,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         SourceProfileError,
         PullError,
         MailingListError,
+        StreamError,
         StorageError,
         OSError,
     ) as error:

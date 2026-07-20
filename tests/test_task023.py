@@ -301,8 +301,12 @@ class MailingListCase(unittest.TestCase):
             server.server_close()
             thread.join(timeout=2)
 
-    def test_schema_v1_migrates_to_v2_without_parallel_authority(self) -> None:
+    def test_schema_v1_migrates_to_current_without_parallel_authority(self) -> None:
         tables = [
+            "artifact_stream_membership_lineage", "artifact_stream_memberships",
+            "artifact_stream_run_plans", "artifact_stream_runs",
+            "artifact_stream_projections", "artifact_stream_dependencies",
+            "artifact_stream_revisions", "artifact_streams",
             "mailing_list_discussion_members", "mailing_list_discussions",
             "mailing_list_relationships", "mailing_list_messages",
             "mailing_list_run_items", "mailing_list_runs", "mailing_list_sources",
@@ -313,7 +317,7 @@ class MailingListCase(unittest.TestCase):
                 connection.execute(f"DROP TABLE {table}")
             connection.execute("UPDATE schema_metadata SET schema_version=1")
         database = RepositoryDatabase.open(self.state)
-        self.assertEqual(database.validate()["schema_version"], 2)
+        self.assertEqual(database.validate()["schema_version"], 4)
         with database.connect(read_only=True) as connection:
             names = {row[0] for row in connection.execute(
                 "SELECT name FROM sqlite_schema WHERE type='table'"

@@ -284,6 +284,32 @@ The artifact browser is one repository browser with sibling firm-artifact and de
 list projections. Both consume repository-owned query and exact-content contracts. SQLite remains
 the sole structured authority; no graph persistence or browser-owned threading exists.
 
+## Revisioned artifact streams
+
+Streams are governed materialized repository projections over external-source artifacts or other
+streams. Stable identities retain immutable configuration revisions; dependency edges form a
+validated DAG; explicit bounded runs publish membership and lineage transactionally. An artifact
+may belong to many streams, but all memberships reference the same immutable content identity.
+
+Generic selection evaluates bounded typed Boolean policies over schema-registered projections.
+The finite schema registry owns capability declarations, projection providers, and context
+expansion handlers. Schema adapters retain native typing. The mailing-list adapter reuses
+authoritative connected discussions, while SEC filings use no expansion. Successful execution
+plans make memberships and lineage reproducible offline. Admin, CLI, REST, and browser consumers
+share repository/service contracts; none owns policy or topology state.
+
+Governed external-source profiles are the authority for provider identity, protocol endpoint, and
+transport policy. Stream revisions reference a source and own selection, expansion, dependencies,
+and output bounds only. Any future acquisition cursor also belongs to the governed source and
+acquisition boundary. Acquisition/evidence storage exclusively owns artifact lifetime; stream
+memberships, lineage, and derived counts never trigger artifact deletion. Stream publication is
+atomic and preserves the last successful view until a replacement run fully commits.
+
+The bounded Lore adapter applies per-source pacing, source-wide in-process concurrency, time and
+response bounds, capped retry/backoff, `Retry-After`, and explicit 429/503 handling. Durable Lore
+cursors and production polling are deferred; the active stream contract exposes no inert
+incremental or initial-date controls.
+
 ---
 
 An RFI implementation should strive for:

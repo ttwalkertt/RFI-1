@@ -4,12 +4,15 @@ from rfi.mailing_lists.contracts import (
     AcquisitionLimits,
     AcquisitionManifest,
     AcquisitionPreview,
+    AcquisitionRunStatus,
+    ArchiveMessage,
     ConnectivityState,
     DiscussionProjection,
     DiscussionSummary,
     InclusionReason,
     MailingListError,
     MailingListSource,
+    LoreTransportPolicy,
     MessageDetail,
     MessageSummary,
     SelectionCriteria,
@@ -24,9 +27,11 @@ LINUX_BLOCK_SOURCE = MailingListSource(
 )
 
 __all__ = [
-    "AcquisitionLimits", "AcquisitionManifest", "AcquisitionPreview", "ConnectivityState",
+    "AcquisitionLimits", "AcquisitionManifest", "AcquisitionPreview", "AcquisitionRunStatus",
+    "ArchiveMessage", "ConnectivityState",
     "DiscussionProjection", "DiscussionSummary", "FixtureMailingListArchive", "InclusionReason",
     "LINUX_BLOCK_SOURCE", "LoreArchive", "MailingListAcquisitionService", "MailingListError",
-    "MailingListQueryService", "MailingListRepository", "MailingListSource", "MessageDetail",
+    "LoreTransportPolicy", "MailingListQueryService", "MailingListRepository",
+    "MailingListSource", "MessageDetail",
     "MessageSummary", "SelectionCriteria",
 ]

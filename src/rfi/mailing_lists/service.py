@@ -15,6 +15,7 @@ from rfi.mailing_lists.contracts import (
     AcquisitionLimits,
     AcquisitionManifest,
     AcquisitionPreview,
+    AcquisitionRunStatus,
     ConnectivityState,
     DiscussionProjection,
     DiscussionSummary,
@@ -89,7 +90,8 @@ def derive_projection(
             else max(requested_states, key=_state_rank)
         )
         classifications[key] = (state, root, depth)
-        groups.setdefault(root, []).append((key, depth))
+        if state in {ConnectivityState.CONNECTED.value, ConnectivityState.TRUNCATED.value}:
+            groups.setdefault(root, []).append((key, depth))
 
     messages: list[dict[str, Any]] = []
     for key, record in sorted(combined.items()):
@@ -175,10 +177,18 @@ class MailingListAcquisitionService:
     def acquire(
         self, source_id: str, criteria: SelectionCriteria, limits: AcquisitionLimits
     ) -> AcquisitionManifest:
-        plan = self._plan(source_id, criteria, limits)
+        # Configuration errors are not acquisition attempts and cannot satisfy the
+        # run table's governed-source foreign key.
         source = self.repository.source(source_id)
         run_id = self.identifiers()
         requested_at = self.clock()
+        try:
+            plan = self._plan(source_id, criteria, limits)
+        except MailingListError as error:
+            self.repository.record_failure(
+                run_id, source_id, requested_at, criteria, limits, error
+            )
+            raise
         retained: list[dict[str, Any]] = []
         created = 0
         idempotent = 0
@@ -206,6 +216,9 @@ class MailingListAcquisitionService:
             len([item for item in discussions if item["source_id"] == source_id]),
             dict(Counter(item["inclusion_reason"] for item in retained)),
             plan["state"], plan["truncated"], tuple(plan["warnings"]), created, idempotent,
+            AcquisitionRunStatus.PARTIAL if plan["failures"] else AcquisitionRunStatus.SUCCEEDED,
+            plan["failures"][0].code if plan["failures"] else None,
+            any(error.retryable for error in plan["failures"]),
         )
         self.repository.publish(manifest, retained, messages, discussions)
         return manifest
@@ -228,6 +241,7 @@ class MailingListAcquisitionService:
             raise MailingListError("no_seed_matches", "bounded selection found no messages")
         items: dict[str, dict[str, Any]] = {}
         warnings: list[str] = []
+        failures: list[MailingListError] = []
         incomplete = False
         quarantined = False
         context_fetches = 0
@@ -270,7 +284,8 @@ class MailingListAcquisitionService:
             try:
                 current = fetch(seed, seed_reason, True)
             except MailingListError as error:
-                quarantined = True
+                failures.append(error)
+                incomplete = True
                 warnings.append(f"seed rejected: {error.code}")
                 continue
             seen: set[str] = set()
@@ -292,7 +307,8 @@ class MailingListAcquisitionService:
                     break
                 try:
                     current = fetch(parent, InclusionReason.ANCESTOR)
-                except MailingListError:
+                except MailingListError as error:
+                    failures.append(error)
                     incomplete = True
                     warnings.append(f"required ancestor unavailable: {parent}")
                     break
@@ -324,8 +340,18 @@ class MailingListAcquisitionService:
                     if stored:
                         frontier.append((stored, depth + 1))
                 except MailingListError as error:
+                    failures.append(error)
                     warnings.append(f"descendant unavailable: {error.code}")
-                    descendant_truncated = True
+                    incomplete = True
+
+        if not items and failures:
+            retryable = any(error.retryable for error in failures)
+            first = next((error for error in failures if error.retryable), failures[0])
+            raise MailingListError(
+                first.code,
+                "bounded mailing-list acquisition obtained no usable messages",
+                retryable=retryable,
+            ) from first
 
         provisional = []
         default_state = (
@@ -356,7 +382,7 @@ class MailingListAcquisitionService:
         return {
             "seeds": tuple(seeds), "items": items, "warnings": sorted(set(warnings)),
             "state": state, "truncated": descendant_truncated,
-            "item_states": item_states,
+            "item_states": item_states, "failures": tuple(failures),
         }
 
 

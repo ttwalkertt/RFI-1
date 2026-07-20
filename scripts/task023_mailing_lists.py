@@ -112,7 +112,7 @@ def live_proof(state: Path, message_ids: tuple[str, ...]) -> dict[str, object]:
     repository = MailingListRepository(state)
     repository.configure_source(LINUX_BLOCK_SOURCE)
     service = MailingListAcquisitionService(
-        repository, LoreArchive(LINUX_BLOCK_SOURCE.archive_base_url)
+        repository, LoreArchive(LINUX_BLOCK_SOURCE)
     )
     criteria = SelectionCriteria(message_ids=message_ids)
     limits = AcquisitionLimits(seed_limit=2, context_limit=20, descendant_depth=0)
