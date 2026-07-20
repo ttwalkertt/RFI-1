@@ -387,14 +387,15 @@ class StreamCase(unittest.TestCase):
         expected = (
             ("/concepts", "Concept Catalog"),
             ("/firms", "Target Firms"),
-            ("/source-profiles", "Source Profiles"),
+            ("/source-profiles", "Firm Profiles"),
+            ("/external-sources", "External Sources"),
             ("/pull-sources", "Pull Sources"),
             ("/streams", "Streams"),
             ("/artifacts", "Artifacts"),
         )
         admin_assets = ROOT / "src/rfi/admin"
         for filename in (
-            "console.html", "firms.html", "source_profiles.html",
+            "console.html", "firms.html", "source_profiles.html", "external_sources.html",
             "pull_sources.html", "streams.html", "artifact_browser.html",
         ):
             template = (admin_assets / filename).read_text(encoding="utf-8")

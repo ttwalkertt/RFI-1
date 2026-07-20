@@ -22,12 +22,101 @@ from rfi.mailing_lists.contracts import (
     InclusionReason,
     MailingListArchive,
     MailingListError,
+    MailingListSource,
+    LoreTransportPolicy,
     MessageDetail,
     MessageSummary,
     SelectionCriteria,
 )
 from rfi.mailing_lists.parser import normalize_message_id, parse_message
 from rfi.mailing_lists.repository import MailingListRepository, message_key
+
+
+class MailingListSourceService:
+    """Shared validation and creation boundary for repository-global Lore sources."""
+
+    _SOURCE_FIELDS = {
+        "source_id", "display_name", "provider", "list_id", "archive_base_url", "transport"
+    }
+    _TRANSPORT_FIELDS = {
+        "user_agent", "minimum_request_interval_seconds", "maximum_concurrency",
+        "timeout_seconds", "maximum_response_bytes", "maximum_attempts_per_request",
+        "backoff_initial_seconds", "backoff_maximum_seconds",
+    }
+
+    def __init__(self, repository: MailingListRepository) -> None:
+        self.repository = repository
+
+    def validate(self, value: Any) -> MailingListSource:
+        if not isinstance(value, dict):
+            raise MailingListError("invalid_source", "source profile must be an object")
+        unknown = sorted(set(value) - self._SOURCE_FIELDS)
+        if unknown:
+            raise MailingListError(
+                "invalid_source", f"unknown source-profile field: {unknown[0]}"
+            )
+        transport_value = value.get("transport", {})
+        if not isinstance(transport_value, dict):
+            raise MailingListError("invalid_source", "transport must be an object")
+        unknown_transport = sorted(set(transport_value) - self._TRANSPORT_FIELDS)
+        if unknown_transport:
+            raise MailingListError(
+                "invalid_source", f"unknown transport field: {unknown_transport[0]}"
+            )
+        defaults = asdict(LoreTransportPolicy())
+        defaults.update(transport_value)
+        provider = self._text(value, "provider")
+        if provider != "lore-public-inbox":
+            raise MailingListError(
+                "invalid_source", "provider must be lore-public-inbox"
+            )
+        try:
+            transport = LoreTransportPolicy(**defaults)
+        except (TypeError, ValueError) as error:
+            raise MailingListError(
+                "invalid_source", "transport policy values have invalid types"
+            ) from error
+        source = MailingListSource(
+            self._text(value, "source_id"),
+            self._text(value, "list_id"),
+            self._text(value, "display_name"),
+            self._text(value, "archive_base_url"),
+            provider,
+            transport,
+        )
+        # Exercise the authoritative governed-source contract without persisting it.
+        from rfi.acquisition import SourceProfile
+
+        try:
+            SourceProfile(
+                source.source_id,
+                source.display_name,
+                True,
+                source.provider,
+                {"archive_base_url": source.archive_base_url, "list_id": source.list_id},
+                {
+                    "repository_projection": "mailing-list",
+                    "transport": asdict(source.transport),
+                },
+            )
+        except ValueError as error:
+            raise MailingListError("invalid_source", str(error)) from error
+        if not source.list_id.strip():
+            raise MailingListError("invalid_source", "archive/list identity must not be blank")
+        if not source.archive_base_url.startswith("https://"):
+            raise MailingListError("invalid_source", "archive URL must use HTTPS")
+        return source
+
+    def create(self, value: Any) -> tuple[MailingListSource, bool]:
+        source = self.validate(value)
+        return source, self.repository.configure_source(source)
+
+    @staticmethod
+    def _text(value: dict[str, Any], field: str) -> str:
+        result = value.get(field)
+        if not isinstance(result, str) or not result.strip():
+            raise MailingListError("invalid_source", f"{field} must not be blank")
+        return result.strip()
 
 
 def _state_rank(value: str) -> int:

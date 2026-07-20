@@ -63,6 +63,11 @@ adapter coordinates request starts and concurrency across adapter instances for 
 honors valid `Retry-After` values, retries HTTP 429 and transient 5xx responses, and classifies
 other HTTP responses as terminal. Profiles may carry different policies.
 
+Lore/public-inbox profiles are repository-global objects, not firm-owned objects. Operators create,
+validate, inspect, and clone them at `/external-sources`; `/source-profiles` remains the separate
+firm-owned acquisition configuration surface. A saved Lore identity is immutable. Policy changes
+use a new stable source ID so existing acquisition and stream references retain their meaning.
+
 A stream revision stores only the governed source ID plus selection, expansion, dependencies, and
 output bounds. It evaluates retained projections and never performs provider I/O. There is no
 unbounded selection form or archive-mirror operation, and rebuild is network-free.

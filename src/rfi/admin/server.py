@@ -21,7 +21,12 @@ from rfi.artifacts import (
 )
 from rfi.concepts import ConceptError, ConceptRepository, ConceptService
 from rfi.firms import FirmError, FirmRepository, FirmService
-from rfi.mailing_lists import MailingListError, MailingListQueryService, MailingListRepository
+from rfi.mailing_lists import (
+    MailingListError,
+    MailingListQueryService,
+    MailingListRepository,
+    MailingListSourceService,
+)
 from rfi.pull import PullError, PullRequest, PullWorkflow, create_pull_workflow
 from rfi.source_profiles import (
     SourceProfileError,
@@ -36,7 +41,8 @@ ADMIN_PREFERENCES_JS = (Path(__file__).parent / "admin_preferences.js").read_byt
 OPERATOR_NAVIGATION = (
     ("/concepts", "Concept Catalog"),
     ("/firms", "Target Firms"),
-    ("/source-profiles", "Source Profiles"),
+    ("/source-profiles", "Firm Profiles"),
+    ("/external-sources", "External Sources"),
     ("/pull-sources", "Pull Sources"),
     ("/streams", "Streams"),
     ("/artifacts", "Artifacts"),
@@ -260,6 +266,7 @@ if _CONSOLE_ASSET.exists():
     CONSOLE_HTML = _load_operator_page("console.html", "/concepts")
 FIRMS_HTML = _load_operator_page("firms.html", "/firms")
 SOURCE_PROFILES_HTML = _load_operator_page("source_profiles.html", "/source-profiles")
+EXTERNAL_SOURCES_HTML = _load_operator_page("external_sources.html", "/external-sources")
 PULL_SOURCES_HTML = _load_operator_page("pull_sources.html", "/pull-sources")
 ARTIFACT_BROWSER_HTML = _load_operator_page("artifact_browser.html", "/artifacts")
 STREAMS_HTML = _load_operator_page("streams.html", "/streams")
@@ -279,6 +286,7 @@ class AdminConsole(ThreadingHTTPServer):
         pull_workflow: PullWorkflow,
         artifact_query_service: ArtifactQueryService,
         mailing_list_query_service: MailingListQueryService,
+        mailing_list_source_service: MailingListSourceService,
         stream_service: StreamService,
     ) -> None:
         self.service = service
@@ -287,6 +295,7 @@ class AdminConsole(ThreadingHTTPServer):
         self.pull_workflow = pull_workflow
         self.artifact_query_service = artifact_query_service
         self.mailing_list_query_service = mailing_list_query_service
+        self.mailing_list_source_service = mailing_list_source_service
         self.stream_service = stream_service
         super().__init__(address, AdminHandler)
 
@@ -329,6 +338,13 @@ class AdminHandler(BaseHTTPRequestHandler):
                 self._send(
                     HTTPStatus.OK,
                     SOURCE_PROFILES_HTML.encode(),
+                    "text/html; charset=utf-8",
+                )
+                return
+            if method == "GET" and path == "/external-sources":
+                self._send(
+                    HTTPStatus.OK,
+                    EXTERNAL_SOURCES_HTML.encode(),
                     "text/html; charset=utf-8",
                 )
                 return
@@ -395,6 +411,8 @@ class AdminHandler(BaseHTTPRequestHandler):
                 status = (
                     HTTPStatus.NOT_FOUND
                     if error.code.startswith("unknown_")
+                    else HTTPStatus.CONFLICT
+                    if error.code == "source_conflict"
                     else HTTPStatus.BAD_REQUEST
                 )
                 self._error(status, str(error), error.code)
@@ -420,7 +438,26 @@ class AdminHandler(BaseHTTPRequestHandler):
         pull_workflow = self.server.pull_workflow
         artifacts = self.server.artifact_query_service
         mailing_lists = self.server.mailing_list_query_service
+        mailing_list_sources = self.server.mailing_list_source_service
         streams = self.server.stream_service
+        if method == "POST" and parts == ["api", "external-sources", "validate"]:
+            source = mailing_list_sources.validate(self._body())
+            self._send_json(
+                HTTPStatus.OK, {"valid": True, "source": asdict(source), "scope": "repository"}
+            )
+            return
+        if method == "POST" and parts == ["api", "external-sources"]:
+            source, created = mailing_list_sources.create(self._body())
+            self._send_json(
+                HTTPStatus.CREATED if created else HTTPStatus.OK,
+                {
+                    "created": created,
+                    "source": asdict(source),
+                    "scope": "repository",
+                    "mutability": "immutable_identity",
+                },
+            )
+            return
         if method == "GET" and parts == ["api", "external-sources"]:
             self._send_json(HTTPStatus.OK, {"items": list(streams.external_sources())})
             return
@@ -980,6 +1017,7 @@ def create_admin_server(
     source_profile_repository = SourceProfileRepository.open(source_profile_state, template)
     acquisition_repository = AcquisitionRepository(state / "acquisition")
     firm_service = FirmService(firm_repository)
+    mailing_list_repository = MailingListRepository(state)
     return AdminConsole(
         (host, port),
         ConceptService(repository),
@@ -987,6 +1025,7 @@ def create_admin_server(
         SourceProfileService(source_profile_repository, firm_repository, template),
         create_pull_workflow(state),
         ArtifactQueryService(acquisition_repository, firm_repository, template),
-        MailingListQueryService(MailingListRepository(state)),
+        MailingListQueryService(mailing_list_repository),
+        MailingListSourceService(mailing_list_repository),
         StreamService(StreamRepository(state)),
     )
