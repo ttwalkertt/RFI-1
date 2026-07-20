@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 5877,
+      "destination_size": 5950,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "cbdbbef80174e5446f5467610684088433faac6c1d60f5294a9442d025b08223",
-      "content_change": "task roadmap reconciled through completed TASK-025 artifact streams"
+      "destination_sha256": "f128d7f9f715463f385a7b09614cc95c646ef9e05c42fd1a6da13ce625cc4acc",
+      "content_change": "task roadmap reconciled through completed TASK-026 stream YAML workflow"
     },
     {
       "source": "ROADMAP.md",

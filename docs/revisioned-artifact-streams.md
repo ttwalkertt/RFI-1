@@ -10,7 +10,8 @@ it references an existing artifact and document identity.
 - `StreamRepository` owns generic SQLite definitions, revisions, dependency edges, typed artifact
   projections, execution runs, durable publication plans, memberships, and lineage.
 - `StreamService` owns generic bounded Boolean evaluation, DAG validation, deterministic ordering,
-  execution, and idempotency. It dispatches schema work through a finite registry.
+  canonical definition normalization, YAML review/import/export, semantic comparison, execution,
+  and idempotency. It dispatches schema work through a finite registry.
 - Registered schema contracts declare capabilities, projection providers, and context-expansion
   handlers. The first registrations are `mail.message` and `sec.filing`.
 - The admin page, CLI, REST adapter, and artifact browser consume the same service/repository
@@ -102,14 +103,20 @@ artifact hashes.
 
 ## Operator workflow
 
-The `/streams` page lists streams and renders schema fields, attributes, operators, and expansion
-options from capability contracts. Operators can compose typed groups, configure external or
-derived inputs, validate, preview a bounded evaluation, explicitly save a revision, run one saved
-stream, run its dependency chain, inspect topology, and inspect revision history.
+The `/streams` page follows Identity → Input → Selection → Context and limits → Review and save.
+Common keywords, authors, title, source, and effective-date filters are capability-aware. Nested
+Boolean groups, negation, and registered attributes remain available under Advanced policy.
+External-source choices and upstream choices lead with display names and operational summaries;
+stable IDs remain visible secondary context.
 
-The `rfi stream` CLI provides list, capabilities, validate, preview, save, run, run-chain,
-inspect-run, memberships, and rebuild operations. JSON configuration is a data contract, not an
-executable rules language.
+Draft validation, bounded preview, YAML review, and YAML export are separate from saving. A new,
+imported, or modified draft cannot run. An explicit save creates a new stream or immutable
+revision; only the latest valid saved revision can run. `rfi stream schema`, `validate`, `import`,
+and `export` invoke the same service as the browser. Legacy JSON preview/save commands remain for
+TASK-025 compatibility, but canonical authoring and interchange use YAML version 1.
+
+The complete format, commands, revision behavior, examples, and troubleshooting guide are in
+[`stream-configuration-and-yaml.md`](stream-configuration-and-yaml.md).
 
 The existing artifact browser adds an Artifact streams projection. It exposes upstream and
 consumer topology, durable runs, current memberships, direct/context reason, registered

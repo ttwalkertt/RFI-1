@@ -9,9 +9,10 @@ from typing import Any, Protocol
 class StreamError(RuntimeError):
     """Actionable stream configuration, execution, or query failure."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, path: str | None = None) -> None:
         super().__init__(message)
         self.code = code
+        self.path = path
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,7 @@ class StreamDraft:
     selection: dict[str, Any]
     expansion: dict[str, Any]
     bounds: dict[str, int]
+    metadata: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -169,3 +171,27 @@ class ValidationResult:
     valid: bool
     errors: tuple[dict[str, str], ...]
     topological_order: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class StreamDefinitionReview:
+    """A normalized, non-persistent definition review shared by browser and CLI."""
+
+    valid: bool
+    errors: tuple[dict[str, str], ...]
+    warnings: tuple[dict[str, str], ...]
+    draft: StreamDraft | None
+    canonical_yaml: str | None
+    semantic_fingerprint: str | None
+    differences: tuple[dict[str, Any], ...]
+    existing_revision_id: str | None
+    import_mode: str
+
+
+@dataclass(frozen=True)
+class StreamImportResult:
+    """Revision-safe outcome of one explicit YAML import."""
+
+    outcome: str
+    revision: StreamRevision
+    semantic_fingerprint: str

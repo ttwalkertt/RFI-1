@@ -43,7 +43,7 @@ from rfi.storage import (
     create_backup,
     restore_backup,
 )
-from rfi.streams import StreamError, StreamRepository, StreamService, draft_from_dict
+from rfi.streams import StreamError, StreamRepository, StreamService, draft_from_dict, template_yaml
 
 DEFAULT_STATE = Path(".artifacts/runtime/rfi-1")
 
@@ -252,12 +252,39 @@ def parser() -> argparse.ArgumentParser:
     stream_actions = streams.add_subparsers(dest="stream_action", required=True)
     stream_actions.add_parser("list", help="list current stream definitions and status")
     stream_actions.add_parser("capabilities", help="list registered schema fields and expansions")
-    for name in ("validate", "preview", "save"):
-        action = stream_actions.add_parser(name, help=f"{name} a JSON stream definition")
+    stream_actions.add_parser(
+        "schema", help="print the canonical versioned stream YAML schema/template"
+    )
+    validate = stream_actions.add_parser(
+        "validate", help="validate and normalize a canonical stream YAML file without saving"
+    )
+    validate.add_argument("--file", type=_state, required=True, metavar="YAML")
+    import_action = stream_actions.add_parser(
+        "import", help="explicitly import canonical YAML as a new stream or new revision"
+    )
+    import_action.add_argument("--file", type=_state, required=True, metavar="YAML")
+    import_mode = import_action.add_mutually_exclusive_group(required=True)
+    import_mode.add_argument("--new", action="store_true", help="create a new stable identity")
+    import_mode.add_argument(
+        "--revision", action="store_true", help="create a revision of an existing identity"
+    )
+    import_action.add_argument(
+        "--expected-revision", help="optional optimistic current revision identity"
+    )
+    export = stream_actions.add_parser(
+        "export", help="export a saved stream revision as deterministic canonical YAML"
+    )
+    export.add_argument("--stream", dest="stream_id", required=True, metavar="STREAM_ID")
+    export.add_argument("--revision-id")
+    export.add_argument("--output", type=_state, metavar="YAML")
+    for name in ("preview", "save"):
+        action = stream_actions.add_parser(
+            name, help=f"{name} a legacy JSON stream draft through the shared contract"
+        )
         action.add_argument("--file", type=_state, required=True, metavar="JSON")
         if name == "save":
             action.add_argument("--expected-revision")
-        if name == "preview":
+        else:
             action.add_argument("--limit", type=int, default=25)
     for name in ("run", "run-chain", "memberships"):
         action = stream_actions.add_parser(name, help=f"{name} for one saved stream")
@@ -447,6 +474,9 @@ def mailing_list_operation(arguments: argparse.Namespace) -> None:
 
 def stream_operation(arguments: argparse.Namespace) -> None:
     """Run one stream operation through the same service used by the admin page."""
+    if arguments.stream_action == "schema":
+        print(template_yaml(), end="")
+        return
     _open_state(arguments.state)
     service = StreamService(StreamRepository(arguments.state))
     action = arguments.stream_action
@@ -454,7 +484,31 @@ def stream_operation(arguments: argparse.Namespace) -> None:
         value: object = {"items": [asdict(item) for item in service.list_streams()]}
     elif action == "capabilities":
         value = {"items": [asdict(item) for item in service.capabilities()]}
-    elif action in {"validate", "preview", "save"}:
+    elif action == "validate":
+        try:
+            text = arguments.file.read_text(encoding="utf-8")
+        except OSError as error:
+            raise ApplicationError(f"cannot read stream YAML: {arguments.file}") from error
+        review = service.review_yaml(text)
+        if not review.valid:
+            first = review.errors[0]
+            raise StreamError(first["code"], first["message"], first.get("path"))
+        value = asdict(review)
+    elif action == "import":
+        try:
+            text = arguments.file.read_text(encoding="utf-8")
+        except OSError as error:
+            raise ApplicationError(f"cannot read stream YAML: {arguments.file}") from error
+        mode = "new" if arguments.new else "revision"
+        value = asdict(service.import_yaml(text, mode, arguments.expected_revision))
+    elif action == "export":
+        rendered = service.export_yaml(arguments.stream_id, arguments.revision_id)
+        if arguments.output:
+            arguments.output.write_text(rendered, encoding="utf-8")
+        else:
+            print(rendered, end="")
+        return
+    elif action in {"preview", "save"}:
         try:
             raw = json.loads(arguments.file.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
@@ -462,9 +516,7 @@ def stream_operation(arguments: argparse.Namespace) -> None:
         if not isinstance(raw, dict):
             raise ApplicationError("stream definition JSON must be an object")
         draft = draft_from_dict(raw)
-        if action == "validate":
-            value = asdict(service.validate(draft))
-        elif action == "preview":
+        if action == "preview":
             value = asdict(service.preview(draft, arguments.limit))
         else:
             value = asdict(service.save(draft, arguments.expected_revision))

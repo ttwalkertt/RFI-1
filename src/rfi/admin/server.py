@@ -434,6 +434,40 @@ class AdminHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK, {"items": [asdict(item) for item in streams.capabilities()]}
             )
             return
+        if method == "GET" and parts == ["api", "streams", "schema"]:
+            self._send(
+                HTTPStatus.OK, streams.schema_template().encode(), "application/yaml; charset=utf-8"
+            )
+            return
+        if method == "POST" and parts == ["api", "streams", "yaml", "review"]:
+            body = self._body()
+            text = body.get("yaml")
+            if not isinstance(text, str):
+                raise StreamError("invalid_yaml", "$.yaml: YAML text is required", "$.yaml")
+            self._send_json(HTTPStatus.OK, asdict(streams.review_yaml(text)))
+            return
+        if method == "POST" and parts == ["api", "streams", "yaml", "import"]:
+            body = self._body()
+            text = body.get("yaml")
+            mode = body.get("mode")
+            expected = body.get("expected_revision_id")
+            if not isinstance(text, str) or mode not in {"new", "revision"} or (
+                expected is not None and not isinstance(expected, str)
+            ):
+                raise StreamError("invalid_import", "explicit YAML import mode is required")
+            self._send_json(
+                HTTPStatus.CREATED, asdict(streams.import_yaml(text, mode, expected))
+            )
+            return
+        if method == "POST" and parts == ["api", "streams", "yaml", "draft"]:
+            body = self._body()
+            draft = body.get("draft")
+            if not isinstance(draft, dict):
+                raise StreamError("invalid_draft", "stream draft is required")
+            self._send_json(
+                HTTPStatus.OK, {"yaml": streams.draft_yaml(draft_from_dict(draft))}
+            )
+            return
         if method == "POST" and parts == ["api", "streams", "validate"]:
             self._send_json(HTTPStatus.OK, asdict(streams.validate(draft_from_dict(self._body()))))
             return
@@ -465,6 +499,14 @@ class AdminHandler(BaseHTTPRequestHandler):
             return
         if len(parts) >= 3 and parts[:2] == ["api", "streams"]:
             stream_id = parts[2]
+            if method == "GET" and parts[3:] == ["export"]:
+                revision_id = self._first(query, "revision_id") or None
+                self._send(
+                    HTTPStatus.OK,
+                    streams.export_yaml(stream_id, revision_id).encode(),
+                    "application/yaml; charset=utf-8",
+                )
+                return
             if method == "GET" and len(parts) == 3:
                 revision_id = self._first(query, "revision_id") or None
                 self._send_json(HTTPStatus.OK, asdict(streams.detail(stream_id, revision_id)))
