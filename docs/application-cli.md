@@ -21,6 +21,11 @@ rfi mailing-list --state PATH configure-lore-source --source ID --list-id ID \
   --display-name NAME --archive-base-url HTTPS_URL [transport policy options]
 rfi mailing-list --state PATH preview|acquire --live --message-id MESSAGE_ID [limits]
 rfi mailing-list --state PATH sources|discussions|search|incomplete|rebuild
+rfi stream schema
+rfi stream --state PATH validate --file STREAM.yaml
+rfi stream --state PATH import --file STREAM.yaml (--new | --revision)
+rfi stream --state PATH export --stream STREAM_ID [--revision-id REVISION_ID]
+  [--output STREAM.yaml]
 ```
 
 `configure-lore-source` persists provider/list/endpoint identity and User-Agent, pacing,
@@ -55,6 +60,44 @@ Launch the integrated console:
 Open the displayed URL. The concept catalog is at `/` or `/concepts`, Target Firms is at `/firms`,
 and firm acquisition configuration is at `/source-profiles`. Press Ctrl-C to stop cleanly.
 The shared Pull Workflow is available at `/pull-sources`.
+
+## Canonical stream YAML
+
+Print a valid, commented version 1 definition template without opening application state:
+
+```sh
+rfi stream schema > stream-template.yaml
+```
+
+Validate and normalize a complete definition without saving or executing it:
+
+```sh
+rfi stream --state /path/to/state validate --file stream.yaml
+```
+
+Import requires an explicit revision intent. Use `--new` for a stable identity that does not yet
+exist and `--revision` for a changed definition of an existing identity:
+
+```sh
+rfi stream --state /path/to/state import --file stream.yaml --new
+rfi stream --state /path/to/state import --file revised-stream.yaml --revision
+```
+
+Existing history is never overwritten. Re-importing a semantically identical normalized
+definition returns `already_current` and creates no revision. Import never executes the stream,
+acquires evidence, changes a source profile, or writes artifact bytes.
+
+Export writes clean canonical YAML to stdout, so shell redirection is safe. `--output` writes the
+same bytes directly. Diagnostics use stderr and failures return exit status 2.
+
+```sh
+rfi stream --state /path/to/state export --stream linux-block-storage > stream.yaml
+rfi stream --state /path/to/state export --stream linux-block-storage \
+  --revision-id streamrev-... --output historical.yaml
+```
+
+See [Stream configuration and canonical YAML](stream-configuration-and-yaml.md) for the exact
+format, browser workflow, policy forms, examples, and troubleshooting.
 
 ## Pull Workflow
 

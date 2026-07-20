@@ -1,0 +1,37 @@
+schema_version: 1
+stream:
+  stream_id: linux-block-storage
+  display_name: Linux Block Storage
+  description: Linux block-layer discussions relevant to storage architecture
+  enabled: true
+  input:
+    kind: external_source
+    source_profile_id: linux-block-lore
+    artifact_schema: mail.message
+  selection:
+    all:
+    - any:
+      - field: searchable_text
+        operator: contains_any
+        values:
+        - blk-mq
+        - zoned
+        - zone append
+        - smr
+      - field: authors
+        operator: contains_any
+        values:
+        - Jens Axboe
+        - Damien Le Moal
+    - field: effective_timestamp
+      operator: on_or_after
+      value: '2026-01-01'
+  expansion:
+    strategy: connected_discussion
+    ancestor_closure: required
+    descendant_depth: 3
+  bounds:
+    direct_matches: 25
+    total_artifacts: 200
+  metadata:
+    notes: Canonical TASK-026 external-source example.

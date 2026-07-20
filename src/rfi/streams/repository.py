@@ -33,6 +33,7 @@ def _draft(value: dict[str, Any]) -> StreamDraft:
         selection=dict(value.get("selection", {})),
         expansion=dict(value.get("expansion", {"strategy": "none"})),
         bounds={str(key): int(item) for key, item in value.get("bounds", {}).items()},
+        metadata={str(key): str(item) for key, item in value.get("metadata", {}).items()},
     )
 
 

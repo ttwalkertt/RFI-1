@@ -9,13 +9,24 @@ from rfi.streams.contracts import (
     RegisteredArtifactSchema,
     SchemaCapability,
     StreamDraft,
+    StreamDefinitionReview,
     StreamError,
+    StreamImportResult,
     StreamMembership,
     StreamPreview,
     StreamRevision,
     StreamRun,
     StreamSummary,
     ValidationResult,
+)
+from rfi.streams.definition import (
+    SCHEMA_VERSION,
+    canonical_yaml,
+    normalize_draft,
+    parse_yaml,
+    semantic_diff,
+    semantic_fingerprint,
+    template_yaml,
 )
 from rfi.streams.registry import StreamSchemaRegistry, default_registry
 from rfi.streams.repository import StreamRepository
@@ -30,7 +41,9 @@ __all__ = [
     "RegisteredArtifactSchema",
     "SchemaCapability",
     "StreamDraft",
+    "StreamDefinitionReview",
     "StreamError",
+    "StreamImportResult",
     "StreamMembership",
     "StreamPreview",
     "StreamRepository",
@@ -40,6 +53,13 @@ __all__ = [
     "StreamSummary",
     "StreamSchemaRegistry",
     "ValidationResult",
+    "SCHEMA_VERSION",
+    "canonical_yaml",
     "draft_from_dict",
     "default_registry",
+    "normalize_draft",
+    "parse_yaml",
+    "semantic_diff",
+    "semantic_fingerprint",
+    "template_yaml",
 ]

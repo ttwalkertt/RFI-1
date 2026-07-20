@@ -152,6 +152,7 @@ def main() -> int:
         "storage/sqlite.py",
         "streams/__init__.py",
         "streams/contracts.py",
+        "streams/definition.py",
         "streams/registry.py",
         "streams/repository.py",
         "streams/service.py",

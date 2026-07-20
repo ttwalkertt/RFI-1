@@ -15,30 +15,60 @@ from rfi.streams.contracts import (
     ArtifactProjection,
     SchemaCapability,
     StreamDraft,
+    StreamDefinitionReview,
     StreamError,
+    StreamImportResult,
     StreamPreview,
     StreamRevision,
     StreamRun,
     StreamSummary,
     ValidationResult,
 )
+from rfi.streams.definition import (
+    canonical_yaml,
+    normalize_draft,
+    parse_yaml,
+    semantic_diff,
+    semantic_fingerprint,
+    template_yaml,
+)
 from rfi.streams.registry import StreamSchemaRegistry, default_registry
 from rfi.streams.repository import StreamRepository
 
 _ID = re.compile(r"^[a-z][a-z0-9._-]{1,79}$")
+
+
 def draft_from_dict(value: dict[str, Any]) -> StreamDraft:
     """Normalize one browser/CLI draft without accepting executable policy forms."""
+    allowed = {
+        "stream_id", "name", "description", "enabled", "input_kind", "input_ids",
+        "schema_id", "selection", "expansion", "bounds", "metadata",
+    }
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise StreamError(
+            "unknown_field", f"$.{unknown[0]}: unknown stream draft field", f"$.{unknown[0]}"
+        )
     try:
         input_ids = value.get("input_ids", [])
         bounds = value.get("bounds", {})
+        enabled = value.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise TypeError("enabled must be Boolean")
+        metadata = value.get("metadata", {})
+        if not isinstance(input_ids, (list, tuple)) or not isinstance(bounds, dict):
+            raise TypeError("invalid input or bounds")
+        if not isinstance(metadata, dict):
+            raise TypeError("invalid metadata")
         return StreamDraft(
             stream_id=str(value["stream_id"]), name=str(value["name"]),
             description=str(value.get("description", "")),
-            enabled=bool(value.get("enabled", True)), input_kind=str(value["input_kind"]),
+            enabled=enabled, input_kind=str(value["input_kind"]),
             input_ids=tuple(str(item) for item in input_ids), schema_id=str(value["schema_id"]),
             selection=dict(value.get("selection", {})),
             expansion=dict(value.get("expansion", {"strategy": "none"})),
             bounds={str(key): int(item) for key, item in bounds.items()},
+            metadata={str(key): str(item) for key, item in metadata.items()},
         )
     except (KeyError, TypeError, ValueError) as error:
         raise StreamError("invalid_draft", "stream draft is malformed") from error
@@ -95,25 +125,190 @@ class StreamService:
     def history(self, stream_id: str) -> tuple[StreamRevision, ...]:
         return self.repository.history(stream_id)
 
+    def schema_template(self) -> str:
+        """Return the documented YAML template generated from the canonical adapter."""
+        return template_yaml()
+
+    def review_yaml(self, text: str) -> StreamDefinitionReview:
+        """Parse, resolve, normalize, validate, and compare YAML without persistence."""
+        try:
+            draft = normalize_draft(parse_yaml(text))
+        except StreamError as error:
+            return StreamDefinitionReview(
+                False, (self._error_value(error),), (), None, None, None, (), None, "invalid"
+            )
+        validation = self.validate(draft)
+        if not validation.valid:
+            return StreamDefinitionReview(
+                False, validation.errors, (), draft, None, semantic_fingerprint(draft),
+                (), None, "invalid",
+            )
+        try:
+            current = self.detail(draft.stream_id)
+        except StreamError as error:
+            if error.code != "unknown_stream":
+                raise
+            current = None
+        differences = semantic_diff(current.draft, draft) if current else ()
+        mode = "new" if current is None else "revision" if differences else "already_current"
+        warnings = () if current is None or differences else ({
+            "code": "already_current",
+            "path": "$.stream",
+            "message": "the normalized definition is already the current saved revision",
+        },)
+        return StreamDefinitionReview(
+            True, (), warnings, draft, canonical_yaml(draft), semantic_fingerprint(draft),
+            differences, current.revision_id if current else None, mode,
+        )
+
+    def import_yaml(
+        self, text: str, mode: str, expected_revision_id: str | None = None
+    ) -> StreamImportResult:
+        """Explicitly import a new identity or revision; identical input is a no-op."""
+        review = self.review_yaml(text)
+        if not review.valid or review.draft is None or review.semantic_fingerprint is None:
+            first = review.errors[0]
+            raise StreamError(first["code"], first["message"], first.get("path"))
+        if review.import_mode == "already_current":
+            revision = self.detail(review.draft.stream_id)
+            return StreamImportResult("already_current", revision, review.semantic_fingerprint)
+        if review.import_mode == "new":
+            if mode != "new":
+                raise StreamError(
+                    "import_mode_required",
+                    "$.stream.stream_id: this identity is new; import requires new mode",
+                    "$.stream.stream_id",
+                )
+            revision = self.save(review.draft)
+            return StreamImportResult("created", revision, review.semantic_fingerprint)
+        if mode != "revision":
+            raise StreamError(
+                "import_mode_required",
+                "$.stream.stream_id: this identity exists; import requires revision mode",
+                "$.stream.stream_id",
+            )
+        expected = expected_revision_id or review.existing_revision_id
+        revision = self.save(review.draft, expected)
+        return StreamImportResult("revised", revision, review.semantic_fingerprint)
+
+    def export_yaml(self, stream_id: str, revision_id: str | None = None) -> str:
+        """Export a selected saved revision as deterministic canonical YAML."""
+        revision = self.detail(stream_id, revision_id)
+        return canonical_yaml(revision.draft, revision)
+
+    def draft_yaml(self, draft: StreamDraft) -> str:
+        """Validate and serialize an unsaved draft through the authoritative contract."""
+        normalized = normalize_draft(draft)
+        validation = self.validate(normalized)
+        if not validation.valid:
+            first = validation.errors[0]
+            raise StreamError(first["code"], first["message"], first.get("path"))
+        return canonical_yaml(normalized)
+
+    def compare(self, before: StreamDraft, after: StreamDraft) -> tuple[dict[str, Any], ...]:
+        """Expose the normalized semantic comparison used by YAML review."""
+        return semantic_diff(before, after)
+
+    @staticmethod
+    def _error_value(error: StreamError) -> dict[str, str]:
+        return {
+            "code": error.code,
+            "path": error.path or "$",
+            "message": str(error),
+        }
+
+    def _validate_contract_shape(
+        self, draft: StreamDraft, add: Callable[[str, str, str], None]
+    ) -> None:
+        """Reject hidden, ill-typed, or non-contract values before normalization."""
+        if not isinstance(draft.enabled, bool):
+            add("invalid_type", "must be a Boolean", "$.stream.enabled")
+        if not isinstance(draft.selection, dict):
+            add("invalid_type", "must be an object", "$.stream.selection")
+        else:
+            self._validate_policy_shape(draft.selection, add, "$.stream.selection")
+        if not isinstance(draft.expansion, dict):
+            add("invalid_type", "must be an object", "$.stream.expansion")
+        else:
+            unknown = sorted(
+                set(draft.expansion)
+                - {"strategy", "ancestor_closure", "descendant_depth"}
+            )
+            if unknown:
+                add(
+                    "unknown_field", "unknown expansion field",
+                    f"$.stream.expansion.{unknown[0]}",
+                )
+        if not isinstance(draft.bounds, dict):
+            add("invalid_type", "must be an object", "$.stream.bounds")
+        else:
+            unknown_bounds = sorted(set(draft.bounds) - {"seed_limit", "expanded_limit"})
+            if unknown_bounds:
+                add(
+                    "unknown_field", "unknown bounds field",
+                    f"$.stream.bounds.{unknown_bounds[0]}",
+                )
+            for key, value in draft.bounds.items():
+                if isinstance(value, bool) or not isinstance(value, int):
+                    add("invalid_type", "must be an integer", f"$.stream.bounds.{key}")
+        unknown_metadata = sorted(set(draft.metadata) - {"notes"})
+        if unknown_metadata:
+            add(
+                "unknown_field", "unknown metadata field",
+                f"$.stream.metadata.{unknown_metadata[0]}",
+            )
+
+    def _validate_policy_shape(
+        self, node: dict[str, Any], add: Callable[[str, str, str], None], path: str
+    ) -> None:
+        operation = node.get("op")
+        allowed = (
+            {"op", "items"} if operation in {"all", "any"}
+            else {"op", "item"} if operation == "not"
+            else {"op", "field", "operator", "value"}
+        )
+        unknown = sorted(set(node) - allowed)
+        if unknown:
+            add("unknown_field", "unknown policy field", f"{path}.{unknown[0]}")
+        if operation in {"all", "any"}:
+            items = node.get("items")
+            if isinstance(items, (list, tuple)):
+                for index, item in enumerate(items):
+                    if isinstance(item, dict):
+                        self._validate_policy_shape(item, add, f"{path}.{operation}[{index}]")
+        elif operation == "not" and isinstance(node.get("item"), dict):
+            self._validate_policy_shape(node["item"], add, f"{path}.not")
+
     def validate(self, draft: StreamDraft) -> ValidationResult:
         errors: list[dict[str, str]] = []
 
-        def add(code: str, message: str) -> None:
-            errors.append({"code": code, "message": message})
+        def add(code: str, message: str, path: str = "$.stream") -> None:
+            errors.append({"code": code, "path": path, "message": f"{path}: {message}"})
+
+        self._validate_contract_shape(draft, add)
+        draft = normalize_draft(draft)
 
         if not _ID.fullmatch(draft.stream_id):
-            add("invalid_identity", "stream ID must be a stable lowercase repository identity")
+            add(
+                "invalid_identity", "must be a stable lowercase repository identity",
+                "$.stream.stream_id",
+            )
         if not draft.name.strip():
-            add("invalid_name", "stream name is required")
+            add("invalid_name", "display name is required", "$.stream.display_name")
         capability = self._capability_map.get(draft.schema_id)
         if capability is None:
-            add("unsupported_schema", f"unsupported artifact schema: {draft.schema_id}")
+            add(
+                "unsupported_schema", f"unsupported artifact schema: {draft.schema_id}",
+                "$.stream.input.artifact_schema",
+            )
         if draft.input_kind not in {"external", "streams"}:
-            add("invalid_input_kind", "input kind must be external or streams")
+            add(
+                "invalid_input_kind", "must be external or streams", "$.stream.input.kind"
+            )
         if not draft.input_ids:
-            add("missing_input", "at least one source or upstream stream is required")
+            add("missing_input", "at least one input is required", "$.stream.input")
         if len(set(draft.input_ids)) != len(draft.input_ids):
-            add("duplicate_input", "stream inputs must be unique")
+            add("duplicate_input", "stable identities must be unique", "$.stream.input")
         if draft.input_kind == "external":
             self._validate_external(draft, add)
         elif draft.input_kind == "streams":
@@ -121,9 +316,15 @@ class StreamService:
         seed_limit = draft.bounds.get("seed_limit", 0)
         expanded_limit = draft.bounds.get("expanded_limit", 0)
         if not 1 <= seed_limit <= 500:
-            add("invalid_limit", "seed_limit must be between 1 and 500")
+            add(
+                "invalid_limit", "must be between 1 and 500",
+                "$.stream.bounds.direct_matches",
+            )
         if not 1 <= expanded_limit <= 2000:
-            add("invalid_limit", "expanded_limit must be between 1 and 2000")
+            add(
+                "invalid_limit", "must be between 1 and 2000",
+                "$.stream.bounds.total_artifacts",
+            )
         if capability is not None:
             self._validate_policy(draft.selection, capability, errors)
             strategy = str(draft.expansion.get("strategy", "none"))
@@ -135,19 +336,26 @@ class StreamService:
                 add(
                     "unsupported_expansion",
                     f"schema {draft.schema_id} does not support expansion {strategy}",
+                    "$.stream.expansion.strategy",
                 )
             else:
-                errors.extend(handlers[strategy].validate(draft.expansion))
+                for item in handlers[strategy].validate(draft.expansion):
+                    path = (
+                        "$.stream.expansion.descendant_depth"
+                        if "depth" in item["message"] else "$.stream.expansion"
+                    )
+                    add(item["code"], item["message"], path)
         try:
             order = self._topological_order(draft)
         except StreamError as error:
-            add(error.code, str(error))
+            add(error.code, str(error), error.path or "$.stream.input")
             order = ()
         return ValidationResult(not errors, tuple(errors), tuple(order))
 
     def save(
         self, draft: StreamDraft, expected_revision_id: str | None = None
     ) -> StreamRevision:
+        draft = normalize_draft(draft)
         validation = self.validate(draft)
         if not validation.valid:
             first = validation.errors[0]
@@ -155,6 +363,7 @@ class StreamService:
         return self.repository.save(draft, expected_revision_id)
 
     def preview(self, draft: StreamDraft, limit: int = 25) -> StreamPreview:
+        draft = normalize_draft(draft)
         validation = self.validate(draft)
         if not validation.valid:
             first = validation.errors[0]
@@ -229,14 +438,20 @@ class StreamService:
         return "application/octet-stream"
 
     def _validate_external(
-        self, draft: StreamDraft, add: Callable[[str, str], None]
+        self, draft: StreamDraft, add: Callable[[str, str, str], None]
     ) -> None:
         if len(draft.input_ids) != 1:
-            add("invalid_external_input", "external streams require exactly one governed source")
+            add(
+                "invalid_external_input", "external input requires exactly one governed source",
+                "$.stream.input.source_profile_id",
+            )
             return
         known = {item["source_id"] for item in self.repository.external_sources()}
         if draft.input_ids[0] not in known:
-            add("unknown_source", f"unknown governed source: {draft.input_ids[0]}")
+            add(
+                "unknown_source", f"unknown governed source: {draft.input_ids[0]}",
+                "$.stream.input.source_profile_id",
+            )
 
     def _refresh(self, schema_id: str) -> int:
         registration = self.registry.registration(schema_id)
@@ -245,62 +460,79 @@ class StreamService:
         return registration.projection_provider.refresh(self.repository)
 
     def _validate_upstreams(
-        self, draft: StreamDraft, add: Callable[[str, str], None]
+        self, draft: StreamDraft, add: Callable[[str, str, str], None]
     ) -> None:
         for upstream_id in draft.input_ids:
             if upstream_id == draft.stream_id:
-                add("self_reference", "a stream cannot consume itself")
+                add("self_reference", "a stream cannot consume itself", "$.stream.input.stream_ids")
                 continue
             try:
                 upstream = self.repository.revision(upstream_id)
             except StreamError:
-                add("unknown_upstream", f"unknown upstream stream: {upstream_id}")
+                add(
+                    "unknown_upstream", f"unknown upstream stream: {upstream_id}",
+                    "$.stream.input.stream_ids",
+                )
                 continue
             if upstream.draft.schema_id != draft.schema_id:
                 add(
                     "incompatible_schema",
                     f"upstream {upstream_id} provides {upstream.draft.schema_id}, "
                     f"not {draft.schema_id}",
+                    "$.stream.input.artifact_schema",
                 )
 
     def _validate_policy(
         self, node: dict[str, Any], capability: SchemaCapability,
         errors: list[dict[str, str]], depth: int = 0, count: list[int] | None = None,
+        path: str = "$.stream.selection",
     ) -> None:
         count = count if count is not None else [0]
         count[0] += 1
         if count[0] > 50 or depth > 5:
             errors.append({
-                "code": "policy_limit", "message": "policy exceeds bounded complexity"
+                "code": "policy_limit", "path": path,
+                "message": f"{path}: policy exceeds bounded complexity",
             })
             return
         op = node.get("op") if isinstance(node, dict) else None
         if op in {"all", "any"}:
             items = node.get("items")
-            if not isinstance(items, list) or not items:
+            if not isinstance(items, (list, tuple)) or not items:
                 errors.append({
-                    "code": "invalid_policy", "message": f"{op} requires policy items"
+                    "code": "invalid_policy", "path": path,
+                    "message": f"{path}: {op} requires policy items",
                 })
                 return
-            for item in items:
+            for index, item in enumerate(items):
                 if not isinstance(item, dict):
                     errors.append({
-                        "code": "invalid_policy", "message": "policy item must be an object"
+                        "code": "invalid_policy", "path": f"{path}.{op}[{index}]",
+                        "message": f"{path}.{op}[{index}]: policy item must be an object",
                     })
                 else:
-                    self._validate_policy(item, capability, errors, depth + 1, count)
+                    self._validate_policy(
+                        item, capability, errors, depth + 1, count,
+                        f"{path}.{op}[{index}]",
+                    )
             return
         if op == "not":
             item = node.get("item")
             if not isinstance(item, dict):
-                errors.append({"code": "invalid_policy", "message": "not requires one policy item"})
+                errors.append({
+                    "code": "invalid_policy", "path": f"{path}.not",
+                    "message": f"{path}.not: not requires one policy item",
+                })
             else:
-                self._validate_policy(item, capability, errors, depth + 1, count)
+                self._validate_policy(
+                    item, capability, errors, depth + 1, count, f"{path}.not"
+                )
             return
         if op != "predicate":
             errors.append({
                 "code": "invalid_policy",
-                "message": "policy uses an unsupported operation",
+                "path": f"{path}.op",
+                "message": f"{path}.op: policy uses an unsupported operation",
             })
             return
         field = str(node.get("field", ""))
@@ -315,19 +547,28 @@ class StreamService:
         if supported is None:
             errors.append({
                 "code": "unsupported_predicate",
-                "message": f"schema {capability.schema_id} does not register field {field}",
+                "path": f"{path}.field",
+                "message": f"{path}.field: schema {capability.schema_id} does not register "
+                f"field {field}",
             })
         elif operator not in supported:
             errors.append({
                 "code": "unsupported_operator",
-                "message": f"field {field} does not support operator {operator}",
+                "path": f"{path}.operator",
+                "message": f"{path}.operator: field {field} does not support operator {operator}",
             })
         value = node.get("value")
         if operator == "in":
             if not isinstance(value, list) or not value or len(value) > 50:
-                errors.append({"code": "invalid_value", "message": "in requires 1-50 values"})
+                errors.append({
+                    "code": "invalid_value", "path": f"{path}.values",
+                    "message": f"{path}.values: in requires 1-50 values",
+                })
         elif not isinstance(value, str) or not value.strip():
-            errors.append({"code": "invalid_value", "message": "predicate value is required"})
+            errors.append({
+                "code": "invalid_value", "path": f"{path}.value",
+                "message": f"{path}.value: predicate value is required",
+            })
 
     def _topological_order(self, draft: StreamDraft) -> tuple[str, ...]:
         graph: dict[str, tuple[str, ...]] = {
@@ -341,7 +582,10 @@ class StreamService:
 
         def visit(node: str) -> None:
             if node in visiting:
-                raise StreamError("dependency_cycle", f"stream dependency cycle includes {node}")
+                raise StreamError(
+                    "dependency_cycle", f"stream dependency cycle includes {node}",
+                    "$.stream.input.stream_ids",
+                )
             if node in visited:
                 return
             visiting.add(node)

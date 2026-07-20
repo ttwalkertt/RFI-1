@@ -57,5 +57,10 @@ schema capabilities, durable membership lineage, offline rebuild, and shared ope
 See [`revisioned-artifact-streams.md`](revisioned-artifact-streams.md) and
 [`ADR-0020`](decisions/0020-revisioned-artifact-stream-dag.md).
 
+TASK-026 makes that established subsystem operable through a progressive browser editor and one
+strict, versioned canonical YAML contract shared by browser, CLI, preview, revision persistence,
+and execution. See [`stream-configuration-and-yaml.md`](stream-configuration-and-yaml.md) and
+[`ADR-0021`](decisions/0021-canonical-stream-definition-yaml.md).
+
 `BACKLOG.md` cannot authorize implementation or imply sequence. Backlog candidates move into
 `ROADMAP.md` or `TASKS.md` only through explicit triage and governance decisions.
