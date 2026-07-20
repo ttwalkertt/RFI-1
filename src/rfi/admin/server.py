@@ -33,10 +33,35 @@ from rfi.streams import StreamError, StreamRepository, StreamService, draft_from
 
 MAX_BODY_BYTES = 1_000_000
 ADMIN_PREFERENCES_JS = (Path(__file__).parent / "admin_preferences.js").read_bytes()
+OPERATOR_NAVIGATION = (
+    ("/concepts", "Concept Catalog"),
+    ("/firms", "Target Firms"),
+    ("/source-profiles", "Source Profiles"),
+    ("/pull-sources", "Pull Sources"),
+    ("/streams", "Streams"),
+    ("/artifacts", "Artifacts"),
+)
+_OPERATOR_NAVIGATION_SLOT = "<!-- operator-navigation -->"
 
 
 def _json(value: Any) -> bytes:
     return (json.dumps(value, sort_keys=True, default=str) + "\n").encode()
+
+
+def _load_operator_page(filename: str, active_path: str) -> str:
+    """Compose one page with the authoritative operator navigation."""
+    if active_path not in {path for path, _label in OPERATOR_NAVIGATION}:
+        raise ValueError(f"unknown operator navigation path: {active_path}")
+    template = (Path(__file__).parent / filename).read_text(encoding="utf-8")
+    if template.count(_OPERATOR_NAVIGATION_SLOT) != 1:
+        raise ValueError(f"{filename} must contain exactly one operator navigation slot")
+    links = "".join(
+        f'<a href="{path}"{active}>{label}</a>'
+        for path, label in OPERATOR_NAVIGATION
+        for active in (' aria-current="page"' if path == active_path else "",)
+    )
+    navigation = f'<nav aria-label="Operator sections">{links}</nav>'
+    return template.replace(_OPERATOR_NAVIGATION_SLOT, navigation)
 
 
 CONSOLE_HTML = """<!doctype html>
@@ -232,17 +257,12 @@ search.onkeydown=e=>{if(e.key==='Enter')load()}; load();
 # source archives made before TASK-010 readable, while normal operation always uses this asset.
 _CONSOLE_ASSET = Path(__file__).with_name("console.html")
 if _CONSOLE_ASSET.exists():
-    CONSOLE_HTML = _CONSOLE_ASSET.read_text(encoding="utf-8")
-_FIRMS_ASSET = Path(__file__).with_name("firms.html")
-FIRMS_HTML = _FIRMS_ASSET.read_text(encoding="utf-8")
-_SOURCE_PROFILES_ASSET = Path(__file__).with_name("source_profiles.html")
-SOURCE_PROFILES_HTML = _SOURCE_PROFILES_ASSET.read_text(encoding="utf-8")
-_PULL_SOURCES_ASSET = Path(__file__).with_name("pull_sources.html")
-PULL_SOURCES_HTML = _PULL_SOURCES_ASSET.read_text(encoding="utf-8")
-_ARTIFACT_BROWSER_ASSET = Path(__file__).with_name("artifact_browser.html")
-ARTIFACT_BROWSER_HTML = _ARTIFACT_BROWSER_ASSET.read_text(encoding="utf-8")
-_STREAMS_ASSET = Path(__file__).with_name("streams.html")
-STREAMS_HTML = _STREAMS_ASSET.read_text(encoding="utf-8")
+    CONSOLE_HTML = _load_operator_page("console.html", "/concepts")
+FIRMS_HTML = _load_operator_page("firms.html", "/firms")
+SOURCE_PROFILES_HTML = _load_operator_page("source_profiles.html", "/source-profiles")
+PULL_SOURCES_HTML = _load_operator_page("pull_sources.html", "/pull-sources")
+ARTIFACT_BROWSER_HTML = _load_operator_page("artifact_browser.html", "/artifacts")
+STREAMS_HTML = _load_operator_page("streams.html", "/streams")
 
 
 class AdminConsole(ThreadingHTTPServer):

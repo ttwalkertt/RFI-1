@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import re
 import tempfile
 import threading
 import unittest
@@ -377,6 +378,52 @@ class StreamCase(unittest.TestCase):
                 browser = response.read().decode()
             self.assertIn("Artifact streams", browser)
             self.assertIn("Upstream / seed lineage", browser)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def test_every_top_level_page_uses_one_authoritative_navigation(self) -> None:
+        expected = (
+            ("/concepts", "Concept Catalog"),
+            ("/firms", "Target Firms"),
+            ("/source-profiles", "Source Profiles"),
+            ("/pull-sources", "Pull Sources"),
+            ("/streams", "Streams"),
+            ("/artifacts", "Artifacts"),
+        )
+        admin_assets = ROOT / "src/rfi/admin"
+        for filename in (
+            "console.html", "firms.html", "source_profiles.html",
+            "pull_sources.html", "streams.html", "artifact_browser.html",
+        ):
+            template = (admin_assets / filename).read_text(encoding="utf-8")
+            self.assertEqual(template.count("<!-- operator-navigation -->"), 1)
+            self.assertNotIn("<nav", template)
+
+        server = create_admin_server(self.state, port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            for active_path, _active_label in expected:
+                with self.subTest(route=active_path):
+                    with urllib.request.urlopen(base + active_path) as response:
+                        html = response.read().decode()
+                    match = re.search(
+                        r'<nav aria-label="Operator sections">(.*?)</nav>', html,
+                    )
+                    self.assertIsNotNone(match)
+                    links = re.findall(
+                        r'<a href="([^"]+)"( aria-current="page")?>([^<]+)</a>',
+                        match.group(1),  # type: ignore[union-attr]
+                    )
+                    rendered = tuple(
+                        (href, label) for href, _active, label in links
+                    )
+                    self.assertEqual(rendered, expected)
+                    active_links = [href for href, active, _label in links if active]
+                    self.assertEqual(active_links, [active_path])
         finally:
             server.shutdown()
             server.server_close()
