@@ -90,6 +90,7 @@ def main() -> int:
         "admin/external_sources.html",
         "admin/field_definitions.py",
         "admin/firms.html",
+        "admin/help.py",
         "admin/pull_sources.html",
         "admin/server.py",
         "admin/source_profiles.html",

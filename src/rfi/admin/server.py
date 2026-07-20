@@ -13,6 +13,12 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from rfi.acquisition import AcquisitionRepository
 from rfi.admin.field_definitions import field_definitions
+from rfi.admin.help import (
+    HELP_WINDOW_NAME,
+    PAGE_HELP_TOPICS,
+    render_help_page,
+    topic_url,
+)
 from rfi.artifacts import (
     ArtifactOrder,
     ArtifactQuery,
@@ -66,7 +72,14 @@ def _load_operator_page(filename: str, active_path: str) -> str:
         for path, label in OPERATOR_NAVIGATION
         for active in (' aria-current="page"' if path == active_path else "",)
     )
-    navigation = f'<nav aria-label="Operator sections">{links}</nav>'
+    topic_id = PAGE_HELP_TOPICS.get(active_path)
+    if topic_id is None:
+        raise ValueError(f"missing help topic for operator page: {active_path}")
+    help_link = (
+        f'<a class="operator-help" href="{topic_url(topic_id)}" '
+        f'target="{HELP_WINDOW_NAME}" aria-label="Help for {topic_id}">Help</a>'
+    )
+    navigation = f'<nav aria-label="Operator sections">{links}{help_link}</nav>'
     return template.replace(_OPERATOR_NAVIGATION_SLOT, navigation)
 
 
@@ -366,6 +379,15 @@ class AdminHandler(BaseHTTPRequestHandler):
                 self._send(
                     HTTPStatus.OK,
                     STREAMS_HTML.encode(),
+                    "text/html; charset=utf-8",
+                )
+                return
+            if method == "GET" and (path == "/help" or path.startswith("/help/")):
+                topic_id = path.removeprefix("/help/") if path != "/help" else None
+                body, known = render_help_page(topic_id)
+                self._send(
+                    HTTPStatus.OK if known else HTTPStatus.NOT_FOUND,
+                    body,
                     "text/html; charset=utf-8",
                 )
                 return
