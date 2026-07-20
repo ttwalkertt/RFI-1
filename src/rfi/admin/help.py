@@ -30,6 +30,7 @@ HELP_TOPICS = (
     HelpTopic("acquisition", "Pull Sources and acquisition workflow"),
     HelpTopic("artifacts", "Artifacts and retained evidence"),
     HelpTopic("streams", "Artifact Streams"),
+    HelpTopic("stream-upstream-definitions", "Preparing upstream streams"),
     HelpTopic("stream-validation-preview", "Stream validation and preview"),
     HelpTopic("revisions-lineage", "Revisions, immutability, and lineage"),
     HelpTopic("yaml", "Stream YAML import and export"),

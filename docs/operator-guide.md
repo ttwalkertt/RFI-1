@@ -106,8 +106,9 @@ inspect a definition and history; or author a new definition/revision.
 
 ### Prerequisites
 
-The repository must be initialized. Starter concepts are optional and are created only by `seed`.
-Related concept IDs and deterministic method inputs should already exist when referenced.
+The repository must be [initialized](#getting-started). Starter concepts are optional and are
+created only by `seed`. Related concept IDs and deterministic method inputs should already exist
+when referenced.
 
 ### Typical workflow
 
@@ -158,8 +159,8 @@ inspect recognition metadata and history, or create/revise a target identity.
 
 ### Prerequisites
 
-The repository must be initialized. Choose a stable `firm_id`; it remains the downstream
-reference. Do not encode mutable legal or market facts into that ID.
+The repository must be [initialized](#getting-started). Choose a stable `firm_id`; it remains the
+downstream reference. Do not encode mutable legal or market facts into that ID.
 
 ### Typical workflow
 
@@ -169,7 +170,8 @@ reference. Do not encode mutable legal or market facts into that ID.
 3. Choose `Validate draft`; nothing is saved.
 4. Choose `Preview new revision` and review the change summary and recognition metadata.
 5. Choose `Save new revision`.
-6. Inspect the firm detail and Revision history, then continue to Firm Profiles.
+6. Inspect the firm detail and Revision history, then continue to
+   [Firm Profiles](#source-profiles).
 
 ### What changes repository state
 
@@ -200,22 +202,25 @@ Related topics: [Firm Source Profiles](#source-profiles), [acquisition](#acquisi
 
 Configure firm-owned acquisition intent using the repository-owned canonical artifact template.
 This page is for SEC filings and other firm artifacts. Lore/public-inbox transport belongs under
-External Sources, not in a firm profile.
+[External Sources](#external-sources), not in a firm profile.
 
 ### Prerequisites
 
-A target firm must exist. A profile may begin as displayed canonical defaults; defaults are not a
-saved revision. Retrieval candidates must use modes and fields permitted by each artifact item.
+A [target firm](#firms) must exist. A profile may begin as displayed canonical defaults; defaults
+are not a saved revision. Retrieval candidates must use modes and fields permitted by each
+artifact item.
 
 ### Typical workflow
 
-1. Choose `Target firm` or follow a configuration-problem link from Pull Sources.
+1. Choose `Target firm` or follow a configuration-problem link from
+   [Pull Sources](#acquisition).
 2. Expand an artifact category and artifact item.
 3. Enable intended artifacts and add prioritized retrieval candidates.
 4. Fill the mode-specific fields and optional operator notes.
 5. Choose `Validate`. This checks the draft and saves nothing.
 6. Choose `Save source-profile revision`.
-7. Confirm the profile revision in the page history, then inspect readiness under Pull Sources.
+7. Confirm the profile revision in the page history, then inspect
+   [readiness](#source-readiness) under [Pull Sources](#acquisition).
 
 ### Controls and state changes
 
@@ -264,8 +269,9 @@ definition. Derived streams require compatible saved upstream streams and an acy
 Readiness evaluation reads current configuration. It does not retrieve, publish a revision, or
 create a run. Execution is always a separate operator action.
 
-Recovery sequence: inspect counts, open the relevant Firm Profile or External Source, validate and
-save the correction, return to the execution page, refresh, and re-evaluate. Never change a saved
+Recovery sequence: inspect counts, open the relevant [Firm Profile](#source-profiles) or
+[External Source](#external-sources), validate and save the correction, then return to
+[Pull Sources](#acquisition) or [Streams](#streams), refresh, and re-evaluate. Never change a saved
 source identity to repair history; create a new source identity where its immutable policy must
 change.
 
@@ -294,7 +300,8 @@ supports the `Lore / public-inbox` provider.
 3. Choose `Validate profile`. The complete proposal is checked and nothing is saved.
 4. Choose `Save governed source`.
 5. Select the saved source to inspect its immutable profile.
-6. Choose `Use in Stream Configuration` to continue with the stable source selected.
+6. Choose `Use in Stream Configuration` to continue to [Streams](#streams) with the stable source
+   selected.
 
 ### State changes and immutability
 
@@ -308,9 +315,9 @@ pacing, retry, timeout, response bounds, or cursors.
 ### Common problems and recovery
 
 Use an HTTPS endpoint and values within the displayed bounds. If policy must change, inspect the
-old source, choose `Clone as new source`, assign a new stable ID, validate, save, and revise the
-stream to refer to the new source. Do not expect this page to acquire messages; bounded live
-preview/acquire is currently CLI-only.
+old source, choose `Clone as new source`, assign a new stable ID, validate, save, and
+[revise the stream](#streams) to refer to the new source. Do not expect this page to acquire
+messages; bounded live preview/acquire is currently [CLI-only](#cli-reference).
 
 ### CLI equivalent
 
@@ -334,21 +341,24 @@ and per-attempt outcomes.
 
 ### Prerequisites
 
-The target firm and a saved firm source-profile revision must exist. At least one artifact should
-be enabled and runnable. Live SEC retrieval requires the governed runtime request identity where
-the selected adapter requires it. This page is not the Lore/public-inbox acquire interface.
+A [target firm](#firms) and a saved [Firm Source Profile](#source-profiles) revision must exist. At
+least one artifact should be enabled and [runnable](#source-readiness). Live SEC retrieval requires
+the governed runtime request identity where the selected adapter requires it. This page is not the
+Lore/public-inbox acquire interface.
 
 ### Acquisition procedure
 
-1. Create or select a firm under Target Firms.
-2. Configure, validate, and save its Firm Source Profile.
-3. Open Pull Sources and inspect enabled, runnable, and incomplete counts.
+1. [Create or select a firm](#firms) under Target Firms.
+2. [Configure, validate, and save its Firm Source Profile](#source-profiles).
+3. Open Pull Sources and inspect [enabled, runnable, and incomplete counts](#source-readiness).
 4. Select one or more firms and choose `Pull selected firms`.
 5. Follow Workflow progress. Starting the pull persists a run and executes configured retrieval.
 6. Read Completed results and expand attempt details for adapter, priority, status, diagnostic,
    and details.
-7. Follow any linked `configuration_problem` to the exact Firm Profile artifact and correct it.
-8. Open Artifacts and locate the retained firm artifact and its acquisition observation.
+7. Follow any linked `configuration_problem` to the exact
+   [Firm Profile](#source-profiles) artifact and correct it.
+8. Open [Artifacts](#artifacts) and locate the retained firm artifact and its acquisition
+   observation.
 
 The run snapshots each firm's current source-profile revision, expands enabled artifacts,
 determines attemptability, executes supported candidates independently, ingests successful bytes,
@@ -365,9 +375,10 @@ idempotent while each materially distinct successful acquisition creates its own
 
 ### Common problems and recovery
 
-- No firms listed: save a Firm Source Profile first.
-- Incomplete artifact: follow its configuration link, correct and save a profile revision, then
-  start a new pull. Existing run history remains unchanged.
+- No firms listed: save a [Firm Source Profile](#source-profiles) first.
+- Incomplete artifact: follow its configuration link, correct and save a
+  [profile revision](#source-profiles), then start a new pull. Existing run history remains
+  unchanged.
 - Retrieval failure: inspect attempt diagnostics, verify runtime request identity/network access,
   and retry as a new run when corrected.
 - Partial run: inspect every artifact outcome; successful evidence remains retained.
@@ -393,8 +404,9 @@ mailing lists, and Artifact streams.
 
 ### Prerequisites
 
-Acquisition or stream execution must have retained material for it to appear. Empty branches are a
-valid state. This page never fetches the original source to build its repository tree.
+[Acquisition](#acquisition) or [stream execution](#streams) must have retained material for it to
+appear. Empty branches are a valid state. This page never fetches the original source to build its
+repository tree.
 
 ### Typical workflow
 
@@ -422,9 +434,10 @@ kind/reason, completeness, and upstream/seed lineage.
 ### Common problems and recovery
 
 Missing content or checksum mismatch is an integrity failure, not a cue to silently reacquire or
-rewrite evidence. Run repository verification and restore a verified backup if necessary. A stale
+rewrite evidence. Follow [repository verification and restore](#repository-protection). A stale
 pagination cursor means repository authority changed; refresh the projection. Missing expected
-material requires checking the acquisition/stream run result and its exact configured revision.
+material requires checking the [acquisition](#acquisition) or [stream](#streams) run result and its
+exact configured revision.
 
 ### CLI equivalent
 
@@ -445,23 +458,38 @@ evidence or saved upstream streams.
 
 ### Prerequisites
 
-For a Governed external source input, first save a repository-global External Source. For Upstream
-streams, save compatible upstream definitions. Know the intended artifact schema, selection
-criteria, context expansion, and hard bounds.
+For a Governed external source input, first
+[save a repository-global External Source](#external-sources). For Upstream streams,
+[save compatible upstream definitions](#stream-upstream-definitions). Know the intended artifact
+schema, selection criteria, context expansion, and hard bounds.
+
+<!-- help-topic: stream-upstream-definitions -->
+### Preparing compatible upstream streams
+
+Create each upstream definition by following the [stream revision procedure](#streams): select its
+input and artifact schema, validate, preview, and save it before selecting it as an Upstream streams
+input. The upstream and downstream schemas must be compatible, every referenced stream must exist,
+and the resulting graph must not contain self-reference or a cycle. Saving a definition does not
+execute it. Before executing the downstream stream, use `Run dependency chain` to execute required
+saved upstream revisions in topology order, or confirm that their current results are already
+usable. Inspect upstream runs, memberships, and lineage under [Artifacts](#artifacts).
 
 ### Stream revision and execution procedure
 
 1. Choose `New stream`, or select a saved stream to create a revision.
 2. Complete Identity, Input, Selection, Context and limits, and Review and save.
-3. Choose `Validate`; inspect Normalized validation. Nothing is saved or run.
+3. Choose `Validate`; inspect Normalized validation. Nothing is saved or run. See
+   [Stream validation and preview](#stream-validation-preview) for the review contract.
 4. Choose `Preview bounded matches`; inspect direct matches, expansion, bounds, warnings, and
    normalized behavior. Nothing is saved, published, or acquired.
 5. Choose `Inspect draft YAML` when a canonical representation is useful.
 6. Review meaningful differences and choose `Save new stream` or `Save new revision`.
 7. Reload/select the saved revision. Only a saved, current, enabled definition can run.
 8. Choose `Run saved stream`, or `Run dependency chain` for required upstream execution.
-9. Inspect Execution result, topology, Revision history, runs and memberships under Artifacts.
-10. Choose `Export saved YAML` for the current revision or Export beside a historical revision.
+9. Inspect Execution result, topology, Revision history, runs and memberships under
+   [Artifacts](#artifacts).
+10. Choose `Export saved YAML` for the current revision or Export beside a historical revision;
+    see [Stream YAML import and export](#yaml).
 
 ### Controls and state changes
 
@@ -487,9 +515,10 @@ membership.
 
 If Run is disabled, select a saved enabled current revision and ensure the draft is clean. Saving
 or discarding the unsaved draft is required before execution. An upstream-not-current failure
-requires running the dependency chain or explicitly bringing upstream results current. Resolve
-cycles or incompatible schemas in the draft rather than editing stored history. Use Rebuild only
-through the supported CLI when derived memberships must be reconstructed from retained state.
+requires [running the dependency chain](#stream-upstream-definitions) or explicitly bringing
+upstream results current. Resolve cycles or incompatible schemas in the draft rather than editing
+stored history. Use Rebuild only through the [supported CLI](#cli-reference) when derived
+memberships must be reconstructed from retained state.
 
 ### CLI equivalent
 
@@ -576,7 +605,7 @@ canonical deterministic YAML contract.
 
 ### Browser validation, preview, and import procedure
 
-1. Open Streams and expand `Import YAML`.
+1. Open [Streams](#streams) and expand `Import YAML`.
 2. Choose a `.yaml`/`.yml` file or paste YAML. File selection only reads into browser draft state.
 3. Choose `Review imported YAML`.
 4. Inspect errors, Normalized YAML preview, semantic fingerprint, import mode, and semantic
@@ -651,8 +680,9 @@ rfi verify --state FRESH_STATE
 rfi admin --state FRESH_STATE --port 8766
 ```
 
-6. Inspect expected firms, source profiles, sources, artifacts, and streams before choosing which
-   repository will be used for later operations.
+6. Inspect expected [firms](#firms), [source profiles](#source-profiles),
+   [external sources](#external-sources), [artifacts](#artifacts), and [streams](#streams) before
+   choosing which repository will be used for later operations.
 
 `verify` reads state and checks SQLite integrity, foreign keys, structured relationships, content
 references, sizes, checksums, and orphan inventory. It does not repair or discard evidence.
@@ -688,20 +718,22 @@ Related topics: [repository model](#repository), [troubleshooting](#troubleshoot
 - Validation error: follow the displayed field/path, correct the browser draft, validate again.
 - Revision conflict: preserve needed draft values, reload the current revision, compare, and
   intentionally reapply. Never bypass optimistic checking.
-- No runnable firm artifacts: inspect Firm Profiles and supported retrieval candidates.
-- No governed stream source: create it under External Sources, then return to Streams.
+- No runnable firm artifacts: inspect [Firm Profiles](#source-profiles) and supported retrieval
+  candidates.
+- No governed stream source: create it under [External Sources](#external-sources), then return to
+  [Streams](#streams).
 - Stream cycle/schema/reference error: correct topology or schema in a new draft; saved history is
   immutable.
 - Run disabled: select a saved enabled current stream and ensure no unsaved/imported draft remains.
 
 ### Acquisition and evidence failures
 
-- Configuration problem: use the result link to the exact firm/artifact, save a corrected profile
-  revision, and create a new pull run.
+- Configuration problem: use the result link to the exact firm/artifact, save a corrected
+  [profile revision](#source-profiles), and create a new [pull run](#acquisition).
 - Retrieval failure: inspect adapter attempt diagnostic and runtime network/request identity; retry
   only after the condition is understood.
-- Missing artifact: inspect the exact pull or stream result and revision. Empty repository branches
-  do not imply acquisition succeeded.
+- Missing artifact: inspect the exact [pull](#acquisition) or [stream](#streams) result and revision.
+  Empty repository branches do not imply acquisition succeeded.
 - Missing/checksum-invalid content or orphan: run `rfi verify`; do not silently modify evidence.
 - Missing mailing-list projection with retained run items: run `rfi mailing-list rebuild`; it uses
   retained bytes without network access.

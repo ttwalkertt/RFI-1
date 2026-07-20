@@ -58,6 +58,15 @@ class HelpContractCase(unittest.TestCase):
             '<h2 id="repository-protection"',
             "<pre><code>",
             'href="/help/artifacts#artifacts"',
+            (
+                'href="/help/external-sources#external-sources">save a repository-global '
+                "External Source</a>"
+            ),
+            (
+                'href="/help/stream-upstream-definitions#stream-upstream-definitions">save '
+                "compatible upstream definitions</a>"
+            ),
+            '<h3 id="stream-upstream-definitions"',
             "Pull selected firms",
             "Save source-profile revision",
             "Review imported YAML",
