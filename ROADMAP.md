@@ -182,3 +182,14 @@ admission, lossless email evidence, offline relationship reconstruction, and mul
 projections in the shared artifact browser without archive mirroring or graph persistence. Future
 mailing-list work should be driven by observed needs for archive queries, incremental cursors,
 patch-series semantics, or cross-list relationships.
+
+TASK-025 generalizes retained evidence selection into revisioned materialized artifact streams.
+External and derived streams form a validated DAG, fan out, apply bounded typed policies, retain
+membership lineage, rebuild offline, and appear in the shared artifact browser. Mail discussion
+expansion and SEC filing filtering demonstrate the same generic execution substrate across two
+schemas without a workflow engine or second persistence authority.
+
+TASK-025 hardening places Lore identity and transport policy in governed external-source profiles,
+adds truthful retry/partial/failure acquisition outcomes, and routes schema projection and context
+through a finite registry. Durable archive cursors, multi-process/global rate coordination, and
+production polling remain future operational work; the current live path is explicit and bounded.

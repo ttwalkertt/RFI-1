@@ -17,10 +17,15 @@ from rfi.acquisition import (
 )
 from rfi.acquisition.contracts import ConflictError, IntegrityError
 from rfi.mailing_lists.contracts import (
+    AcquisitionRunStatus,
     AcquisitionManifest,
+    AcquisitionLimits,
+    ConnectivityState,
+    LoreTransportPolicy,
     MailingListError,
     MailingListSource,
     ParsedMessage,
+    SelectionCriteria,
 )
 from rfi.mailing_lists.parser import parse_message
 from rfi.storage import RepositoryDatabase, StorageError, state_root_for
@@ -60,9 +65,15 @@ class MailingListRepository:
             source.source_id,
             source.display_name,
             True,
-            "lore-public-inbox",
-            {"list_id": source.list_id, "archive_base_url": source.archive_base_url},
-            {"repository_projection": "mailing-list"},
+            source.provider,
+            {
+                "archive_base_url": source.archive_base_url,
+                "list_id": source.list_id,
+            },
+            {
+                "repository_projection": "mailing-list",
+                "transport": asdict(source.transport),
+            },
         )
         self._artifacts.register_source(profile)
         payload = canonical_json(asdict(source))
@@ -91,20 +102,47 @@ class MailingListRepository:
     def source(self, source_id: str) -> MailingListSource:
         with self._database.connect(read_only=True) as connection:
             row = connection.execute(
-                "SELECT source_id,list_id,display_name,archive_base_url "
+                "SELECT source_id,list_id,display_name,archive_base_url,canonical_json "
                 "FROM mailing_list_sources WHERE source_id = ?", (source_id,)
             ).fetchone()
         if row is None:
             raise MailingListError("unknown_source", f"unknown mailing-list source: {source_id}")
-        return MailingListSource(*map(str, row))
+        return self._source_from_row(row, self._artifacts.source(source_id))
 
     def sources(self) -> tuple[MailingListSource, ...]:
         with self._database.connect(read_only=True) as connection:
             rows = connection.execute(
-                "SELECT source_id,list_id,display_name,archive_base_url "
+                "SELECT source_id,list_id,display_name,archive_base_url,canonical_json "
                 "FROM mailing_list_sources ORDER BY display_name,source_id"
             ).fetchall()
-        return tuple(MailingListSource(*map(str, row)) for row in rows)
+        return tuple(
+            self._source_from_row(row, self._artifacts.source(str(row[0]))) for row in rows
+        )
+
+    @staticmethod
+    def _source_from_row(row: Any, governed: dict[str, Any]) -> MailingListSource:
+        try:
+            configuration = governed.get("configuration", {})
+            policy = governed.get("policy", {})
+            transport_value = policy.get("transport", {})
+            # Compatibility for pre-v4 governed profiles. The mailing table is a
+            # projection only; new profiles place every executable setting above.
+            legacy = json.loads(str(row[4]))
+            if not transport_value:
+                transport_value = legacy.get("transport", {})
+            transport = LoreTransportPolicy(**transport_value)
+            return MailingListSource(
+                str(row[0]),
+                str(configuration.get("list_id", row[1])),
+                str(governed.get("name", row[2])),
+                str(configuration.get("archive_base_url", row[3])),
+                str(governed.get("mechanism", legacy.get("provider", "lore-public-inbox"))),
+                transport,
+            )
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            raise MailingListError(
+                "repository_failure", "mailing-list source policy is corrupt"
+            ) from error
 
     def existing_artifact(self, source_id: str, external_id: str) -> str | None:
         with self._database.connect(read_only=True) as connection:
@@ -214,12 +252,16 @@ class MailingListRepository:
         try:
             with self._database.transaction() as connection:
                 connection.execute(
-                    "INSERT INTO mailing_list_runs VALUES (?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO mailing_list_runs "
+                    "(run_id,source_id,requested_at,status,seed_limit,context_limit,seed_count,"
+                    "message_count,canonical_json,lifecycle_status,error_code,retryable) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         manifest.run_id, manifest.source_id, manifest.requested_at,
                         manifest.state.value, manifest.limits.seed_limit,
                         manifest.limits.context_limit, len(manifest.seed_ids),
-                        manifest.message_count, manifest_payload,
+                        manifest.message_count, manifest_payload, manifest.run_status.value,
+                        manifest.error_code, int(manifest.retryable),
                     ),
                 )
                 for item in run_items:
@@ -235,6 +277,55 @@ class MailingListRepository:
                 self._database.advance_revision(connection)
         except StorageError as error:
             raise MailingListError("repository_failure", str(error)) from error
+
+    def record_failure(
+        self,
+        run_id: str,
+        source_id: str,
+        requested_at: str,
+        criteria: SelectionCriteria,
+        limits: AcquisitionLimits,
+        error: MailingListError,
+    ) -> None:
+        """Durably record a failed bounded acquisition without publishing projections."""
+        lifecycle = (
+            AcquisitionRunStatus.RETRYABLE_FAILURE
+            if error.retryable else AcquisitionRunStatus.TERMINAL_FAILURE
+        )
+        payload = canonical_json({
+            "run_id": run_id,
+            "source_id": source_id,
+            "requested_at": requested_at,
+            "criteria": asdict(criteria),
+            "limits": asdict(limits),
+            "run_status": lifecycle.value,
+            "error_code": error.code,
+            "retryable": error.retryable,
+        })
+        try:
+            with self._database.transaction() as connection:
+                connection.execute(
+                    "INSERT INTO mailing_list_runs "
+                    "(run_id,source_id,requested_at,status,seed_limit,context_limit,seed_count,"
+                    "message_count,canonical_json,lifecycle_status,error_code,retryable) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        run_id, source_id, requested_at, ConnectivityState.INCOMPLETE.value,
+                        limits.seed_limit, limits.context_limit, 0, 0, payload,
+                        lifecycle.value, error.code, int(error.retryable),
+                    ),
+                )
+                self._database.advance_revision(connection)
+        except StorageError as storage_error:
+            raise MailingListError("repository_failure", str(storage_error)) from storage_error
+
+    def acquisition_runs(self, source_id: str) -> tuple[dict[str, Any], ...]:
+        return tuple(self.rows(
+            "SELECT run_id,source_id,requested_at,lifecycle_status,status AS connectivity_state,"
+            "seed_count,message_count,error_code,retryable FROM mailing_list_runs "
+            "WHERE source_id=? ORDER BY requested_at,run_id",
+            (source_id,),
+        ))
 
     def replace_derived(
         self, messages: list[dict[str, Any]], discussions: list[dict[str, Any]]

@@ -29,6 +29,7 @@ from rfi.source_profiles import (
     SourceProfileService,
     load_canonical_template,
 )
+from rfi.streams import StreamError, StreamRepository, StreamService, draft_from_dict
 
 MAX_BODY_BYTES = 1_000_000
 ADMIN_PREFERENCES_JS = (Path(__file__).parent / "admin_preferences.js").read_bytes()
@@ -240,6 +241,8 @@ _PULL_SOURCES_ASSET = Path(__file__).with_name("pull_sources.html")
 PULL_SOURCES_HTML = _PULL_SOURCES_ASSET.read_text(encoding="utf-8")
 _ARTIFACT_BROWSER_ASSET = Path(__file__).with_name("artifact_browser.html")
 ARTIFACT_BROWSER_HTML = _ARTIFACT_BROWSER_ASSET.read_text(encoding="utf-8")
+_STREAMS_ASSET = Path(__file__).with_name("streams.html")
+STREAMS_HTML = _STREAMS_ASSET.read_text(encoding="utf-8")
 
 
 class AdminConsole(ThreadingHTTPServer):
@@ -256,6 +259,7 @@ class AdminConsole(ThreadingHTTPServer):
         pull_workflow: PullWorkflow,
         artifact_query_service: ArtifactQueryService,
         mailing_list_query_service: MailingListQueryService,
+        stream_service: StreamService,
     ) -> None:
         self.service = service
         self.firm_service = firm_service
@@ -263,6 +267,7 @@ class AdminConsole(ThreadingHTTPServer):
         self.pull_workflow = pull_workflow
         self.artifact_query_service = artifact_query_service
         self.mailing_list_query_service = mailing_list_query_service
+        self.stream_service = stream_service
         super().__init__(address, AdminHandler)
 
 
@@ -321,6 +326,13 @@ class AdminHandler(BaseHTTPRequestHandler):
                     "text/html; charset=utf-8",
                 )
                 return
+            if method == "GET" and path == "/streams":
+                self._send(
+                    HTTPStatus.OK,
+                    STREAMS_HTML.encode(),
+                    "text/html; charset=utf-8",
+                )
+                return
             if method == "GET" and path == "/admin/admin_preferences.js":
                 self._send(
                     HTTPStatus.OK,
@@ -345,6 +357,7 @@ class AdminHandler(BaseHTTPRequestHandler):
             PullError,
             ArtifactQueryError,
             MailingListError,
+            StreamError,
             ValueError,
             TypeError,
             KeyError,
@@ -365,6 +378,15 @@ class AdminHandler(BaseHTTPRequestHandler):
                     else HTTPStatus.BAD_REQUEST
                 )
                 self._error(status, str(error), error.code)
+            elif isinstance(error, StreamError):
+                status = (
+                    HTTPStatus.NOT_FOUND
+                    if error.code.startswith("unknown_")
+                    else HTTPStatus.CONFLICT
+                    if error.code in {"revision_conflict", "upstream_not_current"}
+                    else HTTPStatus.BAD_REQUEST
+                )
+                self._error(status, str(error), error.code)
             else:
                 self._error(HTTPStatus.BAD_REQUEST, str(error))
         except Exception as error:
@@ -378,6 +400,103 @@ class AdminHandler(BaseHTTPRequestHandler):
         pull_workflow = self.server.pull_workflow
         artifacts = self.server.artifact_query_service
         mailing_lists = self.server.mailing_list_query_service
+        streams = self.server.stream_service
+        if method == "GET" and parts == ["api", "external-sources"]:
+            self._send_json(HTTPStatus.OK, {"items": list(streams.external_sources())})
+            return
+        if method == "GET" and parts == ["api", "streams"]:
+            self._send_json(
+                HTTPStatus.OK, {"items": [asdict(item) for item in streams.list_streams()]}
+            )
+            return
+        if method == "GET" and parts == ["api", "streams", "capabilities"]:
+            self._send_json(
+                HTTPStatus.OK, {"items": [asdict(item) for item in streams.capabilities()]}
+            )
+            return
+        if method == "POST" and parts == ["api", "streams", "validate"]:
+            self._send_json(HTTPStatus.OK, asdict(streams.validate(draft_from_dict(self._body()))))
+            return
+        if method == "POST" and parts == ["api", "streams", "preview"]:
+            body = self._body()
+            draft = body.get("draft")
+            if not isinstance(draft, dict):
+                raise StreamError("invalid_draft", "stream draft is required")
+            self._send_json(
+                HTTPStatus.OK,
+                asdict(streams.preview(draft_from_dict(draft), int(body.get("limit", 25)))),
+            )
+            return
+        if method == "POST" and parts == ["api", "streams"]:
+            body = self._body()
+            draft = body.get("draft")
+            expected = body.get("expected_revision_id")
+            if not isinstance(draft, dict) or (
+                expected is not None and not isinstance(expected, str)
+            ):
+                raise StreamError("invalid_draft", "stream draft or expected revision is invalid")
+            self._send_json(
+                HTTPStatus.CREATED,
+                asdict(streams.save(draft_from_dict(draft), expected)),
+            )
+            return
+        if method == "POST" and parts == ["api", "streams", "rebuild"]:
+            self._send_json(HTTPStatus.OK, streams.rebuild())
+            return
+        if len(parts) >= 3 and parts[:2] == ["api", "streams"]:
+            stream_id = parts[2]
+            if method == "GET" and len(parts) == 3:
+                revision_id = self._first(query, "revision_id") or None
+                self._send_json(HTTPStatus.OK, asdict(streams.detail(stream_id, revision_id)))
+                return
+            if method == "GET" and parts[3:] == ["history"]:
+                self._send_json(
+                    HTTPStatus.OK,
+                    {"items": [asdict(item) for item in streams.history(stream_id)]},
+                )
+                return
+            if method == "GET" and parts[3:] == ["runs"]:
+                self._send_json(
+                    HTTPStatus.OK,
+                    {"items": [asdict(item) for item in streams.repository.runs(stream_id)]},
+                )
+                return
+            if method == "GET" and parts[3:] == ["memberships"]:
+                limit = int(self._first(query, "limit") or "100")
+                offset = int(self._first(query, "offset") or "0")
+                run_id = self._first(query, "run_id") or None
+                self._send_json(
+                    HTTPStatus.OK,
+                    {"items": [asdict(item) for item in streams.repository.memberships(
+                        stream_id, run_id, limit, offset
+                    )]},
+                )
+                return
+            if method == "POST" and parts[3:] == ["run"]:
+                self._body()
+                self._send_json(HTTPStatus.OK, asdict(streams.run(stream_id)))
+                return
+            if method == "POST" and parts[3:] == ["run-chain"]:
+                self._body()
+                self._send_json(
+                    HTTPStatus.OK,
+                    {"items": [asdict(item) for item in streams.run_chain(stream_id)]},
+                )
+                return
+        if len(parts) >= 3 and parts[:2] == ["api", "stream-runs"]:
+            if method == "GET" and len(parts) == 3:
+                self._send_json(HTTPStatus.OK, asdict(streams.repository.run(parts[2])))
+                return
+        if len(parts) >= 3 and parts[:2] == ["api", "stream-memberships"]:
+            membership_id = parts[2]
+            if method == "GET" and parts[3:] == ["content"]:
+                self._send_artifact_content(streams.content(membership_id))
+                return
+            if method == "GET" and len(parts) == 3:
+                self._send_json(
+                    HTTPStatus.OK, asdict(streams.repository.membership(membership_id))
+                )
+                return
         if method == "GET" and parts == ["api", "mailing-lists", "sources"]:
             self._send_json(HTTPStatus.OK, {"items": list(mailing_lists.sources())})
             return
@@ -807,4 +926,5 @@ def create_admin_server(
         create_pull_workflow(state),
         ArtifactQueryService(acquisition_repository, firm_repository, template),
         MailingListQueryService(MailingListRepository(state)),
+        StreamService(StreamRepository(state)),
     )

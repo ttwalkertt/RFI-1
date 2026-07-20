@@ -48,5 +48,14 @@ preserving Form 10-K and the SQLite-independent acquisition boundary. See
 [`additional-sec-numbered-form-adapters.md`](additional-sec-numbered-form-adapters.md) and
 [`ADR-0018`](decisions/0018-artifact-specific-sec-numbered-form-adapters.md).
 
+TASK-023 adds bounded, connected development-mailing-list evidence and a sibling browser
+projection. See [`linux-kernel-mailing-list-intelligence-stream.md`](linux-kernel-mailing-list-intelligence-stream.md)
+and [`ADR-0019`](decisions/0019-bounded-mailing-list-discussion-projection.md).
+
+TASK-025 adds revisioned external and derived artifact streams, validated DAG topology, typed
+schema capabilities, durable membership lineage, offline rebuild, and shared operator surfaces.
+See [`revisioned-artifact-streams.md`](revisioned-artifact-streams.md) and
+[`ADR-0020`](decisions/0020-revisioned-artifact-stream-dag.md).
+
 `BACKLOG.md` cannot authorize implementation or imply sequence. Backlog candidates move into
 `ROADMAP.md` or `TASKS.md` only through explicit triage and governance decisions.

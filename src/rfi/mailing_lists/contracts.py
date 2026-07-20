@@ -10,9 +10,10 @@ from typing import Protocol
 class MailingListError(RuntimeError):
     """Sanitized mailing-list acquisition or query failure."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, *, retryable: bool = False) -> None:
         super().__init__(message)
         self.code = code
+        self.retryable = retryable
 
 
 class InclusionReason(StrEnum):
@@ -30,12 +31,59 @@ class ConnectivityState(StrEnum):
     QUARANTINED = "quarantined"
 
 
+class AcquisitionRunStatus(StrEnum):
+    SUCCEEDED = "succeeded"
+    PARTIAL = "partial"
+    RETRYABLE_FAILURE = "retryable_failure"
+    TERMINAL_FAILURE = "terminal_failure"
+
+
+@dataclass(frozen=True)
+class LoreTransportPolicy:
+    """Durable per-source network policy for the bounded Lore adapter."""
+
+    user_agent: str = "RFI-1 bounded-mailing-list/2"
+    minimum_request_interval_seconds: float = 1.0
+    maximum_concurrency: int = 1
+    timeout_seconds: float = 20.0
+    maximum_response_bytes: int = 5_000_000
+    maximum_attempts_per_request: int = 3
+    backoff_initial_seconds: float = 1.0
+    backoff_maximum_seconds: float = 30.0
+
+    def __post_init__(self) -> None:
+        if not self.user_agent.strip() or len(self.user_agent) > 200:
+            raise MailingListError("invalid_source", "Lore User-Agent must be 1-200 characters")
+        if not 0.1 <= self.minimum_request_interval_seconds <= 60:
+            raise MailingListError(
+                "invalid_source", "Lore request interval must be between 0.1 and 60 seconds"
+            )
+        if not 1 <= self.maximum_concurrency <= 4:
+            raise MailingListError("invalid_source", "Lore concurrency must be between 1 and 4")
+        if not 1 <= self.timeout_seconds <= 120:
+            raise MailingListError(
+                "invalid_source", "Lore timeout must be between 1 and 120 seconds"
+            )
+        if not 1_024 <= self.maximum_response_bytes <= 50_000_000:
+            raise MailingListError(
+                "invalid_source", "Lore response bound must be between 1 KiB and 50 MB"
+            )
+        if not 1 <= self.maximum_attempts_per_request <= 5:
+            raise MailingListError("invalid_source", "Lore attempts must be between 1 and 5")
+        if not 0 <= self.backoff_initial_seconds <= 60:
+            raise MailingListError("invalid_source", "Lore initial backoff is outside bounds")
+        if not self.backoff_initial_seconds <= self.backoff_maximum_seconds <= 300:
+            raise MailingListError("invalid_source", "Lore maximum backoff is outside bounds")
+
+
 @dataclass(frozen=True)
 class MailingListSource:
     source_id: str
     list_id: str
     display_name: str
     archive_base_url: str
+    provider: str = "lore-public-inbox"
+    transport: LoreTransportPolicy = field(default_factory=LoreTransportPolicy)
 
 
 @dataclass(frozen=True)
@@ -126,6 +174,9 @@ class AcquisitionManifest:
     warnings: tuple[str, ...] = ()
     artifact_count_created: int = 0
     idempotent_messages: int = 0
+    run_status: AcquisitionRunStatus = AcquisitionRunStatus.SUCCEEDED
+    error_code: str | None = None
+    retryable: bool = False
 
 
 @dataclass(frozen=True)

@@ -27,7 +27,8 @@ Schema version 2 adds `mailing_list_sources`, immutable `mailing_list_runs` and
 `mailing_list_run_items`, plus rebuildable `mailing_list_messages`,
 `mailing_list_relationships`, `mailing_list_discussions`, and
 `mailing_list_discussion_members`. Opening schema version 1 performs the single supported in-place
-DDL migration. Artifact bytes remain outside SQLite. Existing firm-artifact queries ignore sources
+DDL migration. Schema version 4 adds explicit acquisition lifecycle, error, and retryability
+columns. Artifact bytes remain outside SQLite. Existing firm-artifact queries ignore sources
 whose repository projection is `mailing-list`.
 
 ## Bounded two-stage acquisition
@@ -37,6 +38,11 @@ capped at 100 and context count at 500; ordinary defaults are 10 and 100. The in
 adapter deliberately accepts explicit Message-IDs only. Fixture discovery additionally proves
 date, topic, and query selection. There is no select-all, mirror, unbounded backfill, implicit
 history, daemon, subscription, or archive-clone route.
+
+The governed source profile owns provider, HTTPS endpoint, list identity, User-Agent, timeout,
+response-size bound, minimum request interval, source-wide in-process concurrency, bounded retry,
+and capped backoff. The live adapter honors `Retry-After`, retries HTTP 429 and transient 5xx
+responses, and treats other HTTP rejections as terminal. These policies may differ by source.
 
 Seed discovery and context expansion are separately represented. Each retained run item records
 whether it was an explicit request, a direct seed match, an ancestor connector, or descendant
@@ -85,9 +91,12 @@ Repeated acquisition compares content identity for an existing external Message-
 reuse the artifact, message, document, and relationship; differing bytes fail with
 `message_id_conflict`. A run first retains immutable message artifacts and then publishes its
 manifest, run membership, and the complete rebuilt discussion projection in one SQLite transaction.
-Failure before that structured transaction can leave ordinary immutable observations, but those
-are excluded from both firm and mailing-list discussion projections and can never be labeled
-connected. SQLite publication failure rolls back the complete structured acquisition unit.
+A transport failure before useful acquisition records a retryable or terminal failed run with no
+run items or evidence; a failure after useful acquisition records an explicit partial run. Valid
+bounded frontier or enumeration limits use `truncated`. Failure during structured publication can
+leave ordinary immutable observations, but those are excluded from both firm and mailing-list
+discussion projections and can never be labeled connected. SQLite publication failure rolls back
+the complete structured acquisition unit.
 
 ## Offline reconstruction and browser
 
@@ -108,7 +117,9 @@ The initial vertical has no full-text index beyond bounded SQLite `LIKE`, no com
 or revision-series parser, no cross-list federation, no participant identity resolution, and no
 descendant enumeration on the live adapter. MIME text extraction is limited to ordinary text parts;
 all unsupported parts remain preserved in exact raw evidence and produce parse warnings. Historical
-backfill, incremental cursors, archive query parsing, pruning, and AI summarization remain deferred.
+backfill, durable incremental cursors, archive query parsing, pruning, and AI summarization remain
+deferred. Because there is no cursor, repeated explicit acquisition may repeat bounded network
+requests; this path is not production-ready polling.
 
 ## Architectural Status Summary
 

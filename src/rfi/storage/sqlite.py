@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -221,7 +221,11 @@ CREATE TABLE mailing_list_runs (
     context_limit INTEGER NOT NULL CHECK (context_limit > 0),
     seed_count INTEGER NOT NULL CHECK (seed_count >= 0),
     message_count INTEGER NOT NULL CHECK (message_count >= 0),
-    canonical_json TEXT NOT NULL
+    canonical_json TEXT NOT NULL,
+    lifecycle_status TEXT NOT NULL DEFAULT 'succeeded' CHECK (lifecycle_status IN
+      ('succeeded','partial','retryable_failure','terminal_failure')),
+    error_code TEXT,
+    retryable INTEGER NOT NULL DEFAULT 0 CHECK (retryable IN (0,1))
 ) STRICT;
 CREATE TABLE mailing_list_run_items (
     run_id TEXT NOT NULL REFERENCES mailing_list_runs(run_id),
@@ -279,6 +283,89 @@ CREATE TABLE mailing_list_discussion_members (
     depth INTEGER NOT NULL CHECK (depth >= 0),
     PRIMARY KEY (discussion_id, message_key)
 ) STRICT;
+CREATE TABLE artifact_streams (
+    stream_id TEXT PRIMARY KEY,
+    current_revision_id TEXT NOT NULL UNIQUE
+) STRICT;
+CREATE TABLE artifact_stream_revisions (
+    revision_id TEXT PRIMARY KEY,
+    stream_id TEXT NOT NULL REFERENCES artifact_streams(stream_id)
+      DEFERRABLE INITIALLY DEFERRED,
+    revision_number INTEGER NOT NULL CHECK (revision_number > 0),
+    predecessor_id TEXT REFERENCES artifact_stream_revisions(revision_id),
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    enabled INTEGER NOT NULL CHECK (enabled IN (0,1)),
+    input_kind TEXT NOT NULL CHECK (input_kind IN ('external','streams')),
+    schema_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL,
+    UNIQUE (stream_id, revision_number)
+) STRICT;
+CREATE TABLE artifact_stream_dependencies (
+    revision_id TEXT NOT NULL REFERENCES artifact_stream_revisions(revision_id),
+    upstream_stream_id TEXT NOT NULL REFERENCES artifact_streams(stream_id),
+    ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+    PRIMARY KEY (revision_id, upstream_stream_id),
+    UNIQUE (revision_id, ordinal)
+) STRICT;
+CREATE TABLE artifact_stream_projections (
+    artifact_id TEXT PRIMARY KEY REFERENCES artifacts(artifact_id),
+    document_id TEXT NOT NULL REFERENCES documents(document_id),
+    schema_id TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    effective_at TEXT,
+    title TEXT NOT NULL,
+    searchable_text TEXT NOT NULL,
+    authors_json TEXT NOT NULL,
+    attributes_json TEXT NOT NULL,
+    context_id TEXT,
+    context_depth INTEGER,
+    completeness TEXT,
+    canonical_json TEXT NOT NULL
+) STRICT;
+CREATE TABLE artifact_stream_runs (
+    run_id TEXT PRIMARY KEY,
+    stream_id TEXT NOT NULL REFERENCES artifact_streams(stream_id),
+    revision_id TEXT NOT NULL REFERENCES artifact_stream_revisions(revision_id),
+    requested_at TEXT NOT NULL,
+    completed_at TEXT,
+    status TEXT NOT NULL CHECK (status IN ('running','succeeded','failed')),
+    input_fingerprint TEXT NOT NULL,
+    direct_count INTEGER NOT NULL DEFAULT 0 CHECK (direct_count >= 0),
+    context_count INTEGER NOT NULL DEFAULT 0 CHECK (context_count >= 0),
+    error_code TEXT,
+    canonical_json TEXT NOT NULL
+) STRICT;
+CREATE TABLE artifact_stream_run_plans (
+    run_id TEXT PRIMARY KEY REFERENCES artifact_stream_runs(run_id),
+    publication_json TEXT NOT NULL
+) STRICT;
+CREATE TABLE artifact_stream_memberships (
+    membership_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES artifact_stream_runs(run_id),
+    stream_id TEXT NOT NULL REFERENCES artifact_streams(stream_id),
+    revision_id TEXT NOT NULL REFERENCES artifact_stream_revisions(revision_id),
+    artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+    document_id TEXT NOT NULL REFERENCES documents(document_id),
+    inclusion_kind TEXT NOT NULL CHECK (inclusion_kind IN ('direct','context')),
+    inclusion_reason TEXT NOT NULL,
+    expansion_strategy TEXT NOT NULL,
+    completeness TEXT,
+    ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+    canonical_json TEXT NOT NULL,
+    UNIQUE (run_id, artifact_id),
+    UNIQUE (run_id, ordinal)
+) STRICT;
+CREATE TABLE artifact_stream_membership_lineage (
+    lineage_id TEXT PRIMARY KEY,
+    membership_id TEXT NOT NULL REFERENCES artifact_stream_memberships(membership_id),
+    upstream_stream_id TEXT REFERENCES artifact_streams(stream_id),
+    upstream_membership_id TEXT,
+    seed_artifact_id TEXT REFERENCES artifacts(artifact_id),
+    inclusion_reason TEXT NOT NULL,
+    canonical_json TEXT NOT NULL
+) STRICT;
 CREATE INDEX artifacts_sha256 ON artifacts(sha256);
 CREATE INDEX attempts_document_time ON acquisition_attempts(document_id, occurred_at, attempt_id);
 CREATE INDEX attempts_source_time ON acquisition_attempts(source_id, occurred_at, attempt_id);
@@ -297,12 +384,51 @@ CREATE INDEX mailing_list_relationship_parent
 ON mailing_list_relationships(parent_message_key, child_message_key);
 CREATE INDEX mailing_list_discussions_source_date
 ON mailing_list_discussions(source_id, last_message_at DESC, discussion_id);
+CREATE INDEX artifact_stream_dependencies_upstream
+ON artifact_stream_dependencies(upstream_stream_id, revision_id);
+CREATE INDEX artifact_stream_projections_schema_source
+ON artifact_stream_projections(schema_id, source_id, effective_at, artifact_id);
+CREATE INDEX artifact_stream_runs_stream_time
+ON artifact_stream_runs(stream_id, requested_at DESC, run_id DESC);
+CREATE UNIQUE INDEX artifact_stream_runs_idempotent_success
+ON artifact_stream_runs(revision_id, input_fingerprint) WHERE status = 'succeeded';
+CREATE INDEX artifact_stream_memberships_stream_run
+ON artifact_stream_memberships(stream_id, run_id, ordinal);
+CREATE INDEX artifact_stream_lineage_membership
+ON artifact_stream_membership_lineage(membership_id, lineage_id);
 """
 
 _MIGRATE_V1_TO_V2 = _SCHEMA[
     _SCHEMA.index("CREATE TABLE mailing_list_sources") :
+    _SCHEMA.index("CREATE TABLE artifact_streams")
+] + _SCHEMA[
+    _SCHEMA.index("CREATE INDEX mailing_list_runs_source_time") :
+    _SCHEMA.index("CREATE INDEX artifact_stream_dependencies_upstream")
+]
+
+_MIGRATE_V2_TO_V3 = _SCHEMA[
+    _SCHEMA.index("CREATE TABLE artifact_streams") :
     _SCHEMA.index("CREATE INDEX artifacts_sha256")
-] + _SCHEMA[_SCHEMA.index("CREATE INDEX mailing_list_runs_source_time") :]
+] + _SCHEMA[_SCHEMA.index("CREATE INDEX artifact_stream_dependencies_upstream") :]
+
+_MIGRATE_V3_TO_V4 = """
+ALTER TABLE mailing_list_runs ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'succeeded'
+  CHECK (lifecycle_status IN ('succeeded','partial','retryable_failure','terminal_failure'));
+ALTER TABLE mailing_list_runs ADD COLUMN error_code TEXT;
+ALTER TABLE mailing_list_runs ADD COLUMN retryable INTEGER NOT NULL DEFAULT 0
+  CHECK (retryable IN (0,1));
+"""
+
+_V4_LORE_TRANSPORT_DEFAULT = {
+    "user_agent": "RFI-1 bounded-mailing-list/2",
+    "minimum_request_interval_seconds": 1.0,
+    "maximum_concurrency": 1,
+    "timeout_seconds": 20.0,
+    "maximum_response_bytes": 5_000_000,
+    "maximum_attempts_per_request": 3,
+    "backoff_initial_seconds": 1.0,
+    "backoff_maximum_seconds": 30.0,
+}
 
 
 class RepositoryDatabase:
@@ -389,16 +515,40 @@ class RepositoryDatabase:
                 version = int(row[0])
                 if version == SCHEMA_VERSION:
                     return False
-                if version != 1:
+                if version not in {1, 2, 3}:
                     raise StorageError(
                         "incompatible_schema",
                         f"repository schema version {version} is unsupported; "
                         f"expected {SCHEMA_VERSION}",
                     )
                 connection.execute("BEGIN IMMEDIATE")
-                for statement in _MIGRATE_V1_TO_V2.split(";"):
-                    if statement.strip():
-                        connection.execute(statement)
+                mailing_columns = {
+                    str(item[1])
+                    for item in connection.execute("PRAGMA table_info(mailing_list_runs)")
+                }
+                scripts = []
+                if version == 1:
+                    scripts.append(_MIGRATE_V1_TO_V2)
+                if version <= 2:
+                    scripts.append(_MIGRATE_V2_TO_V3)
+                if version in {2, 3} and "lifecycle_status" not in mailing_columns:
+                    scripts.append(_MIGRATE_V3_TO_V4)
+                for script in scripts:
+                    for statement in script.split(";"):
+                        if statement.strip():
+                            connection.execute(statement)
+                if version <= 3:
+                    for source in connection.execute(
+                        "SELECT source_id,canonical_json FROM governed_sources "
+                        "WHERE mechanism='lore-public-inbox'"
+                    ):
+                        value = json.loads(str(source[1]))
+                        policy = value.setdefault("policy", {})
+                        policy.setdefault("transport", _V4_LORE_TRANSPORT_DEFAULT)
+                        connection.execute(
+                            "UPDATE governed_sources SET canonical_json=? WHERE source_id=?",
+                            (canonical_json(value), str(source[0])),
+                        )
                 connection.execute(
                     "UPDATE schema_metadata SET schema_version = ?, applied_at = ? "
                     "WHERE singleton = 1",

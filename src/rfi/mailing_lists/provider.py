@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import threading
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
+from typing import Any, Callable, Iterator
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from rfi.mailing_lists.contracts import (
     ArchiveMessage,
+    LoreTransportPolicy,
     MailingListError,
+    MailingListSource,
     SelectionCriteria,
 )
 from rfi.mailing_lists.parser import normalize_message_id, parse_message
@@ -70,17 +78,101 @@ class FixtureMailingListArchive:
         return ordered[:limit], len(ordered) > limit
 
 
+class _SourceGovernor:
+    """Coordinate concurrency and request starts for one source inside an RFI process."""
+
+    def __init__(self, policy: LoreTransportPolicy) -> None:
+        self._semaphore = threading.BoundedSemaphore(policy.maximum_concurrency)
+        self._pace_lock = threading.Lock()
+        self._last_started: float | None = None
+        self.maximum_observed_concurrency = 0
+        self._active = 0
+        self._active_lock = threading.Lock()
+
+    @contextmanager
+    def request_slot(
+        self,
+        interval: float,
+        monotonic: Callable[[], float],
+        sleeper: Callable[[float], None],
+    ) -> Iterator[float]:
+        self._semaphore.acquire()
+        slept = 0.0
+        try:
+            with self._pace_lock:
+                now = monotonic()
+                if self._last_started is not None:
+                    remaining = interval - (now - self._last_started)
+                    if remaining > 0:
+                        sleeper(remaining)
+                        slept = remaining
+                        now = monotonic()
+                self._last_started = now
+            with self._active_lock:
+                self._active += 1
+                self.maximum_observed_concurrency = max(
+                    self.maximum_observed_concurrency, self._active
+                )
+            yield slept
+        finally:
+            with self._active_lock:
+                self._active -= 1
+            self._semaphore.release()
+
+
+_GOVERNORS: dict[tuple[str, LoreTransportPolicy], _SourceGovernor] = {}
+_GOVERNORS_LOCK = threading.Lock()
+
+
+def _governor(source: MailingListSource) -> _SourceGovernor:
+    key = (source.source_id, source.transport)
+    with _GOVERNORS_LOCK:
+        return _GOVERNORS.setdefault(key, _SourceGovernor(source.transport))
+
+
 class LoreArchive:
     """Narrow live adapter: explicit Message-IDs plus ancestor closure only."""
 
-    def __init__(self, base_url: str, *, timeout: float = 20.0, max_bytes: int = 5_000_000) -> None:
-        if not base_url.startswith("https://") or not base_url.endswith("/"):
+    def __init__(
+        self,
+        source: MailingListSource,
+        *,
+        opener: Callable[..., Any] = urlopen,
+        monotonic: Callable[[], float] = time.monotonic,
+        sleeper: Callable[[float], None] = time.sleep,
+        wall_clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        if source.provider != "lore-public-inbox":
+            raise MailingListError("invalid_source", "source is not a Lore/public-inbox source")
+        if (
+            not source.archive_base_url.startswith("https://")
+            or not source.archive_base_url.endswith("/")
+        ):
             raise MailingListError(
                 "invalid_source", "Lore archive URL must be an HTTPS directory URL"
             )
-        self.base_url = base_url
-        self.timeout = timeout
-        self.max_bytes = max_bytes
+        self.source = source
+        self.base_url = source.archive_base_url
+        self.policy = source.transport
+        self._opener = opener
+        self._monotonic = monotonic
+        self._sleeper = sleeper
+        self._wall_clock = wall_clock or (lambda: datetime.now(UTC))
+        self._governor = _governor(source)
+        self._request_count = 0
+        self._retry_count = 0
+        self._pacing_sleep_seconds = 0.0
+        self._backoff_sleep_seconds = 0.0
+
+    def usage(self) -> dict[str, int | float | str]:
+        return {
+            "source_id": self.source.source_id,
+            "requests": self._request_count,
+            "retries": self._retry_count,
+            "pacing_sleep_seconds": round(self._pacing_sleep_seconds, 6),
+            "backoff_sleep_seconds": round(self._backoff_sleep_seconds, 6),
+            "maximum_observed_concurrency": self._governor.maximum_observed_concurrency,
+        }
 
     @property
     def descendant_enumeration_complete(self) -> bool:
@@ -104,20 +196,91 @@ class LoreArchive:
     def fetch(self, external_message_id: str) -> ArchiveMessage:
         token = external_message_id.strip().removeprefix("<").removesuffix(">")
         location = f"{self.base_url}{quote(token, safe='@')}/raw"
-        request = Request(location, headers={"User-Agent": "RFI-1 bounded-mailing-list/1"})
-        try:
-            with urlopen(request, timeout=self.timeout) as response:
-                length = response.headers.get("Content-Length")
-                if length and int(length) > self.max_bytes:
+        request = Request(location, headers={"User-Agent": self.policy.user_agent})
+        for attempt in range(self.policy.maximum_attempts_per_request):
+            try:
+                with self._governor.request_slot(
+                    self.policy.minimum_request_interval_seconds,
+                    self._monotonic,
+                    self._sleeper,
+                ) as paced:
+                    self._pacing_sleep_seconds += paced
+                    self._request_count += 1
+                    with self._opener(request, timeout=self.policy.timeout_seconds) as response:
+                        length = response.headers.get("Content-Length")
+                        try:
+                            declared_length = int(length) if length else None
+                        except (TypeError, ValueError):
+                            declared_length = None
+                        if (
+                            declared_length is not None
+                            and declared_length > self.policy.maximum_response_bytes
+                        ):
+                            raise MailingListError(
+                                "response_too_large", "archive message exceeds byte limit"
+                            )
+                        raw = response.read(self.policy.maximum_response_bytes + 1)
+                if len(raw) > self.policy.maximum_response_bytes:
                     raise MailingListError(
                         "response_too_large", "archive message exceeds byte limit"
                     )
-                raw = response.read(self.max_bytes + 1)
-        except (HTTPError, URLError, TimeoutError, OSError) as error:
-            raise MailingListError("archive_unavailable", "Lore archive request failed") from error
-        if len(raw) > self.max_bytes:
-            raise MailingListError("response_too_large", "archive message exceeds byte limit")
-        return ArchiveMessage(raw, location)
+                return ArchiveMessage(raw, location)
+            except HTTPError as error:
+                retry_after = error.headers.get("Retry-After") if error.headers else None
+                try:
+                    if error.code not in {429, 500, 502, 503, 504}:
+                        raise MailingListError(
+                            "archive_request_rejected",
+                            f"Lore archive rejected the bounded request with HTTP {error.code}",
+                        ) from error
+                    code = (
+                        "archive_rate_limited" if error.code == 429 else "archive_unavailable"
+                    )
+                    message = (
+                        "Lore archive rate limited the bounded request"
+                        if error.code == 429
+                        else f"Lore archive returned transient HTTP {error.code}"
+                    )
+                    if attempt + 1 >= self.policy.maximum_attempts_per_request:
+                        raise MailingListError(code, message, retryable=True) from error
+                finally:
+                    error.close()
+                self._retry(attempt, retry_after)
+            except (URLError, TimeoutError, OSError) as error:
+                if attempt + 1 >= self.policy.maximum_attempts_per_request:
+                    raise MailingListError(
+                        "archive_unavailable",
+                        "Lore archive transport failed after bounded retries",
+                        retryable=True,
+                    ) from error
+                self._retry(attempt, None)
+        raise AssertionError("unreachable Lore request state")
+
+    def _retry(self, attempt: int, retry_after: str | None) -> None:
+        self._retry_count += 1
+        exponential = min(
+            self.policy.backoff_initial_seconds * (2**attempt),
+            self.policy.backoff_maximum_seconds,
+        )
+        delay = max(exponential, self._retry_after_seconds(retry_after))
+        delay = min(delay, self.policy.backoff_maximum_seconds)
+        if delay > 0:
+            self._sleeper(delay)
+            self._backoff_sleep_seconds += delay
+
+    def _retry_after_seconds(self, value: str | None) -> float:
+        if not value:
+            return 0.0
+        try:
+            return max(0.0, float(value.strip()))
+        except ValueError:
+            try:
+                target = parsedate_to_datetime(value)
+                if target.tzinfo is None:
+                    target = target.replace(tzinfo=UTC)
+                return max(0.0, (target - self._wall_clock()).total_seconds())
+            except (TypeError, ValueError, OverflowError):
+                return 0.0
 
     def direct_children(
         self, external_message_id: str, limit: int

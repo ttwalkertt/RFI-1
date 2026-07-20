@@ -1,0 +1,88 @@
+{
+  "streams": [
+    {
+      "stream_id": "linux-block",
+      "name": "Linux block",
+      "description": "Bounded retained Lore/public-inbox projection",
+      "enabled": true,
+      "input_kind": "external",
+      "input_ids": ["linux-block-lore"],
+      "schema_id": "mail.message",
+      "selection": {
+        "op": "predicate",
+        "field": "title",
+        "operator": "contains",
+        "value": "deterministic queue"
+      },
+      "expansion": {
+        "strategy": "connected_discussion",
+        "ancestor_closure": true,
+        "descendant_depth": 3
+      },
+      "bounds": {"seed_limit": 20, "expanded_limit": 50}
+    },
+    {
+      "stream_id": "zoned-storage",
+      "name": "Zoned storage",
+      "description": "First fan-out branch",
+      "enabled": true,
+      "input_kind": "streams",
+      "input_ids": ["linux-block"],
+      "schema_id": "mail.message",
+      "selection": {
+        "op": "predicate",
+        "field": "text",
+        "operator": "contains",
+        "value": "lifetime"
+      },
+      "expansion": {
+        "strategy": "connected_discussion",
+        "ancestor_closure": true,
+        "descendant_depth": 3
+      },
+      "bounds": {"seed_limit": 10, "expanded_limit": 50}
+    },
+    {
+      "stream_id": "blk-mq",
+      "name": "Blk MQ",
+      "description": "Second fan-out branch",
+      "enabled": true,
+      "input_kind": "streams",
+      "input_ids": ["linux-block"],
+      "schema_id": "mail.message",
+      "selection": {
+        "op": "predicate",
+        "field": "text",
+        "operator": "contains",
+        "value": "ordering"
+      },
+      "expansion": {
+        "strategy": "connected_discussion",
+        "ancestor_closure": true,
+        "descendant_depth": 3
+      },
+      "bounds": {"seed_limit": 10, "expanded_limit": 50}
+    },
+    {
+      "stream_id": "queue-review",
+      "name": "Queue review",
+      "description": "Second derived level",
+      "enabled": true,
+      "input_kind": "streams",
+      "input_ids": ["zoned-storage"],
+      "schema_id": "mail.message",
+      "selection": {
+        "op": "predicate",
+        "field": "title",
+        "operator": "contains",
+        "value": "deterministic"
+      },
+      "expansion": {
+        "strategy": "connected_discussion",
+        "ancestor_closure": true,
+        "descendant_depth": 3
+      },
+      "bounds": {"seed_limit": 10, "expanded_limit": 50}
+    }
+  ]
+}
