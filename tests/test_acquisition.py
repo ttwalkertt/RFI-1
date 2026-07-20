@@ -340,6 +340,7 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "acquisition/sec_provider.py",
                 "admin/__init__.py",
                 "admin/field_definitions.py",
+                "admin/help.py",
                 "admin/server.py",
                 "artifacts/__init__.py",
                 "artifacts/contracts.py",
