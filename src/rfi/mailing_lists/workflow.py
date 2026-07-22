@@ -457,13 +457,13 @@ class LinuxMailingListWorkflowService:
                 )
             )
             test_evidence_status = (
-                "complete_connected" if acquisition_status == "succeeded"
+                "failed" if acquisition_status == "succeeded"
+                and summary.latest_run_status == "failed"
+                else "complete_connected" if acquisition_status == "succeeded"
                 and connectivity_status == "connected"
                 and int(latest["message_count"]) > 0
-                and summary.latest_run_status == "succeeded"
                 else "incomplete_or_truncated" if acquisition_status == "succeeded"
                 and int(latest["message_count"]) > 0
-                and summary.latest_run_status == "succeeded"
                 else "empty" if no_results
                 else "partial" if acquisition_status == "partial"
                 else "failed" if acquisition_status in {
@@ -527,38 +527,62 @@ class LinuxMailingListWorkflowService:
             service = MailingListAcquisitionService(
                 self.repository, self.archive_factory(source)
             )
-            try:
-                manifest = service.acquire(
-                    source_id, window, limits, cancelled=cancelled
-                )
-            except MailingListError as error:
-                latest = self._new_acquisition(source_id, before)
-                if latest is not None:
-                    run_ids.append(str(latest["run_id"]))
-                if error.code == "no_seed_matches":
+            offset = 0
+            batch_id = hashlib.sha256(
+                f"{revision.revision_id}:{cursor.isoformat()}:{window_end.isoformat()}".encode()
+            ).hexdigest()[:32]
+            while True:
+                try:
+                    manifest = service.acquire(
+                        source_id, window, limits, cancelled=cancelled,
+                        discovery_offset=offset, coverage_batch_id=batch_id,
+                        prior_batches_complete=True,
+                    )
+                except MailingListError as error:
+                    latest = self._new_acquisition(source_id, before)
+                    if latest is not None and str(latest["run_id"]) not in run_ids:
+                        run_ids.append(str(latest["run_id"]))
+                    if error.code == "no_seed_matches" and offset == 0:
+                        completed += 1
+                        cursor = window_end + timedelta(days=1)
+                        break
+                    raise
+                if cancelled is not None and cancelled():
+                    raise MailingListError(
+                        "acquisition_cancelled",
+                        "mailing-list catch-up was cancelled after preserving completed evidence",
+                    )
+                run_ids.append(manifest.run_id)
+                if (
+                    manifest.run_status != AcquisitionRunStatus.SUCCEEDED
+                    or manifest.state.value in {"incomplete", "quarantined"}
+                    or manifest.relationship_truncated
+                ):
                     completed += 1
-                    cursor = window_end + timedelta(days=1)
+                    status = "completed_with_incomplete_evidence"
+                    message = (
+                        "Catch-up stopped at an incomplete relationship batch; retained "
+                        "evidence remains inspectable and coverage was not advanced."
+                    )
+                    break
+                if manifest.discovery_has_more:
+                    offset += len(manifest.seed_ids)
                     continue
-                raise
-            if cancelled is not None and cancelled():
-                raise MailingListError(
-                    "acquisition_cancelled",
-                    "mailing-list catch-up was cancelled after preserving completed evidence",
-                )
-            run_ids.append(manifest.run_id)
-            completed += 1
-            if (
-                manifest.run_status != AcquisitionRunStatus.SUCCEEDED
-                or manifest.truncated
-                or manifest.state.value != "connected"
-            ):
-                status = "completed_with_incomplete_evidence"
-                message = (
-                    "Catch-up stopped at an incomplete or truncated bounded window; "
-                    "retained evidence remains inspectable and coverage was not advanced."
-                )
+                completed += 1
+                cursor = window_end + timedelta(days=1)
                 break
-            cursor = window_end + timedelta(days=1)
+            if status != "completed":
+                break
+        if status == "completed":
+            try:
+                self.stream_service.run(stream_id)
+            except StreamError as error:
+                raise MailingListError(
+                    "stream_projection_failed",
+                    "Acquisition coverage is current, but publishing the saved stream "
+                    f"projection failed: {error}",
+                    retryable=True,
+                )
         return FetchUpToDateResult(
             stream_id, status, start.isoformat(), through.isoformat(), completed,
             tuple(run_ids), self._effective_last_fetch(revision.draft), message,
@@ -613,6 +637,10 @@ class LinuxMailingListWorkflowService:
                 or item["lifecycle_status"] == AcquisitionRunStatus.SUCCEEDED.value
                 and item["connectivity_state"] == "connected"
                 and not item["truncated"]
+                and (
+                    not item.get("pagination_managed")
+                    or item.get("coverage_complete")
+                )
             )
             if complete:
                 intervals.append((start, through))

@@ -284,7 +284,8 @@ class MailingListAcquisitionService:
 
     def acquire(
         self, source_id: str, criteria: SelectionCriteria, limits: AcquisitionLimits,
-        *, cancelled: Callable[[], bool] | None = None,
+        *, cancelled: Callable[[], bool] | None = None, discovery_offset: int = 0,
+        coverage_batch_id: str | None = None, prior_batches_complete: bool = True,
     ) -> AcquisitionManifest:
         # Configuration errors are not acquisition attempts and cannot satisfy the
         # run table's governed-source foreign key.
@@ -292,7 +293,10 @@ class MailingListAcquisitionService:
         run_id = self.identifiers()
         requested_at = self.clock()
         try:
-            plan = self._plan(source_id, criteria, limits, cancelled=cancelled)
+            plan = self._plan(
+                source_id, criteria, limits, cancelled=cancelled,
+                discovery_offset=discovery_offset,
+            )
         except MailingListError as error:
             if error.code == "acquisition_cancelled":
                 raise
@@ -306,7 +310,7 @@ class MailingListAcquisitionService:
         for external_id, item in sorted(plan["items"].items()):
             key, doc_id, artifact_id, artifact_created = self.repository.retain_message(
                 source, run_id, external_id, item["parsed"], item["raw"], item["location"],
-                item["inclusion_reason"], requested_at,
+                item["inclusion_reason"], requested_at, item["fallback_archive_url"],
             )
             del key
             created += int(artifact_created)
@@ -317,19 +321,46 @@ class MailingListAcquisitionService:
                 "connectivity_state": plan["item_states"].get(external_id, plan["state"].value),
                 "inclusion_reason": item["inclusion_reason"], "is_seed": item["is_seed"],
                 "parsed": item["parsed"],
+                "fallback_archive_url": item["fallback_archive_url"],
             })
         existing = self.repository.parsed_retained_records()
         messages, discussions = derive_projection(existing + retained)
-        relationships = sum(bool(item["parent_external_message_id"]) for item in messages)
+        retained_keys = {
+            message_key(item["source_id"], item["external_message_id"])
+            for item in retained
+        }
+        relationships = sum(
+            item["message_key"] in retained_keys
+            and bool(item["parent_external_message_id"])
+            for item in messages
+        )
+        run_discussions = sum(
+            any(key in retained_keys for key, _depth in item["members"])
+            for item in discussions
+            if item["source_id"] == source_id
+        )
+        coverage_complete = (
+            prior_batches_complete
+            and not plan["discovery_has_more"]
+            and not plan["relationship_truncated"]
+            and not plan["failures"]
+            and plan["state"] == ConnectivityState.CONNECTED
+        )
         manifest = AcquisitionManifest(
             run_id, source_id, requested_at, criteria, limits, plan["seeds"], len(retained),
             relationships,
-            len([item for item in discussions if item["source_id"] == source_id]),
+            run_discussions,
             dict(Counter(item["inclusion_reason"] for item in retained)),
             plan["state"], plan["truncated"], tuple(plan["warnings"]), created, idempotent,
             AcquisitionRunStatus.PARTIAL if plan["failures"] else AcquisitionRunStatus.SUCCEEDED,
             plan["failures"][0].code if plan["failures"] else None,
             any(error.retryable for error in plan["failures"]),
+            discovery_offset, plan["discovery_has_more"],
+            plan["relationship_truncated"], coverage_batch_id, coverage_complete,
+            tuple(sorted(
+                external_id for external_id, item in plan["items"].items()
+                if item["fallback_archive_url"] is not None
+            )),
         )
         self.repository.publish(manifest, retained, messages, discussions)
         return manifest
@@ -346,10 +377,21 @@ class MailingListAcquisitionService:
 
     def _plan(self, source_id: str, criteria: SelectionCriteria,
               limits: AcquisitionLimits, *,
-              cancelled: Callable[[], bool] | None = None) -> dict[str, Any]:
+              cancelled: Callable[[], bool] | None = None,
+              discovery_offset: int = 0) -> dict[str, Any]:
         self.repository.source(source_id)
         self._check_cancelled(cancelled)
-        seeds, seed_truncated = self.archive.discover(criteria, limits.seed_limit)
+        if discovery_offset == 0:
+            seeds, seed_truncated = self.archive.discover(criteria, limits.seed_limit)
+        else:
+            discover_page = getattr(self.archive, "discover_page", None)
+            if discover_page is None:
+                raise MailingListError(
+                    "pagination_unsupported", "mailing-list archive cannot continue discovery"
+                )
+            seeds, seed_truncated = discover_page(
+                criteria, limits.seed_limit, discovery_offset
+            )
         self._check_cancelled(cancelled)
         if not seeds:
             raise MailingListError("no_seed_matches", "bounded selection found no messages")
@@ -389,6 +431,7 @@ class MailingListAcquisitionService:
                     ConnectivityState.QUARANTINED.value
                     if parsed.external_message_id != expected else None
                 ),
+                "fallback_archive_url": archive_message.fallback_archive_url,
             }
             return storage_id
 
@@ -436,11 +479,11 @@ class MailingListAcquisitionService:
         # that a hard limit removes descendants at the frontier, never an intermediate connector.
         roots = [key for key, item in items.items() if not item["parsed"].immediate_parent_id]
         frontier = deque((root, 0) for root in sorted(roots))
-        descendant_truncated = seed_truncated or not self.archive.descendant_enumeration_complete
+        relationship_truncated = not self.archive.descendant_enumeration_complete
         if limits.descendant_depth == 0:
             # Zero requests no remote reply enumeration. Report the descendant frontier
             # conservatively instead of performing a hidden network request merely to detect it.
-            descendant_truncated = True
+            relationship_truncated = True
             frontier.clear()
         while frontier:
             parent, depth = frontier.popleft()
@@ -448,15 +491,15 @@ class MailingListAcquisitionService:
             if depth >= limits.descendant_depth:
                 self._check_cancelled(cancelled)
                 children, has_more = self.archive.direct_children(parent, 1)
-                descendant_truncated = descendant_truncated or bool(children) or has_more
+                relationship_truncated = relationship_truncated or bool(children) or has_more
                 continue
             if remaining <= 0:
-                descendant_truncated = True
+                relationship_truncated = True
                 break
             self._check_cancelled(cancelled)
             children, has_more = self.archive.direct_children(parent, remaining + 1)
             if has_more or len(children) > remaining:
-                descendant_truncated = True
+                relationship_truncated = True
             for child in children[:remaining]:
                 if child in items:
                     frontier.append((child, depth + 1))
@@ -485,7 +528,7 @@ class MailingListAcquisitionService:
         default_state = (
             ConnectivityState.QUARANTINED if quarantined else
             ConnectivityState.INCOMPLETE if incomplete else
-            ConnectivityState.TRUNCATED if descendant_truncated else
+            ConnectivityState.TRUNCATED if seed_truncated or relationship_truncated else
             ConnectivityState.CONNECTED
         )
         for external_id, item in items.items():
@@ -503,13 +546,15 @@ class MailingListAcquisitionService:
             state = ConnectivityState.QUARANTINED
         elif any(value == ConnectivityState.INCOMPLETE.value for value in item_states.values()):
             state = ConnectivityState.INCOMPLETE
-        elif descendant_truncated:
+        elif seed_truncated or relationship_truncated:
             state = ConnectivityState.TRUNCATED
         else:
             state = ConnectivityState.CONNECTED
         return {
             "seeds": tuple(seeds), "items": items, "warnings": sorted(set(warnings)),
-            "state": state, "truncated": descendant_truncated,
+            "state": state, "truncated": seed_truncated or relationship_truncated,
+            "discovery_has_more": seed_truncated,
+            "relationship_truncated": relationship_truncated,
             "item_states": item_states, "failures": tuple(failures),
         }
 
@@ -555,7 +600,8 @@ class MailingListQueryService:
         self, run_id: str, limit: int = 100
     ) -> tuple[AcquisitionMessage, ...]:
         self._limit(limit)
-        self.acquisition_run(run_id)
+        run = self.acquisition_run(run_id)
+        fallback_ids = set(run["manifest"].get("fallback_message_ids", ()))
         rows = self.repository.rows(
             self._message_select(
                 prefix="mailing_list_run_items i JOIN mailing_list_messages m "
@@ -574,10 +620,16 @@ class MailingListQueryService:
             direct = reason in {
                 InclusionReason.SEED_MATCH.value, InclusionReason.EXPLICIT_REQUEST.value
             }
+            fallback = summary.external_message_id in fallback_ids
+            archive_url = (
+                "https://lore.kernel.org/all/" if fallback
+                else source.archive_base_url
+            )
             result.append(AcquisitionMessage(
                 summary, reason, direct, not direct,
-                f"{source.archive_base_url}{quote(token, safe='@')}/" if token else "",
+                f"{archive_url}{quote(token, safe='@')}/" if token else "",
                 str(row["discussion_id"]) if row.get("discussion_id") else None,
+                fallback,
             ))
         return tuple(result)
 

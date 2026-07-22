@@ -236,7 +236,7 @@ class LoreTransportCase(unittest.TestCase):
             "terminal-test-lore", minimum_request_interval_seconds=0.1,
             maximum_attempts_per_request=3,
         )
-        opener = SequenceOpener([self.error(404)])
+        opener = SequenceOpener([self.error(404), self.error(404)])
         service = self.service(configured, opener, FakeTime(), "mailrun-terminal")
         with self.assertRaises(MailingListError) as raised:
             self.acquire_one(service, configured.source_id)
@@ -244,6 +244,27 @@ class LoreTransportCase(unittest.TestCase):
         run = self.repository.acquisition_runs(configured.source_id)[0]
         self.assertEqual(run["lifecycle_status"], "terminal_failure")
         self.assertEqual(run["error_code"], "archive_request_rejected")
+
+    def test_exact_message_falls_back_to_all_and_records_provenance_flag(self) -> None:
+        configured = source(
+            "fallback-test-lore", minimum_request_interval_seconds=0.1,
+            maximum_attempts_per_request=1,
+        )
+        opener = SequenceOpener([
+            self.error(404),
+            FakeResponse(raw_message("<transport-test@example.com>", "fallback recovered")),
+        ])
+        service = self.service(configured, opener, FakeTime(), "mailrun-fallback")
+
+        manifest = self.acquire_one(service, configured.source_id)
+
+        self.assertEqual(
+            manifest.fallback_message_ids, ("<transport-test@example.com>",)
+        )
+        observations = self.repository.artifacts.observations()
+        metadata = observations[0]["candidate"]["provenance"]["metadata"]
+        self.assertTrue(metadata["cross_archive_fallback"])
+        self.assertEqual(metadata["fallback_archive_url"], "https://lore.kernel.org/all/")
 
     def test_response_size_bound_is_terminal_and_retains_no_evidence(self) -> None:
         configured = source(

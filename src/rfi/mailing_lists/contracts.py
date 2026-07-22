@@ -159,6 +159,7 @@ class AcquisitionLimits:
 class ArchiveMessage:
     raw: bytes
     location: str
+    fallback_archive_url: str | None = None
 
 
 class MailingListArchive(Protocol):
@@ -166,6 +167,10 @@ class MailingListArchive(Protocol):
 
     def discover(
         self, criteria: SelectionCriteria, limit: int
+    ) -> tuple[tuple[str, ...], bool]: ...
+
+    def discover_page(
+        self, criteria: SelectionCriteria, limit: int, offset: int
     ) -> tuple[tuple[str, ...], bool]: ...
 
     def fetch(self, external_message_id: str) -> ArchiveMessage: ...
@@ -211,6 +216,12 @@ class AcquisitionManifest:
     run_status: AcquisitionRunStatus = AcquisitionRunStatus.SUCCEEDED
     error_code: str | None = None
     retryable: bool = False
+    discovery_offset: int = 0
+    discovery_has_more: bool = False
+    relationship_truncated: bool = False
+    coverage_batch_id: str | None = None
+    coverage_complete: bool = False
+    fallback_message_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -265,6 +276,7 @@ class AcquisitionMessage:
     context_only: bool
     source_link: str
     discussion_id: str | None
+    cross_archive_fallback: bool = False
 
 
 @dataclass(frozen=True)

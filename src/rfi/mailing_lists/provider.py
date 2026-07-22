@@ -37,9 +37,15 @@ class FixtureMailingListArchive:
     def discover(
         self, criteria: SelectionCriteria, limit: int
     ) -> tuple[tuple[str, ...], bool]:
+        return self.discover_page(criteria, limit, 0)
+
+    def discover_page(
+        self, criteria: SelectionCriteria, limit: int, offset: int
+    ) -> tuple[tuple[str, ...], bool]:
         explicit = [normalize_message_id(item) or item for item in criteria.message_ids]
         if explicit:
-            return tuple(explicit[:limit]), len(explicit) > limit
+            page = explicit[offset:offset + limit]
+            return tuple(page), offset + len(page) < len(explicit)
         matches: list[tuple[str, str]] = []
         terms = tuple(item.casefold() for item in criteria.topic_terms)
         subjects = tuple(item.casefold() for item in criteria.subject_terms)
@@ -63,7 +69,8 @@ class FixtureMailingListArchive:
                 continue
             matches.append((when, external_id))
         ordered = tuple(item[1] for item in sorted(matches, reverse=True))
-        return ordered[:limit], len(ordered) > limit
+        page = ordered[offset:offset + limit]
+        return page, offset + len(page) < len(ordered)
 
     def fetch(self, external_message_id: str) -> ArchiveMessage:
         try:
@@ -193,12 +200,18 @@ class LoreArchive:
     def discover(
         self, criteria: SelectionCriteria, limit: int
     ) -> tuple[tuple[str, ...], bool]:
+        return self.discover_page(criteria, limit, 0)
+
+    def discover_page(
+        self, criteria: SelectionCriteria, limit: int, offset: int
+    ) -> tuple[tuple[str, ...], bool]:
         if criteria.message_ids:
+            page = criteria.message_ids[offset:offset + limit]
             return (
                 tuple(
-                    normalize_message_id(item) or item for item in criteria.message_ids[:limit]
+                    normalize_message_id(item) or item for item in page
                 ),
-                len(criteria.message_ids) > limit,
+                offset + len(page) < len(criteria.message_ids),
             )
         clauses = []
         if criteria.query:
@@ -224,7 +237,10 @@ class LoreArchive:
             raise MailingListError(
                 "unsupported_selection", "Lore discovery requires a bounded search criterion"
             )
-        location = f"{self.base_url}?{urlencode({'q': ' AND '.join(clauses), 'x': 'A'})}"
+        query = {'q': ' AND '.join(clauses), 'x': 'A'}
+        if offset:
+            query['o'] = str(offset)
+        location = f"{self.base_url}?{urlencode(query)}"
         root = self._atom(self._request(location), "Lore search returned malformed Atom")
         message_ids = tuple(
             message_id
@@ -252,7 +268,14 @@ class LoreArchive:
     def fetch(self, external_message_id: str) -> ArchiveMessage:
         token = external_message_id.strip().removeprefix("<").removesuffix(">")
         location = f"{self.base_url}{quote(token, safe='@')}/raw"
-        return ArchiveMessage(self._request(location), location)
+        try:
+            return ArchiveMessage(self._request(location), location)
+        except MailingListError as error:
+            if error.code != "archive_request_rejected" or self.base_url.endswith("/all/"):
+                raise
+        fallback_base = "https://lore.kernel.org/all/"
+        fallback = f"{fallback_base}{quote(token, safe='@')}/raw"
+        return ArchiveMessage(self._request(fallback), fallback, fallback_base)
 
     def _request(self, location: str) -> bytes:
         request = Request(location, headers={"User-Agent": self.policy.user_agent})
@@ -379,9 +402,17 @@ class LoreArchive:
         if parent not in self._thread_children:
             token = parent.strip().removeprefix("<").removesuffix(">")
             location = f"{self.base_url}{quote(token, safe='@')}/t.atom"
-            root = self._atom(
-                self._request(location), "Lore thread endpoint returned malformed Atom"
-            )
+            try:
+                raw = self._request(location)
+            except MailingListError as error:
+                if error.code != "archive_request_rejected" or self.base_url.endswith("/all/"):
+                    raise
+                location = (
+                    "https://lore.kernel.org/all/"
+                    f"{quote(token, safe='@')}/t.atom"
+                )
+                raw = self._request(location)
+            root = self._atom(raw, "Lore thread endpoint returned malformed Atom")
             children: dict[str, list[str]] = {}
             all_ids: set[str] = set()
             for entry in root.findall(f"{self._ATOM}entry"):

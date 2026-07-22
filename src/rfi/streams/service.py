@@ -743,9 +743,13 @@ class StreamService:
             accepted = {str(value).casefold() for value in expected}
             return bool(set(values).intersection(accepted)) if values else scalar in accepted
         if operator == "after_or_on":
-            return scalar >= str(expected).casefold()
+            target = str(expected).casefold()
+            comparable = scalar[:10] if field == "effective_at" and len(target) == 10 else scalar
+            return comparable >= target
         if operator == "before_or_on":
-            return scalar <= str(expected).casefold()
+            target = str(expected).casefold()
+            comparable = scalar[:10] if field == "effective_at" and len(target) == 10 else scalar
+            return comparable <= target
         return False
 
     @staticmethod

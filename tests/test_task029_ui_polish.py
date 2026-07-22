@@ -27,6 +27,7 @@ class Task029UiPolishCase(unittest.TestCase):
         self.assertIn("removeAttribute('open')", html)
         self.assertIn("max-height:360px;overflow:auto", html)
         self.assertIn('tabindex="0" role="region"', html)
+        self.assertIn("Lore /all fallback", html)
 
     def test_stream_cards_expose_selected_health_and_coverage_hierarchy(self) -> None:
         html = (ROOT / "src/rfi/admin/linux_mailing_lists.html").read_text()

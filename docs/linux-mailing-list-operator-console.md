@@ -71,10 +71,28 @@ date. If no complete coverage exists, it starts at the revision's configured ini
 two-day overlap is deterministic and intentionally re-observes the archive boundary. Immutable
 content remains idempotent.
 
-Each Lore request spans at most the existing 31-day difference and retains the revision's direct,
-total, reply-depth, source transport, response-size, pacing, retry, and concurrency bounds. Longer
-catch-up ranges are partitioned into gap-free FIFO windows. An incomplete or truncated window is
-retained and exposed, but catch-up stops so a later complete window cannot hide the gap.
+Each Lore date window spans at most the existing 31-day difference and retains the revision's
+per-run direct, total, reply-depth, source transport, response-size, pacing, retry, and concurrency
+bounds. Longer catch-up ranges are partitioned into gap-free FIFO windows. When a date window has
+more direct matches than one run may retain, catch-up advances Lore's bounded search offset and
+issues additional immutable runs. Only the final page carries a durable coverage-complete marker,
+and only after every preceding page completed without missing or truncated relationship context.
+An interruption, rejection, missing relationship, or relationship-bound truncation leaves all
+completed evidence inspectable but does not publish that marker or advance coverage.
+
+After all date windows complete, catch-up executes the authoritative saved stream projection.
+Date-only stream predicates compare the date portion of message timestamps, so the configured
+through-date includes the full calendar day. Projection failure is reported separately from
+acquisition coverage and never discards retained evidence.
+
+Exact Message-ID retrieval first uses the configured mailing-list archive. If that archive rejects
+the exact object, the adapter may retry the same bounded identity through Lore's `/all` archive.
+Fallback bytes are retained normally but their artifact observation, acquisition manifest, source
+link, and operator badge explicitly identify the cross-archive fallback. If `/all` also rejects the
+identity, normal incomplete/partial behavior applies.
+
+Acquisition manifest relationship and discussion counts describe only messages retained by that
+run; repository-wide derived counts remain available through the mailing-list query surfaces.
 
 ## Queue behavior
 

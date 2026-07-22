@@ -417,6 +417,9 @@ hard direct/total message limits. Relevance controls are optional.
    last fetch, latest acquisition result, and any incomplete/partial warning.
 2. Choose **Fetch up to date**. RFI immediately queues deterministic bounded acquisition from a
    two-day overlap before complete repository coverage through today.
+   If a window contains more direct messages than one bounded run permits, RFI continues through
+   additional bounded Lore pages. Coverage advances only after the complete page sequence and its
+   required relationship context finish successfully.
 3. Follow queued, started, completed, failed, or cancellation state in **Fetch queue** while using
    the rest of the page. **Fetch All up to date** queues every eligible stream through the same FIFO
    and duplicate suppression.
@@ -432,7 +435,9 @@ hard direct/total message limits. Relevance controls are optional.
 
 Archive validation and Review are read-only. Create and Save change durable source or immutable
 stream-revision state. Test and Fetch contact Lore, preserve exact message bytes and provenance,
-and record bounded acquisition runs. The queue and status panel are process-local operational
+and record bounded acquisition runs. An exact Message-ID rejected by the selected archive may be
+retried through Lore `/all`; retained fallback artifacts are explicitly flagged in provenance and
+the message viewer. The queue and status panel are process-local operational
 state, not a scheduler or audit store; restart clears them but preserves durable evidence and
 reconstructed effective coverage. There is no unbounded mirror.
 

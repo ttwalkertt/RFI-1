@@ -191,6 +191,7 @@ class MailingListRepository:
         location: str,
         inclusion_reason: str,
         requested_at: str,
+        fallback_archive_url: str | None = None,
     ) -> tuple[str, str, str, bool]:
         """Retain exact bytes once; return message/document/artifact identity and creation."""
         digest = hashlib.sha256(raw).hexdigest()
@@ -228,6 +229,8 @@ class MailingListRepository:
                     "inclusion_reason": inclusion_reason,
                     "run_id": run_id,
                     "parse_warnings": list(parsed.parse_warnings),
+                    "cross_archive_fallback": fallback_archive_url is not None,
+                    "fallback_archive_url": fallback_archive_url,
                 },
             ),
         )
@@ -356,6 +359,9 @@ class MailingListRepository:
             payload = json.loads(str(item.pop("canonical_json")))
             item["criteria"] = payload.get("criteria", {})
             item["truncated"] = bool(payload.get("truncated", False))
+            item["pagination_managed"] = "coverage_complete" in payload
+            item["coverage_complete"] = bool(payload.get("coverage_complete", False))
+            item["coverage_batch_id"] = payload.get("coverage_batch_id")
             result.append(item)
         return tuple(result)
 
