@@ -130,10 +130,6 @@ class MailingListSourceService:
         return result.strip()
 
 
-def _state_rank(value: str) -> int:
-    return {"connected": 4, "truncated": 3, "incomplete": 2, "quarantined": 1}[value]
-
-
 def derive_projection(
     records: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -186,12 +182,19 @@ def derive_projection(
             continue
         depth = len(path) - 1
         requested_states = states[key]
+        # A run-wide incomplete outcome is audit evidence about the acquisition, not
+        # structural evidence about every component retained by that run. Once this
+        # message's actual parent path closes at a retained root, only a connected
+        # observation can clear a component-local truncation or quarantine marker;
+        # inherited incomplete observations alone do not make the closed path incomplete.
         state = (
             ConnectivityState.CONNECTED.value
             if ConnectivityState.CONNECTED.value in requested_states
             else ConnectivityState.TRUNCATED.value
             if ConnectivityState.TRUNCATED.value in requested_states
-            else max(requested_states, key=_state_rank)
+            else ConnectivityState.QUARANTINED.value
+            if ConnectivityState.QUARANTINED.value in requested_states
+            else ConnectivityState.CONNECTED.value
         )
         classifications[key] = (state, root, depth)
         if state != ConnectivityState.QUARANTINED.value:
@@ -564,9 +567,13 @@ class MailingListAcquisitionService:
         item_states = {
             item["external_message_id"]: item["connectivity_state"] for item in projected
         }
-        if any(value == ConnectivityState.QUARANTINED.value for value in item_states.values()):
+        if quarantined or any(
+            value == ConnectivityState.QUARANTINED.value for value in item_states.values()
+        ):
             state = ConnectivityState.QUARANTINED
-        elif any(value == ConnectivityState.INCOMPLETE.value for value in item_states.values()):
+        elif incomplete or any(
+            value == ConnectivityState.INCOMPLETE.value for value in item_states.values()
+        ):
             state = ConnectivityState.INCOMPLETE
         elif relationship_truncated:
             state = ConnectivityState.TRUNCATED

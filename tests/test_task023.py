@@ -202,6 +202,153 @@ class MailingListCase(unittest.TestCase):
             detail.missing_parent_reference, "<task023-not-retained@kernel.example>"
         )
 
+    def test_partial_run_projects_connectivity_per_component_and_rebuilds_identically(
+        self,
+    ) -> None:
+        missing_parent = "<component-missing-parent@kernel.example>"
+        incomplete_child = "<component-incomplete-child@kernel.example>"
+        complete_root = "<component-complete-root@kernel.example>"
+        complete_child = "<component-complete-child@kernel.example>"
+        out_of_policy_grandchild = "<component-depth-two@kernel.example>"
+        first_archive = FixtureMailingListArchive({
+            incomplete_child: ArchiveMessage(
+                raw_message(
+                    incomplete_child, "Re: incomplete component", missing_parent
+                ),
+                "fixture:incomplete-child",
+            ),
+            complete_root: ArchiveMessage(
+                raw_message(complete_root, "[PATCH 0/1] complete component"),
+                "fixture:complete-root",
+            ),
+            complete_child: ArchiveMessage(
+                raw_message(
+                    complete_child, "[PATCH 1/1] complete component", complete_root
+                ),
+                "fixture:complete-child",
+            ),
+            out_of_policy_grandchild: ArchiveMessage(
+                raw_message(
+                    out_of_policy_grandchild,
+                    "Re: [PATCH 1/1] complete component",
+                    complete_child,
+                ),
+                "fixture:depth-two",
+            ),
+        })
+        run_ids = iter(("mailrun-component-partial", "mailrun-component-recovered"))
+        service = MailingListAcquisitionService(
+            self.repository, first_archive, identifiers=run_ids.__next__
+        )
+
+        partial = service.acquire(
+            LINUX_BLOCK_SOURCE.source_id,
+            SelectionCriteria(message_ids=(incomplete_child, complete_root)),
+            AcquisitionLimits(seed_limit=2, context_limit=10, descendant_depth=1),
+        )
+
+        self.assertEqual(partial.run_status.value, "partial")
+        self.assertEqual(partial.state, ConnectivityState.INCOMPLETE)
+        self.assertTrue(partial.descendant_policy_limited)
+        run_items = {
+            str(row["external_message_id"]): str(row["connectivity_state"])
+            for row in self.repository.rows(
+                "SELECT external_message_id,connectivity_state "
+                "FROM mailing_list_run_items WHERE run_id=?",
+                (partial.run_id,),
+            )
+        }
+        self.assertEqual(run_items[incomplete_child], "incomplete")
+        self.assertEqual(run_items[complete_root], "connected")
+        self.assertEqual(run_items[complete_child], "connected")
+        self.assertNotIn(out_of_policy_grandchild, run_items)
+
+        discussion = self.query.discussions(LINUX_BLOCK_SOURCE.source_id)[0]
+        self.assertEqual(discussion.connectivity_state, ConnectivityState.CONNECTED)
+        self.assertFalse(discussion.descendant_truncated)
+        self.assertTrue(discussion.descendant_policy_limited)
+        self.assertEqual(discussion.message_count, 2)
+        incomplete_ids = {
+            item.external_message_id
+            for item in self.query.incomplete(LINUX_BLOCK_SOURCE.source_id)
+        }
+        self.assertEqual(incomplete_ids, {incomplete_child})
+
+        manifest_before = self.repository.rows(
+            "SELECT lifecycle_status,status,canonical_json FROM mailing_list_runs WHERE run_id=?",
+            (partial.run_id,),
+        )[0]
+        artifacts_before = {
+            str(item["artifact_id"]): (
+                str(item["sha256"]),
+                self.repository.raw_for_artifact(str(item["artifact_id"])),
+            )
+            for item in self.repository.artifacts.artifact_metadata()
+        }
+
+        def projection_statuses() -> tuple[tuple[object, ...], ...]:
+            rows = self.repository.rows(
+                "SELECT 'message',external_message_id,connectivity_state,canonical_json "
+                "FROM mailing_list_messages UNION ALL "
+                "SELECT 'discussion',discussion_id,connectivity_state,canonical_json "
+                "FROM mailing_list_discussions ORDER BY 1,2"
+            )
+            return tuple(tuple(row.values()) for row in rows)
+
+        live_statuses = projection_statuses()
+        service.rebuild()
+        self.assertEqual(projection_statuses(), live_statuses)
+        self.assertEqual(
+            self.repository.rows(
+                "SELECT lifecycle_status,status,canonical_json "
+                "FROM mailing_list_runs WHERE run_id=?",
+                (partial.run_id,),
+            )[0],
+            manifest_before,
+        )
+        for artifact_id, (digest, raw) in artifacts_before.items():
+            metadata = next(
+                item for item in self.repository.artifacts.artifact_metadata()
+                if item["artifact_id"] == artifact_id
+            )
+            self.assertEqual(metadata["sha256"], digest)
+            self.assertEqual(self.repository.raw_for_artifact(artifact_id), raw)
+
+        recovered_archive = FixtureMailingListArchive({
+            **first_archive.messages,
+            missing_parent: ArchiveMessage(
+                raw_message(missing_parent, "Recovered component root"),
+                "fixture:recovered-root",
+            ),
+        })
+        recovered = MailingListAcquisitionService(
+            self.repository, recovered_archive, identifiers=run_ids.__next__
+        ).acquire(
+            LINUX_BLOCK_SOURCE.source_id,
+            SelectionCriteria(message_ids=(incomplete_child,)),
+            AcquisitionLimits(seed_limit=1, context_limit=10, descendant_depth=0),
+        )
+        self.assertEqual(recovered.run_status.value, "succeeded")
+        self.assertEqual(self.query.incomplete(LINUX_BLOCK_SOURCE.source_id), ())
+        recovered_live_statuses = projection_statuses()
+        service.rebuild()
+        self.assertEqual(projection_statuses(), recovered_live_statuses)
+        self.assertEqual(
+            self.repository.rows(
+                "SELECT lifecycle_status,status,canonical_json "
+                "FROM mailing_list_runs WHERE run_id=?",
+                (partial.run_id,),
+            )[0],
+            manifest_before,
+        )
+        for artifact_id, (digest, raw) in artifacts_before.items():
+            metadata = next(
+                item for item in self.repository.artifacts.artifact_metadata()
+                if item["artifact_id"] == artifact_id
+            )
+            self.assertEqual(metadata["sha256"], digest)
+            self.assertEqual(self.repository.raw_for_artifact(artifact_id), raw)
+
     def test_partial_v1_v2_v3_series_preserve_depth_for_retained_ancestor_paths(self) -> None:
         service = MailingListAcquisitionService(
             self.repository,

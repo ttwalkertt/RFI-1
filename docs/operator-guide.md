@@ -542,6 +542,13 @@ separate **Test evidence incomplete or truncated** warning where applicable. Pol
 is labeled separately from incomplete acquisition. Disconnected or unexpectedly truncated material
 is never labeled complete.
 
+Acquisition-run outcome and discussion connectivity are separate authorities. A run remains
+partial when any selected component fails, while each retained message is projected from its own
+header-derived parent path. A missing ancestor therefore keeps only that unresolved chain in
+**Incomplete or quarantined**; independent components whose paths close at retained roots remain
+connected. The supported `rfi mailing-list --state PATH rebuild` command applies the same derivation
+offline without changing historical manifests or immutable message artifacts.
+
 <!-- help-topic: mailing-list-retry -->
 ## Rerunning a mailing-list stream
 

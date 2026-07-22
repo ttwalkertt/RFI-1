@@ -229,7 +229,14 @@ class LoreTransportCase(unittest.TestCase):
         self.assertEqual(manifest.message_count, 1)
         self.assertEqual(len(self.repository.artifacts.artifact_metadata()), 1)
         self.assertEqual(len(self.repository.rows("SELECT * FROM mailing_list_run_items")), 1)
-        self.assertEqual(self.repository.rows("SELECT * FROM mailing_list_discussions"), [])
+        run_item = self.repository.rows(
+            "SELECT connectivity_state FROM mailing_list_run_items WHERE run_id=?",
+            (manifest.run_id,),
+        )[0]
+        self.assertEqual(run_item["connectivity_state"], "connected")
+        discussions = self.repository.rows("SELECT * FROM mailing_list_discussions")
+        self.assertEqual(len(discussions), 1)
+        self.assertEqual(discussions[0]["connectivity_state"], "connected")
 
     def test_terminal_http_rejection_is_recorded_as_terminal(self) -> None:
         configured = source(
