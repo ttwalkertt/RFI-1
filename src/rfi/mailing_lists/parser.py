@@ -85,3 +85,19 @@ def parse_message(raw: bytes) -> ParsedMessage:
         external_id, subject, normalize_subject(subject), sender, date_value, parent,
         references, "\n".join(text_parts), tuple(sorted(set(warnings)))
     )
+
+
+def unavailable_ancestor(message_id: str) -> ParsedMessage:
+    """Project an explicit non-message tombstone into the relationship graph."""
+    return ParsedMessage(
+        message_id,
+        "[Unavailable Lore ancestor]",
+        "unavailable lore ancestor",
+        "(message unavailable from Lore)",
+        None,
+        None,
+        (),
+        "Lore returned HTTP 404 for this Message-ID from both the configured archive "
+        "and the cross-list archive. No email content was synthesized.",
+        ("confirmed unavailable Lore ancestor; tombstone is not RFC 5322 content",),
+    )

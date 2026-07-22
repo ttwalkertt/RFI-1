@@ -426,10 +426,16 @@ class LinuxMailingListWorkflowService:
                 "incompleteness warning. The saved configuration remains executable."
                 if incomplete
                 else "The saved configuration is executable and the bounded test evidence is "
-                "complete and connected."
+                + (
+                    "structurally connected with explicitly unavailable ancestor tombstones."
+                    if manifest.tombstone_message_ids
+                    else "complete and connected."
+                )
             ),
             True, stream_id, source_id, manifest, stream_run, messages, True,
-            "incomplete_or_truncated" if incomplete else "complete_connected", incomplete,
+            "incomplete_or_truncated" if incomplete else
+            "complete_with_tombstones" if manifest.tombstone_message_ids else
+            "complete_connected", incomplete,
         )
 
     def saved(self) -> tuple[SavedMailingListWorkflow, ...]:
@@ -465,6 +471,9 @@ class LinuxMailingListWorkflowService:
             test_evidence_status = (
                 "failed" if acquisition_status == "succeeded"
                 and summary.latest_run_status == "failed"
+                else "complete_with_tombstones" if acquisition_status == "succeeded"
+                and connectivity_status == "connected"
+                and int(latest.get("tombstone_count", 0)) > 0
                 else "complete_connected" if acquisition_status == "succeeded"
                 and connectivity_status == "connected"
                 and int(latest["message_count"]) > 0

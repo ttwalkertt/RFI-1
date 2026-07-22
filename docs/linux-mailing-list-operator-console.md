@@ -93,11 +93,15 @@ Date-only stream predicates compare the date portion of message timestamps, so t
 through-date includes the full calendar day. Projection failure is reported separately from
 acquisition coverage and never discards retained evidence.
 
-Exact Message-ID retrieval first uses the configured mailing-list archive. If that archive rejects
-the exact object, the adapter may retry the same bounded identity through Lore's `/all` archive.
+Exact Message-ID retrieval first uses the configured mailing-list archive. If that archive cannot
+provide the exact object, the adapter may retry the same bounded identity through Lore's `/all`
+archive.
 Fallback bytes are retained normally but their artifact observation, acquisition manifest, source
-link, and operator badge explicitly identify the cross-archive fallback. If `/all` also rejects the
-identity, normal incomplete/partial behavior applies.
+link, and operator badge explicitly identify the cross-archive fallback. When both paths return
+HTTP 404 for a required ancestor, acquisition retains a distinct JSON tombstone artifact recording
+both negative observations. The header-derived edge resolves to that tombstone, coverage may
+advance, and the UI reports **Connected with unavailable ancestors**. Other dual-path failures keep
+normal incomplete/partial behavior.
 
 Acquisition manifest relationship and discussion counts describe only messages retained by that
 run; repository-wide derived counts remain available through the mailing-list query surfaces.

@@ -271,11 +271,30 @@ class LoreArchive:
         try:
             return ArchiveMessage(self._request(location), location)
         except MailingListError as error:
-            if error.code != "archive_request_rejected" or self.base_url.endswith("/all/"):
+            if (
+                error.code not in {"archive_request_rejected", "archive_not_found"}
+                or self.base_url.endswith("/all/")
+            ):
                 raise
+            primary_error = error
         fallback_base = "https://lore.kernel.org/all/"
         fallback = f"{fallback_base}{quote(token, safe='@')}/raw"
-        return ArchiveMessage(self._request(fallback), fallback, fallback_base)
+        try:
+            return ArchiveMessage(self._request(fallback), fallback, fallback_base)
+        except MailingListError as error:
+            if primary_error.code == "archive_not_found" and error.code == "archive_not_found":
+                raise MailingListError(
+                    "archive_message_not_found",
+                    "Lore has no archived message for the required Message-ID",
+                    details={
+                        "message_id": external_message_id,
+                        "attempts": [
+                            {"location": location, "http_status": 404},
+                            {"location": fallback, "http_status": 404},
+                        ],
+                    },
+                ) from error
+            raise
 
     def _request(self, location: str) -> bytes:
         request = Request(location, headers={"User-Agent": self.policy.user_agent})
@@ -310,10 +329,17 @@ class LoreArchive:
             except HTTPError as error:
                 retry_after = error.headers.get("Retry-After") if error.headers else None
                 try:
+                    if error.code == 404:
+                        raise MailingListError(
+                            "archive_not_found",
+                            "Lore archive has no resource for the bounded request",
+                            details={"location": location, "http_status": 404},
+                        ) from error
                     if error.code not in {429, 500, 502, 503, 504}:
                         raise MailingListError(
                             "archive_request_rejected",
                             f"Lore archive rejected the bounded request with HTTP {error.code}",
+                            details={"location": location, "http_status": error.code},
                         ) from error
                     code = (
                         "archive_rate_limited" if error.code == 429 else "archive_unavailable"
@@ -405,7 +431,10 @@ class LoreArchive:
             try:
                 raw = self._request(location)
             except MailingListError as error:
-                if error.code != "archive_request_rejected" or self.base_url.endswith("/all/"):
+                if (
+                    error.code not in {"archive_request_rejected", "archive_not_found"}
+                    or self.base_url.endswith("/all/")
+                ):
                     raise
                 location = (
                     "https://lore.kernel.org/all/"

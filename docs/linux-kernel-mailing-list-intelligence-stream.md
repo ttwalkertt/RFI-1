@@ -11,7 +11,7 @@ explicitly selected, bounded evidence set and never offers an archive-wide impor
 bounded archive adapter
   -> seed discovery
   -> ancestor closure + bounded descendant frontier
-  -> shared acquisition repository (exact message/rfc822 bytes)
+  -> shared acquisition repository (exact message/rfc822 bytes or explicit 404 tombstones)
   -> SQLite durable manifests and derived discussion state
   -> MailingListQueryService
   -> CLI + shared artifact browser projection
@@ -22,6 +22,11 @@ parts and attachments, remain immutable content-addressed artifacts. Parsed head
 text, reply edges, discussion membership, depth, and browser organization are derived. No graph
 database, external graph service, or in-memory graph authority is present. Browser JavaScript uses
 bounded API contracts and never parses `In-Reply-To` or reconstructs a graph.
+
+Confirmed-unavailable ancestor tombstones are a second, explicitly typed evidence form. They use
+`application/vnd.rfi.mailing-list-tombstone+json`, record 404 observations from both the configured
+archive and `/all/`, and declare that no email content was synthesized. They participate in the
+derived relationship graph but are never represented as retrieved RFC 5322 messages.
 
 Schema version 2 adds `mailing_list_sources`, immutable `mailing_list_runs` and
 `mailing_list_run_items`, plus rebuildable `mailing_list_messages`,
@@ -43,7 +48,9 @@ route.
 The governed source profile owns provider, HTTPS endpoint, list identity, User-Agent, timeout,
 response-size bound, minimum request interval, source-wide in-process concurrency, bounded retry,
 and capped backoff. The live adapter honors `Retry-After`, retries HTTP 429 and transient 5xx
-responses, and treats other HTTP rejections as terminal. These policies may differ by source.
+responses, and treats other HTTP rejections as terminal. It distinguishes 404 absence from generic
+rejection so only two-path confirmed absence can create an ancestor tombstone. These policies may
+differ by source.
 
 Seed discovery and context expansion are separately represented. Each retained run item records
 whether it was an explicit request, a direct seed match, an ancestor connector, or descendant
@@ -81,15 +88,17 @@ header-derived direct edges and unresolved parents. Future heuristic relationshi
 distinct `inferred`/`heuristic` classification.
 
 For every connected or truncated discussion, each member has one acyclic immediate-reply path to
-the stored root and every connector on that path is stored. The repository integrity check walks
-and validates those paths and depths. Missing connectors classify material as incomplete; malformed
+the stored root and every connector on that path is stored. A connector may be a retrieved message
+or an explicitly typed confirmed-unavailable tombstone. The repository integrity check walks and
+validates those paths and depths. Unresolved connectors classify material as incomplete; malformed
 identity and cycles are quarantined. Neither state receives discussion membership. A descendant
 limit produces `truncated`, never a disconnected `connected` component. The live adapter enumerates
 replies through per-thread Atom feeds. Feed pagination or an unexpanded frontier still reports
 truncation rather than claiming a complete discussion.
 
-Repeated acquisition compares content identity for an existing external Message-ID. Equal bytes
-reuse the artifact, message, document, and relationship; differing bytes fail with
+Repeated acquisition compares evidence identity for an existing external Message-ID. Equal bytes
+or an equal deterministic tombstone reuse the artifact, message, document, and relationship;
+differing evidence fails with
 `message_id_conflict`. A run first retains immutable message artifacts and then publishes its
 manifest, run membership, and the complete rebuilt discussion projection in one SQLite transaction.
 A transport failure before useful acquisition records a retryable or terminal failed run with no
@@ -102,8 +111,9 @@ the complete structured acquisition unit.
 ## Offline reconstruction and browser
 
 Durable run items identify every retained artifact and its inclusion reason. Rebuild reparses exact
-stored bytes, reconstructs header relationships, validates connectivity, and atomically replaces
-all derived message/discussion tables without an archive client or network access.
+stored email bytes or projects typed tombstone metadata, reconstructs header relationships,
+validates connectivity, and atomically replaces all derived message/discussion tables without an
+archive client or network access.
 
 The existing `/artifacts` browser now has sibling `Firm artifacts` and `Development mailing lists`
 repository projections. Linux block-layer discussions and incomplete material expand lazily.

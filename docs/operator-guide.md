@@ -502,9 +502,13 @@ control are alternatives; populated control groups and the date window all const
 A direct match satisfies the configured Lore seed criteria. Context-only messages do not need to
 match those criteria: they are retained as required ancestors or bounded descendants so the
 discussion is not misleadingly disconnected. Immediate reply authority comes from message headers,
-not normalized subjects. Missing connectors, cycles, response limits, and incomplete thread feeds
-remain explicit. Every result message shows its inclusion reason, parent/root context, depth, reply
-count, connectivity state, Message-ID, and canonical Lore link.
+not normalized subjects. A required ancestor that returns HTTP 404 from both the configured archive
+and Lore's cross-list `/all/` archive becomes an explicit immutable tombstone. The tombstone records
+the attempted locations and statuses, contains no synthesized email, and may close the structural
+reply path so repository coverage can advance. Other missing connectors, cycles, response limits,
+and incomplete thread feeds remain explicit. Every result record shows its inclusion reason,
+parent/root context, depth, reply count, connectivity state, and Message-ID. Retrieved messages link
+to Lore; tombstones are labeled instead of offering a dead canonical link.
 
 <!-- help-topic: generated-identities -->
 ## Generated mailing-list identities
@@ -542,6 +546,12 @@ separate **Test evidence incomplete or truncated** warning where applicable. Pol
 is labeled separately from incomplete acquisition. Disconnected or unexpectedly truncated material
 is never labeled complete.
 
+`Connected with unavailable ancestors` means relationship closure succeeded through one or more
+confirmed Lore 404 tombstones. This state may advance repository coverage because the unavailable
+connector is durably and explicitly represented. It is not equivalent to having the ancestor's
+email content, and the tombstone remains visible in retained evidence. A 403, timeout, rate limit,
+5xx response, malformed response, or single-path 404 never creates a tombstone.
+
 Acquisition-run outcome and discussion connectivity are separate authorities. A run remains
 partial when any selected component fails, while each retained message is projected from its own
 header-derived parent path. A missing ancestor therefore keeps only that unresolved chain in
@@ -554,10 +564,11 @@ offline without changing historical manifests or immutable message artifacts.
 
 Select a saved stream to inspect its summary and latest acquisition evidence. **Fetch up to date**
 uses deterministic two-day overlap and one or more gap-free, at-most-31-day windows through today.
-Duplicate queued/running work is ignored. Immutable artifact content and relationships remain
-idempotent. A retryable Lore failure may be queued again; correct terminal URL, selection, or
-validation errors in **Edit** first. Incomplete or truncated windows retain evidence but do not
-advance effective coverage.
+Duplicate queued/running work is ignored. Immutable artifact content, tombstones, and relationships
+remain idempotent. A retryable Lore failure may be queued again; correct terminal URL, selection,
+or validation errors in **Edit** first. Incomplete or truncated windows retain evidence but do not
+advance effective coverage. Confirmed-unavailable ancestor tombstones do not force the same window
+to remain permanently incomplete.
 
 <!-- help-topic: lore-connectivity -->
 ## Troubleshooting Lore connectivity

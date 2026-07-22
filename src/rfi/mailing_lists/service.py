@@ -31,7 +31,7 @@ from rfi.mailing_lists.contracts import (
     SelectionCriteria,
     normalize_lore_archive,
 )
-from rfi.mailing_lists.parser import normalize_message_id, parse_message
+from rfi.mailing_lists.parser import normalize_message_id, parse_message, unavailable_ancestor
 from rfi.mailing_lists.repository import MailingListRepository, message_key
 
 
@@ -215,6 +215,7 @@ def derive_projection(
             "normalized_subject": parsed.normalized_subject, "sender": parsed.sender,
             "message_date": parsed.message_date, "text_content": parsed.text_content,
             "connectivity_state": state,
+            "is_tombstone": bool(record.get("is_tombstone", False)),
             "parent_external_message_id": parsed.immediate_parent_id,
             "parent_message_key": parent_message_key,
             "canonical": {
@@ -223,6 +224,8 @@ def derive_projection(
                 "parse_warnings": list(parsed.parse_warnings),
                 "relationship_basis": "header",
                 "normalized_subject_is_identity": False,
+                "is_tombstone": bool(record.get("is_tombstone", False)),
+                "unavailable_details": record.get("unavailable_details"),
             },
         })
     discussions: list[dict[str, Any]] = []
@@ -260,6 +263,10 @@ def derive_projection(
                 "relationship_authority": "header",
                 "descendant_policy_limited": any(
                     policy_limits[key] for key, _depth in members
+                ),
+                "tombstone_count": sum(
+                    bool(combined[key].get("is_tombstone", False))
+                    for key, _depth in members
                 ),
             },
         })
@@ -322,10 +329,19 @@ class MailingListAcquisitionService:
         created = 0
         idempotent = 0
         for external_id, item in sorted(plan["items"].items()):
-            key, doc_id, artifact_id, artifact_created = self.repository.retain_message(
-                source, run_id, external_id, item["parsed"], item["raw"], item["location"],
-                item["inclusion_reason"], requested_at, item["fallback_archive_url"],
-            )
+            if item.get("is_tombstone", False):
+                key, doc_id, artifact_id, artifact_created = (
+                    self.repository.retain_unavailable_ancestor(
+                        source, run_id, external_id, requested_at,
+                        item["unavailable_details"]["attempts"],
+                    )
+                )
+            else:
+                key, doc_id, artifact_id, artifact_created = self.repository.retain_message(
+                    source, run_id, external_id, item["parsed"], item["raw"],
+                    item["location"], item["inclusion_reason"], requested_at,
+                    item["fallback_archive_url"],
+                )
             del key
             created += int(artifact_created)
             idempotent += int(not artifact_created)
@@ -337,6 +353,8 @@ class MailingListAcquisitionService:
                 "parsed": item["parsed"],
                 "fallback_archive_url": item["fallback_archive_url"],
                 "descendant_policy_limited": plan["descendant_policy_limited"],
+                "is_tombstone": bool(item.get("is_tombstone", False)),
+                "unavailable_details": item.get("unavailable_details"),
             })
         existing = self.repository.parsed_retained_records()
         messages, discussions = derive_projection(existing + retained)
@@ -381,6 +399,10 @@ class MailingListAcquisitionService:
             plan["discovery_complete"], plan["required_ancestry_complete"],
             plan["descendant_policy_complete"], plan["descendant_policy_limited"],
             plan["unexpected_truncation"],
+            tuple(sorted(
+                external_id for external_id, item in plan["items"].items()
+                if item.get("is_tombstone", False)
+            )),
         )
         self.repository.publish(manifest, retained, messages, discussions)
         return manifest
@@ -453,6 +475,8 @@ class MailingListAcquisitionService:
                     if parsed.external_message_id != expected else None
                 ),
                 "fallback_archive_url": archive_message.fallback_archive_url,
+                "is_tombstone": False,
+                "unavailable_details": None,
             }
             return storage_id
 
@@ -493,6 +517,40 @@ class MailingListAcquisitionService:
                 except MailingListError as error:
                     if error.code == "acquisition_cancelled":
                         raise
+                    if error.code == "archive_message_not_found":
+                        attempts = error.details.get("attempts")
+                        if not isinstance(attempts, list) or len(attempts) != 2:
+                            raise MailingListError(
+                                "invalid_unavailability_evidence",
+                                "confirmed Lore absence lacks two-path retrieval evidence",
+                            ) from error
+                        if any(
+                            not isinstance(item, dict)
+                            or item.get("http_status") != 404
+                            or not isinstance(item.get("location"), str)
+                            for item in attempts
+                        ):
+                            raise MailingListError(
+                                "invalid_unavailability_evidence",
+                                "confirmed Lore absence contains invalid retrieval evidence",
+                            ) from error
+                        context_fetches += 1
+                        items[parent] = {
+                            "raw": None,
+                            "location": str(attempts[-1]["location"]),
+                            "parsed": unavailable_ancestor(parent),
+                            "inclusion_reason": InclusionReason.ANCESTOR.value,
+                            "is_seed": False,
+                            "forced_state": None,
+                            "fallback_archive_url": None,
+                            "is_tombstone": True,
+                            "unavailable_details": {"attempts": attempts},
+                        }
+                        warnings.append(
+                            f"confirmed unavailable ancestor tombstoned: {parent}"
+                        )
+                        current = parent
+                        continue
                     failures.append(error)
                     incomplete = True
                     required_ancestry_complete = False
@@ -513,6 +571,13 @@ class MailingListAcquisitionService:
         while frontier:
             parent, depth = frontier.popleft()
             remaining = limits.context_limit - context_fetches
+            if items[parent].get("is_tombstone", False):
+                known_children = sorted(
+                    key for key, item in items.items()
+                    if item["parsed"].immediate_parent_id == parent
+                )
+                frontier.extend((child, depth + 1) for child in known_children)
+                continue
             if depth >= limits.descendant_depth:
                 # Reaching the requested boundary completes this branch. Do not enumerate or
                 # retrieve out-of-policy children merely to prove that deeper context exists.
@@ -562,6 +627,8 @@ class MailingListAcquisitionService:
                 "artifact_id": "preview", "document_id": "preview",
                 "connectivity_state": item["forced_state"] or default_state.value,
                 "parsed": item["parsed"],
+                "is_tombstone": bool(item.get("is_tombstone", False)),
+                "unavailable_details": item.get("unavailable_details"),
             })
         projected, _ = derive_projection(provisional)
         item_states = {
@@ -665,6 +732,7 @@ class MailingListQueryService:
             )
             result.append(AcquisitionMessage(
                 summary, reason, direct, not direct,
+                "" if summary.is_tombstone else
                 f"{archive_url}{quote(token, safe='@')}/" if token else "",
                 str(row["discussion_id"]) if row.get("discussion_id") else None,
                 fallback,
@@ -823,6 +891,7 @@ class MailingListQueryService:
             row["first_message_at"], row["last_message_at"],
             ConnectivityState(str(row["connectivity_state"])), bool(row["descendant_truncated"]),
             bool(canonical.get("descendant_policy_limited", False)),
+            int(canonical.get("tombstone_count", 0)),
         )
 
     @staticmethod
@@ -847,4 +916,5 @@ class MailingListQueryService:
             str(row["sender"]), row["message_date"], row.get("parent_external_message_id"),
             ConnectivityState(str(row["connectivity_state"])), int(row["child_count"]),
             int(row["depth"]) if row.get("depth") is not None else None,
+            bool(canonical.get("is_tombstone", False)),
         )

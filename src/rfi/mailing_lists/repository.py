@@ -27,7 +27,7 @@ from rfi.mailing_lists.contracts import (
     ParsedMessage,
     SelectionCriteria,
 )
-from rfi.mailing_lists.parser import parse_message
+from rfi.mailing_lists.parser import parse_message, unavailable_ancestor
 from rfi.storage import RepositoryDatabase, StorageError, state_root_for
 from rfi.storage.sqlite import canonical_json
 
@@ -258,6 +258,93 @@ class MailingListRepository:
             receipt.artifact_created,
         )
 
+    def retain_unavailable_ancestor(
+        self,
+        source: MailingListSource,
+        run_id: str,
+        external_id: str,
+        requested_at: str,
+        attempts: list[dict[str, Any]],
+    ) -> tuple[str, str, str, bool]:
+        """Retain immutable evidence of a Message-ID confirmed absent from Lore."""
+        payload = canonical_json({
+            "record_type": "mailing_list_unavailable_ancestor",
+            "source_id": source.source_id,
+            "external_message_id": external_id,
+            "availability": "confirmed_not_found",
+            "attempts": attempts,
+            "content_synthesized": False,
+        }).encode("utf-8")
+        digest = hashlib.sha256(payload).hexdigest()
+        expected_artifact = f"artifact-{digest}"
+        existing = self.existing_artifact(source.source_id, external_id)
+        if existing is not None:
+            if existing != expected_artifact:
+                raise MailingListError(
+                    "message_id_conflict",
+                    "the unavailable ancestor identity conflicts with retained message content",
+                )
+            return (
+                message_key(source.source_id, external_id),
+                document_id(source.source_id, external_id),
+                existing,
+                False,
+            )
+        doc_id = document_id(source.source_id, external_id)
+        candidate = CandidateDocument(
+            f"candidate.{hashlib.sha256((run_id + external_id).encode()).hexdigest()[:32]}",
+            source.source_id,
+            doc_id,
+            DiscoveryProvenance(
+                requested_at,
+                "lore-unavailable-ancestor",
+                {"message_id": external_id},
+                tuple(str(item["location"]) for item in attempts),
+                {
+                    "repository_projection": "mailing-list",
+                    "list_id": source.list_id,
+                    "subject": "[Unavailable Lore ancestor]",
+                    "sender": "(message unavailable from Lore)",
+                    "message_date": None,
+                    "immediate_parent_id": None,
+                    "inclusion_reason": "ancestor_context",
+                    "run_id": run_id,
+                    "is_tombstone": True,
+                    "availability": "confirmed_not_found",
+                    "http_statuses": [int(item["http_status"]) for item in attempts],
+                    "content_synthesized": False,
+                },
+            ),
+        )
+        attempt_digest = hashlib.sha256(
+            f"{source.source_id}\0tombstone\0{external_id}".encode()
+        ).hexdigest()
+        try:
+            receipt = self._artifacts.record_success(
+                f"attempt.mail-tombstone.{attempt_digest[:32]}",
+                candidate,
+                RetrievalResult(
+                    payload,
+                    "application/vnd.rfi.mailing-list-tombstone+json",
+                    requested_at,
+                    "lore-public-inbox",
+                    {"message_id": external_id},
+                    {
+                        "confirmed_unavailable": True,
+                        "http_statuses": [int(item["http_status"]) for item in attempts],
+                        "lossless_archive_representation": False,
+                    },
+                ),
+            )
+        except (ConflictError, IntegrityError) as error:
+            raise MailingListError("repository_failure", str(error)) from error
+        return (
+            message_key(source.source_id, external_id),
+            receipt.document_id,
+            receipt.artifact_id,
+            receipt.artifact_created,
+        )
+
     def publish(
         self,
         manifest: AcquisitionManifest,
@@ -338,12 +425,19 @@ class MailingListRepository:
             raise MailingListError("repository_failure", str(storage_error)) from storage_error
 
     def acquisition_runs(self, source_id: str) -> tuple[dict[str, Any], ...]:
-        return tuple(self.rows(
+        rows = self.rows(
             "SELECT run_id,source_id,requested_at,lifecycle_status,status AS connectivity_state,"
-            "seed_count,message_count,error_code,retryable FROM mailing_list_runs "
+            "seed_count,message_count,error_code,retryable,canonical_json FROM mailing_list_runs "
             "WHERE source_id=? ORDER BY requested_at,run_id",
             (source_id,),
-        ))
+        )
+        result = []
+        for row in rows:
+            item = dict(row)
+            manifest = json.loads(str(item.pop("canonical_json")))
+            item["tombstone_count"] = len(manifest.get("tombstone_message_ids", ()))
+            result.append(item)
+        return tuple(result)
 
     def acquisition_coverage(self, source_id: str) -> tuple[dict[str, Any], ...]:
         """Return acquisition scope needed to derive coverage without a mutable cursor."""
@@ -455,7 +549,22 @@ class MailingListRepository:
     def parsed_retained_records(self) -> list[dict[str, Any]]:
         records = self.retained_records()
         for record in records:
-            record["parsed"] = parse_message(self.raw_for_artifact(record["artifact_id"]))
+            metadata = record["observation"].get("candidate", {}).get(
+                "provenance", {}
+            ).get("metadata", {})
+            record["is_tombstone"] = bool(metadata.get("is_tombstone", False))
+            record["unavailable_details"] = {
+                "availability": metadata.get("availability"),
+                "http_statuses": metadata.get("http_statuses", []),
+                "locations": record["observation"].get("candidate", {}).get(
+                    "provenance", {}
+                ).get("locations", []),
+            } if record["is_tombstone"] else None
+            record["parsed"] = (
+                unavailable_ancestor(record["external_message_id"])
+                if record["is_tombstone"]
+                else parse_message(self.raw_for_artifact(record["artifact_id"]))
+            )
         return records
 
     def rows(self, query: str, parameters: tuple[Any, ...] = ()) -> list[dict[str, Any]]:

@@ -14,10 +14,18 @@ _ARCHIVE_ID = re.compile(r"[a-z0-9][a-z0-9._+-]{0,79}")
 class MailingListError(RuntimeError):
     """Sanitized mailing-list acquisition or query failure."""
 
-    def __init__(self, code: str, message: str, *, retryable: bool = False) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        retryable: bool = False,
+        details: dict[str, object] | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.retryable = retryable
+        self.details = details or {}
 
 
 def normalize_lore_archive(value: str) -> tuple[str, str]:
@@ -232,6 +240,7 @@ class AcquisitionManifest:
     descendant_policy_complete: bool = False
     descendant_policy_limited: bool = False
     unexpected_truncation: bool = False
+    tombstone_message_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -260,6 +269,7 @@ class DiscussionSummary:
     connectivity_state: ConnectivityState
     descendant_truncated: bool
     descendant_policy_limited: bool = False
+    tombstone_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -275,6 +285,7 @@ class MessageSummary:
     connectivity_state: ConnectivityState
     child_count: int
     depth: int | None = None
+    is_tombstone: bool = False
 
 
 @dataclass(frozen=True)
