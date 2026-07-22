@@ -33,7 +33,7 @@ The summary now separates operational comprehension from configuration detail. S
 and actions remain first; a compact operational strip answers whether the stream is healthy and
 how current repository coverage is. Configuration criteria and bounds remain visible beneath it
 without competing with health. The primary wording is **Repository coverage** and **Current
-through …**; the exact contiguous-complete, untruncated derivation remains available as secondary
+through …**; the exact contiguous-complete derivation remains available as secondary
 help rather than implementation language in the primary interface.
 
 A concise **Last acquisition summary** precedes retained evidence. It shows acquisition time,
@@ -57,12 +57,20 @@ fetch. This reduces navigation and mode switching without introducing another ap
 
 There is no mutable cursor. Effective last fetch is reconstructed from durable acquisition
 manifests whose Lore source and relevance criteria exactly match the current stream revision.
-Qualifying intervals must be complete: successful, connected, and untruncated, or a completed
+Qualifying intervals must be complete: direct discovery exhausted, required ancestry resolved,
+configured descendant expansion completed, and no unexpected truncation; or a completed
 bounded search with no seed matches. Intervals are sorted and merged from the configured initial
 start date. Only adjacent or overlapping intervals advance the displayed date. Partial,
 incomplete, quarantined, truncated, retryable-failure, and terminal-failure intervals never bridge
 a coverage gap or advance coverage. A no-match search is coverage even though the existing run
 lifecycle retains its historical `no_seed_matches` representation.
+
+Reply depth is an intentional context policy. Reaching that depth completes descendant expansion
+successfully and may advance coverage when discovery and ancestry are otherwise complete. The
+manifest and browser report this as policy-limited context retained through the configured depth;
+it does not change lifecycle or connectivity state. A total-message cap, source-enumeration
+limitation, cancellation, unavailable required ancestor, or other stop before the configured
+policy completes remains incomplete or unexpectedly truncated and cannot advance coverage.
 
 ### Overlap policy and multi-window catch-up
 
@@ -76,7 +84,7 @@ per-run direct, total, reply-depth, source transport, response-size, pacing, ret
 bounds. Longer catch-up ranges are partitioned into gap-free FIFO windows. When a date window has
 more direct matches than one run may retain, catch-up advances Lore's bounded search offset and
 issues additional immutable runs. Only the final page carries a durable coverage-complete marker,
-and only after every preceding page completed without missing or truncated relationship context.
+and only after every preceding page completed without missing or unexpectedly truncated context.
 An interruption, rejection, missing relationship, or relationship-bound truncation leaves all
 completed evidence inspectable but does not publish that marker or advance coverage.
 

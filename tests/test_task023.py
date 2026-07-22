@@ -192,6 +192,8 @@ class MailingListCase(unittest.TestCase):
             AcquisitionLimits(descendant_depth=0),
         )
         self.assertEqual(manifest.state, ConnectivityState.INCOMPLETE)
+        self.assertFalse(manifest.required_ancestry_complete)
+        self.assertFalse(manifest.descendant_policy_limited)
         self.assertEqual(manifest.discussion_count, 0)
         incomplete = self.query.incomplete(LINUX_BLOCK_SOURCE.source_id)
         self.assertEqual(len(incomplete), 1)
@@ -264,13 +266,16 @@ class MailingListCase(unittest.TestCase):
         self.assertEqual(self.query.discussions(LINUX_BLOCK_SOURCE.source_id), ())
         self.assertEqual(len(self.query.incomplete(LINUX_BLOCK_SOURCE.source_id)), 3)
 
-    def test_descendant_limit_truncates_only_at_connected_frontier(self) -> None:
+    def test_total_message_cap_truncates_only_at_connected_frontier(self) -> None:
         manifest = self.service.acquire(
             LINUX_BLOCK_SOURCE.source_id,
             SelectionCriteria(message_ids=("<task023-a1@kernel.example>",)),
             AcquisitionLimits(seed_limit=1, context_limit=3, descendant_depth=5),
         )
         self.assertEqual(manifest.state, ConnectivityState.TRUNCATED)
+        self.assertTrue(manifest.unexpected_truncation)
+        self.assertFalse(manifest.descendant_policy_complete)
+        self.assertFalse(manifest.coverage_complete)
         discussion = self.query.discussions(LINUX_BLOCK_SOURCE.source_id)[0]
         self.assertEqual(discussion.connectivity_state, ConnectivityState.TRUNCATED)
         for message in self.query.projection(discussion.discussion_id).messages:
@@ -278,6 +283,66 @@ class MailingListCase(unittest.TestCase):
                 self.query.ancestors(message.message_key)[0].message_key,
                 discussion.root_message_key,
             )
+
+    def test_reply_depth_saturation_is_successful_policy_limited_context(self) -> None:
+        root = "<policy-root@kernel.example>"
+        depth_one = "<policy-depth-one@kernel.example>"
+        depth_two = "<policy-depth-two@kernel.example>"
+
+        class BoundaryRecordingArchive(FixtureMailingListArchive):
+            enumerated: list[str]
+
+            def __init__(self, messages):
+                super().__init__(messages)
+                self.enumerated = []
+
+            def direct_children(self, external_message_id, limit):
+                self.enumerated.append(external_message_id)
+                return super().direct_children(external_message_id, limit)
+
+        archive = BoundaryRecordingArchive({
+            root: ArchiveMessage(raw_message(root, "[PATCH] policy root"), "fixture:root"),
+            depth_one: ArchiveMessage(
+                raw_message(depth_one, "Re: [PATCH] policy root", root), "fixture:one"
+            ),
+            depth_two: ArchiveMessage(
+                raw_message(depth_two, "Re: [PATCH] policy root", depth_one), "fixture:two"
+            ),
+        })
+        service = MailingListAcquisitionService(
+            self.repository, archive, identifiers=self.identifiers.__next__
+        )
+
+        manifest = service.acquire(
+            LINUX_BLOCK_SOURCE.source_id,
+            SelectionCriteria(message_ids=(root,)),
+            AcquisitionLimits(seed_limit=1, context_limit=10, descendant_depth=1),
+        )
+
+        self.assertEqual(manifest.run_status.value, "succeeded")
+        self.assertEqual(manifest.state, ConnectivityState.CONNECTED)
+        self.assertFalse(manifest.truncated)
+        self.assertFalse(manifest.unexpected_truncation)
+        self.assertTrue(manifest.discovery_complete)
+        self.assertTrue(manifest.required_ancestry_complete)
+        self.assertTrue(manifest.descendant_policy_complete)
+        self.assertTrue(manifest.descendant_policy_limited)
+        self.assertTrue(manifest.coverage_complete)
+        self.assertEqual(manifest.message_count, 2)
+        self.assertEqual(archive.enumerated, [root])
+        retained_ids = {
+            item.summary.external_message_id
+            for item in self.query.acquisition_messages(manifest.run_id)
+        }
+        self.assertEqual(retained_ids, {root, depth_one})
+        discussion = self.query.discussions(LINUX_BLOCK_SOURCE.source_id)[0]
+        self.assertEqual(discussion.connectivity_state, ConnectivityState.CONNECTED)
+        self.assertFalse(discussion.descendant_truncated)
+        self.assertTrue(discussion.descendant_policy_limited)
+
+        service.rebuild()
+        rebuilt = self.query.discussions(LINUX_BLOCK_SOURCE.source_id)[0]
+        self.assertTrue(rebuilt.descendant_policy_limited)
 
     def test_repeated_acquisition_is_idempotent_for_evidence_and_relationships(self) -> None:
         first = self.acquire_branch()
@@ -377,6 +442,13 @@ class MailingListCase(unittest.TestCase):
         browser = (ROOT / "src/rfi/admin/artifact_browser.html").read_text()
         self.assertIn("Development mailing lists", browser)
         self.assertIn("/api/mailing-lists/messages/", browser)
+        self.assertIn("selectDiscussion(discussion,button)", browser)
+        self.assertIn("Retained discussion size", browser)
+        self.assertIn("Complete — context retained through configured reply depth", browser)
+        self.assertIn("Policy-limited — retained through configured depth", browser)
+        self.assertIn("Unexpected truncation before policy completion", browser)
+        self.assertIn("A configured reply-depth boundary is an intentional context policy", browser)
+        self.assertIn('aria-label=\"Discussion list summary\"', browser)
         self.assertNotIn("In-Reply-To').split", browser)
 
     def test_shared_browser_api_lazily_serves_branches_detail_and_content(self) -> None:

@@ -531,13 +531,16 @@ evidence storage, and stream verification. Overall success is withheld when any 
 <!-- help-topic: incomplete-mailing-list-results -->
 ## Incomplete mailing-list results
 
-`truncated` means a valid connected result reached a visible seed, reply-depth, total-message, or
-remote-feed frontier. `incomplete` means required context was unavailable. `quarantined` means
+`truncated` means acquisition stopped before its configured context policy completed, such as at a
+total-message cap or remote-feed limitation. Reaching the configured reply depth is instead a
+successful policy boundary: the UI reports context retained through that depth, and deeper replies
+remain intentionally unretained. `incomplete` means required context was unavailable. `quarantined` means
 identity or relationship integrity failed. A partial transport outcome may retain useful evidence
 but does not establish successful verification. The result page shows active bounds, the
 direct/context breakdown, **Configuration ready** as the saved definition's executability, and a
-separate **Test evidence incomplete or truncated** warning where applicable. Disconnected or
-truncated material is never labeled complete.
+separate **Test evidence incomplete or truncated** warning where applicable. Policy-limited context
+is labeled separately from incomplete acquisition. Disconnected or unexpectedly truncated material
+is never labeled complete.
 
 <!-- help-topic: mailing-list-retry -->
 ## Rerunning a mailing-list stream

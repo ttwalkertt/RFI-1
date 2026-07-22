@@ -194,6 +194,11 @@ class AcquisitionPreview:
     state: ConnectivityState
     truncated: bool
     warnings: tuple[str, ...] = ()
+    discovery_complete: bool = False
+    required_ancestry_complete: bool = False
+    descendant_policy_complete: bool = False
+    descendant_policy_limited: bool = False
+    unexpected_truncation: bool = False
 
 
 @dataclass(frozen=True)
@@ -222,6 +227,11 @@ class AcquisitionManifest:
     coverage_batch_id: str | None = None
     coverage_complete: bool = False
     fallback_message_ids: tuple[str, ...] = ()
+    discovery_complete: bool = False
+    required_ancestry_complete: bool = False
+    descendant_policy_complete: bool = False
+    descendant_policy_limited: bool = False
+    unexpected_truncation: bool = False
 
 
 @dataclass(frozen=True)
@@ -249,6 +259,7 @@ class DiscussionSummary:
     last_message_at: str | None
     connectivity_state: ConnectivityState
     descendant_truncated: bool
+    descendant_policy_limited: bool = False
 
 
 @dataclass(frozen=True)

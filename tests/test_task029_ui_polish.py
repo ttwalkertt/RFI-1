@@ -38,6 +38,12 @@ class Task029UiPolishCase(unittest.TestCase):
         self.assertIn("Repository coverage through", html)
         self.assertIn("Fetch up to date", html)
 
+    def test_policy_limited_context_is_not_worded_as_incomplete_acquisition(self) -> None:
+        html = (ROOT / "src/rfi/admin/linux_mailing_lists.html").read_text()
+
+        self.assertIn("deeper replies were intentionally outside this acquisition policy", html)
+        self.assertIn("stopped before completing the configured context policy", html)
+
 
 if __name__ == "__main__":
     unittest.main()

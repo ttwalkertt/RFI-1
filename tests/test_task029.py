@@ -175,6 +175,51 @@ class CatchUpCase(unittest.TestCase):
         self.assertEqual(result.status, "completed_with_incomplete_evidence")
         self.assertEqual(result.effective_last_fetch_date, "2026-07-16")
 
+        self.workflow.archive_factory = archive_factory
+        recovered = self.workflow.fetch_up_to_date(stream_id)
+        self.assertEqual(recovered.status, "completed")
+        self.assertEqual(recovered.effective_last_fetch_date, "2026-07-22")
+        coverage = self.workflow.repository.acquisition_coverage(
+            self.workflow.stream_service.detail(stream_id).draft.input_ids[0]
+        )
+        self.assertTrue(any(not item["coverage_complete"] for item in coverage))
+        self.assertTrue(any(item["coverage_complete"] for item in coverage))
+
+    def test_reply_depth_policy_limit_advances_exhausted_discovery_coverage(self) -> None:
+        root = "<workflow-policy-root@kernel.example>"
+        one = "<workflow-policy-one@kernel.example>"
+        two = "<workflow-policy-two@kernel.example>"
+        messages = {
+            root: ArchiveMessage(
+                raw_message(root, "[PATCH] bounded policy", body="deterministic queue"),
+                "fixture:root",
+            ),
+            one: ArchiveMessage(
+                raw_message(one, "Re: [PATCH] bounded policy", root), "fixture:one"
+            ),
+            two: ArchiveMessage(
+                raw_message(two, "Re: [PATCH] bounded policy", one), "fixture:two"
+            ),
+        }
+        self.workflow.archive_factory = lambda _source: FixtureWorkflowArchive(messages)
+        stream_id = self.create(
+            date_from="2026-07-17", date_through="2026-07-17",
+            seed_limit=10, total_limit=11, descendant_depth=1,
+        )
+
+        result = self.workflow.fetch_up_to_date(stream_id)
+
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(result.effective_last_fetch_date, "2026-07-22")
+        manifest = self.workflow.query_service.acquisition_run(
+            result.acquisition_run_ids[-1]
+        )["manifest"]
+        self.assertTrue(manifest["discovery_complete"])
+        self.assertTrue(manifest["descendant_policy_complete"])
+        self.assertTrue(manifest["descendant_policy_limited"])
+        self.assertFalse(manifest["unexpected_truncation"])
+        self.assertTrue(manifest["coverage_complete"])
+
     def test_projection_publication_failure_is_explicit_after_coverage(self) -> None:
         stream_id = self.create()
         with patch.object(

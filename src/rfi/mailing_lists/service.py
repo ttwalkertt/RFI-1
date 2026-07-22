@@ -140,6 +140,7 @@ def derive_projection(
     """Rebuild authoritative header-derived organization from retained evidence."""
     combined: dict[tuple[str, str], dict[str, Any]] = {}
     states: dict[tuple[str, str], set[str]] = {}
+    policy_limits: dict[tuple[str, str], bool] = {}
     for record in records:
         key = (record["source_id"], record["external_message_id"])
         prior = combined.get(key)
@@ -149,6 +150,9 @@ def derive_projection(
             )
         combined[key] = record
         states.setdefault(key, set()).add(record["connectivity_state"])
+        policy_limits[key] = policy_limits.get(key, False) or bool(
+            record.get("descendant_policy_limited", False)
+        )
     by_external = {key: value for key, value in combined.items()}
     classifications: dict[tuple[str, str], tuple[str, tuple[str, str] | None, int | None]] = {}
     groups: dict[tuple[str, str], list[tuple[tuple[str, str], int]]] = {}
@@ -243,6 +247,7 @@ def derive_projection(
             "discussion_id": f"discussion-{digest[:32]}", "source_id": root[0],
             "root_message_key": message_key(*root), "connectivity_state": component_state,
             "descendant_truncated": component_state == ConnectivityState.TRUNCATED.value,
+            "descendant_policy_limited": any(policy_limits[key] for key, _depth in members),
             "first_message_at": dates[0] if dates else None,
             "last_message_at": dates[-1] if dates else None,
             "members": [(message_key(*key), depth) for key, depth in members],
@@ -250,6 +255,9 @@ def derive_projection(
                 "root_external_message_id": root[1],
                 "connectivity_validated": True,
                 "relationship_authority": "header",
+                "descendant_policy_limited": any(
+                    policy_limits[key] for key, _depth in members
+                ),
             },
         })
     return messages, discussions
@@ -280,6 +288,9 @@ class MailingListAcquisitionService:
             source_id, criteria, limits, plan["seeds"], len(plan["items"]),
             dict(Counter(item["inclusion_reason"] for item in plan["items"].values())),
             plan["state"], plan["truncated"], tuple(plan["warnings"]),
+            plan["discovery_complete"], plan["required_ancestry_complete"],
+            plan["descendant_policy_complete"], plan["descendant_policy_limited"],
+            plan["unexpected_truncation"],
         )
 
     def acquire(
@@ -322,6 +333,7 @@ class MailingListAcquisitionService:
                 "inclusion_reason": item["inclusion_reason"], "is_seed": item["is_seed"],
                 "parsed": item["parsed"],
                 "fallback_archive_url": item["fallback_archive_url"],
+                "descendant_policy_limited": plan["descendant_policy_limited"],
             })
         existing = self.repository.parsed_retained_records()
         messages, discussions = derive_projection(existing + retained)
@@ -341,8 +353,10 @@ class MailingListAcquisitionService:
         )
         coverage_complete = (
             prior_batches_complete
-            and not plan["discovery_has_more"]
-            and not plan["relationship_truncated"]
+            and plan["discovery_complete"]
+            and plan["required_ancestry_complete"]
+            and plan["descendant_policy_complete"]
+            and not plan["unexpected_truncation"]
             and not plan["failures"]
             and plan["state"] == ConnectivityState.CONNECTED
         )
@@ -361,6 +375,9 @@ class MailingListAcquisitionService:
                 external_id for external_id, item in plan["items"].items()
                 if item["fallback_archive_url"] is not None
             )),
+            plan["discovery_complete"], plan["required_ancestry_complete"],
+            plan["descendant_policy_complete"], plan["descendant_policy_limited"],
+            plan["unexpected_truncation"],
         )
         self.repository.publish(manifest, retained, messages, discussions)
         return manifest
@@ -400,6 +417,7 @@ class MailingListAcquisitionService:
         failures: list[MailingListError] = []
         incomplete = False
         quarantined = False
+        required_ancestry_complete = True
         context_fetches = 0
 
         def fetch(external_id: str, reason: InclusionReason, is_seed: bool = False) -> str | None:
@@ -452,6 +470,7 @@ class MailingListAcquisitionService:
             while current is not None:
                 if current in seen:
                     quarantined = True
+                    required_ancestry_complete = False
                     warnings.append("cycle detected in immediate-reply ancestry")
                     break
                 seen.add(current)
@@ -463,6 +482,7 @@ class MailingListAcquisitionService:
                     continue
                 if context_fetches >= limits.context_limit:
                     incomplete = True
+                    required_ancestry_complete = False
                     warnings.append("context limit reached before ancestor closure")
                     break
                 try:
@@ -472,6 +492,7 @@ class MailingListAcquisitionService:
                         raise
                     failures.append(error)
                     incomplete = True
+                    required_ancestry_complete = False
                     warnings.append(f"required ancestor unavailable: {parent}")
                     break
 
@@ -480,18 +501,19 @@ class MailingListAcquisitionService:
         roots = [key for key, item in items.items() if not item["parsed"].immediate_parent_id]
         frontier = deque((root, 0) for root in sorted(roots))
         relationship_truncated = not self.archive.descendant_enumeration_complete
+        descendant_policy_limited = False
         if limits.descendant_depth == 0:
             # Zero requests no remote reply enumeration. Report the descendant frontier
             # conservatively instead of performing a hidden network request merely to detect it.
-            relationship_truncated = True
+            descendant_policy_limited = bool(roots)
             frontier.clear()
         while frontier:
             parent, depth = frontier.popleft()
             remaining = limits.context_limit - context_fetches
             if depth >= limits.descendant_depth:
-                self._check_cancelled(cancelled)
-                children, has_more = self.archive.direct_children(parent, 1)
-                relationship_truncated = relationship_truncated or bool(children) or has_more
+                # Reaching the requested boundary completes this branch. Do not enumerate or
+                # retrieve out-of-policy children merely to prove that deeper context exists.
+                descendant_policy_limited = True
                 continue
             if remaining <= 0:
                 relationship_truncated = True
@@ -528,7 +550,7 @@ class MailingListAcquisitionService:
         default_state = (
             ConnectivityState.QUARANTINED if quarantined else
             ConnectivityState.INCOMPLETE if incomplete else
-            ConnectivityState.TRUNCATED if seed_truncated or relationship_truncated else
+            ConnectivityState.TRUNCATED if relationship_truncated else
             ConnectivityState.CONNECTED
         )
         for external_id, item in items.items():
@@ -546,14 +568,23 @@ class MailingListAcquisitionService:
             state = ConnectivityState.QUARANTINED
         elif any(value == ConnectivityState.INCOMPLETE.value for value in item_states.values()):
             state = ConnectivityState.INCOMPLETE
-        elif seed_truncated or relationship_truncated:
+        elif relationship_truncated:
             state = ConnectivityState.TRUNCATED
         else:
             state = ConnectivityState.CONNECTED
+        descendant_policy_complete = not relationship_truncated and not any(
+            warning.startswith("descendant unavailable:") for warning in warnings
+        )
+        unexpected_truncation = relationship_truncated or bool(failures)
         return {
             "seeds": tuple(seeds), "items": items, "warnings": sorted(set(warnings)),
-            "state": state, "truncated": seed_truncated or relationship_truncated,
+            "state": state, "truncated": unexpected_truncation,
             "discovery_has_more": seed_truncated,
+            "discovery_complete": not seed_truncated,
+            "required_ancestry_complete": required_ancestry_complete,
+            "descendant_policy_complete": descendant_policy_complete,
+            "descendant_policy_limited": descendant_policy_limited,
+            "unexpected_truncation": unexpected_truncation,
             "relationship_truncated": relationship_truncated,
             "item_states": item_states, "failures": tuple(failures),
         }
@@ -778,11 +809,13 @@ class MailingListQueryService:
 
     @staticmethod
     def _discussion(row: dict[str, Any]) -> DiscussionSummary:
+        canonical = json.loads(str(row["canonical_json"]))
         return DiscussionSummary(
             str(row["discussion_id"]), str(row["source_id"]), str(row["list_id"]),
             str(row["root_message_key"]), str(row["root_subject"]), int(row["message_count"]),
             row["first_message_at"], row["last_message_at"],
             ConnectivityState(str(row["connectivity_state"])), bool(row["descendant_truncated"]),
+            bool(canonical.get("descendant_policy_limited", False)),
         )
 
     @staticmethod

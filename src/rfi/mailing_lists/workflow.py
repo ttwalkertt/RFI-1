@@ -410,14 +410,20 @@ class LinuxMailingListWorkflowService:
                 "failed", "publishing stream result", str(error), True, stream_id, source_id,
                 manifest, None, messages, True, "failed", manifest.truncated,
             )
-        incomplete = manifest.truncated or manifest.state.value in {
-            "incomplete", "quarantined"
-        }
+        incomplete = (
+            not manifest.discovery_complete
+            or not manifest.required_ancestry_complete
+            or not manifest.descendant_policy_complete
+            or manifest.unexpected_truncation
+            or manifest.state.value in {
+                "incomplete", "quarantined"
+            }
+        )
         return WorkflowTestResult(
             "tested_incomplete" if incomplete else "ready", None,
             (
-                "The bounded Lore test stored inspectable evidence with an explicit truncation "
-                "or incompleteness warning. The saved configuration remains executable."
+                "The bounded Lore test stored inspectable evidence with an explicit acquisition "
+                "incompleteness warning. The saved configuration remains executable."
                 if incomplete
                 else "The saved configuration is executable and the bounded test evidence is "
                 "complete and connected."
@@ -556,7 +562,9 @@ class LinuxMailingListWorkflowService:
                 if (
                     manifest.run_status != AcquisitionRunStatus.SUCCEEDED
                     or manifest.state.value in {"incomplete", "quarantined"}
-                    or manifest.relationship_truncated
+                    or not manifest.required_ancestry_complete
+                    or not manifest.descendant_policy_complete
+                    or manifest.unexpected_truncation
                 ):
                     completed += 1
                     status = "completed_with_incomplete_evidence"

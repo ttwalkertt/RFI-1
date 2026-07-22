@@ -425,23 +425,29 @@ class MailingListRepository:
         with self._database.connect(read_only=True) as connection:
             rows = connection.execute(
                 "SELECT i.source_id,i.external_message_id,i.artifact_id,i.document_id,"
-                "i.connectivity_state,i.inclusion_reason,i.is_seed,o.canonical_json "
+                "i.connectivity_state,i.inclusion_reason,i.is_seed,o.canonical_json,"
+                "r.canonical_json "
                 "FROM mailing_list_run_items i JOIN artifact_observations o "
                 "ON o.artifact_id=i.artifact_id AND o.document_id=i.document_id "
-                "GROUP BY i.source_id,i.external_message_id,i.artifact_id,i.document_id,"
-                "i.connectivity_state,i.inclusion_reason,i.is_seed "
-                "ORDER BY i.source_id,i.external_message_id"
+                "JOIN mailing_list_runs r ON r.run_id=i.run_id "
+                "ORDER BY i.source_id,i.external_message_id,i.run_id"
             ).fetchall()
-        records = []
+        records_by_identity: dict[tuple[Any, ...], dict[str, Any]] = {}
         for row in rows:
             observation = json.loads(str(row[7]))
-            records.append({
+            manifest = json.loads(str(row[8]))
+            identity = tuple(row[index] for index in range(7))
+            record = records_by_identity.setdefault(identity, {
                 "source_id": str(row[0]), "external_message_id": str(row[1]),
                 "artifact_id": str(row[2]), "document_id": str(row[3]),
                 "connectivity_state": str(row[4]), "inclusion_reason": str(row[5]),
                 "is_seed": bool(row[6]), "observation": observation,
             })
-        return records
+            record["descendant_policy_limited"] = bool(
+                record.get("descendant_policy_limited", False)
+                or manifest.get("descendant_policy_limited", False)
+            )
+        return list(records_by_identity.values())
 
     def raw_for_artifact(self, artifact_id: str) -> bytes:
         return self._artifacts.read_artifact(artifact_id)
