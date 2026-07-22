@@ -33,11 +33,12 @@ whose repository projection is `mailing-list`.
 
 ## Bounded two-stage acquisition
 
-Every request needs explicit Message-IDs, a query, date bounds, or topic terms. Seed count is hard
-capped at 100 and context count at 500; ordinary defaults are 10 and 100. The initial live Lore
-adapter deliberately accepts explicit Message-IDs only. Fixture discovery additionally proves
-date, topic, and query selection. There is no select-all, mirror, unbounded backfill, implicit
-history, daemon, subscription, or archive-clone route.
+Every request needs explicit Message-IDs, a query, date bounds, or topic terms. The foundational
+service caps seed count at 100 and context count at 500. The TASK-028 operator workflow narrows
+those limits to 25 direct and 100 total messages, with defaults of 5 and 50. The live Lore adapter
+uses public-inbox Atom search for bounded date, text, subject, and participant discovery. There is
+no select-all, mirror, unbounded backfill, implicit history, daemon, subscription, or archive-clone
+route.
 
 The governed source profile owns provider, HTTPS endpoint, list identity, User-Agent, timeout,
 response-size bound, minimum request interval, source-wide in-process concurrency, bounded retry,
@@ -83,8 +84,8 @@ For every connected or truncated discussion, each member has one acyclic immedia
 the stored root and every connector on that path is stored. The repository integrity check walks
 and validates those paths and depths. Missing connectors classify material as incomplete; malformed
 identity and cycles are quarantined. Neither state receives discussion membership. A descendant
-limit produces `truncated`, never a disconnected `connected` component. Because the initial live
-adapter does not enumerate descendants, live ancestor-closure acquisitions conservatively report
+limit produces `truncated`, never a disconnected `connected` component. The live adapter enumerates
+replies through per-thread Atom feeds. Feed pagination or an unexpanded frontier still reports
 truncation rather than claiming a complete discussion.
 
 Repeated acquisition compares content identity for an existing external Message-ID. Equal bytes
@@ -114,8 +115,8 @@ are independently capped at 100 and 50 by default.
 ## Limitations
 
 The initial vertical has no full-text index beyond bounded SQLite `LIKE`, no comprehensive patch
-or revision-series parser, no cross-list federation, no participant identity resolution, and no
-descendant enumeration on the live adapter. MIME text extraction is limited to ordinary text parts;
+or revision-series parser, no cross-list federation, and no participant identity resolution. MIME
+text extraction is limited to ordinary text parts;
 all unsupported parts remain preserved in exact raw evidence and produce parse warnings. Historical
 backfill, durable incremental cursors, archive query parsing, pruning, and AI summarization remain
 deferred. Because there is no cursor, repeated explicit acquisition may repeat bounded network
@@ -125,7 +126,7 @@ requests; this path is not production-ready polling.
 
 | Subsystem | Responsibility | Status |
 | --- | --- | --- |
-| Lore/public-inbox adapter | Explicit-ID live retrieval and ancestor closure | Usable with Limitations |
+| Lore/public-inbox adapter | Bounded Atom discovery, message retrieval, ancestor closure, reply enumeration | Usable with Limitations |
 | Bounded acquisition service | Preview, seed/context separation, limits, fail-closed admission | Complete |
 | Immutable evidence | Lossless email bytes, acquisition provenance, integrity | Complete |
 | SQLite manifests and discussion state | Durable inclusion facts and rebuildable relationships | Complete |
@@ -134,7 +135,6 @@ requests; this path is not production-ready polling.
 | Patch-series and revision semantics | Deterministic non-reply relationships | Not Started |
 
 TASK-023 changes the repository from a single firm-oriented browser projection to one browser with
-multiple repository-owned projections. The important limitation is that live descendant enumeration
-is not yet implemented, so live acquisitions are conservatively truncated. The next architectural
-milestone should be selected from operating evidence: bounded archive-query discovery and cursors,
-or deterministic patch/revision relationships if consulting workflows demonstrate their value.
+multiple repository-owned projections. TASK-028 adds bounded production Atom discovery and reply
+enumeration without changing repository authority. Durable cursors and deterministic patch/revision
+relationships remain candidates only if operating evidence demonstrates their value.

@@ -2,6 +2,7 @@
 
 from rfi.mailing_lists.contracts import (
     AcquisitionLimits,
+    AcquisitionMessage,
     AcquisitionManifest,
     AcquisitionPreview,
     AcquisitionRunStatus,
@@ -18,11 +19,24 @@ from rfi.mailing_lists.contracts import (
     SelectionCriteria,
 )
 from rfi.mailing_lists.provider import FixtureMailingListArchive, LoreArchive
+from rfi.mailing_lists.queue import MailingListFetchQueue
 from rfi.mailing_lists.repository import MailingListRepository
 from rfi.mailing_lists.service import (
     MailingListAcquisitionService,
     MailingListQueryService,
     MailingListSourceService,
+)
+from rfi.mailing_lists.workflow import (
+    ArchiveValidationResult,
+    FetchUpToDateResult,
+    LinuxMailingListWorkflowService,
+    LoreCatalogEntry,
+    MailingListWorkflowDraft,
+    MailingListWorkflowReview,
+    SavedMailingListWorkflow,
+    WorkflowCreateResult,
+    WorkflowTestResult,
+    normalize_lore_archive,
 )
 
 LINUX_BLOCK_SOURCE = MailingListSource(
@@ -31,12 +45,20 @@ LINUX_BLOCK_SOURCE = MailingListSource(
 )
 
 __all__ = [
-    "AcquisitionLimits", "AcquisitionManifest", "AcquisitionPreview", "AcquisitionRunStatus",
+    "AcquisitionLimits", "AcquisitionManifest", "AcquisitionMessage", "AcquisitionPreview",
+    "AcquisitionRunStatus",
+    "ArchiveValidationResult",
+    "FetchUpToDateResult",
     "ArchiveMessage", "ConnectivityState",
     "DiscussionProjection", "DiscussionSummary", "FixtureMailingListArchive", "InclusionReason",
     "LINUX_BLOCK_SOURCE", "LoreArchive", "MailingListAcquisitionService", "MailingListError",
+    "LinuxMailingListWorkflowService", "LoreCatalogEntry",
+    "MailingListFetchQueue",
     "LoreTransportPolicy", "MailingListQueryService", "MailingListRepository",
     "MailingListSourceService",
-    "MailingListSource", "MessageDetail",
+    "MailingListSource", "MailingListWorkflowDraft", "MailingListWorkflowReview", "MessageDetail",
     "MessageSummary", "SelectionCriteria",
+    "SavedMailingListWorkflow", "WorkflowCreateResult",
+    "WorkflowTestResult",
+    "normalize_lore_archive",
 ]

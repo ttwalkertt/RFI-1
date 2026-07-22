@@ -342,6 +342,23 @@ class MailingListRepository:
             (source_id,),
         ))
 
+    def acquisition_coverage(self, source_id: str) -> tuple[dict[str, Any], ...]:
+        """Return acquisition scope needed to derive coverage without a mutable cursor."""
+        rows = self.rows(
+            "SELECT run_id,requested_at,lifecycle_status,status AS connectivity_state,"
+            "message_count,error_code,canonical_json FROM mailing_list_runs "
+            "WHERE source_id=? ORDER BY requested_at,run_id",
+            (source_id,),
+        )
+        result = []
+        for row in rows:
+            item = dict(row)
+            payload = json.loads(str(item.pop("canonical_json")))
+            item["criteria"] = payload.get("criteria", {})
+            item["truncated"] = bool(payload.get("truncated", False))
+            result.append(item)
+        return tuple(result)
+
     def replace_derived(
         self, messages: list[dict[str, Any]], discussions: list[dict[str, Any]]
     ) -> None:
@@ -479,13 +496,14 @@ class MailingListRepository:
         membership_by_message = {str(row["message_key"]): row for row in memberships}
         paths = 0
         for key, item in messages.items():
-            if item["connectivity_state"] not in {"connected", "truncated"}:
-                continue
             membership = membership_by_message.get(key)
             if membership is None:
-                raise MailingListError(
-                    "connectivity_violation", "connected message has no discussion membership"
-                )
+                if item["connectivity_state"] in {"connected", "truncated"}:
+                    raise MailingListError(
+                        "connectivity_violation",
+                        "connected message has no discussion membership",
+                    )
+                continue
             seen: set[str] = set()
             current = key
             edges = 0

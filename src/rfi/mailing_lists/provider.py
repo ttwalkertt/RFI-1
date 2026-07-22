@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import threading
 import time
+import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any, Callable, Iterator
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 from rfi.mailing_lists.contracts import (
@@ -41,6 +42,8 @@ class FixtureMailingListArchive:
             return tuple(explicit[:limit]), len(explicit) > limit
         matches: list[tuple[str, str]] = []
         terms = tuple(item.casefold() for item in criteria.topic_terms)
+        subjects = tuple(item.casefold() for item in criteria.subject_terms)
+        participants = tuple(item.casefold() for item in criteria.participant_terms)
         query = (criteria.query or "").casefold()
         for external_id, item in self.messages.items():
             parsed = parse_message(item.raw)
@@ -48,6 +51,10 @@ class FixtureMailingListArchive:
             if query and query not in haystack:
                 continue
             if terms and not any(term in haystack for term in terms):
+                continue
+            if subjects and not any(term in parsed.subject.casefold() for term in subjects):
+                continue
+            if participants and not any(term in parsed.sender.casefold() for term in participants):
                 continue
             when = parsed.message_date or ""
             if criteria.date_from and when < criteria.date_from:
@@ -131,7 +138,10 @@ def _governor(source: MailingListSource) -> _SourceGovernor:
 
 
 class LoreArchive:
-    """Narrow live adapter: explicit Message-IDs plus ancestor closure only."""
+    """Bounded Lore adapter with Atom discovery and thread enumeration."""
+
+    _ATOM = "{http://www.w3.org/2005/Atom}"
+    _THREAD = "{http://purl.org/syndication/thread/1.0}"
 
     def __init__(
         self,
@@ -163,6 +173,8 @@ class LoreArchive:
         self._retry_count = 0
         self._pacing_sleep_seconds = 0.0
         self._backoff_sleep_seconds = 0.0
+        self._thread_children: dict[str, tuple[str, ...]] = {}
+        self._thread_feed_truncated: set[str] = set()
 
     def usage(self) -> dict[str, int | float | str]:
         return {
@@ -176,26 +188,73 @@ class LoreArchive:
 
     @property
     def descendant_enumeration_complete(self) -> bool:
-        return False
+        return True
 
     def discover(
         self, criteria: SelectionCriteria, limit: int
     ) -> tuple[tuple[str, ...], bool]:
-        if not criteria.message_ids:
-            raise MailingListError(
-                "unsupported_selection",
-                "the initial live Lore path requires one or more explicit Message-IDs",
+        if criteria.message_ids:
+            return (
+                tuple(
+                    normalize_message_id(item) or item for item in criteria.message_ids[:limit]
+                ),
+                len(criteria.message_ids) > limit,
             )
-        return (
-            tuple(
-                normalize_message_id(item) or item for item in criteria.message_ids[:limit]
-            ),
-            len(criteria.message_ids) > limit,
+        clauses = []
+        if criteria.query:
+            clauses.append(f"({criteria.query.strip()})")
+        if criteria.topic_terms:
+            terms = " OR ".join(
+                f'bs:"{self._query_literal(item)}"' for item in criteria.topic_terms
+            )
+            clauses.append(f"({terms})")
+        if criteria.subject_terms:
+            subjects = " OR ".join(
+                f's:"{self._query_literal(item)}"' for item in criteria.subject_terms
+            )
+            clauses.append(f"({subjects})")
+        if criteria.participant_terms:
+            participants = " OR ".join(
+                f'f:"{self._query_literal(item)}"' for item in criteria.participant_terms
+            )
+            clauses.append(f"({participants})")
+        if criteria.date_from or criteria.date_through:
+            clauses.append(f"d:{criteria.date_from or ''}..{criteria.date_through or ''}")
+        if not clauses:
+            raise MailingListError(
+                "unsupported_selection", "Lore discovery requires a bounded search criterion"
+            )
+        location = f"{self.base_url}?{urlencode({'q': ' AND '.join(clauses), 'x': 'A'})}"
+        root = self._atom(self._request(location), "Lore search returned malformed Atom")
+        message_ids = tuple(
+            message_id
+            for entry in root.findall(f"{self._ATOM}entry")
+            if (message_id := self._entry_message_id(entry)) is not None
         )
+        feed_truncated = any(
+            link.get("rel") == "next" for link in root.findall(f"{self._ATOM}link")
+        )
+        unique = tuple(dict.fromkeys(message_ids))
+        return unique[:limit], feed_truncated or len(unique) > limit
+
+    def probe(self) -> dict[str, str]:
+        """Verify that the configured archive exposes a structurally valid Atom feed."""
+        location = f"{self.base_url}new.atom"
+        root = self._atom(self._request(location), "Lore archive did not return a valid Atom feed")
+        title = root.findtext(f"{self._ATOM}title", default="").strip()
+        updated = root.findtext(f"{self._ATOM}updated", default="").strip()
+        if not title:
+            raise MailingListError(
+                "unsupported_archive", "Lore archive Atom feed has no archive title"
+            )
+        return {"title": title, "updated": updated, "canonical_url": self.base_url}
 
     def fetch(self, external_message_id: str) -> ArchiveMessage:
         token = external_message_id.strip().removeprefix("<").removesuffix(">")
         location = f"{self.base_url}{quote(token, safe='@')}/raw"
+        return ArchiveMessage(self._request(location), location)
+
+    def _request(self, location: str) -> bytes:
         request = Request(location, headers={"User-Agent": self.policy.user_agent})
         for attempt in range(self.policy.maximum_attempts_per_request):
             try:
@@ -224,7 +283,7 @@ class LoreArchive:
                     raise MailingListError(
                         "response_too_large", "archive message exceeds byte limit"
                     )
-                return ArchiveMessage(raw, location)
+                return raw
             except HTTPError as error:
                 retry_after = error.headers.get("Retry-After") if error.headers else None
                 try:
@@ -256,6 +315,37 @@ class LoreArchive:
                 self._retry(attempt, None)
         raise AssertionError("unreachable Lore request state")
 
+    @classmethod
+    def _atom(cls, raw: bytes, message: str) -> ET.Element:
+        try:
+            root = ET.fromstring(raw)
+        except ET.ParseError as error:
+            raise MailingListError("malformed_archive_response", message) from error
+        if root.tag != f"{cls._ATOM}feed":
+            raise MailingListError("unsupported_archive", message)
+        return root
+
+    @staticmethod
+    def _query_literal(value: str) -> str:
+        return value.strip().replace("\\", "\\\\").replace('"', '\\"')
+
+    @staticmethod
+    def _message_id_from_url(value: str | None) -> str | None:
+        if not value:
+            return None
+        path = urlsplit(value).path.rstrip("/")
+        token = unquote(path.rsplit("/", 1)[-1]) if path else ""
+        return normalize_message_id(f"<{token}>")
+
+    @classmethod
+    def _entry_message_id(cls, entry: ET.Element) -> str | None:
+        for link in entry.findall(f"{cls._ATOM}link"):
+            if link.get("rel", "alternate") == "alternate":
+                message_id = cls._message_id_from_url(link.get("href"))
+                if message_id:
+                    return message_id
+        return None
+
     def _retry(self, attempt: int, retry_after: str | None) -> None:
         self._retry_count += 1
         exponential = min(
@@ -285,6 +375,35 @@ class LoreArchive:
     def direct_children(
         self, external_message_id: str, limit: int
     ) -> tuple[tuple[str, ...], bool]:
-        del external_message_id
-        del limit
-        return (), True
+        parent = normalize_message_id(external_message_id) or external_message_id
+        if parent not in self._thread_children:
+            token = parent.strip().removeprefix("<").removesuffix(">")
+            location = f"{self.base_url}{quote(token, safe='@')}/t.atom"
+            root = self._atom(
+                self._request(location), "Lore thread endpoint returned malformed Atom"
+            )
+            children: dict[str, list[str]] = {}
+            all_ids: set[str] = set()
+            for entry in root.findall(f"{self._ATOM}entry"):
+                message_id = self._entry_message_id(entry)
+                if not message_id:
+                    continue
+                all_ids.add(message_id)
+                relation = entry.find(f"{self._THREAD}in-reply-to")
+                relation_parent = self._message_id_from_url(
+                    relation.get("href") if relation is not None else None
+                )
+                if relation_parent:
+                    children.setdefault(relation_parent, []).append(message_id)
+            truncated = any(
+                link.get("rel") == "next" for link in root.findall(f"{self._ATOM}link")
+            )
+            for message_id in all_ids | set(children):
+                self._thread_children[message_id] = tuple(
+                    sorted(dict.fromkeys(children.get(message_id, [])))
+                )
+                if truncated:
+                    self._thread_feed_truncated.add(message_id)
+            self._thread_children.setdefault(parent, ())
+        result = self._thread_children[parent]
+        return result[:limit], parent in self._thread_feed_truncated or len(result) > limit

@@ -35,6 +35,9 @@
 | TASK-024 | Pull-result configuration repair navigation | Complete |
 | TASK-025 | Revisioned multi-level artifact streams and configuration | Complete |
 | TASK-026 | Usable stream configuration and canonical YAML | Complete |
+| TASK-027 | Non-modal operator help system and workflow guide | Complete |
+| TASK-028 | Linux kernel mailing-list stream workflow | Complete |
+| TASK-029 | Simplified Linux mailing-list operator workflow | Complete |
 
 ## Architectural Progression
 

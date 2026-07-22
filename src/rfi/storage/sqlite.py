@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -430,6 +430,90 @@ _V4_LORE_TRANSPORT_DEFAULT = {
     "backoff_maximum_seconds": 30.0,
 }
 
+_TASK028_SOURCE_ID = "linux-block-lore"
+_TASK028_LIST_ID = "linux-block"
+_TASK028_PROVIDER = "lore-public-inbox"
+_TASK028_MALFORMED_URL = "https://lore-kernel-org/linux-block"
+_TASK028_CANONICAL_URL = "https://lore.kernel.org/linux-block/"
+
+
+def _migrate_v4_task028_legacy_linux_block_source(connection: sqlite3.Connection) -> bool:
+    """Repair only the known unused TASK-028 legacy source, or leave it untouched."""
+    mailing_row = connection.execute(
+        "SELECT list_id,archive_base_url,canonical_json FROM mailing_list_sources "
+        "WHERE source_id=?",
+        (_TASK028_SOURCE_ID,),
+    ).fetchone()
+    governed_row = connection.execute(
+        "SELECT mechanism,canonical_json FROM governed_sources WHERE source_id=?",
+        (_TASK028_SOURCE_ID,),
+    ).fetchone()
+    if mailing_row is None or governed_row is None:
+        return False
+    if (
+        str(mailing_row[0]) != _TASK028_LIST_ID
+        or str(mailing_row[1]) != _TASK028_MALFORMED_URL
+        or str(governed_row[0]) != _TASK028_PROVIDER
+    ):
+        return False
+    try:
+        mailing = json.loads(str(mailing_row[2]))
+        governed = json.loads(str(governed_row[1]))
+    except (json.JSONDecodeError, TypeError):
+        return False
+    configuration = governed.get("configuration")
+    if not isinstance(configuration, dict):
+        return False
+    if (
+        mailing.get("source_id") != _TASK028_SOURCE_ID
+        or mailing.get("list_id") != _TASK028_LIST_ID
+        or mailing.get("provider") != _TASK028_PROVIDER
+        or mailing.get("archive_base_url") != _TASK028_MALFORMED_URL
+        or governed.get("source_id") != _TASK028_SOURCE_ID
+        or governed.get("mechanism") != _TASK028_PROVIDER
+        or configuration.get("list_id") != _TASK028_LIST_ID
+        or configuration.get("archive_base_url") != _TASK028_MALFORMED_URL
+    ):
+        return False
+
+    for table in (
+        "acquisition_attempts",
+        "artifact_observations",
+        "checkpoint_events",
+        "current_checkpoints",
+        "mailing_list_runs",
+        "mailing_list_run_items",
+        "mailing_list_messages",
+        "mailing_list_discussions",
+        "artifact_stream_projections",
+    ):
+        if connection.execute(
+            f"SELECT 1 FROM {table} WHERE source_id=? LIMIT 1", (_TASK028_SOURCE_ID,)
+        ).fetchone() is not None:
+            return False
+    for row in connection.execute(
+        "SELECT canonical_json FROM artifact_stream_revisions WHERE input_kind='external'"
+    ):
+        try:
+            revision = json.loads(str(row[0]))
+        except (json.JSONDecodeError, TypeError):
+            return False
+        if _TASK028_SOURCE_ID in revision.get("input_ids", []):
+            return False
+
+    mailing["archive_base_url"] = _TASK028_CANONICAL_URL
+    configuration["archive_base_url"] = _TASK028_CANONICAL_URL
+    connection.execute(
+        "UPDATE governed_sources SET canonical_json=? WHERE source_id=?",
+        (canonical_json(governed), _TASK028_SOURCE_ID),
+    )
+    connection.execute(
+        "UPDATE mailing_list_sources SET archive_base_url=?,canonical_json=? "
+        "WHERE source_id=?",
+        (_TASK028_CANONICAL_URL, canonical_json(mailing), _TASK028_SOURCE_ID),
+    )
+    return True
+
 
 class RepositoryDatabase:
     """Own schema lifecycle, connections, and repository-wide revisions."""
@@ -515,7 +599,7 @@ class RepositoryDatabase:
                 version = int(row[0])
                 if version == SCHEMA_VERSION:
                     return False
-                if version not in {1, 2, 3}:
+                if version not in {1, 2, 3, 4}:
                     raise StorageError(
                         "incompatible_schema",
                         f"repository schema version {version} is unsupported; "
@@ -549,6 +633,8 @@ class RepositoryDatabase:
                             "UPDATE governed_sources SET canonical_json=? WHERE source_id=?",
                             (canonical_json(value), str(source[0])),
                         )
+                if version <= 4 and _migrate_v4_task028_legacy_linux_block_source(connection):
+                    self.advance_revision(connection)
                 connection.execute(
                     "UPDATE schema_metadata SET schema_version = ?, applied_at = ? "
                     "WHERE singleton = 1",

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
+from urllib.parse import urlsplit, urlunsplit
+
+_ARCHIVE_ID = re.compile(r"[a-z0-9][a-z0-9._+-]{0,79}")
 
 
 class MailingListError(RuntimeError):
@@ -14,6 +18,31 @@ class MailingListError(RuntimeError):
         super().__init__(message)
         self.code = code
         self.retryable = retryable
+
+
+def normalize_lore_archive(value: str) -> tuple[str, str]:
+    """Return the supported archive identity and canonical Lore URL."""
+    try:
+        parsed = urlsplit(value.strip())
+    except ValueError as error:
+        raise MailingListError("malformed_lore_url", "Lore archive URL is malformed") from error
+    if parsed.scheme != "https" or parsed.hostname != "lore.kernel.org":
+        raise MailingListError(
+            "unsupported_lore_host", "Use an HTTPS mailing-list archive on lore.kernel.org"
+        )
+    if parsed.username or parsed.password or parsed.port or parsed.query or parsed.fragment:
+        raise MailingListError(
+            "malformed_lore_url",
+            "Lore archive URL must not contain credentials, port, query, or fragment",
+        )
+    parts = tuple(item for item in parsed.path.split("/") if item)
+    if len(parts) != 1 or not _ARCHIVE_ID.fullmatch(parts[0]):
+        raise MailingListError(
+            "unsupported_archive_shape",
+            "Use a Lore mailing-list archive URL such as https://lore.kernel.org/linux-block/",
+        )
+    archive_id = parts[0]
+    return archive_id, urlunsplit(("https", "lore.kernel.org", f"/{archive_id}/", "", ""))
 
 
 class InclusionReason(StrEnum):
@@ -95,14 +124,19 @@ class SelectionCriteria:
     date_from: str | None = None
     date_through: str | None = None
     topic_terms: tuple[str, ...] = ()
+    subject_terms: tuple[str, ...] = ()
+    participant_terms: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not any((self.message_ids, self.query, self.date_from, self.date_through,
-                    self.topic_terms)):
+                    self.topic_terms, self.subject_terms, self.participant_terms)):
             raise MailingListError(
                 "unbounded_selection", "mailing-list acquisition requires explicit bounds"
             )
-        if any(not value.strip() for value in self.message_ids + self.topic_terms):
+        values = (
+            self.message_ids + self.topic_terms + self.subject_terms + self.participant_terms
+        )
+        if any(not value.strip() for value in values):
             raise MailingListError("invalid_selection", "selection values must not be blank")
 
 
@@ -219,6 +253,18 @@ class MessageSummary:
     connectivity_state: ConnectivityState
     child_count: int
     depth: int | None = None
+
+
+@dataclass(frozen=True)
+class AcquisitionMessage:
+    """Operator-facing projection of one message retained by one acquisition run."""
+
+    summary: MessageSummary
+    inclusion_reason: str
+    direct_match: bool
+    context_only: bool
+    source_link: str
+    discussion_id: str | None
 
 
 @dataclass(frozen=True)

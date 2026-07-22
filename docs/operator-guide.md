@@ -1,8 +1,8 @@
 # RFI-1 Operator Guide
 
 This is the canonical, repository-owned operating guide for the RFI-1 local administration
-application. It describes the implemented product after TASK-026, including the corrected
-repository-global External Sources workflow. The administration server renders this same file at
+application. It describes the implemented product through TASK-028, including the first-class
+Linux mailing-list workflow. The administration server renders this same file at
 `/help`; no network connection or second documentation server is required.
 
 Help opens through an ordinary named browser target. A browser normally reuses the existing
@@ -41,7 +41,8 @@ opens existing state, prints the local URL and state path, and does not seed, mi
 open a browser. Stop the foreground server with Ctrl-C.
 
 Open the printed URL. Use the persistent top navigation for Concept Catalog, Target Firms, Firm
-Profiles, External Sources, Pull Sources, Streams, and Artifacts. Every page has a Help action.
+Profiles, External Sources, Pull Sources, Linux Mailing Lists, Streams, and Artifacts. Every page
+has a Help action.
 Help is a separate browsing context, so invoking it does not submit, reset, close, or navigate the
 current form.
 
@@ -393,6 +394,165 @@ rfi pull --state STATE --all-configured
 
 Related topics: [Firm Source Profiles](#source-profiles), [source readiness](#source-readiness),
 [Artifacts](#artifacts), and [troubleshooting](#troubleshooting).
+
+<!-- help-topic: linux-mailing-lists -->
+## Linux Mailing Lists
+
+### Purpose
+
+Use **Linux Mailing Lists** to operate bounded Lore-backed evidence streams without first
+configuring External Sources or the generic Streams editor. The page coordinates those existing
+repository objects behind an operations-first summary and remains the normal starting point when
+the intended outcome is collecting Linux kernel mailing-list discussions.
+
+### Prerequisites
+
+The repository must be initialized and Lore must be reachable over HTTPS. No governed source or
+stream needs to exist beforehand. The initial live test requires a start date, through date, and
+hard direct/total message limits. Relevance controls are optional.
+
+### Typical workflow
+
+1. Select a saved stream card. Its summary shows purpose, source, relevance, hard limits, effective
+   last fetch, latest acquisition result, and any incomplete/partial warning.
+2. Choose **Fetch up to date**. RFI immediately queues deterministic bounded acquisition from a
+   two-day overlap before complete repository coverage through today.
+3. Follow queued, started, completed, failed, or cancellation state in **Fetch queue** while using
+   the rest of the page. **Fetch All up to date** queues every eligible stream through the same FIFO
+   and duplicate suppression.
+4. Choose **Edit** only when configuration must change. Saving an existing stream creates its next
+   immutable authoritative revision and displays a modal confirmation.
+5. Choose **Add mailing list** for a new stream, then configure at most 31 initial days, optional
+   relevance, and hard limits. Review writes nothing; **Create and test stream** saves and retrieves
+   one bounded sample.
+6. Inspect direct/context labels, relationships, Lore links, and completeness. Use **Artifacts** for
+   the complete retained-evidence view.
+
+### State and side effects
+
+Archive validation and Review are read-only. Create and Save change durable source or immutable
+stream-revision state. Test and Fetch contact Lore, preserve exact message bytes and provenance,
+and record bounded acquisition runs. The queue and status panel are process-local operational
+state, not a scheduler or audit store; restart clears them but preserves durable evidence and
+reconstructed effective coverage. There is no unbounded mirror.
+
+The page reports two independent dimensions from authoritative records. **Configuration ready**
+means the governed source and saved stream revision are executable for a later bounded run.
+**Test evidence complete and connected**, **incomplete or truncated**, **empty**, **partial**,
+**failed**, or **not run** describes only the latest bounded test evidence. Configuration readiness
+never means a truncated test was complete.
+
+### Common problems and recovery
+
+- An invalid Lore URL must be corrected to one canonical HTTPS archive URL.
+- If a prior **External Sources** record owns the generated archive identity with a different URL,
+  the workflow refuses to replace it. Sources created through current validation store supported
+  trailing-slash and host-case variants canonically, so their stable identity is reused. The exact
+  malformed, unused TASK-028 legacy Linux Block record is corrected once by schema migration v5,
+  preserving its source ID and both persisted projections. Every other mismatch, and every source
+  with a durable dependency, remains unchanged and requires a separately reviewed central
+  source-governance migration.
+- A connectivity failure persists nothing during validation; retry is safe.
+- If governed-source creation succeeds but stream creation fails, the page identifies that durable
+  partial state. Retry reuses the source rather than duplicating it.
+- A failed or partial acquisition is not reported as verified. Any retained evidence remains
+  inspectable, and the displayed retryability explains the next action.
+- **Reload saved streams** names the state being reloaded and protects unsaved values.
+- **Cancel / Abandon all Fetches** requires confirmation, abandons queued work, and requests safe
+  cooperative cancellation of a running acquisition. Already durable evidence is not removed.
+
+Related topics: [choosing a Lore list](#choosing-lore),
+[bounded acquisition](#bounded-mailing-list-acquisition), [discussion context](#discussion-context),
+[generated identities](#generated-identities), [lifecycle](#mailing-list-lifecycle),
+[incomplete results](#incomplete-mailing-list-results), [rerun and recovery](#mailing-list-retry),
+and [Lore connectivity](#lore-connectivity).
+
+<!-- help-topic: choosing-lore -->
+## Choosing a Lore mailing list
+
+The catalog provides human-readable Linux block, NVMe, SCSI, and main-kernel archives. A custom
+archive is supported only when its URL has exactly the form
+`https://lore.kernel.org/ARCHIVE/`. RFI derives the archive identity from that canonical path,
+rejects other hosts, credentials, ports, queries, fragments, and nested paths, then verifies a
+real Atom feed before claiming reachability. Selection and validation do not create repository
+state.
+
+<!-- help-topic: bounded-mailing-list-acquisition -->
+## Bounded mailing-list acquisition
+
+The initial date window is required, cannot extend into the future, and cannot exceed 31 days.
+Direct seed messages are capped at 25 and the complete retained result at 100; normal defaults are
+5 and 50. Reply depth is capped at 10. The governed source also enforces response-size, timeout,
+pacing, concurrency, retry, and backoff policy. Fetch All queues each eligible stream as a separate
+bounded job; it is not an unbounded selection. No archive mirror, implicit history, daemon, or
+scheduled polling is available.
+
+Keywords search message subject/body, subjects search the Subject field, and participants search
+the From field through Lore's bounded public-inbox query interface. Values within one populated
+control are alternatives; populated control groups and the date window all constrain the seeds.
+
+<!-- help-topic: discussion-context -->
+## Direct matches and discussion context
+
+A direct match satisfies the configured Lore seed criteria. Context-only messages do not need to
+match those criteria: they are retained as required ancestors or bounded descendants so the
+discussion is not misleadingly disconnected. Immediate reply authority comes from message headers,
+not normalized subjects. Missing connectors, cycles, response limits, and incomplete thread feeds
+remain explicit. Every result message shows its inclusion reason, parent/root context, depth, reply
+count, connectivity state, Message-ID, and canonical Lore link.
+
+<!-- help-topic: generated-identities -->
+## Generated mailing-list identities
+
+Operators provide a human-readable stream name, not repository IDs. RFI derives the governed-source
+identity from the canonical Lore archive and a stream identity from the name. Existing equivalent
+records are reused. A different record that already owns the generated identity causes RFI to add
+a deterministic digest suffix; it never silently overwrites or asks the operator to coordinate row
+identifiers. Review shows generated identities as secondary inspection information before save.
+
+<!-- help-topic: mailing-list-lifecycle -->
+## Mailing-list validation, creation, and testing
+
+**Validate archive connectivity** performs a live structural Lore check and writes nothing.
+**Review mailing-list stream** validates and normalizes the complete draft and writes nothing.
+**Create and test stream** first creates or resolves the governed source and immutable stream
+revision, then performs the bounded acquisition, stores exact evidence and provenance, publishes
+discussion state, executes the saved stream revision, and displays results. Later acquisition is
+the same explicit bounded action; it is not validation, save, scheduling, or background polling.
+
+Progress identifies archive validation, source resolution, stream revision, retrieval, context,
+evidence storage, and stream verification. Overall success is withheld when any later stage fails.
+
+<!-- help-topic: incomplete-mailing-list-results -->
+## Incomplete mailing-list results
+
+`truncated` means a valid connected result reached a visible seed, reply-depth, total-message, or
+remote-feed frontier. `incomplete` means required context was unavailable. `quarantined` means
+identity or relationship integrity failed. A partial transport outcome may retain useful evidence
+but does not establish successful verification. The result page shows active bounds, the
+direct/context breakdown, **Configuration ready** as the saved definition's executability, and a
+separate **Test evidence incomplete or truncated** warning where applicable. Disconnected or
+truncated material is never labeled complete.
+
+<!-- help-topic: mailing-list-retry -->
+## Rerunning a mailing-list stream
+
+Select a saved stream to inspect its summary and latest acquisition evidence. **Fetch up to date**
+uses deterministic two-day overlap and one or more gap-free, at-most-31-day windows through today.
+Duplicate queued/running work is ignored. Immutable artifact content and relationships remain
+idempotent. A retryable Lore failure may be queued again; correct terminal URL, selection, or
+validation errors in **Edit** first. Incomplete or truncated windows retain evidence but do not
+advance effective coverage.
+
+<!-- help-topic: lore-connectivity -->
+## Troubleshooting Lore connectivity
+
+Confirm the URL uses the supported canonical `https://lore.kernel.org/ARCHIVE/` form. A malformed
+or non-Atom response is an unsupported archive, while timeout, rate limit, or transient server
+failure is retryable according to the governed policy. Validation writes nothing. During test,
+transport failure before useful retrieval records a failed run with no evidence; failure after
+useful retrieval records an explicit partial run. Raw network exceptions, HTML bodies, and stack
+traces are not exposed to the operator.
 
 <!-- help-topic: artifacts -->
 ## Artifacts and retained evidence

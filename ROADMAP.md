@@ -193,3 +193,9 @@ TASK-025 hardening places Lore identity and transport policy in governed externa
 adds truthful retry/partial/failure acquisition outcomes, and routes schema projection and context
 through a finite registry. Durable archive cursors, multi-process/global rate coordination, and
 production polling remain future operational work; the current live path is explicit and bounded.
+
+TASK-028 turns the Linux mailing-list vertical into a coherent operator workflow. One task-specific
+façade coordinates known/custom Lore selection, non-persistent review, deterministic source and
+stream creation, live bounded Atom search, connected-context retention, stream verification, and
+evidence inspection without exposing the repository decomposition. Existing source, stream,
+acquisition, artifact, provenance, and SQLite authorities remain unchanged.

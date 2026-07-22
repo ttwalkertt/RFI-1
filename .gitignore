@@ -29,6 +29,7 @@ fixtures/local/*
 
 # Generated review and build evidence
 .artifacts/
+tmp/
 
 # Editor and operating-system files
 .DS_Store

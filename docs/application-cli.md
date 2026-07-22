@@ -202,7 +202,7 @@ use retained repository evidence and never instantiate the live adapter.
 
 - Application lifecycle CLI: **Complete** for explicit local initialization, seeding, and startup.
 - Integrated admin console: **Complete** for concept and target-firm local operation.
-- Application structured persistence: **Complete for schema version 4**; SQLite is authoritative
+- Application structured persistence: **Complete for schema version 5**; SQLite is authoritative
   and incompatible or legacy state fails closed.
 - Operational deployment: **Not started**; the server is a foreground local development service.
 - Architectural change: TASK-021 replaced disposable structured-file persistence with one fresh

@@ -17,10 +17,10 @@
       "source": "README.md",
       "destination": "README.md",
       "source_size": 5104,
-      "destination_size": 6605,
+      "destination_size": 6932,
       "source_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
-      "destination_sha256": "fa8f0a34c5ca3473600acc4e29c2679b54b0c5be40e9ba1a4d36ae90f8f207fb",
-      "content_change": "documentation index and status extended through TASK-025 artifact streams"
+      "destination_sha256": "6b39f73baff1296d8f85f0d092b03e4f572df942b9af4b420c07ad92f072c6cc",
+      "content_change": "documentation index and status extended through TASK-029 mailing-list operations"
     },
     {
       "source": "DESIGN_PRINCIPLES.md",
@@ -53,28 +53,28 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 5950,
+      "destination_size": 6168,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "f128d7f9f715463f385a7b09614cc95c646ef9e05c42fd1a6da13ce625cc4acc",
-      "content_change": "task roadmap reconciled through completed TASK-026 stream YAML workflow"
+      "destination_sha256": "28508e1c947442e5a84ab6ed4a79ef4515fd3e978028d6e4a2c19c5a1cb549f8",
+      "content_change": "task roadmap reconciled through TASK-029 mailing-list operations"
     },
     {
       "source": "ROADMAP.md",
       "destination": "ROADMAP.md",
       "source_size": 3371,
-      "destination_size": 5257,
+      "destination_size": 5720,
       "source_sha256": "1de0192a023e8c046f2cdedc2fe61592345d2e06b324c9b49b2c2b25424dfdad",
-      "destination_sha256": "f5aa15ba1636329babbc159e7e375f73d243613e3330d5effa8a0818c4ed8bfe",
-      "content_change": "roadmap updated through TASK-025 governed stream hardening"
+      "destination_sha256": "993430d34ed8de731962c481dda11efadb0b61c5a6dd53e0f48a9860e1f98db1",
+      "content_change": "roadmap updated through TASK-028 mailing-list operator workflow"
     },
     {
       "source": "ARCHITECTURE.md",
       "destination": "ARCHITECTURE.md",
       "source_size": 4889,
-      "destination_size": 9785,
+      "destination_size": 10369,
       "source_sha256": "b1035d87d8f620ace89e3aaae5ca65b0c21cf93c6e1ca91c824c1e623b20aa9f",
-      "destination_sha256": "ab7da8fb4e22139038633a41eaa90271e447e09cd16e942c69fe8fb439450657",
-      "content_change": "repository architecture extended through TASK-025 governed stream hardening"
+      "destination_sha256": "7f44eacaec30771413c2c2d7c55dfb21abf94f60a68f2d2bfdf8d9db24c31e5e",
+      "content_change": "repository architecture extended through TASK-028 workflow façade"
     }
   ]
 }

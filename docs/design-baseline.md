@@ -62,5 +62,10 @@ strict, versioned canonical YAML contract shared by browser, CLI, preview, revis
 and execution. See [`stream-configuration-and-yaml.md`](stream-configuration-and-yaml.md) and
 [`ADR-0021`](decisions/0021-canonical-stream-definition-yaml.md).
 
+TASK-028 adds a first-class Linux mailing-list workflow façade over those existing authorities and
+production Lore Atom discovery/thread enumeration. See
+[`linux-mailing-list-workflow.md`](linux-mailing-list-workflow.md) and
+[`ADR-0022`](decisions/0022-linux-mailing-list-workflow-facade.md).
+
 `BACKLOG.md` cannot authorize implementation or imply sequence. Backlog candidates move into
 `ROADMAP.md` or `TASKS.md` only through explicit triage and governance decisions.

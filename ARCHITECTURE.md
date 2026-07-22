@@ -310,6 +310,13 @@ response bounds, capped retry/backoff, `Retry-After`, and explicit 429/503 handl
 cursors and production polling are deferred; the active stream contract exposes no inert
 incremental or initial-date controls.
 
+The first-class Linux Mailing Lists surface is a task-specific orchestration façade rather than a
+new authority. It converts operator intent into provisional source validation, deterministic
+governed-source and stream identities, immutable revision creation, bounded Lore Atom acquisition,
+stream publication, and run-bound evidence inspection through existing public services. The normal
+path does not expose repository identifiers or schema mechanics. Generic source and stream editors
+remain advanced administration surfaces. No browser-only configuration or persistence exists.
+
 ---
 
 An RFI implementation should strive for:

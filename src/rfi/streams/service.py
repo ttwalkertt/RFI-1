@@ -279,7 +279,9 @@ class StreamService:
         elif operation == "not" and isinstance(node.get("item"), dict):
             self._validate_policy_shape(node["item"], add, f"{path}.not")
 
-    def validate(self, draft: StreamDraft) -> ValidationResult:
+    def validate(
+        self, draft: StreamDraft, provisional_external_sources: tuple[str, ...] = ()
+    ) -> ValidationResult:
         errors: list[dict[str, str]] = []
 
         def add(code: str, message: str, path: str = "$.stream") -> None:
@@ -310,7 +312,7 @@ class StreamService:
         if len(set(draft.input_ids)) != len(draft.input_ids):
             add("duplicate_input", "stable identities must be unique", "$.stream.input")
         if draft.input_kind == "external":
-            self._validate_external(draft, add)
+            self._validate_external(draft, add, provisional_external_sources)
         elif draft.input_kind == "streams":
             self._validate_upstreams(draft, add)
         seed_limit = draft.bounds.get("seed_limit", 0)
@@ -438,7 +440,10 @@ class StreamService:
         return "application/octet-stream"
 
     def _validate_external(
-        self, draft: StreamDraft, add: Callable[[str, str, str], None]
+        self,
+        draft: StreamDraft,
+        add: Callable[[str, str, str], None],
+        provisional_external_sources: tuple[str, ...] = (),
     ) -> None:
         if len(draft.input_ids) != 1:
             add(
@@ -446,7 +451,9 @@ class StreamService:
                 "$.stream.input.source_profile_id",
             )
             return
-        known = {item["source_id"] for item in self.repository.external_sources()}
+        known = {
+            item["source_id"] for item in self.repository.external_sources()
+        } | set(provisional_external_sources)
         if draft.input_ids[0] not in known:
             add(
                 "unknown_source", f"unknown governed source: {draft.input_ids[0]}",

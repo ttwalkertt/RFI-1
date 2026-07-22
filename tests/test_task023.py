@@ -59,6 +59,70 @@ def raw_message(message_id: str, subject: str, parent: str | None = None,
     return ("\r\n".join(headers) + f"\r\n\r\n{body}\r\n").encode()
 
 
+class PartialPatchSeriesArchive(FixtureMailingListArchive):
+    """Three retained patch-series trees plus one unavailable remote descendant."""
+
+    unavailable = "<patch-series-unavailable@kernel.example>"
+    v3_root = "<patch-v3-0@kernel.example>"
+
+    def fetch(self, external_message_id: str) -> ArchiveMessage:
+        if external_message_id == self.unavailable:
+            raise MailingListError(
+                "archive_request_failed",
+                "simulated unavailable patch-series descendant",
+                retryable=True,
+            )
+        return super().fetch(external_message_id)
+
+    def direct_children(
+        self, external_message_id: str, limit: int
+    ) -> tuple[tuple[str, ...], bool]:
+        children, has_more = super().direct_children(external_message_id, limit)
+        if external_message_id != self.v3_root or len(children) >= limit:
+            return children, has_more
+        expanded = children + (self.unavailable,)
+        return expanded[:limit], has_more or len(expanded) > limit
+
+
+def partial_patch_series_archive() -> PartialPatchSeriesArchive:
+    definitions = (
+        ("<patch-v1-0@kernel.example>", "[PATCH 0/1] block: P2PDMA fixes", None),
+        (
+            "<patch-v1-1@kernel.example>",
+            "[PATCH 1/1] block: P2PDMA fix",
+            "<patch-v1-0@kernel.example>",
+        ),
+        ("<patch-v2-0@kernel.example>", "[PATCH v2 0/1] block: P2PDMA fixes", None),
+        (
+            "<patch-v2-1@kernel.example>",
+            "[PATCH v2 1/1] block: P2PDMA fix",
+            "<patch-v2-0@kernel.example>",
+        ),
+        (
+            "<patch-v2-review@kernel.example>",
+            "Re: [PATCH v2 1/1] block: P2PDMA fix",
+            "<patch-v2-1@kernel.example>",
+        ),
+        (PartialPatchSeriesArchive.v3_root, "[PATCH v3 0/2] block: P2PDMA fixes", None),
+        (
+            "<patch-v3-1@kernel.example>",
+            "[PATCH v3 1/2] block: P2PDMA fix",
+            PartialPatchSeriesArchive.v3_root,
+        ),
+        (
+            "<patch-v3-2@kernel.example>",
+            "[PATCH v3 2/2] block: P2PDMA fix",
+            PartialPatchSeriesArchive.v3_root,
+        ),
+    )
+    return PartialPatchSeriesArchive({
+        message_id: ArchiveMessage(
+            raw_message(message_id, subject, parent), f"fixture:{message_id}"
+        )
+        for message_id, subject, parent in definitions
+    })
+
+
 class MailingListCase(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -135,6 +199,54 @@ class MailingListCase(unittest.TestCase):
         self.assertEqual(
             detail.missing_parent_reference, "<task023-not-retained@kernel.example>"
         )
+
+    def test_partial_v1_v2_v3_series_preserve_depth_for_retained_ancestor_paths(self) -> None:
+        service = MailingListAcquisitionService(
+            self.repository,
+            partial_patch_series_archive(),
+            clock=lambda: "2026-07-21T18:00:00+00:00",
+            identifiers=lambda: "mailrun-partial-patch-series",
+        )
+        direct = (
+            "<patch-v1-1@kernel.example>",
+            "<patch-v2-review@kernel.example>",
+            "<patch-v3-1@kernel.example>",
+            "<patch-v3-2@kernel.example>",
+        )
+        manifest = service.acquire(
+            LINUX_BLOCK_SOURCE.source_id,
+            SelectionCriteria(message_ids=direct),
+            AcquisitionLimits(seed_limit=4, context_limit=20, descendant_depth=3),
+        )
+        self.assertEqual(manifest.run_status.value, "partial")
+        self.assertEqual(manifest.state, ConnectivityState.INCOMPLETE)
+        self.assertEqual(manifest.message_count, 8)
+        self.assertEqual(manifest.relationship_count, 5)
+        self.assertEqual(manifest.discussion_count, 3)
+
+        retained = {
+            item.summary.external_message_id: item
+            for item in self.query.acquisition_messages(manifest.run_id)
+        }
+        self.assertEqual(retained[direct[0]].summary.depth, 1)
+        self.assertEqual(retained[direct[1]].summary.depth, 2)
+        self.assertEqual(retained[direct[2]].summary.depth, 1)
+        self.assertEqual(retained[direct[3]].summary.depth, 1)
+        for message_id in direct:
+            item = retained[message_id]
+            self.assertTrue(item.direct_match)
+            self.assertIsNotNone(item.discussion_id)
+            self.assertIsNotNone(item.summary.immediate_parent_id)
+
+        verification = self.repository.validate_connectivity()
+        self.assertEqual(verification["validated_paths"], 8)
+        self.assertEqual(verification["discussions"], 3)
+        restarted = MailingListQueryService(MailingListRepository(self.state))
+        restarted_messages = {
+            item.summary.external_message_id: item
+            for item in restarted.acquisition_messages(manifest.run_id)
+        }
+        self.assertEqual(restarted_messages[direct[1]].summary.depth, 2)
 
     def test_cycle_and_malformed_identity_are_quarantined(self) -> None:
         cycle = self.service.acquire(
@@ -317,7 +429,7 @@ class MailingListCase(unittest.TestCase):
                 connection.execute(f"DROP TABLE {table}")
             connection.execute("UPDATE schema_metadata SET schema_version=1")
         database = RepositoryDatabase.open(self.state)
-        self.assertEqual(database.validate()["schema_version"], 4)
+        self.assertEqual(database.validate()["schema_version"], 5)
         with database.connect(read_only=True) as connection:
             names = {row[0] for row in connection.execute(
                 "SELECT name FROM sqlite_schema WHERE type='table'"

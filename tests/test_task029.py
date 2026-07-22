@@ -1,0 +1,263 @@
+"""Focused TASK-029 operator-console and catch-up queue evidence."""
+
+from __future__ import annotations
+
+import tempfile
+import threading
+import unittest
+from datetime import date, timedelta
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+
+from rfi.firms import FirmRepository
+from rfi.mailing_lists import (
+    AcquisitionLimits,
+    FetchUpToDateResult,
+    LinuxMailingListWorkflowService,
+    MailingListError,
+    MailingListFetchQueue,
+    MailingListQueryService,
+    MailingListRepository,
+    MailingListSourceService,
+    MailingListAcquisitionService,
+    SelectionCriteria,
+)
+from rfi.storage import RepositoryDatabase
+from rfi.streams import StreamRepository, StreamService
+from tests.test_task028 import FixtureWorkflowArchive, archive_factory, draft
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class CatchUpCase(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.state = Path(self.temporary.name)
+        RepositoryDatabase.initialize(self.state)
+        FirmRepository.initialize(self.state / "firm-catalog")
+        repository = MailingListRepository(self.state)
+        self.workflow = LinuxMailingListWorkflowService(
+            repository,
+            MailingListSourceService(repository),
+            StreamService(StreamRepository(self.state)),
+            MailingListQueryService(repository),
+            archive_factory=archive_factory,
+            today=lambda: date(2026, 7, 22),
+        )
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def create(self, **changes: Any) -> str:
+        result = self.workflow.create(draft(**changes))
+        assert result.revision is not None
+        return result.revision.stream_id
+
+    def test_effective_last_fetch_uses_complete_contiguous_repository_coverage(self) -> None:
+        stream_id = self.create()
+        tested = self.workflow.test(stream_id)
+        self.assertEqual(tested.status, "ready")
+        self.assertEqual(self.workflow.effective_last_fetch(stream_id), "2026-07-16")
+        result = self.workflow.fetch_up_to_date(stream_id)
+        self.assertEqual(result.window_start, "2026-07-14")
+        self.assertEqual(result.window_end, "2026-07-22")
+        self.assertEqual(result.effective_last_fetch_date, "2026-07-22")
+
+        restarted_repository = MailingListRepository(self.state)
+        restarted = LinuxMailingListWorkflowService(
+            restarted_repository,
+            MailingListSourceService(restarted_repository),
+            StreamService(StreamRepository(self.state)),
+            MailingListQueryService(restarted_repository),
+            archive_factory=archive_factory,
+            today=lambda: date(2026, 7, 22),
+        )
+        self.assertEqual(restarted.effective_last_fetch(stream_id), "2026-07-22")
+
+    def test_long_catch_up_is_split_into_bounded_windows(self) -> None:
+        stream_id = self.create(date_from="2026-05-01", date_through="2026-05-01")
+        result = self.workflow.fetch_up_to_date(stream_id)
+        self.assertEqual(result.windows_completed, 3)
+        runs = self.workflow.repository.acquisition_coverage(
+            self.workflow.stream_service.detail(stream_id).draft.input_ids[0]
+        )
+        spans = [
+            (
+                item["criteria"]["date_from"],
+                item["criteria"]["date_through"],
+            )
+            for item in runs
+        ]
+        self.assertEqual(
+            spans,
+            [
+                ("2026-05-01", "2026-06-01"),
+                ("2026-06-02", "2026-07-03"),
+                ("2026-07-04", "2026-07-22"),
+            ],
+        )
+        self.assertTrue(
+            all(
+                date.fromisoformat(end) - date.fromisoformat(start)
+                <= timedelta(days=31)
+                for start, end in spans
+            )
+        )
+
+    def test_incomplete_window_does_not_advance_coverage(self) -> None:
+        stream_id = self.create()
+        self.workflow.test(stream_id)
+
+        class FrontierUnknownArchive(FixtureWorkflowArchive):
+            @property
+            def descendant_enumeration_complete(self) -> bool:
+                return False
+
+        base = archive_factory(self.workflow.repository.source("linux-block-lore"))
+        self.workflow.archive_factory = lambda _source: FrontierUnknownArchive(base.messages)
+        result = self.workflow.fetch_up_to_date(stream_id)
+        self.assertEqual(result.status, "completed_with_incomplete_evidence")
+        self.assertEqual(result.effective_last_fetch_date, "2026-07-16")
+
+    def test_editor_save_creates_authoritative_revision_and_modal_is_required(self) -> None:
+        stream_id = self.create()
+        saved = self.workflow.save(stream_id, draft(description="Updated operator purpose"))
+        assert saved.revision is not None
+        self.assertEqual(saved.status, "revised")
+        self.assertEqual(saved.revision.revision_number, 2)
+        html = (ROOT / "src/rfi/admin/linux_mailing_lists.html").read_text()
+        self.assertIn('id="save-dialog"', html)
+        self.assertIn("Authoritative revision saved", html)
+        self.assertIn("showModal()", html)
+        self.assertIn('id="summary-mode"', html)
+        self.assertIn('id="editor-mode"', html)
+        self.assertIn("Fetch All up to date", html)
+        self.assertIn("Cancel / Abandon all Fetches", html)
+        self.assertIn("max-height:360px;overflow:auto", html)
+
+    def test_acquisition_cancellation_is_not_swallowed_as_partial_evidence(self) -> None:
+        stream_id = self.create()
+        revision = self.workflow.stream_service.detail(stream_id)
+        source_id = revision.draft.input_ids[0]
+        service = MailingListAcquisitionService(
+            self.workflow.repository,
+            archive_factory(self.workflow.repository.source(source_id)),
+        )
+        checkpoints = 0
+
+        def cancelled() -> bool:
+            nonlocal checkpoints
+            checkpoints += 1
+            return checkpoints >= 3
+
+        with self.assertRaises(MailingListError) as raised:
+            service.acquire(
+                source_id,
+                SelectionCriteria(
+                    date_from="2026-07-16", date_through="2026-07-16",
+                    topic_terms=("deterministic queue",),
+                ),
+                AcquisitionLimits(5, 15, 3),
+                cancelled=cancelled,
+            )
+        self.assertEqual(raised.exception.code, "acquisition_cancelled")
+        self.assertEqual(self.workflow.repository.acquisition_runs(source_id), ())
+
+
+class FakeWorkflow:
+    def __init__(self, names: tuple[str, ...], *, blocking: bool = False) -> None:
+        self.items = tuple(
+            SimpleNamespace(stream_id=name, stream_name=name.upper()) for name in names
+        )
+        self.blocking = blocking
+        self.calls: list[str] = []
+        self.started = threading.Event()
+        self.release = threading.Event()
+        self.completed = threading.Event()
+
+    def saved(self):
+        return self.items
+
+    def fetch_up_to_date(self, stream_id: str, *, cancelled):
+        self.calls.append(stream_id)
+        self.started.set()
+        if self.blocking:
+            while not self.release.wait(0.01):
+                if cancelled():
+                    raise MailingListError("acquisition_cancelled", "cancelled")
+        if len(self.calls) == len(self.items):
+            self.completed.set()
+        return FetchUpToDateResult(
+            stream_id, "completed", "2026-07-20", "2026-07-22", 1, (),
+            "2026-07-22", "Acquisition coverage is up to date.",
+        )
+
+
+class QueueCase(unittest.TestCase):
+    def test_fifo_duplicate_suppression_and_fetch_all(self) -> None:
+        workflow = FakeWorkflow(("one", "two", "three"), blocking=True)
+        queue = MailingListFetchQueue(workflow)  # type: ignore[arg-type]
+        try:
+            first = queue.enqueue("one")
+            self.assertTrue(first["accepted"])
+            self.assertTrue(workflow.started.wait(1))
+            all_result = queue.enqueue_all()
+            self.assertEqual(all_result["queued"], 2)
+            self.assertEqual(all_result["duplicates_ignored"], 1)
+            duplicate = queue.enqueue("two")
+            self.assertTrue(duplicate["duplicate"])
+            workflow.release.set()
+            self.assertTrue(workflow.completed.wait(1))
+            self.assertEqual(workflow.calls, ["one", "two", "three"])
+            events = [item["event"] for item in queue.snapshot()["events"]]
+            self.assertIn("duplicate_ignored", events)
+            self.assertEqual(events.count("started"), 3)
+            self.assertEqual(events.count("completed"), 3)
+        finally:
+            queue.close()
+
+    def test_cancel_abandons_queued_work_and_cancels_running_checkpoint(self) -> None:
+        workflow = FakeWorkflow(("one", "two"), blocking=True)
+        queue = MailingListFetchQueue(workflow)  # type: ignore[arg-type]
+        try:
+            queue.enqueue("one")
+            self.assertTrue(workflow.started.wait(1))
+            queue.enqueue("two")
+            result = queue.cancel_all()
+            self.assertEqual(result["abandoned"], 1)
+            self.assertTrue(result["cancellation_requested"])
+            for _index in range(100):
+                snapshot = queue.snapshot()
+                if snapshot["recent"] and any(
+                    item["state"] == "cancelled" for item in snapshot["recent"]
+                ):
+                    break
+                threading.Event().wait(0.01)
+            states = {item["stream_id"]: item["state"] for item in queue.snapshot()["recent"]}
+            self.assertEqual(states, {"one": "cancelled", "two": "abandoned"})
+            events = [item["event"] for item in queue.snapshot()["events"]]
+            self.assertIn("cancellation_requested", events)
+            self.assertIn("abandoned", events)
+            self.assertIn("cancelled", events)
+        finally:
+            workflow.release.set()
+            queue.close()
+
+    def test_process_restart_starts_with_an_empty_operational_queue(self) -> None:
+        workflow = FakeWorkflow(("one",))
+        first = MailingListFetchQueue(workflow)  # type: ignore[arg-type]
+        first.close()
+        restarted = MailingListFetchQueue(workflow)  # type: ignore[arg-type]
+        try:
+            snapshot = restarted.snapshot()
+            self.assertIsNone(snapshot["running"])
+            self.assertEqual(snapshot["queued"], [])
+            self.assertEqual(snapshot["events"], [])
+            self.assertIn("durable_evidence_remains", snapshot["restart_behavior"])
+        finally:
+            restarted.close()
+
+
+if __name__ == "__main__":
+    unittest.main()

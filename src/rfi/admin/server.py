@@ -28,6 +28,9 @@ from rfi.artifacts import (
 from rfi.concepts import ConceptError, ConceptRepository, ConceptService
 from rfi.firms import FirmError, FirmRepository, FirmService
 from rfi.mailing_lists import (
+    LinuxMailingListWorkflowService,
+    LoreArchive,
+    MailingListFetchQueue,
     MailingListError,
     MailingListQueryService,
     MailingListRepository,
@@ -50,6 +53,7 @@ OPERATOR_NAVIGATION = (
     ("/source-profiles", "Firm Profiles"),
     ("/external-sources", "External Sources"),
     ("/pull-sources", "Pull Sources"),
+    ("/linux-mailing-lists", "Linux Mailing Lists"),
     ("/streams", "Streams"),
     ("/artifacts", "Artifacts"),
 )
@@ -280,6 +284,9 @@ if _CONSOLE_ASSET.exists():
 FIRMS_HTML = _load_operator_page("firms.html", "/firms")
 SOURCE_PROFILES_HTML = _load_operator_page("source_profiles.html", "/source-profiles")
 EXTERNAL_SOURCES_HTML = _load_operator_page("external_sources.html", "/external-sources")
+LINUX_MAILING_LISTS_HTML = _load_operator_page(
+    "linux_mailing_lists.html", "/linux-mailing-lists"
+)
 PULL_SOURCES_HTML = _load_operator_page("pull_sources.html", "/pull-sources")
 ARTIFACT_BROWSER_HTML = _load_operator_page("artifact_browser.html", "/artifacts")
 STREAMS_HTML = _load_operator_page("streams.html", "/streams")
@@ -301,6 +308,8 @@ class AdminConsole(ThreadingHTTPServer):
         mailing_list_query_service: MailingListQueryService,
         mailing_list_source_service: MailingListSourceService,
         stream_service: StreamService,
+        linux_mailing_list_workflow: LinuxMailingListWorkflowService,
+        mailing_list_fetch_queue: MailingListFetchQueue,
     ) -> None:
         self.service = service
         self.firm_service = firm_service
@@ -310,7 +319,13 @@ class AdminConsole(ThreadingHTTPServer):
         self.mailing_list_query_service = mailing_list_query_service
         self.mailing_list_source_service = mailing_list_source_service
         self.stream_service = stream_service
+        self.linux_mailing_list_workflow = linux_mailing_list_workflow
+        self.mailing_list_fetch_queue = mailing_list_fetch_queue
         super().__init__(address, AdminHandler)
+
+    def server_close(self) -> None:
+        self.mailing_list_fetch_queue.close()
+        super().server_close()
 
 
 class AdminHandler(BaseHTTPRequestHandler):
@@ -365,6 +380,13 @@ class AdminHandler(BaseHTTPRequestHandler):
                 self._send(
                     HTTPStatus.OK,
                     PULL_SOURCES_HTML.encode(),
+                    "text/html; charset=utf-8",
+                )
+                return
+            if method == "GET" and path == "/linux-mailing-lists":
+                self._send(
+                    HTTPStatus.OK,
+                    LINUX_MAILING_LISTS_HTML.encode(),
                     "text/html; charset=utf-8",
                 )
                 return
@@ -431,6 +453,9 @@ class AdminHandler(BaseHTTPRequestHandler):
                 self._error(status, str(error), error.code)
             elif isinstance(error, MailingListError):
                 status = (
+                    HTTPStatus.SERVICE_UNAVAILABLE
+                    if error.retryable
+                    else
                     HTTPStatus.NOT_FOUND
                     if error.code.startswith("unknown_")
                     else HTTPStatus.CONFLICT
@@ -461,7 +486,71 @@ class AdminHandler(BaseHTTPRequestHandler):
         artifacts = self.server.artifact_query_service
         mailing_lists = self.server.mailing_list_query_service
         mailing_list_sources = self.server.mailing_list_source_service
+        mailing_list_workflow = self.server.linux_mailing_list_workflow
+        mailing_list_fetch_queue = self.server.mailing_list_fetch_queue
         streams = self.server.stream_service
+        if method == "GET" and parts == ["api", "linux-mailing-lists"]:
+            self._send_json(HTTPStatus.OK, {
+                "catalog": [asdict(item) for item in mailing_list_workflow.catalog()],
+                "defaults": asdict(mailing_list_workflow.defaults()),
+                "saved": [asdict(item) for item in mailing_list_workflow.saved()],
+            })
+            return
+        if method == "POST" and parts == ["api", "linux-mailing-lists", "review"]:
+            self._send_json(HTTPStatus.OK, asdict(mailing_list_workflow.review(self._body())))
+            return
+        if method == "POST" and parts == ["api", "linux-mailing-lists", "validate-archive"]:
+            self._send_json(
+                HTTPStatus.OK, asdict(mailing_list_workflow.validate_archive(self._body()))
+            )
+            return
+        if method == "POST" and parts == ["api", "linux-mailing-lists", "create"]:
+            result = mailing_list_workflow.create(self._body())
+            status = HTTPStatus.CREATED if result.status == "created" else HTTPStatus.OK
+            self._send_json(status, asdict(result))
+            return
+        if method == "GET" and parts == ["api", "linux-mailing-lists", "fetches"]:
+            self._send_json(HTTPStatus.OK, mailing_list_fetch_queue.snapshot())
+            return
+        if method == "POST" and parts == ["api", "linux-mailing-lists", "fetches"]:
+            self._body()
+            self._send_json(HTTPStatus.ACCEPTED, mailing_list_fetch_queue.enqueue_all())
+            return
+        if (
+            method == "POST"
+            and parts == ["api", "linux-mailing-lists", "fetches", "cancel-all"]
+        ):
+            self._body()
+            self._send_json(HTTPStatus.ACCEPTED, mailing_list_fetch_queue.cancel_all())
+            return
+        if (
+            method == "POST" and len(parts) == 4
+            and parts[:3] == ["api", "linux-mailing-lists", "fetches"]
+        ):
+            self._body()
+            self._send_json(
+                HTTPStatus.ACCEPTED, mailing_list_fetch_queue.enqueue(parts[3])
+            )
+            return
+        if method == "GET" and len(parts) == 3 and parts[:2] == ["api", "linux-mailing-lists"]:
+            self._send_json(HTTPStatus.OK, asdict(mailing_list_workflow.draft_for(parts[2])))
+            return
+        if method == "PUT" and len(parts) == 3 and parts[:2] == ["api", "linux-mailing-lists"]:
+            self._send_json(
+                HTTPStatus.OK, asdict(mailing_list_workflow.save(parts[2], self._body()))
+            )
+            return
+        if len(parts) == 4 and parts[:2] == ["api", "linux-mailing-lists"] and parts[3] == "test":
+            if method == "POST":
+                self._body()
+                self._send_json(HTTPStatus.OK, asdict(mailing_list_workflow.test(parts[2])))
+                return
+        if (
+            method == "GET" and len(parts) == 4
+            and parts[:3] == ["api", "linux-mailing-lists", "results"]
+        ):
+            self._send_json(HTTPStatus.OK, mailing_list_workflow.result(parts[3]))
+            return
         if method == "POST" and parts == ["api", "external-sources", "validate"]:
             source = mailing_list_sources.validate(self._body())
             self._send_json(
@@ -1040,6 +1129,17 @@ def create_admin_server(
     acquisition_repository = AcquisitionRepository(state / "acquisition")
     firm_service = FirmService(firm_repository)
     mailing_list_repository = MailingListRepository(state)
+    stream_service = StreamService(StreamRepository(state))
+    mailing_list_query_service = MailingListQueryService(mailing_list_repository)
+    mailing_list_source_service = MailingListSourceService(mailing_list_repository)
+    mailing_list_workflow = LinuxMailingListWorkflowService(
+        mailing_list_repository,
+        mailing_list_source_service,
+        stream_service,
+        mailing_list_query_service,
+        archive_factory=LoreArchive,
+    )
+    mailing_list_fetch_queue = MailingListFetchQueue(mailing_list_workflow)
     return AdminConsole(
         (host, port),
         ConceptService(repository),
@@ -1047,7 +1147,9 @@ def create_admin_server(
         SourceProfileService(source_profile_repository, firm_repository, template),
         create_pull_workflow(state),
         ArtifactQueryService(acquisition_repository, firm_repository, template),
-        MailingListQueryService(mailing_list_repository),
-        MailingListSourceService(mailing_list_repository),
-        StreamService(StreamRepository(state)),
+        mailing_list_query_service,
+        mailing_list_source_service,
+        stream_service,
+        mailing_list_workflow,
+        mailing_list_fetch_queue,
     )

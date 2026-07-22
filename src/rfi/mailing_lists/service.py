@@ -9,9 +9,11 @@ from collections import Counter, deque
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any, Callable
+from urllib.parse import quote
 
 from rfi.artifacts import ArtifactContent
 from rfi.mailing_lists.contracts import (
+    AcquisitionMessage,
     AcquisitionLimits,
     AcquisitionManifest,
     AcquisitionPreview,
@@ -27,6 +29,7 @@ from rfi.mailing_lists.contracts import (
     MessageDetail,
     MessageSummary,
     SelectionCriteria,
+    normalize_lore_archive,
 )
 from rfi.mailing_lists.parser import normalize_message_id, parse_message
 from rfi.mailing_lists.repository import MailingListRepository, message_key
@@ -76,11 +79,19 @@ class MailingListSourceService:
             raise MailingListError(
                 "invalid_source", "transport policy values have invalid types"
             ) from error
+        archive_id, canonical_url = normalize_lore_archive(
+            self._text(value, "archive_base_url")
+        )
+        list_id = self._text(value, "list_id")
+        if list_id != archive_id:
+            raise MailingListError(
+                "invalid_source", "archive/list identity must match the canonical Lore URL"
+            )
         source = MailingListSource(
             self._text(value, "source_id"),
-            self._text(value, "list_id"),
+            list_id,
             self._text(value, "display_name"),
-            self._text(value, "archive_base_url"),
+            canonical_url,
             provider,
             transport,
         )
@@ -179,7 +190,7 @@ def derive_projection(
             else max(requested_states, key=_state_rank)
         )
         classifications[key] = (state, root, depth)
-        if state in {ConnectivityState.CONNECTED.value, ConnectivityState.TRUNCATED.value}:
+        if state != ConnectivityState.QUARANTINED.value:
             groups.setdefault(root, []).append((key, depth))
 
     messages: list[dict[str, Any]] = []
@@ -211,10 +222,17 @@ def derive_projection(
     for root, members in sorted(groups.items()):
         component_states = [classifications[key][0] for key, _depth in members]
         component_state = (
-            ConnectivityState.TRUNCATED.value
+            ConnectivityState.INCOMPLETE.value
+            if ConnectivityState.INCOMPLETE.value in component_states
+            else ConnectivityState.TRUNCATED.value
             if ConnectivityState.TRUNCATED.value in component_states
             else ConnectivityState.CONNECTED.value
         )
+        if (
+            component_state == ConnectivityState.INCOMPLETE.value
+            and not any(depth > 0 for _key, depth in members)
+        ):
+            continue
         dates = sorted(
             value
             for key, _depth in members
@@ -254,9 +272,10 @@ class MailingListAcquisitionService:
         self.identifiers = identifiers or (lambda: f"mailrun-{uuid.uuid4().hex}")
 
     def preview(
-        self, source_id: str, criteria: SelectionCriteria, limits: AcquisitionLimits
+        self, source_id: str, criteria: SelectionCriteria, limits: AcquisitionLimits,
+        *, cancelled: Callable[[], bool] | None = None,
     ) -> AcquisitionPreview:
-        plan = self._plan(source_id, criteria, limits)
+        plan = self._plan(source_id, criteria, limits, cancelled=cancelled)
         return AcquisitionPreview(
             source_id, criteria, limits, plan["seeds"], len(plan["items"]),
             dict(Counter(item["inclusion_reason"] for item in plan["items"].values())),
@@ -264,7 +283,8 @@ class MailingListAcquisitionService:
         )
 
     def acquire(
-        self, source_id: str, criteria: SelectionCriteria, limits: AcquisitionLimits
+        self, source_id: str, criteria: SelectionCriteria, limits: AcquisitionLimits,
+        *, cancelled: Callable[[], bool] | None = None,
     ) -> AcquisitionManifest:
         # Configuration errors are not acquisition attempts and cannot satisfy the
         # run table's governed-source foreign key.
@@ -272,8 +292,10 @@ class MailingListAcquisitionService:
         run_id = self.identifiers()
         requested_at = self.clock()
         try:
-            plan = self._plan(source_id, criteria, limits)
+            plan = self._plan(source_id, criteria, limits, cancelled=cancelled)
         except MailingListError as error:
+            if error.code == "acquisition_cancelled":
+                raise
             self.repository.record_failure(
                 run_id, source_id, requested_at, criteria, limits, error
             )
@@ -323,9 +345,12 @@ class MailingListAcquisitionService:
         }
 
     def _plan(self, source_id: str, criteria: SelectionCriteria,
-              limits: AcquisitionLimits) -> dict[str, Any]:
+              limits: AcquisitionLimits, *,
+              cancelled: Callable[[], bool] | None = None) -> dict[str, Any]:
         self.repository.source(source_id)
+        self._check_cancelled(cancelled)
         seeds, seed_truncated = self.archive.discover(criteria, limits.seed_limit)
+        self._check_cancelled(cancelled)
         if not seeds:
             raise MailingListError("no_seed_matches", "bounded selection found no messages")
         items: dict[str, dict[str, Any]] = {}
@@ -337,6 +362,7 @@ class MailingListAcquisitionService:
 
         def fetch(external_id: str, reason: InclusionReason, is_seed: bool = False) -> str | None:
             nonlocal context_fetches, quarantined
+            self._check_cancelled(cancelled)
             expected = normalize_message_id(external_id) or external_id
             if expected in items:
                 if is_seed:
@@ -373,6 +399,8 @@ class MailingListAcquisitionService:
             try:
                 current = fetch(seed, seed_reason, True)
             except MailingListError as error:
+                if error.code == "acquisition_cancelled":
+                    raise
                 failures.append(error)
                 incomplete = True
                 warnings.append(f"seed rejected: {error.code}")
@@ -397,6 +425,8 @@ class MailingListAcquisitionService:
                 try:
                     current = fetch(parent, InclusionReason.ANCESTOR)
                 except MailingListError as error:
+                    if error.code == "acquisition_cancelled":
+                        raise
                     failures.append(error)
                     incomplete = True
                     warnings.append(f"required ancestor unavailable: {parent}")
@@ -407,16 +437,23 @@ class MailingListAcquisitionService:
         roots = [key for key, item in items.items() if not item["parsed"].immediate_parent_id]
         frontier = deque((root, 0) for root in sorted(roots))
         descendant_truncated = seed_truncated or not self.archive.descendant_enumeration_complete
+        if limits.descendant_depth == 0:
+            # Zero requests no remote reply enumeration. Report the descendant frontier
+            # conservatively instead of performing a hidden network request merely to detect it.
+            descendant_truncated = True
+            frontier.clear()
         while frontier:
             parent, depth = frontier.popleft()
             remaining = limits.context_limit - context_fetches
             if depth >= limits.descendant_depth:
+                self._check_cancelled(cancelled)
                 children, has_more = self.archive.direct_children(parent, 1)
                 descendant_truncated = descendant_truncated or bool(children) or has_more
                 continue
             if remaining <= 0:
                 descendant_truncated = True
                 break
+            self._check_cancelled(cancelled)
             children, has_more = self.archive.direct_children(parent, remaining + 1)
             if has_more or len(children) > remaining:
                 descendant_truncated = True
@@ -429,6 +466,8 @@ class MailingListAcquisitionService:
                     if stored:
                         frontier.append((stored, depth + 1))
                 except MailingListError as error:
+                    if error.code == "acquisition_cancelled":
+                        raise
                     failures.append(error)
                     warnings.append(f"descendant unavailable: {error.code}")
                     incomplete = True
@@ -474,6 +513,13 @@ class MailingListAcquisitionService:
             "item_states": item_states, "failures": tuple(failures),
         }
 
+    @staticmethod
+    def _check_cancelled(cancelled: Callable[[], bool] | None) -> None:
+        if cancelled is not None and cancelled():
+            raise MailingListError(
+                "acquisition_cancelled", "mailing-list acquisition was cancelled"
+            )
+
 
 class MailingListQueryService:
     """Bounded read projection for CLI, browser, and future model-facing consumers."""
@@ -491,6 +537,49 @@ class MailingListQueryService:
         }
         return tuple({**asdict(source), "discussion_count": int(counts.get(source.source_id, 0))}
                      for source in self.repository.sources())
+
+    def acquisition_run(self, run_id: str) -> dict[str, Any]:
+        rows = self.repository.rows(
+            "SELECT run_id,source_id,requested_at,lifecycle_status,status AS connectivity_state,"
+            "seed_limit,context_limit,seed_count,message_count,error_code,retryable,canonical_json "
+            "FROM mailing_list_runs WHERE run_id=?", (run_id,),
+        )
+        if not rows:
+            raise MailingListError("unknown_run", "unknown mailing-list acquisition run")
+        row = dict(rows[0])
+        row["retryable"] = bool(row["retryable"])
+        row["manifest"] = json.loads(str(row.pop("canonical_json")))
+        return row
+
+    def acquisition_messages(
+        self, run_id: str, limit: int = 100
+    ) -> tuple[AcquisitionMessage, ...]:
+        self._limit(limit)
+        self.acquisition_run(run_id)
+        rows = self.repository.rows(
+            self._message_select(
+                prefix="mailing_list_run_items i JOIN mailing_list_messages m "
+                "ON m.source_id=i.source_id AND m.external_message_id=i.external_message_id",
+                extra_select=",i.inclusion_reason,i.is_seed,dm.discussion_id",
+            )
+            + " WHERE i.run_id=? ORDER BY i.is_seed DESC,m.message_date,m.message_key LIMIT ?",
+            (run_id, limit),
+        )
+        result = []
+        for row in rows:
+            summary = self._message(row)
+            source = self.repository.source(str(row["source_id"]))
+            token = (summary.external_message_id or "").strip("<>")
+            reason = str(row["inclusion_reason"])
+            direct = reason in {
+                InclusionReason.SEED_MATCH.value, InclusionReason.EXPLICIT_REQUEST.value
+            }
+            result.append(AcquisitionMessage(
+                summary, reason, direct, not direct,
+                f"{source.archive_base_url}{quote(token, safe='@')}/" if token else "",
+                str(row["discussion_id"]) if row.get("discussion_id") else None,
+            ))
+        return tuple(result)
 
     def discussions(self, source_id: str, limit: int = 25, offset: int = 0
                     ) -> tuple[DiscussionSummary, ...]:
@@ -645,11 +734,13 @@ class MailingListQueryService:
         )
 
     @staticmethod
-    def _message_select(prefix: str = "mailing_list_messages m") -> str:
+    def _message_select(
+        prefix: str = "mailing_list_messages m", extra_select: str = ""
+    ) -> str:
         return (
             "SELECT m.*,r.parent_external_message_id,dm.depth,"
             "(SELECT count(*) FROM mailing_list_relationships c "
-            "WHERE c.parent_message_key=m.message_key) AS child_count "
+            f"WHERE c.parent_message_key=m.message_key) AS child_count{extra_select} "
             f"FROM {prefix} LEFT JOIN mailing_list_relationships r "
             "ON r.child_message_key=m.message_key "
             "LEFT JOIN mailing_list_discussion_members dm ON dm.message_key=m.message_key"

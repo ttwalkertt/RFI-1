@@ -40,7 +40,7 @@ class HelpContractCase(unittest.TestCase):
     def test_every_major_page_has_one_valid_context_mapping(self) -> None:
         expected = {
             "/concepts", "/firms", "/source-profiles", "/external-sources",
-            "/pull-sources", "/streams", "/artifacts",
+            "/pull-sources", "/linux-mailing-lists", "/streams", "/artifacts",
         }
         self.assertEqual(set(PAGE_HELP_TOPICS), expected)
         self.assertTrue(set(PAGE_HELP_TOPICS.values()).issubset(TOPICS_BY_ID))
@@ -115,7 +115,7 @@ class HelpServerCase(unittest.TestCase):
         self.assertIn("Acquisition procedure", body)
         self.assertIn("Use browser Find", body)
         self.assertEqual(headers["Cache-Control"], "no-store")
-        self.assertNotIn("https://", body)
+        self.assertNotIn('href="https://', body)
 
     def test_every_page_has_deep_link_with_shared_named_target(self) -> None:
         for page, topic_id in PAGE_HELP_TOPICS.items():

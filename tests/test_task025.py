@@ -390,13 +390,15 @@ class StreamCase(unittest.TestCase):
             ("/source-profiles", "Firm Profiles"),
             ("/external-sources", "External Sources"),
             ("/pull-sources", "Pull Sources"),
+            ("/linux-mailing-lists", "Linux Mailing Lists"),
             ("/streams", "Streams"),
             ("/artifacts", "Artifacts"),
         )
         admin_assets = ROOT / "src/rfi/admin"
         for filename in (
             "console.html", "firms.html", "source_profiles.html", "external_sources.html",
-            "pull_sources.html", "streams.html", "artifact_browser.html",
+            "pull_sources.html", "linux_mailing_lists.html", "streams.html",
+            "artifact_browser.html",
         ):
             template = (admin_assets / filename).read_text(encoding="utf-8")
             self.assertEqual(template.count("<!-- operator-navigation -->"), 1)
@@ -445,7 +447,7 @@ class StreamCase(unittest.TestCase):
                 connection.execute(f"DROP TABLE {table}")
             connection.execute("UPDATE schema_metadata SET schema_version=2")
         database = RepositoryDatabase.open(fresh)
-        self.assertEqual(database.validate()["schema_version"], 4)
+        self.assertEqual(database.validate()["schema_version"], 5)
         with database.connect(read_only=True) as connection:
             names = {str(row[0]) for row in connection.execute(
                 "SELECT name FROM sqlite_schema WHERE type='table'"

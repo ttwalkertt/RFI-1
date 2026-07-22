@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RFI Operator Console · Linux Mailing Lists</title>
+  <style>
+    :root{--ink:#15202b;--muted:#647386;--line:#d8e0e9;--blue:#2458d3;--blue2:#1747b7;
+      --paper:#fff;--wash:#f4f7fb;--bad:#9b351f;--good:#176333;--amber:#805b00;--nav:#162334}
+    *{box-sizing:border-box}body{margin:0;color:var(--ink);background:var(--wash);
+      font:14px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif}
+    header{min-height:64px;padding:0 24px;display:flex;align-items:center;gap:22px;color:#fff;background:var(--nav)}
+    header strong{font-size:18px;white-space:nowrap}nav{display:flex;gap:7px;flex-wrap:wrap}nav a{color:#fff;
+      text-decoration:none;padding:19px 6px 16px;border-bottom:3px solid transparent;font-weight:700}
+    nav a[aria-current]{border-color:#7db0ff}button{border:1px solid #abb7c5;border-radius:7px;padding:9px 13px;
+      background:#fff;color:var(--ink);font:inherit;font-weight:700;cursor:pointer}button:hover:not(:disabled){background:#f1f5fa}
+    button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #8bb1f4;outline-offset:1px}
+    button.primary{color:#fff;background:var(--blue);border-color:var(--blue)}button.primary:hover:not(:disabled){background:var(--blue2)}
+    button.danger{color:var(--bad);border-color:#d7a99e}button:disabled{opacity:.5;cursor:not-allowed}.hidden{display:none!important}
+    main{height:calc(100vh - 64px);min-height:660px;display:grid;grid-template-columns:340px minmax(0,1fr);max-width:1540px;margin:auto}
+    aside{min-height:0;border-right:1px solid var(--line);background:#fff;display:grid;grid-template-rows:auto minmax(0,1fr)}
+    .sidebar-head{padding:20px;border-bottom:1px solid var(--line)}h1,h2,h3,p{margin-top:0}.eyebrow{margin-bottom:5px;color:#52647a;
+      font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.muted,.help{color:var(--muted)}.toolbar,.actions,.badges{
+      display:flex;gap:8px;align-items:center;flex-wrap:wrap}.sidebar-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
+    .sidebar-actions button{padding-inline:8px}.stream-list{min-height:0;overflow:auto}.stream-card{position:relative;border-bottom:1px solid var(--line);
+      padding:12px 14px 13px;transition:background .15s ease,box-shadow .15s ease}.stream-card.selected{background:#edf4ff;box-shadow:inset 4px 0 var(--blue)}
+    .stream-card.selected::after{position:absolute;inset:8px 7px 8px auto;width:2px;border-radius:3px;background:#a8c5fb;content:""}.stream-select{display:block;
+      width:100%;padding:0 8px 0 0;border:0;background:transparent;text-align:left}.stream-select:hover{background:transparent}.card-title{display:flex;align-items:center;
+      justify-content:space-between;gap:8px}.stream-name{min-width:0;font-size:15px;font-weight:800;line-height:1.3}.selected-label{color:var(--blue2);font-size:10px;
+      font-weight:850;letter-spacing:.07em;text-transform:uppercase}.stream-meta{margin:3px 0 7px;color:var(--muted);font-size:12px}.card-health{display:flex;
+      align-items:center;gap:6px;color:#425267;font-size:12px}.status-dot{width:8px;height:8px;flex:0 0 auto;border-radius:50%;background:#8d9aaa}.status-dot.good{background:#329459}
+    .status-dot.warn{background:#c08b16}.status-dot.bad{background:#c1543d}.card-foot{display:flex;align-items:end;justify-content:space-between;gap:8px;margin-top:9px;
+      padding-top:9px;border-top:1px solid #dfe7f0}.coverage{display:grid;font-size:12px;line-height:1.35}.coverage-label{color:var(--muted);font-size:11px}.coverage strong{font-size:12px}
+    .card-fetch{padding:6px 9px;font-size:12px}.empty{padding:28px 20px;color:var(--muted);text-align:center}
+    .workspace{min-width:0;min-height:0;overflow:auto;padding:24px}.content{max-width:1080px;margin:auto;display:grid;gap:16px;padding-bottom:20px}
+    .panel{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 2px #1723340b}.panel-body{padding:20px}
+    .hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-start}.hero h1{margin-bottom:5px;font-size:27px}.hero-actions{justify-content:flex-end}
+    .badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#e9eef6;font-size:12px;font-weight:700}.badge.good{color:var(--good);
+      background:#e5f5e9}.badge.warn{color:var(--amber);background:#fff2ca}.badge.bad{color:var(--bad);background:#fae9e4}.operational-strip{display:grid;
+      grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:12px;padding:0 20px 20px}.operational-card{min-width:0;padding:14px 16px;border:1px solid var(--line);
+      border-radius:9px;background:#f8fafc}.operational-card h2{margin:0 0 4px;font-size:12px;color:#53657b;letter-spacing:.06em;text-transform:uppercase}
+    .operational-value{display:flex;align-items:center;gap:8px;min-height:27px;font-size:18px;font-weight:800}.operational-detail{margin:3px 0 0;color:var(--muted);font-size:12px}
+    .summary-grid{display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border-top:1px solid var(--line)}.summary-item{min-width:0;padding:18px 20px;border-bottom:1px solid var(--line)}
+    .summary-item:nth-child(odd){border-right:1px solid var(--line)}.summary-item h3{margin-bottom:5px;color:#53657b;font-size:12px;text-transform:uppercase;
+      letter-spacing:.06em}.summary-item p{margin:0;overflow-wrap:anywhere}.callout{margin:16px 20px 20px;padding:12px 14px;border-left:4px solid #5981b7;
+      border-radius:6px;background:#f5f8fc}.acquisition-head,.evidence-head,.status-head,.editor-head{display:flex;justify-content:space-between;gap:16px;align-items:center;
+      padding:16px 20px;border-bottom:1px solid var(--line)}.acquisition-head h2,.evidence-head h2,.status-head h2,.editor-head h1{margin:0}.acquisition-grid{display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));gap:0}.acquisition-metric{padding:15px 20px;border-right:1px solid var(--line)}.acquisition-metric:last-child{border-right:0}
+    .acquisition-metric span{display:block;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}.acquisition-metric strong{display:block;
+      margin-top:3px;font-size:16px}.acquisition-note{margin:0;padding:12px 20px;border-top:1px solid var(--line);color:var(--muted)}details.panel{overflow:hidden}
+    details.panel>summary{list-style:none;cursor:pointer}details.panel>summary::-webkit-details-marker{display:none}.evidence-head:hover{background:#f8fafc}.evidence-heading p{margin:3px 0 0}
+    .evidence-summary-right{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap}.disclosure-label{color:var(--blue2);font-size:12px;font-weight:800}
+    details[open] .disclosure-label::after{content:"Hide messages"}details:not([open]) .disclosure-label::after{content:"Review messages"}.message-list{max-height:360px;overflow:auto;overscroll-behavior:contain;
+      scrollbar-gutter:stable;padding:4px 20px 18px}.message-card{padding:13px 0;border-bottom:1px solid var(--line)}.message-card:last-child{border-bottom:0}
+    .message-card h3{margin:5px 0;font-size:15px}.message-card code{font-size:12px;overflow-wrap:anywhere}.result-links{padding:12px 20px;border-top:1px solid var(--line)}
+    .result-links a{margin-right:14px}.status-panel{max-height:270px;overflow:hidden}.queue-overview{display:flex;gap:16px;color:var(--muted);font-size:13px}
+    .events{max-height:190px;overflow:auto;overscroll-behavior:contain}.event{display:grid;grid-template-columns:88px 150px minmax(0,1fr);gap:12px;padding:9px 20px;
+      border-top:1px solid #edf0f4;font-size:13px}.event-type{font-weight:800}.event time{color:var(--muted)}.event.empty-event{display:block;color:var(--muted)}
+    #operator-message{min-height:22px;font-weight:700}.good-text{color:var(--good)}.bad-text{color:var(--bad)}
+    .editor-head{align-items:flex-start}.editor-head p{margin:4px 0 0}.form-section{padding:20px;border-bottom:1px solid var(--line)}.form-section:last-child{border:0}
+    .form-section>h2{font-size:17px;margin-bottom:14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px 20px}.wide{grid-column:1/-1}
+    label{display:flex;flex-direction:column;gap:5px;font-weight:750}input,select,textarea{width:100%;border:1px solid #b4c0ce;border-radius:7px;padding:9px 10px;
+      background:#fff;color:var(--ink);font:inherit}textarea{min-height:78px;resize:vertical}.help{font-size:12px;font-weight:400}.archive-summary,.notice,.review{
+      padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:#f8fafc}.notice{border-left:4px solid #5981b7}.review dl{display:grid;
+      grid-template-columns:150px 1fr;gap:7px 12px}.review dt{font-weight:800}.review dd{margin:0}.editor-footer{position:sticky;bottom:-24px;z-index:2;display:flex;
+      justify-content:space-between;gap:12px;align-items:center;padding:14px 20px;border-top:1px solid var(--line);background:#fffffff2;backdrop-filter:blur(8px)}
+    dialog{width:min(520px,calc(100vw - 32px));border:0;border-radius:12px;padding:0;box-shadow:0 18px 60px #0f1c2d55}dialog::backdrop{background:#10192599}
+    dialog .dialog-body{padding:24px}dialog .dialog-actions{display:flex;justify-content:flex-end;padding:14px 24px;border-top:1px solid var(--line)}
+    @media(max-width:960px){main{height:auto;display:block}aside{border-right:0;border-bottom:1px solid var(--line)}.stream-list{max-height:340px}.workspace{overflow:visible}
+      .summary-grid,.grid{grid-template-columns:1fr}.summary-item:nth-child(odd){border-right:0}.hero{display:block}.hero-actions{justify-content:flex-start;margin-top:14px}}
+    @media(max-width:620px){header{align-items:flex-start;padding-block:12px}main{min-height:0}.workspace{padding:14px}.sidebar-actions{grid-template-columns:1fr}.event{
+      grid-template-columns:1fr;gap:2px}.operational-strip,.acquisition-grid{grid-template-columns:1fr}.acquisition-metric{border-right:0;border-bottom:1px solid var(--line)}
+      .acquisition-metric:last-child{border-bottom:0}.evidence-head{align-items:flex-start}.evidence-summary-right{justify-content:flex-start}.review dl{grid-template-columns:1fr}
+      .review dd{margin-bottom:7px}.editor-footer{bottom:-14px;display:block}.editor-footer .actions{margin-top:10px}}
+  </style>
+</head>
+<body>
+<header><strong>RFI Operator Console</strong><!-- operator-navigation --></header>
+<main>
+  <aside aria-label="Mailing-list streams">
+    <div class="sidebar-head"><div class="eyebrow">Operations</div><h1>Linux Mailing Lists</h1>
+      <p class="muted">Keep Lore-backed intelligence streams current.</p>
+      <div class="sidebar-actions"><button id="new">Add mailing list</button><button id="reload">Reload saved streams</button>
+        <button id="fetch-all" class="primary">Fetch All up to date</button><button id="cancel-all" class="danger">Cancel / Abandon all Fetches</button></div>
+    </div>
+    <div id="saved" class="stream-list"><p class="empty">Loading saved streams…</p></div>
+  </aside>
+
+  <section class="workspace">
+    <div class="content">
+      <div id="operator-message" role="status" aria-live="polite"></div>
+
+      <section id="summary-mode" class="panel hidden" aria-labelledby="summary-title">
+        <div class="panel-body hero"><div><div class="eyebrow">Stream summary</div><h1 id="summary-title"></h1>
+          <p id="summary-description" class="muted"></p><div id="summary-badges" class="badges"></div></div>
+          <div class="actions hero-actions"><button id="edit">Edit</button><button id="fetch-one" class="primary">Fetch up to date</button></div>
+        </div>
+        <div class="operational-strip">
+          <section class="operational-card" aria-labelledby="health-label"><h2 id="health-label">Stream health</h2>
+            <div id="summary-health" class="operational-value"></div><p id="summary-health-detail" class="operational-detail"></p></section>
+          <section class="operational-card" aria-labelledby="coverage-label"><h2 id="coverage-label">Repository coverage</h2>
+            <div id="summary-coverage" class="operational-value"></div>
+            <p id="summary-coverage-detail" class="operational-detail" title="Coverage advances only through contiguous complete, untruncated acquisition windows."></p></section>
+        </div>
+        <div class="summary-grid">
+          <div class="summary-item"><h3>Mailing list / source</h3><p id="summary-source"></p></div>
+          <div class="summary-item"><h3>Relevance criteria</h3><p id="summary-relevance"></p></div>
+          <div class="summary-item"><h3>Acquisition limits</h3><p id="summary-limits"></p></div>
+          <div class="summary-item"><h3>Configured initial scope</h3><p id="summary-scope"></p></div>
+        </div>
+        <div id="summary-warning" class="callout hidden"></div>
+      </section>
+
+      <section id="last-acquisition" class="panel hidden" aria-labelledby="last-acquisition-title">
+        <div class="acquisition-head"><div><div class="eyebrow">Most recent run</div><h2 id="last-acquisition-title">Last acquisition summary</h2></div>
+          <div id="last-acquisition-status" class="badges"></div></div>
+        <div id="last-acquisition-metrics" class="acquisition-grid"></div>
+        <p id="last-acquisition-note" class="acquisition-note"></p>
+      </section>
+
+      <section id="welcome" class="panel"><div class="panel-body">
+        <div class="eyebrow">Mailing-list operations</div><h1>Select a stream to begin</h1>
+        <p class="muted">Choose a saved stream to inspect coverage and run acquisition. Configuration stays out of the way until you choose Edit.</p>
+        <button id="welcome-add" class="primary">Add your first mailing list</button>
+      </div></section>
+
+      <section id="editor-mode" class="panel hidden" aria-labelledby="editor-title">
+        <div class="editor-head"><div><div class="eyebrow">Configuration</div><h1 id="editor-title">Mailing-list stream editor</h1>
+          <p class="muted">Choose a mailing list, define its bounded scope, and save an authoritative revision.</p><!-- Choose mailing list · Define bounded scope --></div><button id="close-editor">Back to summary</button></div>
+        <form id="form">
+          <section class="form-section"><h2>Mailing list and identity</h2><div class="grid">
+            <label class="wide">Lore mailing list<select id="catalog" name="catalog"></select><span class="help">Choose a known archive or a canonical Lore URL.</span></label>
+            <label id="custom-wrap" class="wide hidden">Canonical Lore archive URL<input name="archive_url" type="url" required><span class="help">One HTTPS archive directly under lore.kernel.org.</span></label>
+            <div id="archive-summary" class="archive-summary wide"></div>
+            <label>Stream name<input name="stream_name" required maxlength="120"><span class="help">A clear operator-facing name; RFI owns the stable internal identity.</span></label>
+            <label>Description<textarea name="description"></textarea><span class="help">Explain what this stream watches and why.</span></label>
+          </div></section>
+          <section class="form-section"><h2>Relevance and initial scope</h2><div class="grid">
+            <label>Start date<input name="date_from" type="date" required><span class="help">Initial acquisition starts here; required ancestors may be older.</span></label>
+            <label>Through date<input name="date_through" type="date" required><span class="help">The initial Lore window may span at most 31 days.</span></label>
+            <label>Keywords or phrases<textarea name="keywords"></textarea><span class="help">Optional, one per line.</span></label>
+            <label>Subjects<textarea name="subjects"></textarea><span class="help">Optional, one per line.</span></label>
+            <label class="wide">Senders or participants<textarea name="participants"></textarea><span class="help">Optional, one per line; aliases are not automatically resolved.</span></label>
+          </div></section>
+          <section class="form-section"><h2>Bounded acquisition limits</h2><div class="grid">
+            <label>Direct-message maximum<input name="seed_limit" type="number" min="1" max="25" required><span class="help">Hard cap for direct relevance matches.</span></label>
+            <label>Total-message maximum<input name="total_limit" type="number" min="2" max="100" required><span class="help">Hard cap including connected context.</span></label>
+            <label>Reply depth<input name="descendant_depth" type="number" min="0" max="10" required><span class="help">Maximum bounded reply expansion depth.</span></label>
+            <div class="notice"><b>No archive mirroring</b><br>Every acquisition remains date-bounded and hard-capped. Immutable evidence and incomplete/truncated semantics are unchanged.</div>
+          </div></section>
+          <section id="new-review" class="form-section"><h2>Review and create</h2>
+            <p class="muted">Review validates normalized intent without persistence. Create and test then saves configuration and retrieves one bounded sample.</p>
+            <div class="actions"><button id="validate-archive" type="button">Validate archive connectivity</button><button id="review" type="button">Review mailing-list stream</button></div>
+            <div id="review-output" class="review" style="margin-top:12px"><span class="muted">Review details will appear here.</span></div>
+          </section>
+          <div class="editor-footer"><div id="editor-message" role="status" aria-live="polite" class="muted">No unsaved changes.</div>
+            <div class="actions"><button id="discard" type="button">Discard changes</button><button id="save-revision" class="primary hidden" type="submit">Save revision</button>
+              <button id="create-test" class="primary" type="button" disabled>Create and test stream</button></div></div>
+        </form>
+      </section>
+
+      <details id="outcome" class="panel hidden">
+        <summary class="evidence-head"><div class="evidence-heading"><div class="eyebrow">Immutable evidence</div><h2 id="outcome-title">Latest retained messages</h2>
+          <p class="muted">Expand to inspect direct matches and retained discussion context.</p></div>
+          <div class="evidence-summary-right"><div id="outcome-summary" class="badges"></div><span class="disclosure-label" aria-hidden="true"></span></div></summary>
+        <div id="messages" class="message-list" tabindex="0" role="region" aria-label="Latest retained mailing-list messages"></div>
+        <div class="result-links"><a href="/artifacts">Inspect all retained evidence in Artifacts</a>
+          <a href="/help/incomplete-mailing-list-results#incomplete-mailing-list-results" target="rfi-operator-help">Interpret incomplete results</a></div>
+      </details>
+
+      <section class="panel status-panel" aria-labelledby="status-title">
+        <div class="status-head"><div><div class="eyebrow">Process-local activity</div><h2 id="status-title">Fetch queue</h2></div>
+          <div id="queue-overview" class="queue-overview"><span>Loading…</span></div></div>
+        <div id="events" class="events" role="log" aria-live="polite"><div class="event empty-event">No fetch activity in this server process.</div></div>
+      </section>
+    </div>
+  </section>
+</main>
+
+<dialog id="save-dialog" aria-labelledby="save-dialog-title"><div class="dialog-body"><div class="eyebrow">Saved</div>
+  <h2 id="save-dialog-title">Authoritative revision saved</h2><p id="save-dialog-message"></p></div>
+  <div class="dialog-actions"><button id="save-dialog-close" class="primary">Return to stream summary</button></div></dialog>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id),form=$('form');
+let catalog=[],saved=[],defaults=null,selectedStream=null,currentDraft=null,reviewed=null,dirty=false,busy=false,lastEventSequence=0;
+const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const lines=value=>value.split('\n').map(x=>x.trim()).filter(Boolean);
+async function api(path,options={}){const response=await fetch(path,{headers:{'Content-Type':'application/json'},...options});const data=await response.json().catch(()=>({error:'Unreadable server response'}));if(!response.ok){const error=new Error(data.error||'Request failed');error.code=data.error_code;throw error}return data}
+function notify(text,good=false){$('operator-message').textContent=text;$('operator-message').className=good?'good-text':'bad-text'}
+function editorMessage(text,bad=false){$('editor-message').textContent=text;$('editor-message').className=bad?'bad-text':'muted'}
+function payload(){return {archive_url:form.archive_url.value.trim(),stream_name:form.stream_name.value.trim(),description:form.description.value.trim(),date_from:form.date_from.value,date_through:form.date_through.value,keywords:lines(form.keywords.value),subjects:lines(form.subjects.value),participants:lines(form.participants.value),seed_limit:Number(form.seed_limit.value),total_limit:Number(form.total_limit.value),descendant_depth:Number(form.descendant_depth.value)}}
+const evidenceLabel=value=>({complete_connected:'Complete and connected',incomplete_or_truncated:'Incomplete or truncated',empty:'No matching messages',partial:'Partial evidence',failed:'Failed',untested:'Not run'}[value]||'Unavailable');
+const statusClass=value=>value==='complete_connected'||value==='empty'?'good':value==='failed'?'bad':'warn';
+const healthState=value=>({
+  complete_connected:{label:'Healthy',detail:'The latest acquisition completed with connected evidence.',css:'good'},
+  empty:{label:'Healthy',detail:'The latest acquisition completed with no matching messages.',css:'good'},
+  incomplete_or_truncated:{label:'Needs attention',detail:'The latest evidence is incomplete or truncated.',css:'warn'},
+  partial:{label:'Needs attention',detail:'The latest acquisition retained only partial evidence.',css:'warn'},
+  failed:{label:'Fetch failed',detail:'The latest acquisition did not complete successfully.',css:'bad'},
+  untested:{label:'Not yet run',detail:'Fetch this stream to establish its operational health.',css:''},
+}[value]||{label:'Status unavailable',detail:'The latest acquisition state is unavailable.',css:''});
+const displayDate=value=>value?new Date(value+'T00:00:00').toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}):'Not established';
+const displayDateTime=value=>value?new Date(value).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}):'Unavailable';
+const lifecycleLabel=value=>({succeeded:'Completed',partial:'Completed with partial evidence',retryable_failure:'Failed · retry available',terminal_failure:'Failed'}[value]||'Not run');
+const sentence=value=>{const text=String(value||'').trim();return text?text.charAt(0).toUpperCase()+text.slice(1)+(text.endsWith('.')?'':'.'):''};
+function chooseArchive(mark=true){const selected=catalog.find(x=>x.archive_id===$('catalog').value),custom=$('catalog').value==='custom';$('custom-wrap').classList.toggle('hidden',!custom);if(selected){form.archive_url.value=selected.canonical_url;$('archive-summary').innerHTML=`<b>${esc(selected.display_name)}</b><br>${esc(selected.description)}<br><span class="muted">${esc(selected.canonical_url)}</span>`}else{$('archive-summary').innerHTML='<b>Custom Lore archive</b><br><span class="muted">Enter one supported canonical lore.kernel.org mailing-list URL.</span>'}if(mark)markDirty()}
+function applyDraft(d){form.archive_url.value=d.archive_url;const known=catalog.find(x=>x.canonical_url===d.archive_url);$('catalog').value=known?known.archive_id:'custom';chooseArchive(false);form.archive_url.value=d.archive_url;for(const name of ['stream_name','description','date_from','date_through','seed_limit','total_limit','descendant_depth'])form.elements[name].value=d[name];for(const name of ['keywords','subjects','participants'])form.elements[name].value=(d[name]||[]).join('\n')}
+function renderSaved(){
+  $('saved').innerHTML=saved.map(item=>{const selected=selectedStream===item.stream_id,health=healthState(item.test_evidence_status);return `<article class="stream-card ${selected?'selected':''}"><button class="stream-select" data-select="${esc(item.stream_id)}" ${selected?'aria-current="true"':''}><span class="card-title"><span class="stream-name">${esc(item.stream_name)}</span>${selected?'<span class="selected-label">Selected</span>':''}</span><div class="stream-meta">${esc(item.archive_name)} · revision ${item.revision_number}</div><span class="card-health"><span class="status-dot ${health.css}"></span>${esc(health.label)}</span></button><div class="card-foot"><span class="coverage"><span class="coverage-label">Repository coverage through</span><strong>${esc(item.effective_last_fetch_date?displayDate(item.effective_last_fetch_date):'Not established')}</strong></span><button class="card-fetch" data-fetch="${esc(item.stream_id)}">Fetch up to date</button></div></article>`}).join('')||'<div class="empty"><p>No mailing-list streams configured yet.</p><button class="primary" data-add>Add mailing list</button></div>';
+  document.querySelectorAll('[data-select]').forEach(x=>x.onclick=()=>selectSaved(x.dataset.select));document.querySelectorAll('[data-fetch]').forEach(x=>x.onclick=()=>queueOne(x.dataset.fetch));document.querySelectorAll('[data-add]').forEach(x=>x.onclick=openNewEditor)
+}
+async function load(){const data=await api('/api/linux-mailing-lists');catalog=data.catalog;saved=data.saved;defaults=data.defaults;$('catalog').innerHTML=catalog.map(x=>`<option value="${esc(x.archive_id)}">${esc(x.display_name)} — ${esc(x.archive_id)}</option>`).join('')+'<option value="custom">Enter another Lore archive URL</option>';renderSaved();if(selectedStream&&saved.some(x=>x.stream_id===selectedStream))await selectSaved(selectedStream,false);else if(saved.length)await selectSaved(saved[0].stream_id,false)}
+function relevance(d){const groups=[];if(d.keywords?.length)groups.push('Keywords: '+d.keywords.join(', '));if(d.subjects?.length)groups.push('Subjects: '+d.subjects.join(', '));if(d.participants?.length)groups.push('Participants: '+d.participants.join(', '));return groups.join(' · ')||'All messages within the bounded date window'}
+async function selectSaved(streamId,announce=true){
+  if(dirty&&selectedStream!==streamId&&!confirm('Discard unsaved editor changes and open this stream?'))return;
+  const item=saved.find(x=>x.stream_id===streamId);if(!item)return;const d=await api('/api/linux-mailing-lists/'+encodeURIComponent(streamId)),health=healthState(item.test_evidence_status);
+  selectedStream=streamId;currentDraft=d;dirty=false;reviewed=null;renderSaved();$('welcome').classList.add('hidden');$('editor-mode').classList.add('hidden');$('summary-mode').classList.remove('hidden');$('last-acquisition').classList.remove('hidden');
+  $('summary-title').textContent=item.stream_name;$('summary-description').textContent=d.description||'No description provided.';$('summary-badges').innerHTML=`<span class="badge good">Configuration ready</span><span class="badge">Revision ${item.revision_number}</span>`;
+  $('summary-health').innerHTML=`<span class="status-dot ${health.css}"></span>${esc(health.label)}`;$('summary-health-detail').textContent=health.detail;
+  $('summary-coverage').textContent=item.effective_last_fetch_date?`Current through ${displayDate(item.effective_last_fetch_date)}`:'Not established';$('summary-coverage-detail').textContent=item.effective_last_fetch_date?'Complete repository evidence is available through this date.':'Fetch up to date to establish repository coverage.';
+  $('summary-source').innerHTML=`${esc(item.archive_name)}<br><span class="muted">${esc(item.archive_url)}</span>`;$('summary-relevance').textContent=relevance(d);$('summary-limits').textContent=`${d.seed_limit} direct messages · ${d.total_limit} total messages · reply depth ${d.descendant_depth}`;$('summary-scope').textContent=`${displayDate(d.date_from)} through ${displayDate(d.date_through)}`;
+  const warning=['incomplete_or_truncated','partial','failed'].includes(item.test_evidence_status);$('summary-warning').classList.toggle('hidden',!warning);$('summary-warning').innerHTML=warning?`<b>Attention required</b><br>The latest result is ${esc(evidenceLabel(item.test_evidence_status).toLowerCase())}. Retained evidence is still inspectable, but this outcome does not extend repository coverage.`:'';
+  if(item.latest_acquisition_run_id){$('last-acquisition-status').innerHTML='<span class="badge">Loading details…</span>';$('last-acquisition-metrics').innerHTML='';$('last-acquisition-note').textContent='Loading the most recent retained acquisition summary…';await showResult(item.latest_acquisition_run_id)}else{renderNoAcquisition();$('outcome').classList.add('hidden')}
+  if(announce)notify('Stream summary loaded.',true)
+}
+function showEditor(){ $('summary-mode').classList.add('hidden');$('last-acquisition').classList.add('hidden');$('welcome').classList.add('hidden');$('outcome').classList.add('hidden');$('editor-mode').classList.remove('hidden') }
+function openNewEditor(){selectedStream=null;currentDraft=defaults;applyDraft(defaults);dirty=false;reviewed=null;$('new-review').classList.remove('hidden');$('save-revision').classList.add('hidden');$('create-test').classList.remove('hidden');$('create-test').disabled=true;$('close-editor').textContent='Cancel';$('discard').textContent='Reset';$('editor-title').textContent='Add mailing-list stream';$('review-output').innerHTML='<span class="muted">Review details will appear here.</span>';renderSaved();showEditor();editorMessage('Review before creating durable configuration.')}
+function openExistingEditor(){if(!currentDraft)return;applyDraft(currentDraft);dirty=false;reviewed=null;$('new-review').classList.add('hidden');$('save-revision').classList.remove('hidden');$('create-test').classList.add('hidden');$('close-editor').textContent='Back to summary';$('discard').textContent='Discard changes';$('editor-title').textContent='Edit mailing-list stream';showEditor();editorMessage('No unsaved changes.')}
+function closeEditor(){if(dirty&&!confirm('Discard unsaved configuration changes?'))return;if(selectedStream)selectSaved(selectedStream,false);else{$('editor-mode').classList.add('hidden');$('welcome').classList.remove('hidden')}}
+function markDirty(){if(busy)return;dirty=true;reviewed=null;if(selectedStream)editorMessage('Unsaved changes. Save creates a new immutable revision.');else{editorMessage('Draft changed. Review it before create and test.');$('create-test').disabled=true}}
+async function review(){try{editorMessage('Reviewing normalized intent…');const x=await api('/api/linux-mailing-lists/review',{method:'POST',body:JSON.stringify(payload())});reviewed=x;const d=x.draft;$('review-output').innerHTML=`<h3>Normalized intent</h3><dl><dt>Mailing list</dt><dd>${esc(x.archive.display_name)}</dd><dt>Stream</dt><dd>${esc(d.stream_name)}</dd><dt>Scope</dt><dd>${d.date_from} through ${d.date_through}</dd><dt>Relevance</dt><dd>${esc(relevance(d))}</dd><dt>Limits</dt><dd>${d.seed_limit} direct / ${d.total_limit} total · depth ${d.descendant_depth}</dd><dt>Repository records</dt><dd>${esc(x.records_to_create.join('; '))}</dd></dl>`;$('create-test').disabled=false;dirty=false;editorMessage('Review complete. Nothing was persisted or retrieved.')}catch(error){reviewed=null;$('create-test').disabled=true;editorMessage(error.message,true)}}
+async function validateArchive(){try{editorMessage('Validating live Lore connectivity…');const x=await api('/api/linux-mailing-lists/validate-archive',{method:'POST',body:JSON.stringify(payload())});editorMessage(`Archive reachable: ${x.observed_title}. Nothing was saved.`)}catch(error){editorMessage(error.message,true)}}
+async function createAndTest(){if(!reviewed||busy)return;busy=true;$('create-test').disabled=true;try{editorMessage('Creating configuration and retrieving one bounded sample…');await api('/api/linux-mailing-lists/validate-archive',{method:'POST',body:JSON.stringify(payload())});const created=await api('/api/linux-mailing-lists/create',{method:'POST',body:JSON.stringify(payload())});if(created.status==='failed'||created.status==='partial')throw new Error(created.message);selectedStream=created.revision.stream_id;const tested=await api('/api/linux-mailing-lists/'+encodeURIComponent(selectedStream)+'/test',{method:'POST',body:'{}'});await refreshSaved();await selectSaved(selectedStream,false);notify(tested.message,tested.status!=='failed')}catch(error){editorMessage(error.message,true)}finally{busy=false;$('create-test').disabled=!reviewed}}
+async function saveRevision(event){event.preventDefault();if(!selectedStream||busy)return;busy=true;$('save-revision').disabled=true;try{const result=await api('/api/linux-mailing-lists/'+encodeURIComponent(selectedStream),{method:'PUT',body:JSON.stringify(payload())});dirty=false;currentDraft=payload();await refreshSaved();$('save-dialog-message').textContent=result.status==='no_change'?'No values changed; the current authoritative revision remains active.':result.message;$('save-dialog').showModal()}catch(error){editorMessage(error.message,true)}finally{busy=false;$('save-revision').disabled=false}}
+function renderNoAcquisition(){
+  $('last-acquisition-status').innerHTML='<span class="badge warn">Not yet run</span>';$('last-acquisition-metrics').innerHTML='<div class="acquisition-metric"><span>Acquisition</span><strong>Not available</strong></div><div class="acquisition-metric"><span>Direct messages</span><strong>—</strong></div><div class="acquisition-metric"><span>Context messages</span><strong>—</strong></div>';$('last-acquisition-note').textContent='Fetch up to date to create the first bounded acquisition result.'
+}
+function renderLastAcquisition(run,manifest,status){
+  const total=Number(run.message_count??manifest.message_count??0),direct=Number(run.seed_count??manifest.seed_ids?.length??0),context=Math.max(0,total-direct),warnings=(manifest.warnings||[]).map(sentence);
+  if(manifest.truncated)warnings.push('The bounded result was truncated.');if(run.error_code)warnings.push(`Acquisition reported ${run.error_code.replaceAll('_',' ')}.`);
+  $('last-acquisition-status').innerHTML=`<span class="badge ${statusClass(status)}">${esc(lifecycleLabel(run.lifecycle_status))}</span><span class="badge ${statusClass(status)}">${esc(evidenceLabel(status))}</span>`;
+  $('last-acquisition-metrics').innerHTML=`<div class="acquisition-metric"><span>Acquired</span><strong>${esc(displayDateTime(run.requested_at||manifest.requested_at))}</strong></div><div class="acquisition-metric"><span>Direct messages</span><strong>${direct}</strong></div><div class="acquisition-metric"><span>Context messages</span><strong>${context}</strong></div>`;
+  $('last-acquisition-note').textContent=warnings.length?warnings.join(' '):status==='empty'?'Acquisition completed normally; no messages matched this stream.':status==='complete_connected'?'Acquisition completed with connected retained evidence.':'Review the status and retained evidence before relying on this result.'
+}
+function renderResult(result){
+  const run=result.run||{},manifest=run.manifest||result.acquisition||{},messages=result.messages||[],status=run.message_count===0?'empty':run.lifecycle_status==='partial'?'partial':run.lifecycle_status&&run.lifecycle_status!=='succeeded'?'failed':run.connectivity_state==='connected'?'complete_connected':'incomplete_or_truncated';
+  renderLastAcquisition(run,manifest,status);$('outcome').classList.remove('hidden');$('outcome').removeAttribute('open');$('outcome-summary').innerHTML=`<span class="badge ${statusClass(status)}">${esc(evidenceLabel(status))}</span><span class="badge">${run.message_count??manifest.message_count??messages.length} messages</span><span class="badge">${manifest.relationship_count??'—'} relationships</span>`;
+  $('messages').innerHTML=messages.map(item=>{const m=item.summary;return `<article class="message-card"><div class="badges"><span class="badge ${item.direct_match?'good':'warn'}">${item.direct_match?'direct match':'context only'}</span><span class="badge">${esc(item.inclusion_reason.replaceAll('_',' '))}</span><span class="badge ${m.connectivity_state==='connected'?'good':'warn'}">${esc(m.connectivity_state)}</span></div><h3>${esc(m.subject)}</h3><p>${esc(m.sender)} · ${esc(m.message_date||'date unavailable')}</p><p><code>${esc(m.external_message_id||'Message-ID unavailable')}</code></p><p class="muted">Thread depth ${m.depth??'not connected'} · ${m.child_count} direct replies · Parent: ${esc(m.immediate_parent_id||'discussion root')}</p><a href="${esc(item.source_link)}" target="_blank" rel="noreferrer">Open canonical Lore message</a></article>`}).join('')||'<p class="empty">No retained messages are available for this acquisition.</p>'
+}
+async function showResult(runId){try{renderResult(await api('/api/linux-mailing-lists/results/'+encodeURIComponent(runId)))}catch(error){$('last-acquisition-status').innerHTML='<span class="badge bad">Details unavailable</span>';$('last-acquisition-metrics').innerHTML='';$('last-acquisition-note').textContent='The latest acquisition summary could not be loaded.';$('outcome').classList.add('hidden');notify('Stream loaded, but its latest evidence could not be displayed: '+error.message)}}
+async function refreshSaved(){const data=await api('/api/linux-mailing-lists');saved=data.saved;renderSaved()}
+async function queueOne(streamId){try{const x=await api('/api/linux-mailing-lists/fetches/'+encodeURIComponent(streamId),{method:'POST',body:'{}'});notify(x.duplicate?'Duplicate ignored; this stream is already queued or running.':'Fetch queued. The page remains available while acquisition runs.',true);await pollQueue()}catch(error){notify(error.message)}}
+async function queueAll(){try{const x=await api('/api/linux-mailing-lists/fetches',{method:'POST',body:'{}'});notify(`${x.queued} fetches queued; ${x.duplicates_ignored} duplicates ignored.`,true);await pollQueue()}catch(error){notify(error.message)}}
+async function cancelAll(){if(!confirm('Abandon every queued fetch and request cancellation of the running fetch? Durable evidence will be preserved.'))return;try{const x=await api('/api/linux-mailing-lists/fetches/cancel-all',{method:'POST',body:'{}'});notify(`${x.abandoned} queued fetches abandoned${x.cancellation_requested?'; running cancellation requested':''}.`,true);await pollQueue()}catch(error){notify(error.message)}}
+const eventLabel=value=>value.replaceAll('_',' ');
+async function pollQueue(){try{const x=await api('/api/linux-mailing-lists/fetches');$('queue-overview').innerHTML=`<span><b>${x.running?1:0}</b> running</span><span><b>${x.queued.length}</b> queued</span><span><b>${x.recent.length}</b> recent</span>`;$('events').innerHTML=x.events.slice().reverse().map(e=>`<div class="event"><span class="event-type">${esc(eventLabel(e.event))}</span><time>${esc(new Date(e.occurred_at).toLocaleTimeString())}</time><span><b>${esc(e.stream_name||'All streams')}</b> · ${esc(e.message)}</span></div>`).join('')||'<div class="event empty-event">No fetch activity in this server process.</div>';const newest=x.events.at(-1)?.sequence||0;if(newest>lastEventSequence){lastEventSequence=newest;await refreshSaved();if(selectedStream&&!dirty&&$('editor-mode').classList.contains('hidden'))await selectSaved(selectedStream,false)}}catch(error){$('queue-overview').textContent='Status unavailable'}}
+function discard(){if(selectedStream){applyDraft(currentDraft);dirty=false;editorMessage('Unsaved changes discarded.')}else{applyDraft(defaults);dirty=false;reviewed=null;$('create-test').disabled=true;editorMessage('Draft reset to bounded defaults.')}}
+form.addEventListener('input',markDirty);form.addEventListener('change',event=>{if(event.target===$('catalog'))chooseArchive();else markDirty()});form.addEventListener('submit',saveRevision);
+$('new').onclick=openNewEditor;$('welcome-add').onclick=openNewEditor;$('reload').onclick=async()=>{if(dirty&&!confirm('Reloading saved streams will discard unsaved changes. Continue?'))return;await load();notify('Saved mailing-list streams reloaded.',true)};$('edit').onclick=openExistingEditor;$('close-editor').onclick=closeEditor;$('discard').onclick=discard;$('review').onclick=review;$('validate-archive').onclick=validateArchive;$('create-test').onclick=createAndTest;$('fetch-one').onclick=()=>queueOne(selectedStream);$('fetch-all').onclick=queueAll;$('cancel-all').onclick=cancelAll;$('save-dialog-close').onclick=()=>{$('save-dialog').close();selectSaved(selectedStream,false)};
+load().then(pollQueue).catch(error=>notify(error.message));setInterval(pollQueue,1500);
+</script>
+</body></html>
