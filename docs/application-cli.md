@@ -20,6 +20,7 @@ rfi mailing-list --state PATH configure-linux-block
 rfi mailing-list --state PATH configure-lore-source --source ID --list-id ID \
   --display-name NAME --archive-base-url HTTPS_URL [transport policy options]
 rfi mailing-list --state PATH preview|acquire --live --message-id MESSAGE_ID [limits]
+  [--continuation-id ID --discovery-offset OFFSET]
 rfi mailing-list --state PATH sources|discussions|search|incomplete|rebuild
 rfi stream schema
 rfi stream --state PATH validate --file STREAM.yaml
@@ -31,6 +32,12 @@ rfi stream --state PATH export --stream STREAM_ID [--revision-id REVISION_ID]
 `configure-lore-source` persists provider/list/endpoint identity and User-Agent, pacing,
 concurrency, timeout, response-size, retry, and backoff policy in the governed external-source
 profile. Stream JSON references that source ID and does not repeat transport configuration.
+
+`acquire` prints `relationship_status` and any durable `relationship_continuation`. Reuse the same
+`--continuation-id`, selection, limits, and `--discovery-offset` to resume one bounded seed page.
+`continuation_pending` is successful bounded progress, `policy_truncated` is an intentional reply
+depth boundary, and `failed` is provider or execution failure. The Linux Mailing Lists catch-up
+workflow supplies these identities automatically.
 
 The default state is `.artifacts/runtime/rfi-1`, the default host is `127.0.0.1`, and the default
 port is `8765`. Every command prints or documents its state location. `admin` prints the bound URL,

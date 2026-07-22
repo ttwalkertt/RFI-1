@@ -54,8 +54,10 @@ differ by source.
 
 Seed discovery and context expansion are separately represented. Each retained run item records
 whether it was an explicit request, a direct seed match, an ancestor connector, or descendant
-context. Ancestors may lie outside the discovery window. Breadth-first descendant expansion spends
-the remaining context allowance and truncates only at a frontier. Preview performs all remote
+context. Ancestors may lie outside the discovery window. Ancestry-first depth-first descendant
+expansion spends one run's remaining context allowance and appends a deterministic continuation
+frontier when work remains. Lore relationship-page offsets, unconsumed siblings, and completed
+branch identifiers resume without repeating completed provider work. Preview performs all remote
 planning and parsing but writes nothing; acquisition is a separate explicit action.
 
 The live path is separately gated:
@@ -87,14 +89,15 @@ normalized subject is search/display metadata and never thread identity. Relatio
 header-derived direct edges and unresolved parents. Future heuristic relationships must use the
 distinct `inferred`/`heuristic` classification.
 
-For every connected or truncated discussion, each member has one acyclic immediate-reply path to
+For every connected discussion, each member has one acyclic immediate-reply path to
 the stored root and every connector on that path is stored. A connector may be a retrieved message
 or an explicitly typed confirmed-unavailable tombstone. The repository integrity check walks and
 validates those paths and depths. Unresolved connectors classify material as incomplete; malformed
-identity and cycles are quarantined. Neither state receives discussion membership. A descendant
-limit produces `truncated`, never a disconnected `connected` component. The live adapter enumerates
-replies through per-thread Atom feeds. Feed pagination or an unexpanded frontier still reports
-truncation rather than claiming a complete discussion.
+identity and cycles are quarantined. Neither state receives discussion membership. A configured
+depth limit produces run-level `policy_truncated`. A per-run record boundary produces
+`continuation_pending`. Neither state contaminates a message whose retained parent path is
+structurally connected. The live adapter enumerates replies through bounded, pageable per-thread
+Atom feeds.
 
 Repeated acquisition compares evidence identity for an existing external Message-ID. Equal bytes
 or an equal deterministic tombstone reuse the artifact, message, document, and relationship;
@@ -136,8 +139,8 @@ requests; this path is not production-ready polling.
 
 | Subsystem | Responsibility | Status |
 | --- | --- | --- |
-| Lore/public-inbox adapter | Bounded Atom discovery, message retrieval, ancestor closure, reply enumeration | Usable with Limitations |
-| Bounded acquisition service | Preview, seed/context separation, limits, fail-closed admission | Complete |
+| Lore/public-inbox adapter | Bounded Atom discovery, message retrieval, pageable relationship enumeration | Usable with Limitations |
+| Bounded acquisition service | Durable ancestry-first depth-first continuation, limits, fail-closed admission | Complete |
 | Immutable evidence | Lossless email bytes, acquisition provenance, integrity | Complete |
 | SQLite manifests and discussion state | Durable inclusion facts and rebuildable relationships | Complete |
 | Mailing-list query service | Sources, discussions, children, ancestors, search, incomplete state | Complete |

@@ -17,10 +17,10 @@
       "source": "README.md",
       "destination": "README.md",
       "source_size": 5104,
-      "destination_size": 6932,
+      "destination_size": 7157,
       "source_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
-      "destination_sha256": "6b39f73baff1296d8f85f0d092b03e4f572df942b9af4b420c07ad92f072c6cc",
-      "content_change": "documentation index and status extended through TASK-029 mailing-list operations"
+      "destination_sha256": "72559c409da19070cfc96c3fb3dd732eb2f7f923dd64d04270343c591b106a0e",
+      "content_change": "documentation index and status extended through TASK-031 relationship continuation"
     },
     {
       "source": "DESIGN_PRINCIPLES.md",
@@ -53,28 +53,28 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 6168,
+      "destination_size": 6230,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "28508e1c947442e5a84ab6ed4a79ef4515fd3e978028d6e4a2c19c5a1cb549f8",
-      "content_change": "task roadmap reconciled through TASK-029 mailing-list operations"
+      "destination_sha256": "3a5a1175c0a85c1ff1fdd3e0056456871cdd22bda56d1e1dd0d5b26e44ce906a",
+      "content_change": "task roadmap reconciled through TASK-031 relationship continuation"
     },
     {
       "source": "ROADMAP.md",
       "destination": "ROADMAP.md",
       "source_size": 3371,
-      "destination_size": 5720,
+      "destination_size": 6155,
       "source_sha256": "1de0192a023e8c046f2cdedc2fe61592345d2e06b324c9b49b2c2b25424dfdad",
-      "destination_sha256": "993430d34ed8de731962c481dda11efadb0b61c5a6dd53e0f48a9860e1f98db1",
-      "content_change": "roadmap updated through TASK-028 mailing-list operator workflow"
+      "destination_sha256": "342f790a8474c0a2b58fbacb5c55378b6f047f8e4a87d41893dcba8d51946c44",
+      "content_change": "roadmap updated through TASK-031 relationship continuation"
     },
     {
       "source": "ARCHITECTURE.md",
       "destination": "ARCHITECTURE.md",
       "source_size": 4889,
-      "destination_size": 10369,
+      "destination_size": 10930,
       "source_sha256": "b1035d87d8f620ace89e3aaae5ca65b0c21cf93c6e1ca91c824c1e623b20aa9f",
-      "destination_sha256": "7f44eacaec30771413c2c2d7c55dfb21abf94f60a68f2d2bfdf8d9db24c31e5e",
-      "content_change": "repository architecture extended through TASK-028 workflow façade"
+      "destination_sha256": "22c46ed48b7bced8e3705020b6e04c39b95a9fd8045bc1966e66c0c48933e2d1",
+      "content_change": "repository architecture extended through TASK-031 relationship continuation"
     }
   ]
 }

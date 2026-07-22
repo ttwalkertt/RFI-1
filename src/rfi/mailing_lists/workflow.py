@@ -12,6 +12,7 @@ from rfi.mailing_lists.contracts import (
     AcquisitionManifest,
     AcquisitionMessage,
     AcquisitionRunStatus,
+    RelationshipAcquisitionStatus,
     LoreTransportPolicy,
     MailingListError,
     MailingListSource,
@@ -369,8 +370,13 @@ class LinuxMailingListWorkflowService:
         acquisition_service = MailingListAcquisitionService(
             self.repository, self.archive_factory(source)
         )
+        test_batch_id = hashlib.sha256(
+            f"{revision.revision_id}:bounded-test".encode()
+        ).hexdigest()[:32]
         try:
-            manifest = acquisition_service.acquire(source_id, criteria, limits)
+            manifest = acquisition_service.acquire(
+                source_id, criteria, limits, coverage_batch_id=test_batch_id
+            )
         except MailingListError as error:
             latest = self._new_acquisition(source_id, before)
             message = str(error)
@@ -388,6 +394,14 @@ class LinuxMailingListWorkflowService:
                 evidence_status == "failed",
             )
         messages = self.query_service.acquisition_messages(manifest.run_id)
+        if manifest.relationship_status == RelationshipAcquisitionStatus.CONTINUATION_PENDING:
+            return WorkflowTestResult(
+                "continuation_pending", None,
+                "This bounded Lore run retained valid evidence and durable relationship "
+                "progress. Run the test again to continue the pending ancestry or replies.",
+                True, stream_id, source_id, manifest, None, messages, True,
+                "continuation_pending", False,
+            )
         if manifest.run_status != AcquisitionRunStatus.SUCCEEDED:
             return WorkflowTestResult(
                 "failed", "retrieving bounded sample",
@@ -471,6 +485,10 @@ class LinuxMailingListWorkflowService:
             test_evidence_status = (
                 "failed" if acquisition_status == "succeeded"
                 and summary.latest_run_status == "failed"
+                else "continuation_pending" if latest is not None
+                and latest.get("relationship_status") == "continuation_pending"
+                else "policy_truncated" if latest is not None
+                and latest.get("relationship_status") == "policy_truncated"
                 else "complete_with_tombstones" if acquisition_status == "succeeded"
                 and connectivity_status == "connected"
                 and int(latest.get("tombstone_count", 0)) > 0
@@ -546,6 +564,18 @@ class LinuxMailingListWorkflowService:
             batch_id = hashlib.sha256(
                 f"{revision.revision_id}:{cursor.isoformat()}:{window_end.isoformat()}".encode()
             ).hexdigest()[:32]
+            progress = self.repository.coverage_batch_progress(source_id, batch_id)
+            latest_by_offset = {
+                int(item.get("discovery_offset", 0)): item for item in progress
+            }
+            while offset in latest_by_offset:
+                prior = latest_by_offset[offset]
+                if prior.get("relationship_status") in {"continuation_pending", "failed"}:
+                    break
+                if prior.get("discovery_has_more"):
+                    offset += len(prior.get("seed_ids", ()))
+                    continue
+                break
             while True:
                 try:
                     manifest = service.acquire(
@@ -569,6 +599,24 @@ class LinuxMailingListWorkflowService:
                     )
                 run_ids.append(manifest.run_id)
                 if (
+                    manifest.relationship_status
+                    == RelationshipAcquisitionStatus.CONTINUATION_PENDING
+                ):
+                    status = "continuation_pending"
+                    message = (
+                        "A bounded relationship run completed and retained valid evidence. "
+                        "Durable continuation remains and coverage is withheld until it finishes."
+                    )
+                    continue
+                if manifest.relationship_status == RelationshipAcquisitionStatus.FAILED:
+                    completed += 1
+                    status = "failed"
+                    message = (
+                        "Relationship acquisition failed after preserving valid durable progress; "
+                        "coverage was not advanced and retry resumes from the saved frontier."
+                    )
+                    break
+                if (
                     manifest.run_status != AcquisitionRunStatus.SUCCEEDED
                     or manifest.state.value in {"incomplete", "quarantined"}
                     or not manifest.required_ancestry_complete
@@ -588,8 +636,10 @@ class LinuxMailingListWorkflowService:
                 completed += 1
                 cursor = window_end + timedelta(days=1)
                 break
-            if status != "completed":
+            if status not in {"completed", "continuation_pending"}:
                 break
+            if status == "continuation_pending":
+                status = "completed"
         if status == "completed":
             try:
                 self.stream_service.run(stream_id)

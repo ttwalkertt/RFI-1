@@ -199,3 +199,9 @@ façade coordinates known/custom Lore selection, non-persistent review, determin
 stream creation, live bounded Atom search, connected-context retention, stream verification, and
 evidence inspection without exposing the repository decomposition. Existing source, stream,
 acquisition, artifact, provenance, and SQLite authorities remain unchanged.
+
+TASK-031 makes bounded Lore relationship work durable across runs. Ancestry-first depth-first
+frames and provider-page offsets live in append-only SQLite acquisition manifests. Seed pages and
+date windows wait for terminal relationship state, coverage remains withheld while continuation is
+pending, and valid retained artifacts remain structurally classified from their own header paths.
+Per-request adapter limits remain unchanged.

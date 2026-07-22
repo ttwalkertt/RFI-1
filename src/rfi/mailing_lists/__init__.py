@@ -6,6 +6,7 @@ from rfi.mailing_lists.contracts import (
     AcquisitionManifest,
     AcquisitionPreview,
     AcquisitionRunStatus,
+    RelationshipAcquisitionStatus,
     ArchiveMessage,
     ConnectivityState,
     DiscussionProjection,
@@ -46,7 +47,7 @@ LINUX_BLOCK_SOURCE = MailingListSource(
 
 __all__ = [
     "AcquisitionLimits", "AcquisitionManifest", "AcquisitionMessage", "AcquisitionPreview",
-    "AcquisitionRunStatus",
+    "AcquisitionRunStatus", "RelationshipAcquisitionStatus",
     "ArchiveValidationResult",
     "FetchUpToDateResult",
     "ArchiveMessage", "ConnectivityState",

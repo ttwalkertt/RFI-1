@@ -65,6 +65,11 @@ limits. Offline `sources`, `discussions`, `search`, `incomplete`, and `rebuild` 
 Lore. Run `make task023-test` and `make task023-proof` for deterministic acceptance evidence. See
 the [mailing-list stream guide](linux-kernel-mailing-list-intelligence-stream.md).
 
+TASK-031 relationship continuation is covered by `make task031-test`. The gated live proof is
+`.venv/bin/python scripts/task031_live_proof.py`; it performs only a three-day, one-seed,
+one-context-record, depth-zero Lore acquisition and reports honestly that live data does not exercise
+the complete deterministic continuation case.
+
 ## TASK-011 target-firm workflow
 
 Run `make task011-proof` for the seeded HDD firm catalog, conflict, revision, restart, and stable

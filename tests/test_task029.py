@@ -160,7 +160,7 @@ class CatchUpCase(unittest.TestCase):
         self.assertGreater(int(projections[0]["count"]), 0)
         self.assertEqual(self.workflow.saved()[0].test_evidence_status, "complete_connected")
 
-    def test_incomplete_window_does_not_advance_coverage(self) -> None:
+    def test_provider_relationship_failure_does_not_advance_coverage(self) -> None:
         stream_id = self.create()
         self.workflow.test(stream_id)
 
@@ -172,7 +172,7 @@ class CatchUpCase(unittest.TestCase):
         base = archive_factory(self.workflow.repository.source("linux-block-lore"))
         self.workflow.archive_factory = lambda _source: FrontierUnknownArchive(base.messages)
         result = self.workflow.fetch_up_to_date(stream_id)
-        self.assertEqual(result.status, "completed_with_incomplete_evidence")
+        self.assertEqual(result.status, "failed")
         self.assertEqual(result.effective_last_fetch_date, "2026-07-16")
 
         self.workflow.archive_factory = archive_factory

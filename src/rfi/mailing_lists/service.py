@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from collections import Counter, deque
+from collections import Counter
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any, Callable
@@ -18,6 +18,7 @@ from rfi.mailing_lists.contracts import (
     AcquisitionManifest,
     AcquisitionPreview,
     AcquisitionRunStatus,
+    RelationshipAcquisitionStatus,
     ConnectivityState,
     DiscussionProjection,
     DiscussionSummary,
@@ -313,10 +314,27 @@ class MailingListAcquisitionService:
         source = self.repository.source(source_id)
         run_id = self.identifiers()
         requested_at = self.clock()
+        effective_batch_id = coverage_batch_id or hashlib.sha256(
+            json.dumps(
+                {
+                    "source_id": source_id,
+                    "criteria": asdict(criteria),
+                    "limits": asdict(limits),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()[:32]
+        continuation = (
+            self.repository.relationship_resume_state(
+                source_id, effective_batch_id, discovery_offset
+            )
+            if coverage_batch_id is not None else None
+        )
         try:
             plan = self._plan(
                 source_id, criteria, limits, cancelled=cancelled,
-                discovery_offset=discovery_offset,
+                discovery_offset=discovery_offset, continuation=continuation,
             )
         except MailingListError as error:
             if error.code == "acquisition_cancelled":
@@ -329,7 +347,12 @@ class MailingListAcquisitionService:
         created = 0
         idempotent = 0
         for external_id, item in sorted(plan["items"].items()):
-            if item.get("is_tombstone", False):
+            if item.get("reuse", False):
+                key = message_key(source_id, external_id)
+                doc_id = str(item["document_id"])
+                artifact_id = str(item["artifact_id"])
+                artifact_created = False
+            elif item.get("is_tombstone", False):
                 key, doc_id, artifact_id, artifact_created = (
                     self.repository.retain_unavailable_ancestor(
                         source, run_id, external_id, requested_at,
@@ -376,7 +399,10 @@ class MailingListAcquisitionService:
             prior_batches_complete
             and plan["discovery_complete"]
             and plan["required_ancestry_complete"]
-            and plan["descendant_policy_complete"]
+            and plan["relationship_status"] in {
+                RelationshipAcquisitionStatus.COMPLETE,
+                RelationshipAcquisitionStatus.POLICY_TRUNCATED,
+            }
             and not plan["unexpected_truncation"]
             and not plan["failures"]
             and plan["state"] == ConnectivityState.CONNECTED
@@ -391,7 +417,7 @@ class MailingListAcquisitionService:
             plan["failures"][0].code if plan["failures"] else None,
             any(error.retryable for error in plan["failures"]),
             discovery_offset, plan["discovery_has_more"],
-            plan["relationship_truncated"], coverage_batch_id, coverage_complete,
+            plan["relationship_truncated"], effective_batch_id, coverage_complete,
             tuple(sorted(
                 external_id for external_id, item in plan["items"].items()
                 if item["fallback_archive_url"] is not None
@@ -403,6 +429,8 @@ class MailingListAcquisitionService:
                 external_id for external_id, item in plan["items"].items()
                 if item.get("is_tombstone", False)
             )),
+            plan["relationship_status"], plan["continuation"],
+            plan["relationship_records_processed"],
         )
         self.repository.publish(manifest, retained, messages, discussions)
         return manifest
@@ -420,42 +448,66 @@ class MailingListAcquisitionService:
     def _plan(self, source_id: str, criteria: SelectionCriteria,
               limits: AcquisitionLimits, *,
               cancelled: Callable[[], bool] | None = None,
-              discovery_offset: int = 0) -> dict[str, Any]:
+              discovery_offset: int = 0,
+              continuation: dict[str, Any] | None = None) -> dict[str, Any]:
         self.repository.source(source_id)
         self._check_cancelled(cancelled)
-        if discovery_offset == 0:
-            seeds, seed_truncated = self.archive.discover(criteria, limits.seed_limit)
-        else:
-            discover_page = getattr(self.archive, "discover_page", None)
-            if discover_page is None:
-                raise MailingListError(
-                    "pagination_unsupported", "mailing-list archive cannot continue discovery"
+        if continuation is None:
+            if discovery_offset == 0:
+                seeds, seed_truncated = self.archive.discover(criteria, limits.seed_limit)
+            else:
+                discover_page = getattr(self.archive, "discover_page", None)
+                if discover_page is None:
+                    raise MailingListError(
+                        "pagination_unsupported", "mailing-list archive cannot continue discovery"
+                    )
+                seeds, seed_truncated = discover_page(
+                    criteria, limits.seed_limit, discovery_offset
                 )
-            seeds, seed_truncated = discover_page(
-                criteria, limits.seed_limit, discovery_offset
-            )
+        else:
+            seeds = tuple(str(item) for item in continuation.get("seeds", ()))
+            seed_truncated = bool(continuation.get("discovery_has_more", False))
         self._check_cancelled(cancelled)
         if not seeds:
             raise MailingListError("no_seed_matches", "bounded selection found no messages")
         items: dict[str, dict[str, Any]] = {}
         warnings: list[str] = []
         failures: list[MailingListError] = []
-        incomplete = False
         quarantined = False
-        required_ancestry_complete = True
         context_fetches = 0
+        retained = {
+            item["external_message_id"]: item
+            for item in self.repository.parsed_retained_records()
+            if item["source_id"] == source_id
+        }
+        acquired_ids = set(
+            str(item) for item in (continuation or {}).get("acquired_ids", ())
+        )
+        resuming = continuation is not None
+
+        def known(external_id: str) -> dict[str, Any] | None:
+            return items.get(external_id) or retained.get(external_id)
 
         def fetch(external_id: str, reason: InclusionReason, is_seed: bool = False) -> str | None:
             nonlocal context_fetches, quarantined
             self._check_cancelled(cancelled)
             expected = normalize_message_id(external_id) or external_id
-            if expected in items:
+            existing = known(expected)
+            if existing is not None and not is_seed:
                 if is_seed:
-                    items[expected]["is_seed"] = True
-                    items[expected]["inclusion_reason"] = (
-                        InclusionReason.EXPLICIT_REQUEST.value
-                        if criteria.message_ids else InclusionReason.SEED_MATCH.value
-                    )
+                    acquired_ids.add(expected)
+                if not resuming and expected in retained and expected not in items:
+                    prior = retained[expected]
+                    items[expected] = {
+                        "raw": None, "location": "", "parsed": prior["parsed"],
+                        "inclusion_reason": reason.value, "is_seed": False,
+                        "forced_state": None, "fallback_archive_url": None,
+                        "is_tombstone": bool(prior.get("is_tombstone", False)),
+                        "unavailable_details": prior.get("unavailable_details"),
+                        "reuse": True, "artifact_id": prior["artifact_id"],
+                        "document_id": prior["document_id"],
+                    }
+                    acquired_ids.add(expected)
                 return expected
             archive_message = self.archive.fetch(expected)
             parsed = parse_message(archive_message.raw)
@@ -478,134 +530,223 @@ class MailingListAcquisitionService:
                 "is_tombstone": False,
                 "unavailable_details": None,
             }
+            acquired_ids.add(storage_id)
             return storage_id
 
         seed_reason = (
             InclusionReason.EXPLICIT_REQUEST if criteria.message_ids else InclusionReason.SEED_MATCH
         )
-        for seed in seeds:
+        state = dict(continuation or {})
+        if continuation is None:
+            normalized_seeds = []
+            for seed in seeds:
+                try:
+                    stored = fetch(seed, seed_reason, True)
+                    if stored:
+                        normalized_seeds.append(stored)
+                except MailingListError as error:
+                    if error.code == "acquisition_cancelled":
+                        raise
+                    failures.append(error)
+                    warnings.append(f"seed rejected: {error.code}")
+            seeds = tuple(normalized_seeds)
+            state = {
+                "version": 1,
+                "phase": "ancestry",
+                "seeds": list(seeds),
+                "discovery_has_more": seed_truncated,
+                "acquired_ids": sorted(acquired_ids),
+                "ancestry_stack": [
+                    {"current": seed, "seen": []} for seed in reversed(seeds)
+                ],
+                "reply_stack": [],
+                "completed_reply_ids": [],
+                "policy_truncated": False,
+            }
+
+        ancestry_stack = list(state.get("ancestry_stack", []))
+        reply_stack = list(state.get("reply_stack", []))
+        completed_reply_ids = set(
+            str(item) for item in state.get("completed_reply_ids", ())
+        )
+        phase = str(state.get("phase", "ancestry"))
+        policy_truncated = bool(state.get("policy_truncated", False))
+        retry_ancestry: list[dict[str, Any]] = []
+
+        while phase == "ancestry" and ancestry_stack:
+            frame = dict(ancestry_stack[-1])
+            current = str(frame["current"])
+            seen = set(str(item) for item in frame.get("seen", ()))
+            if current in seen:
+                quarantined = True
+                failures.append(MailingListError("relationship_cycle", "cycle in ancestry"))
+                warnings.append("cycle detected in immediate-reply ancestry")
+                break
+            next_seen = {*seen, current}
+            current_item = known(current)
+            if current_item is None:
+                failures.append(MailingListError("continuation_corrupt", "ancestor is missing"))
+                break
+            parent = current_item["parsed"].immediate_parent_id
+            if not parent:
+                ancestry_stack.pop()
+                continue
+            if known(parent) is not None:
+                if not resuming:
+                    fetch(parent, InclusionReason.ANCESTOR)
+                acquired_ids.add(parent)
+                ancestry_stack[-1] = {
+                    "current": parent, "seen": sorted(next_seen)
+                }
+                continue
+            if context_fetches >= limits.context_limit:
+                break
             try:
-                current = fetch(seed, seed_reason, True)
+                fetch(parent, InclusionReason.ANCESTOR)
             except MailingListError as error:
                 if error.code == "acquisition_cancelled":
                     raise
-                failures.append(error)
-                incomplete = True
-                warnings.append(f"seed rejected: {error.code}")
-                continue
-            seen: set[str] = set()
-            while current is not None:
-                if current in seen:
-                    quarantined = True
-                    required_ancestry_complete = False
-                    warnings.append("cycle detected in immediate-reply ancestry")
-                    break
-                seen.add(current)
-                parent = items[current]["parsed"].immediate_parent_id
-                if not parent:
-                    break
-                if parent in items:
-                    current = parent
-                    continue
-                if context_fetches >= limits.context_limit:
-                    incomplete = True
-                    required_ancestry_complete = False
-                    warnings.append("context limit reached before ancestor closure")
-                    break
-                try:
-                    current = fetch(parent, InclusionReason.ANCESTOR)
-                except MailingListError as error:
-                    if error.code == "acquisition_cancelled":
-                        raise
-                    if error.code == "archive_message_not_found":
-                        attempts = error.details.get("attempts")
-                        if not isinstance(attempts, list) or len(attempts) != 2:
-                            raise MailingListError(
-                                "invalid_unavailability_evidence",
-                                "confirmed Lore absence lacks two-path retrieval evidence",
-                            ) from error
-                        if any(
-                            not isinstance(item, dict)
-                            or item.get("http_status") != 404
-                            or not isinstance(item.get("location"), str)
-                            for item in attempts
-                        ):
-                            raise MailingListError(
-                                "invalid_unavailability_evidence",
-                                "confirmed Lore absence contains invalid retrieval evidence",
-                            ) from error
-                        context_fetches += 1
-                        items[parent] = {
-                            "raw": None,
-                            "location": str(attempts[-1]["location"]),
-                            "parsed": unavailable_ancestor(parent),
-                            "inclusion_reason": InclusionReason.ANCESTOR.value,
-                            "is_seed": False,
-                            "forced_state": None,
-                            "fallback_archive_url": None,
-                            "is_tombstone": True,
-                            "unavailable_details": {"attempts": attempts},
-                        }
-                        warnings.append(
-                            f"confirmed unavailable ancestor tombstoned: {parent}"
-                        )
-                        current = parent
-                        continue
+                if error.code == "archive_message_not_found":
+                    attempts = error.details.get("attempts")
+                    if not isinstance(attempts, list) or len(attempts) != 2 or any(
+                        not isinstance(item, dict)
+                        or item.get("http_status") != 404
+                        or not isinstance(item.get("location"), str)
+                        for item in attempts
+                    ):
+                        raise MailingListError(
+                            "invalid_unavailability_evidence",
+                            "confirmed Lore absence lacks valid two-path evidence",
+                        ) from error
+                    context_fetches += 1
+                    items[parent] = {
+                        "raw": None, "location": str(attempts[-1]["location"]),
+                        "parsed": unavailable_ancestor(parent),
+                        "inclusion_reason": InclusionReason.ANCESTOR.value,
+                        "is_seed": False, "forced_state": None,
+                        "fallback_archive_url": None, "is_tombstone": True,
+                        "unavailable_details": {"attempts": attempts},
+                    }
+                    acquired_ids.add(parent)
+                    warnings.append(f"confirmed unavailable ancestor tombstoned: {parent}")
+                    ancestry_stack[-1] = {
+                        "current": parent, "seen": sorted(next_seen)
+                    }
+                else:
                     failures.append(error)
-                    incomplete = True
-                    required_ancestry_complete = False
                     warnings.append(f"required ancestor unavailable: {parent}")
-                    break
+                    retry_ancestry.append(dict(ancestry_stack.pop()))
+            else:
+                ancestry_stack[-1] = {
+                    "current": parent, "seen": sorted(next_seen)
+                }
 
-        # Expand only from roots whose ancestor closure is present. Breadth-first order ensures
-        # that a hard limit removes descendants at the frontier, never an intermediate connector.
-        roots = [key for key, item in items.items() if not item["parsed"].immediate_parent_id]
-        frontier = deque((root, 0) for root in sorted(roots))
-        relationship_truncated = not self.archive.descendant_enumeration_complete
-        descendant_policy_limited = False
-        if limits.descendant_depth == 0:
-            # Zero requests no remote reply enumeration. Report the descendant frontier
-            # conservatively instead of performing a hidden network request merely to detect it.
-            descendant_policy_limited = bool(roots)
-            frontier.clear()
-        while frontier:
-            parent, depth = frontier.popleft()
-            remaining = limits.context_limit - context_fetches
-            if items[parent].get("is_tombstone", False):
-                known_children = sorted(
-                    key for key, item in items.items()
-                    if item["parsed"].immediate_parent_id == parent
-                )
-                frontier.extend((child, depth + 1) for child in known_children)
+        if phase == "ancestry" and not ancestry_stack:
+            phase = "replies"
+            scoped = {
+                key: known(key) for key in acquired_ids if known(key) is not None
+            }
+            roots = sorted(
+                key for key, item in scoped.items()
+                if item is not None and not item["parsed"].immediate_parent_id
+            )
+            if not reply_stack:
+                reply_stack = [
+                    {"message_id": root, "depth": 0, "offset": 0, "pending": [],
+                     "has_more": True, "enumerated": False}
+                    for root in reversed(roots)
+                ]
+
+        while phase == "replies" and reply_stack:
+            frame = reply_stack[-1]
+            parent = str(frame["message_id"])
+            depth = int(frame["depth"])
+            if parent in completed_reply_ids:
+                reply_stack.pop()
                 continue
             if depth >= limits.descendant_depth:
-                # Reaching the requested boundary completes this branch. Do not enumerate or
-                # retrieve out-of-policy children merely to prove that deeper context exists.
-                descendant_policy_limited = True
+                policy_truncated = True
+                completed_reply_ids.add(parent)
+                reply_stack.pop()
                 continue
-            if remaining <= 0:
-                relationship_truncated = True
+            parent_item = known(parent)
+            if parent_item is None:
+                failures.append(MailingListError("continuation_corrupt", "reply parent is missing"))
                 break
-            self._check_cancelled(cancelled)
-            children, has_more = self.archive.direct_children(parent, remaining + 1)
-            if has_more or len(children) > remaining:
-                relationship_truncated = True
-            for child in children[:remaining]:
-                if child in items:
-                    frontier.append((child, depth + 1))
-                    continue
+            if parent_item.get("is_tombstone", False):
+                completed_reply_ids.add(parent)
+                reply_stack.pop()
+                continue
+            pending = list(frame.get("pending", []))
+            if pending:
+                child = str(pending.pop(0))
+                frame["pending"] = pending
+                if child in {str(item["message_id"]) for item in reply_stack}:
+                    failures.append(MailingListError("relationship_cycle", "cycle in replies"))
+                    warnings.append("cycle detected in reply traversal")
+                    break
+                if known(child) is None:
+                    if context_fetches >= limits.context_limit:
+                        frame["pending"] = [child, *pending]
+                        break
+                    try:
+                        fetch(child, InclusionReason.DESCENDANT)
+                    except MailingListError as error:
+                        if error.code == "acquisition_cancelled":
+                            raise
+                        frame["pending"] = [child, *pending]
+                        failures.append(error)
+                        warnings.append(f"descendant unavailable: {error.code}")
+                        break
+                elif not resuming:
+                    fetch(child, InclusionReason.DESCENDANT)
+                    acquired_ids.add(child)
+                reply_stack.append({
+                    "message_id": child, "depth": depth + 1, "offset": 0,
+                    "pending": [], "has_more": True, "enumerated": False,
+                })
+                continue
+            if bool(frame.get("has_more", True)) or not bool(frame.get("enumerated", False)):
+                remaining = limits.context_limit - context_fetches
+                if remaining <= 0:
+                    break
+                page_size = min(50, remaining)
+                page = getattr(self.archive, "direct_children_page", None)
+                if page is None:
+                    if int(frame.get("offset", 0)):
+                        failures.append(MailingListError(
+                            "pagination_unsupported",
+                            "mailing-list archive cannot resume relationship pagination",
+                        ))
+                        break
+                    page = lambda message_id, limit, _offset: self.archive.direct_children(
+                        message_id, limit
+                    )
                 try:
-                    stored = fetch(child, InclusionReason.DESCENDANT)
-                    if stored:
-                        frontier.append((stored, depth + 1))
+                    page_offset = int(frame.get("offset", 0))
+                    if page_offset == 0:
+                        children, has_more = self.archive.direct_children(parent, page_size)
+                    else:
+                        children, has_more = page(parent, page_size, page_offset)
                 except MailingListError as error:
-                    if error.code == "acquisition_cancelled":
-                        raise
                     failures.append(error)
-                    warnings.append(f"descendant unavailable: {error.code}")
-                    incomplete = True
+                    warnings.append(f"descendant enumeration failed: {error.code}")
+                    break
+                ordered = list(dict.fromkeys(sorted(children)))
+                if has_more and not ordered:
+                    failures.append(MailingListError(
+                        "pagination_no_progress", "relationship page made no progress"
+                    ))
+                    break
+                frame["offset"] = int(frame.get("offset", 0)) + len(ordered)
+                frame["pending"] = ordered
+                frame["has_more"] = bool(has_more)
+                frame["enumerated"] = True
+                continue
+            completed_reply_ids.add(parent)
+            reply_stack.pop()
 
-        if not items and failures:
+        if not items and failures and not acquired_ids:
             retryable = any(error.retryable for error in failures)
             first = next((error for error in failures if error.retryable), failures[0])
             raise MailingListError(
@@ -614,23 +755,65 @@ class MailingListAcquisitionService:
                 retryable=retryable,
             ) from first
 
-        provisional = []
-        default_state = (
-            ConnectivityState.QUARANTINED if quarantined else
-            ConnectivityState.INCOMPLETE if incomplete else
-            ConnectivityState.TRUNCATED if relationship_truncated else
-            ConnectivityState.CONNECTED
+        if (
+            phase == "replies" and not reply_stack and not failures
+            and not self.archive.descendant_enumeration_complete
+        ):
+            failures.append(MailingListError(
+                "provider_relationship_incomplete",
+                "provider could not prove relationship enumeration complete",
+                retryable=True,
+            ))
+            warnings.append("provider relationship enumeration remained incomplete")
+        required_ancestry_complete = (
+            not ancestry_stack and not retry_ancestry and phase == "replies"
         )
+        pending = bool(ancestry_stack or reply_stack) and not failures
+        relationship_status = (
+            RelationshipAcquisitionStatus.FAILED if failures else
+            RelationshipAcquisitionStatus.CONTINUATION_PENDING if pending else
+            RelationshipAcquisitionStatus.POLICY_TRUNCATED if policy_truncated else
+            RelationshipAcquisitionStatus.COMPLETE
+        )
+        descendant_policy_complete = relationship_status in {
+            RelationshipAcquisitionStatus.COMPLETE,
+            RelationshipAcquisitionStatus.POLICY_TRUNCATED,
+        }
+        continuation_value = None
+        if relationship_status in {
+            RelationshipAcquisitionStatus.CONTINUATION_PENDING,
+            RelationshipAcquisitionStatus.FAILED,
+        }:
+            continuation_value = {
+                "version": 1, "phase": "ancestry" if retry_ancestry else phase,
+                "seeds": list(seeds),
+                "discovery_has_more": seed_truncated,
+                "acquired_ids": sorted(acquired_ids),
+                "ancestry_stack": retry_ancestry or ancestry_stack,
+                "reply_stack": reply_stack,
+                "completed_reply_ids": sorted(completed_reply_ids),
+                "policy_truncated": policy_truncated,
+            }
+        provisional = []
         for external_id, item in items.items():
             provisional.append({
                 "source_id": source_id, "external_message_id": external_id,
-                "artifact_id": "preview", "document_id": "preview",
-                "connectivity_state": item["forced_state"] or default_state.value,
+                "artifact_id": (
+                    retained[external_id]["artifact_id"]
+                    if external_id in retained else "preview"
+                ),
+                "document_id": (
+                    retained[external_id]["document_id"]
+                    if external_id in retained else "preview"
+                ),
+                "connectivity_state": item["forced_state"] or ConnectivityState.CONNECTED.value,
                 "parsed": item["parsed"],
                 "is_tombstone": bool(item.get("is_tombstone", False)),
                 "unavailable_details": item.get("unavailable_details"),
             })
-        projected, _ = derive_projection(provisional)
+        projected, _ = derive_projection(
+            self.repository.parsed_retained_records() + provisional
+        )
         item_states = {
             item["external_message_id"]: item["connectivity_state"] for item in projected
         }
@@ -638,18 +821,17 @@ class MailingListAcquisitionService:
             value == ConnectivityState.QUARANTINED.value for value in item_states.values()
         ):
             state = ConnectivityState.QUARANTINED
-        elif incomplete or any(
+        elif failures or not required_ancestry_complete or any(
             value == ConnectivityState.INCOMPLETE.value for value in item_states.values()
         ):
             state = ConnectivityState.INCOMPLETE
-        elif relationship_truncated:
+        elif relationship_status == RelationshipAcquisitionStatus.CONTINUATION_PENDING:
             state = ConnectivityState.TRUNCATED
         else:
             state = ConnectivityState.CONNECTED
-        descendant_policy_complete = not relationship_truncated and not any(
-            warning.startswith("descendant unavailable:") for warning in warnings
+        unexpected_truncation = bool(failures) or (
+            relationship_status == RelationshipAcquisitionStatus.CONTINUATION_PENDING
         )
-        unexpected_truncation = relationship_truncated or bool(failures)
         return {
             "seeds": tuple(seeds), "items": items, "warnings": sorted(set(warnings)),
             "state": state, "truncated": unexpected_truncation,
@@ -657,10 +839,15 @@ class MailingListAcquisitionService:
             "discovery_complete": not seed_truncated,
             "required_ancestry_complete": required_ancestry_complete,
             "descendant_policy_complete": descendant_policy_complete,
-            "descendant_policy_limited": descendant_policy_limited,
+            "descendant_policy_limited": policy_truncated,
             "unexpected_truncation": unexpected_truncation,
-            "relationship_truncated": relationship_truncated,
+            "relationship_truncated": (
+                relationship_status == RelationshipAcquisitionStatus.CONTINUATION_PENDING
+            ),
             "item_states": item_states, "failures": tuple(failures),
+            "relationship_status": relationship_status,
+            "continuation": continuation_value,
+            "relationship_records_processed": context_fetches,
         }
 
     @staticmethod

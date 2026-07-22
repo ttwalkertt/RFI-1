@@ -38,6 +38,7 @@
 | TASK-027 | Non-modal operator help system and workflow guide | Complete |
 | TASK-028 | Linux kernel mailing-list stream workflow | Complete |
 | TASK-029 | Simplified Linux mailing-list operator workflow | Complete |
+| TASK-031 | Resumable Lore relationship acquisition | Done |
 
 ## Architectural Progression
 

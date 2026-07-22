@@ -280,6 +280,13 @@ SQLite acquisition manifests retain why each message was selected; reply edges a
 rebuildable header-derived state. Every connected member has one complete acyclic path to its stored
 root. Missing connectors and cycles fail closed, and descendant limits remain visible frontiers.
 
+Relationship acquisition is resumable rather than limited to one context batch. Append-only run
+manifests own an ancestry-first, depth-first continuation frontier and Lore provider-page offsets.
+One seed page reaches complete, policy-truncated, or failed relationship state before seed
+pagination or date-window coverage proceeds. Successful budget exhaustion is
+`continuation_pending`, not artifact incompleteness. Coverage remains withheld, while already closed
+message paths remain connected and inspectable. SQLite remains the only continuation authority.
+
 The artifact browser is one repository browser with sibling firm-artifact and development-mailing-
 list projections. Both consume repository-owned query and exact-content contracts. SQLite remains
 the sole structured authority; no graph persistence or browser-owned threading exists.

@@ -75,6 +75,15 @@ class AcquisitionRunStatus(StrEnum):
     TERMINAL_FAILURE = "terminal_failure"
 
 
+class RelationshipAcquisitionStatus(StrEnum):
+    """Outcome of configured relationship work, independent of artifact truth."""
+
+    COMPLETE = "complete"
+    CONTINUATION_PENDING = "continuation_pending"
+    POLICY_TRUNCATED = "policy_truncated"
+    FAILED = "failed"
+
+
 @dataclass(frozen=True)
 class LoreTransportPolicy:
     """Durable per-source network policy for the bounded Lore adapter."""
@@ -187,6 +196,10 @@ class MailingListArchive(Protocol):
         self, external_message_id: str, limit: int
     ) -> tuple[tuple[str, ...], bool]: ...
 
+    def direct_children_page(
+        self, external_message_id: str, limit: int, offset: int
+    ) -> tuple[tuple[str, ...], bool]: ...
+
     @property
     def descendant_enumeration_complete(self) -> bool: ...
 
@@ -241,6 +254,11 @@ class AcquisitionManifest:
     descendant_policy_limited: bool = False
     unexpected_truncation: bool = False
     tombstone_message_ids: tuple[str, ...] = ()
+    relationship_status: RelationshipAcquisitionStatus = (
+        RelationshipAcquisitionStatus.COMPLETE
+    )
+    relationship_continuation: dict[str, object] | None = None
+    relationship_records_processed: int = 0
 
 
 @dataclass(frozen=True)

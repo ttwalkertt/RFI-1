@@ -1,7 +1,7 @@
 # RFI-1 Operator Guide
 
 This is the canonical, repository-owned operating guide for the RFI-1 local administration
-application. It describes the implemented product through TASK-028, including the first-class
+application. It describes the implemented product through TASK-031, including the first-class
 Linux mailing-list workflow. The administration server renders this same file at
 `/help`; no network connection or second documentation server is required.
 
@@ -535,15 +535,17 @@ evidence storage, and stream verification. Overall success is withheld when any 
 <!-- help-topic: incomplete-mailing-list-results -->
 ## Incomplete mailing-list results
 
-`truncated` means acquisition stopped before its configured context policy completed, such as at a
-total-message cap or remote-feed limitation. Reaching the configured reply depth is instead a
-successful policy boundary: the UI reports context retained through that depth, and deeper replies
-remain intentionally unretained. `incomplete` means required context was unavailable. `quarantined` means
+`continuation_pending` means the bounded run succeeded, retained valid evidence, and saved an
+ancestry or reply frontier for the next run. Repository coverage remains withheld, but complete
+stored parent paths remain connected. `policy_truncated` means configured reply depth intentionally
+ended expansion and is a valid terminal coverage state. `failed` means provider, integrity, or
+execution work prevented terminal progress; valid prior progress remains inspectable and retry may
+resume its durable frontier. `incomplete` means required context was unavailable. `quarantined` means
 identity or relationship integrity failed. A partial transport outcome may retain useful evidence
 but does not establish successful verification. The result page shows active bounds, the
 direct/context breakdown, **Configuration ready** as the saved definition's executability, and a
-separate **Test evidence incomplete or truncated** warning where applicable. Policy-limited context
-is labeled separately from incomplete acquisition. Disconnected or unexpectedly truncated material
+separate **Continuation pending**, **Policy boundary reached**, or **Failed** status where applicable.
+Disconnected or structurally incomplete material
 is never labeled complete.
 
 `Connected with unavailable ancestors` means relationship closure succeeded through one or more
@@ -565,10 +567,11 @@ offline without changing historical manifests or immutable message artifacts.
 Select a saved stream to inspect its summary and latest acquisition evidence. **Fetch up to date**
 uses deterministic two-day overlap and one or more gap-free, at-most-31-day windows through today.
 Duplicate queued/running work is ignored. Immutable artifact content, tombstones, and relationships
-remain idempotent. A retryable Lore failure may be queued again; correct terminal URL, selection,
-or validation errors in **Edit** first. Incomplete or truncated windows retain evidence but do not
-advance effective coverage. Confirmed-unavailable ancestor tombstones do not force the same window
-to remain permanently incomplete.
+remain idempotent. If a relationship run reaches its record allowance, the same seed page resumes
+automatically from the SQLite manifest before later seed pages or date windows. A retryable Lore
+failure may be queued again; correct terminal URL, selection, or validation errors in **Edit** first.
+Pending or failed windows retain evidence but do not advance effective coverage. Confirmed-
+unavailable ancestor tombstones do not force the same window to remain permanently incomplete.
 
 <!-- help-topic: lore-connectivity -->
 ## Troubleshooting Lore connectivity

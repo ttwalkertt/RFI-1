@@ -436,6 +436,7 @@ class MailingListRepository:
             item = dict(row)
             manifest = json.loads(str(item.pop("canonical_json")))
             item["tombstone_count"] = len(manifest.get("tombstone_message_ids", ()))
+            item["relationship_status"] = manifest.get("relationship_status", "complete")
             result.append(item)
         return tuple(result)
 
@@ -458,6 +459,53 @@ class MailingListRepository:
             item["coverage_batch_id"] = payload.get("coverage_batch_id")
             result.append(item)
         return tuple(result)
+
+    def relationship_resume_state(
+        self, source_id: str, coverage_batch_id: str, discovery_offset: int
+    ) -> dict[str, Any] | None:
+        """Return the latest append-only continuation for one seed page."""
+        rows = self.rows(
+            "SELECT canonical_json FROM mailing_list_runs WHERE source_id=? "
+            "ORDER BY requested_at DESC,run_id DESC",
+            (source_id,),
+        )
+        for row in rows:
+            manifest = json.loads(str(row["canonical_json"]))
+            if (
+                manifest.get("coverage_batch_id") == coverage_batch_id
+                and int(manifest.get("discovery_offset", 0)) == discovery_offset
+                and manifest.get("relationship_status") in {
+                    "continuation_pending", "failed"
+                }
+            ):
+                continuation = manifest.get("relationship_continuation")
+                return dict(continuation) if isinstance(continuation, dict) else None
+            if (
+                manifest.get("coverage_batch_id") == coverage_batch_id
+                and int(manifest.get("discovery_offset", 0)) == discovery_offset
+            ):
+                return None
+        return None
+
+    def coverage_batch_progress(
+        self, source_id: str, coverage_batch_id: str
+    ) -> tuple[dict[str, Any], ...]:
+        """Expose page/run progress used to resume catch-up after process restart."""
+        result = []
+        for item in self.acquisition_coverage(source_id):
+            if item.get("coverage_batch_id") != coverage_batch_id:
+                continue
+            run = self.acquisition_run_manifest(str(item["run_id"]))
+            result.append(run)
+        return tuple(result)
+
+    def acquisition_run_manifest(self, run_id: str) -> dict[str, Any]:
+        rows = self.rows(
+            "SELECT canonical_json FROM mailing_list_runs WHERE run_id=?", (run_id,)
+        )
+        if not rows:
+            raise MailingListError("unknown_run", "unknown mailing-list acquisition run")
+        return dict(json.loads(str(rows[0]["canonical_json"])))
 
     def replace_derived(
         self, messages: list[dict[str, Any]], discussions: list[dict[str, Any]]

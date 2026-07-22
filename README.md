@@ -140,6 +140,7 @@ The following documents define the project.
 | `docs/linux-kernel-mailing-list-intelligence-stream.md` | TASK-023 bounded Linux block-layer email acquisition, connectivity, replay, query, and shared-browser projection |
 | `docs/linux-mailing-list-workflow.md` | TASK-028 first-class Lore workflow façade, live bounded test, operator feedback, and preserved service authorities |
 | `docs/linux-mailing-list-operator-console.md` | TASK-029 operations-first summary/editor workflow, catch-up coverage, FIFO queue, API, and status design |
+| `docs/decisions/0023-resumable-lore-relationship-acquisition.md` | TASK-031 durable depth-first Lore ancestry, reply, pagination, status, and coverage continuation |
 | `docs/revisioned-artifact-streams.md` | TASK-025 revisioned stream DAGs, typed capabilities, bounded execution, lineage, rebuild, and operator workflow |
 | `docs/storage_architecture_design_draft.md` | TASK-020 structured storage comparison and hybrid SQLite/file recommendation |
 | `docs/sqlite-structured-state-repository.md` | TASK-021 SQLite schema, transactions, initialization, integrity, and hybrid backup/restore |
@@ -151,6 +152,7 @@ The following documents define the project.
 | `ROADMAP.md` *(planned)* | Capability roadmap |
 | `TASKS.md` | Authorized implementation work and task status |
 | `TASK-029` | Simplified Linux mailing-list operator workflow |
+| `TASK-031` | Resumable Lore relationship acquisition |
 
 ---
 

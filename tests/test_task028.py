@@ -245,13 +245,13 @@ class WorkflowCase(unittest.TestCase):
         created = self.workflow.create(draft(seed_limit=1, total_limit=2))
         assert created.revision is not None
         result = self.workflow.test(created.revision.stream_id)
-        self.assertEqual(result.status, "tested_incomplete")
+        self.assertEqual(result.status, "continuation_pending")
         self.assertTrue(result.configuration_ready)
-        self.assertEqual(result.test_evidence_status, "incomplete_or_truncated")
-        self.assertTrue(result.incomplete_or_truncated)
+        self.assertEqual(result.test_evidence_status, "continuation_pending")
+        self.assertFalse(result.incomplete_or_truncated)
         saved = self.workflow.saved()[0]
         self.assertEqual(saved.configuration_status, "ready")
-        self.assertEqual(saved.test_evidence_status, "incomplete_or_truncated")
+        self.assertEqual(saved.test_evidence_status, "continuation_pending")
 
     def test_prior_external_source_is_reused_with_canonical_equivalence(self) -> None:
         prior = MailingListSource(

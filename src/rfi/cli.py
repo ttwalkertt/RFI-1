@@ -230,6 +230,11 @@ def parser() -> argparse.ArgumentParser:
         action.add_argument("--context-limit", type=int, default=100)
         action.add_argument("--descendant-depth", type=int, default=0)
         action.add_argument(
+            "--continuation-id",
+            help="durable continuation identity; reuse it to resume the same seed page",
+        )
+        action.add_argument("--discovery-offset", type=int, default=0)
+        action.add_argument(
             "--live", action="store_true", required=True,
             help="explicitly authorize the separately gated public-archive path",
         )
@@ -468,7 +473,11 @@ def mailing_list_operation(arguments: argparse.Namespace) -> None:
     result = (
         acquisition.preview(arguments.source, criteria, limits)
         if action == "preview"
-        else acquisition.acquire(arguments.source, criteria, limits)
+        else acquisition.acquire(
+            arguments.source, criteria, limits,
+            discovery_offset=arguments.discovery_offset,
+            coverage_batch_id=arguments.continuation_id,
+        )
     )
     print(json.dumps(asdict(result), indent=2, sort_keys=True, default=str))
 

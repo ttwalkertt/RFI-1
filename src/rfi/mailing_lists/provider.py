@@ -83,13 +83,19 @@ class FixtureMailingListArchive:
     def direct_children(
         self, external_message_id: str, limit: int
     ) -> tuple[tuple[str, ...], bool]:
+        return self.direct_children_page(external_message_id, limit, 0)
+
+    def direct_children_page(
+        self, external_message_id: str, limit: int, offset: int
+    ) -> tuple[tuple[str, ...], bool]:
         parent = normalize_message_id(external_message_id) or external_message_id
         children = []
         for message_id, item in self.messages.items():
             if parse_message(item.raw).immediate_parent_id == parent:
                 children.append(message_id)
         ordered = tuple(sorted(children))
-        return ordered[:limit], len(ordered) > limit
+        page = ordered[offset:offset + limit]
+        return page, offset + len(page) < len(ordered)
 
 
 class _SourceGovernor:
@@ -424,10 +430,20 @@ class LoreArchive:
     def direct_children(
         self, external_message_id: str, limit: int
     ) -> tuple[tuple[str, ...], bool]:
+        return self.direct_children_page(external_message_id, limit, 0)
+
+    def direct_children_page(
+        self, external_message_id: str, limit: int, offset: int
+    ) -> tuple[tuple[str, ...], bool]:
         parent = normalize_message_id(external_message_id) or external_message_id
-        if parent not in self._thread_children:
+        if offset == 0 and parent in self._thread_children:
+            result = self._thread_children[parent]
+            return result[:limit], parent in self._thread_feed_truncated or len(result) > limit
+        if offset >= 0:
             token = parent.strip().removeprefix("<").removesuffix(">")
             location = f"{self.base_url}{quote(token, safe='@')}/t.atom"
+            if offset:
+                location = f"{location}?{urlencode({'o': offset})}"
             try:
                 raw = self._request(location)
             except MailingListError as error:
@@ -458,12 +474,10 @@ class LoreArchive:
             truncated = any(
                 link.get("rel") == "next" for link in root.findall(f"{self._ATOM}link")
             )
-            for message_id in all_ids | set(children):
-                self._thread_children[message_id] = tuple(
-                    sorted(dict.fromkeys(children.get(message_id, [])))
-                )
+            result = tuple(sorted(dict.fromkeys(children.get(parent, []))))
+            if offset == 0:
+                self._thread_children[parent] = result
                 if truncated:
-                    self._thread_feed_truncated.add(message_id)
-            self._thread_children.setdefault(parent, ())
-        result = self._thread_children[parent]
-        return result[:limit], parent in self._thread_feed_truncated or len(result) > limit
+                    self._thread_feed_truncated.add(parent)
+            return result[:limit], truncated or len(result) > limit
+        raise MailingListError("invalid_offset", "relationship page offset cannot be negative")

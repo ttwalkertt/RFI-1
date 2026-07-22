@@ -57,8 +57,8 @@ fetch. This reduces navigation and mode switching without introducing another ap
 
 There is no mutable cursor. Effective last fetch is reconstructed from durable acquisition
 manifests whose Lore source and relevance criteria exactly match the current stream revision.
-Qualifying intervals must be complete: direct discovery exhausted, required ancestry resolved,
-configured descendant expansion completed, and no unexpected truncation; or a completed
+Qualifying intervals must be terminal: direct discovery exhausted, required ancestry resolved,
+configured descendant expansion completed or intentionally policy-truncated, and no failure; or a completed
 bounded search with no seed matches. Intervals are sorted and merged from the configured initial
 start date. Only adjacent or overlapping intervals advance the displayed date. Partial,
 incomplete, quarantined, truncated, retryable-failure, and terminal-failure intervals never bridge
@@ -85,8 +85,16 @@ bounds. Longer catch-up ranges are partitioned into gap-free FIFO windows. When 
 more direct matches than one run may retain, catch-up advances Lore's bounded search offset and
 issues additional immutable runs. Only the final page carries a durable coverage-complete marker,
 and only after every preceding page completed without missing or unexpectedly truncated context.
-An interruption, rejection, missing relationship, or relationship-bound truncation leaves all
-completed evidence inspectable but does not publish that marker or advance coverage.
+Budget exhaustion appends a `continuation_pending` depth-first frontier to the SQLite run manifest.
+The same seed page resumes before later seed pages or windows. An interruption, rejection, missing
+relationship, or provider failure leaves completed evidence inspectable but does not publish the
+coverage marker or advance coverage.
+
+The frontier is ancestry-first, then depth-first replies. It records the active ancestor/reply
+frames, unconsumed sibling identifiers, completed reply nodes, and Lore page offsets. Each provider
+page remains capped at 50 identifiers and each run retains its configured message limits. Process
+restart reconstructs work from the latest append-only manifest; the process-local UI queue is not
+continuation authority.
 
 After all date windows complete, catch-up executes the authoritative saved stream projection.
 Date-only stream predicates compare the date portion of message timestamps, so the configured

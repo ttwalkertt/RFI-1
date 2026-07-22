@@ -413,18 +413,20 @@ class MailingListCase(unittest.TestCase):
         self.assertEqual(self.query.discussions(LINUX_BLOCK_SOURCE.source_id), ())
         self.assertEqual(len(self.query.incomplete(LINUX_BLOCK_SOURCE.source_id)), 3)
 
-    def test_total_message_cap_truncates_only_at_connected_frontier(self) -> None:
+    def test_total_message_cap_creates_pending_run_without_contaminating_artifacts(self) -> None:
         manifest = self.service.acquire(
             LINUX_BLOCK_SOURCE.source_id,
             SelectionCriteria(message_ids=("<task023-a1@kernel.example>",)),
             AcquisitionLimits(seed_limit=1, context_limit=3, descendant_depth=5),
         )
         self.assertEqual(manifest.state, ConnectivityState.TRUNCATED)
+        self.assertEqual(manifest.relationship_status, "continuation_pending")
         self.assertTrue(manifest.unexpected_truncation)
         self.assertFalse(manifest.descendant_policy_complete)
         self.assertFalse(manifest.coverage_complete)
         discussion = self.query.discussions(LINUX_BLOCK_SOURCE.source_id)[0]
-        self.assertEqual(discussion.connectivity_state, ConnectivityState.TRUNCATED)
+        self.assertEqual(discussion.connectivity_state, ConnectivityState.CONNECTED)
+        self.assertFalse(discussion.descendant_truncated)
         for message in self.query.projection(discussion.discussion_id).messages:
             self.assertEqual(
                 self.query.ancestors(message.message_key)[0].message_key,

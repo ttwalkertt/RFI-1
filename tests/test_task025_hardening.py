@@ -238,7 +238,7 @@ class LoreTransportCase(unittest.TestCase):
         self.assertEqual(len(discussions), 1)
         self.assertEqual(discussions[0]["connectivity_state"], "connected")
 
-    def test_terminal_http_rejection_is_recorded_as_terminal(self) -> None:
+    def test_two_path_not_found_is_recorded_as_terminal_absence(self) -> None:
         configured = source(
             "terminal-test-lore", minimum_request_interval_seconds=0.1,
             maximum_attempts_per_request=3,
@@ -250,7 +250,7 @@ class LoreTransportCase(unittest.TestCase):
         self.assertFalse(raised.exception.retryable)
         run = self.repository.acquisition_runs(configured.source_id)[0]
         self.assertEqual(run["lifecycle_status"], "terminal_failure")
-        self.assertEqual(run["error_code"], "archive_request_rejected")
+        self.assertEqual(run["error_code"], "archive_message_not_found")
 
     def test_exact_message_falls_back_to_all_and_records_provenance_flag(self) -> None:
         configured = source(
