@@ -817,12 +817,17 @@ class MailingListAcquisitionService:
         item_states = {
             item["external_message_id"]: item["connectivity_state"] for item in projected
         }
+        current_item_states = tuple(
+            item_states[external_id]
+            for external_id in items
+            if external_id in item_states
+        )
         if quarantined or any(
-            value == ConnectivityState.QUARANTINED.value for value in item_states.values()
+            value == ConnectivityState.QUARANTINED.value for value in current_item_states
         ):
             state = ConnectivityState.QUARANTINED
         elif failures or not required_ancestry_complete or any(
-            value == ConnectivityState.INCOMPLETE.value for value in item_states.values()
+            value == ConnectivityState.INCOMPLETE.value for value in current_item_states
         ):
             state = ConnectivityState.INCOMPLETE
         elif relationship_status == RelationshipAcquisitionStatus.CONTINUATION_PENDING:

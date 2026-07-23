@@ -206,6 +206,26 @@ class CatchUpCase(unittest.TestCase):
             date_from="2026-07-17", date_through="2026-07-17",
             seed_limit=10, total_limit=11, descendant_depth=1,
         )
+        orphan = "<workflow-unrelated-orphan@kernel.example>"
+        incomplete = MailingListAcquisitionService(
+            self.workflow.repository,
+            FixtureWorkflowArchive({
+                orphan: ArchiveMessage(
+                    raw_message(
+                        orphan,
+                        "[PATCH] unrelated incomplete evidence",
+                        "<workflow-unavailable-parent@kernel.example>",
+                    ),
+                    "fixture:unrelated-orphan",
+                )
+            }),
+        ).acquire(
+            self.workflow.stream_service.detail(stream_id).draft.input_ids[0],
+            SelectionCriteria(message_ids=(orphan,)),
+            AcquisitionLimits(seed_limit=1, context_limit=2, descendant_depth=1),
+            coverage_batch_id="workflow-unrelated-incomplete-batch",
+        )
+        self.assertEqual(incomplete.state, "incomplete")
 
         result = self.workflow.fetch_up_to_date(stream_id)
 
