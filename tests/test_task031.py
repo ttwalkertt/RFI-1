@@ -230,6 +230,62 @@ class DurableContinuationCase(unittest.TestCase):
         self.assertTrue(manifest.descendant_policy_limited)
         self.assertTrue(manifest.coverage_complete)
 
+    def test_unrelated_incomplete_evidence_does_not_contaminate_later_run(self) -> None:
+        orphan = "<task031-unrelated-orphan@kernel.example>"
+        missing_parent = "<task031-unrelated-missing@kernel.example>"
+        repository = MailingListRepository(self.state)
+        incomplete = MailingListAcquisitionService(
+            repository,
+            FixtureMailingListArchive({
+                orphan: ArchiveMessage(
+                    raw_message(orphan, "[PATCH] unrelated orphan", missing_parent),
+                    "fixture:unrelated-orphan",
+                )
+            }),
+            identifiers=lambda: "mailrun-task031-unrelated-incomplete",
+        ).acquire(
+            LINUX_BLOCK_SOURCE.source_id,
+            SelectionCriteria(message_ids=(orphan,)),
+            AcquisitionLimits(seed_limit=1, context_limit=2, descendant_depth=1),
+            coverage_batch_id="task031-unrelated-incomplete-batch",
+        )
+        self.assertEqual(incomplete.state, "incomplete")
+
+        clean_root = "<task031-clean-policy-root@kernel.example>"
+        clean_child = "<task031-clean-policy-child@kernel.example>"
+        clean_grandchild = "<task031-clean-policy-grandchild@kernel.example>"
+        clean_messages = {
+            clean_root: ArchiveMessage(
+                raw_message(clean_root, "[PATCH] clean policy root"), "fixture:clean-root"
+            ),
+            clean_child: ArchiveMessage(
+                raw_message(clean_child, "Re: [PATCH] clean policy root", clean_root),
+                "fixture:clean-child",
+            ),
+            clean_grandchild: ArchiveMessage(
+                raw_message(
+                    clean_grandchild,
+                    "Re: [PATCH] clean policy root",
+                    clean_child,
+                ),
+                "fixture:clean-grandchild",
+            ),
+        }
+        clean = MailingListAcquisitionService(
+            repository,
+            FixtureMailingListArchive(clean_messages),
+            identifiers=lambda: "mailrun-task031-clean-policy",
+        ).acquire(
+            LINUX_BLOCK_SOURCE.source_id,
+            SelectionCriteria(message_ids=(clean_root,)),
+            AcquisitionLimits(seed_limit=1, context_limit=10, descendant_depth=1),
+            coverage_batch_id="task031-clean-policy-batch",
+        )
+
+        self.assertEqual(clean.relationship_status, "policy_truncated")
+        self.assertEqual(clean.state, "connected")
+        self.assertTrue(clean.coverage_complete)
+
     def test_more_than_fifty_relationship_records_complete_in_three_bounded_runs(self) -> None:
         root = "<task031-large-root@kernel.example>"
         messages = {
@@ -318,6 +374,7 @@ class WorkflowContinuationCase(unittest.TestCase):
             result = workflow.fetch_up_to_date(created.revision.stream_id)
 
             self.assertEqual(result.status, "completed")
+            self.assertEqual(result.message, "Acquisition coverage is up to date.")
             self.assertEqual(result.windows_completed, 3)
             self.assertEqual(result.effective_last_fetch_date, "2026-07-22")
             manifests = [

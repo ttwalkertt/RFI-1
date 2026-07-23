@@ -243,7 +243,13 @@ class LoreTransportCase(unittest.TestCase):
             "terminal-test-lore", minimum_request_interval_seconds=0.1,
             maximum_attempts_per_request=3,
         )
-        opener = SequenceOpener([self.error(404), self.error(404)])
+        empty_search = FakeResponse(
+            b'<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">'
+            b"<title>no exact Message-ID match</title></feed>"
+        )
+        opener = SequenceOpener([
+            self.error(404), self.error(404), empty_search, empty_search,
+        ])
         service = self.service(configured, opener, FakeTime(), "mailrun-terminal")
         with self.assertRaises(MailingListError) as raised:
             self.acquire_one(service, configured.source_id)

@@ -188,6 +188,7 @@ class LoreArchive:
         self._backoff_sleep_seconds = 0.0
         self._thread_children: dict[str, tuple[str, ...]] = {}
         self._thread_feed_truncated: set[str] = set()
+        self._message_locations: dict[str, str] = {}
 
     def usage(self) -> dict[str, int | float | str]:
         return {
@@ -272,7 +273,22 @@ class LoreArchive:
         return {"title": title, "updated": updated, "canonical_url": self.base_url}
 
     def fetch(self, external_message_id: str) -> ArchiveMessage:
-        token = external_message_id.strip().removeprefix("<").removesuffix(">")
+        canonical_id = normalize_message_id(external_message_id) or external_message_id
+        exact_location = self._message_locations.get(canonical_id)
+        if exact_location is not None:
+            fallback_base = (
+                "https://lore.kernel.org/all/"
+                if exact_location.startswith("https://lore.kernel.org/all/")
+                else None
+            )
+            try:
+                return ArchiveMessage(
+                    self._request(exact_location), exact_location, fallback_base
+                )
+            except MailingListError as error:
+                if error.code not in {"archive_request_rejected", "archive_not_found"}:
+                    raise
+        token = canonical_id.strip().removeprefix("<").removesuffix(">")
         location = f"{self.base_url}{quote(token, safe='@')}/raw"
         try:
             return ArchiveMessage(self._request(location), location)
@@ -289,6 +305,18 @@ class LoreArchive:
             return ArchiveMessage(self._request(fallback), fallback, fallback_base)
         except MailingListError as error:
             if primary_error.code == "archive_not_found" and error.code == "archive_not_found":
+                resolved = self._resolve_message_location(canonical_id)
+                if resolved is not None:
+                    resolved_location, resolved_fallback = resolved
+                    try:
+                        return ArchiveMessage(
+                            self._request(resolved_location),
+                            resolved_location,
+                            resolved_fallback,
+                        )
+                    except MailingListError as resolved_error:
+                        if resolved_error.code != "archive_not_found":
+                            raise
                 raise MailingListError(
                     "archive_message_not_found",
                     "Lore has no archived message for the required Message-ID",
@@ -301,6 +329,32 @@ class LoreArchive:
                     },
                 ) from error
             raise
+
+    def _resolve_message_location(self, external_message_id: str) -> tuple[str, str | None] | None:
+        """Recover Lore's case-sensitive path for one canonical Message-ID."""
+        token = external_message_id.strip().removeprefix("<").removesuffix(">")
+        fallback_base = "https://lore.kernel.org/all/"
+        bases = (self.base_url,) if self.base_url == fallback_base else (
+            self.base_url, fallback_base,
+        )
+        for base in bases:
+            search = f"{base}?{urlencode({'q': f'm:{token}', 'x': 'A'})}"
+            try:
+                root = self._atom(
+                    self._request(search),
+                    "Lore Message-ID recovery returned malformed Atom",
+                )
+            except MailingListError as error:
+                if error.code == "archive_not_found":
+                    continue
+                raise
+            for entry in root.findall(f"{self._ATOM}entry"):
+                observed = self._entry_message_id(entry)
+                if observed == external_message_id:
+                    location = self._message_locations.get(observed)
+                    if location is not None:
+                        return location, fallback_base if base == fallback_base else None
+        return None
 
     def _request(self, location: str) -> bytes:
         request = Request(location, headers={"User-Agent": self.policy.user_agent})
@@ -384,19 +438,30 @@ class LoreArchive:
     def _query_literal(value: str) -> str:
         return value.strip().replace("\\", "\\\\").replace('"', '\\"')
 
-    @staticmethod
-    def _message_id_from_url(value: str | None) -> str | None:
+    def _message_id_from_url(self, value: str | None) -> str | None:
         if not value:
             return None
-        path = urlsplit(value).path.rstrip("/")
+        parsed = urlsplit(value)
+        path = parsed.path.rstrip("/")
         token = unquote(path.rsplit("/", 1)[-1]) if path else ""
-        return normalize_message_id(f"<{token}>")
+        message_id = normalize_message_id(f"<{token}>")
+        allowed_prefixes = (
+            urlsplit(self.base_url).path,
+            "/all/",
+        )
+        if (
+            message_id is not None
+            and parsed.scheme == "https"
+            and parsed.netloc == "lore.kernel.org"
+            and any(parsed.path.startswith(prefix) for prefix in allowed_prefixes)
+        ):
+            self._message_locations[message_id] = f"{value.rstrip('/')}/raw"
+        return message_id
 
-    @classmethod
-    def _entry_message_id(cls, entry: ET.Element) -> str | None:
-        for link in entry.findall(f"{cls._ATOM}link"):
+    def _entry_message_id(self, entry: ET.Element) -> str | None:
+        for link in entry.findall(f"{self._ATOM}link"):
             if link.get("rel", "alternate") == "alternate":
-                message_id = cls._message_id_from_url(link.get("href"))
+                message_id = self._message_id_from_url(link.get("href"))
                 if message_id:
                     return message_id
         return None
@@ -441,7 +506,12 @@ class LoreArchive:
             return result[:limit], parent in self._thread_feed_truncated or len(result) > limit
         if offset >= 0:
             token = parent.strip().removeprefix("<").removesuffix(">")
-            location = f"{self.base_url}{quote(token, safe='@')}/t.atom"
+            exact_raw = self._message_locations.get(parent)
+            location = (
+                f"{exact_raw.removesuffix('/raw')}/t.atom"
+                if exact_raw is not None
+                else f"{self.base_url}{quote(token, safe='@')}/t.atom"
+            )
             if offset:
                 location = f"{location}?{urlencode({'o': offset})}"
             try:
@@ -456,7 +526,19 @@ class LoreArchive:
                     "https://lore.kernel.org/all/"
                     f"{quote(token, safe='@')}/t.atom"
                 )
-                raw = self._request(location)
+                try:
+                    raw = self._request(location)
+                except MailingListError as fallback_error:
+                    if fallback_error.code != "archive_not_found":
+                        raise
+                    resolved = self._resolve_message_location(parent)
+                    if resolved is None:
+                        raise
+                    exact_raw, _fallback_base = resolved
+                    location = f"{exact_raw.removesuffix('/raw')}/t.atom"
+                    if offset:
+                        location = f"{location}?{urlencode({'o': offset})}"
+                    raw = self._request(location)
             root = self._atom(raw, "Lore thread endpoint returned malformed Atom")
             children: dict[str, list[str]] = {}
             all_ids: set[str] = set()

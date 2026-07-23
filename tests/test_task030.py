@@ -206,6 +206,67 @@ class LoreClassificationCase(unittest.TestCase):
         self.assertIn("/linux-block/", requested[0])
         self.assertIn("/all/", requested[1])
 
+    def test_case_sensitive_lore_path_is_recovered_from_exact_message_id_search(self) -> None:
+        canonical = "<DM4PR11MB5375ABC@dm4pr11mb5375.namprd11.prod.outlook.com>"
+        exact_token = "DM4PR11MB5375ABC@DM4PR11MB5375.namprd11.prod.outlook.com"
+        exact_location = f"https://lore.kernel.org/linux-block/{exact_token}/raw"
+        exact_thread = f"https://lore.kernel.org/linux-block/{exact_token}/t.atom"
+        search = f'''<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+          <title>exact Message-ID search</title><entry>
+            <link href="https://lore.kernel.org/linux-block/{exact_token}/"/>
+          </entry></feed>'''.encode()
+        raw = raw_message(f"<{exact_token}>")
+        thread = f'''<?xml version="1.0"?><feed
+          xmlns="http://www.w3.org/2005/Atom"
+          xmlns:thr="http://purl.org/syndication/thread/1.0">
+          <title>case-sensitive thread</title>
+          <entry><link href="https://lore.kernel.org/linux-block/child@example.com/"/>
+          <thr:in-reply-to href="https://lore.kernel.org/linux-block/{exact_token}/"/>
+          </entry></feed>'''.encode()
+        requested: list[str] = []
+
+        def opener(request: Any, **_kwargs: Any):
+            requested.append(request.full_url)
+            if request.full_url == exact_location:
+                return type("Response", (), {
+                    "headers": {},
+                    "__enter__": lambda self: self,
+                    "__exit__": lambda self, *_args: None,
+                    "read": lambda self, limit: raw[:limit],
+                })()
+            if request.full_url == exact_thread:
+                return type("Response", (), {
+                    "headers": {},
+                    "__enter__": lambda self: self,
+                    "__exit__": lambda self, *_args: None,
+                    "read": lambda self, limit: thread[:limit],
+                })()
+            if "?q=" in request.full_url:
+                return type("Response", (), {
+                    "headers": {},
+                    "__enter__": lambda self: self,
+                    "__exit__": lambda self, *_args: None,
+                    "read": lambda self, limit: search[:limit],
+                })()
+            raise self.error(request.full_url, 404)
+
+        archive = LoreArchive(
+            LINUX_BLOCK_SOURCE, opener=opener, sleeper=lambda _seconds: None
+        )
+        observed = archive.fetch(canonical)
+
+        self.assertEqual(observed.raw, raw)
+        self.assertEqual(observed.location, exact_location)
+        self.assertIn(exact_location, requested)
+
+        restarted = LoreArchive(
+            LINUX_BLOCK_SOURCE, opener=opener, sleeper=lambda _seconds: None
+        )
+        children, has_more = restarted.direct_children(canonical, 5)
+        self.assertEqual(children, ("<child@example.com>",))
+        self.assertFalse(has_more)
+        self.assertIn(exact_thread, requested)
+
     def test_404_then_403_is_not_confirmed_absence(self) -> None:
         calls = 0
 
@@ -220,6 +281,41 @@ class LoreClassificationCase(unittest.TestCase):
         with self.assertRaises(MailingListError) as raised:
             archive.fetch("<missing@kernel.example>")
         self.assertEqual(raised.exception.code, "archive_request_rejected")
+
+    def test_advertised_list_link_still_uses_cross_archive_fallback(self) -> None:
+        message_id = "<cross-list@kernel.example>"
+        token = message_id.strip("<>")
+        list_location = f"https://lore.kernel.org/linux-block/{token}/raw"
+        all_location = f"https://lore.kernel.org/all/{token}/raw"
+        raw = raw_message(message_id)
+        requested: list[str] = []
+
+        def opener(request: Any, **_kwargs: Any):
+            requested.append(request.full_url)
+            if request.full_url == all_location:
+                return type("Response", (), {
+                    "headers": {},
+                    "__enter__": lambda self: self,
+                    "__exit__": lambda self, *_args: None,
+                    "read": lambda self, limit: raw[:limit],
+                })()
+            raise self.error(request.full_url, 404)
+
+        archive = LoreArchive(
+            LINUX_BLOCK_SOURCE, opener=opener, sleeper=lambda _seconds: None
+        )
+        self.assertEqual(
+            archive._message_id_from_url(list_location.removesuffix("raw")),
+            message_id,
+        )
+
+        observed = archive.fetch(message_id)
+
+        self.assertEqual(observed.raw, raw)
+        self.assertEqual(observed.location, all_location)
+        self.assertEqual(observed.fallback_archive_url, "https://lore.kernel.org/all/")
+        self.assertIn(list_location, requested)
+        self.assertIn(all_location, requested)
 
 
 class OperatorDisclosureCase(unittest.TestCase):

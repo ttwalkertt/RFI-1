@@ -641,6 +641,7 @@ class LinuxMailingListWorkflowService:
             if status == "continuation_pending":
                 status = "completed"
         if status == "completed":
+            message = "Acquisition coverage is up to date."
             try:
                 self.stream_service.run(stream_id)
             except StreamError as error:
