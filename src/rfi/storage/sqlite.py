@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -396,6 +396,32 @@ CREATE INDEX artifact_stream_memberships_stream_run
 ON artifact_stream_memberships(stream_id, run_id, ordinal);
 CREATE INDEX artifact_stream_lineage_membership
 ON artifact_stream_membership_lineage(membership_id, lineage_id);
+CREATE TABLE IF NOT EXISTS mailing_list_fetch_history (
+    history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stream_id TEXT NOT NULL,
+    stream_name TEXT NOT NULL,
+    state TEXT NOT NULL
+        CHECK (state IN ('completed','failed','cancelled','abandoned')),
+    message TEXT NOT NULL DEFAULT '',
+    queued_at TEXT,
+    started_at TEXT,
+    finished_at TEXT NOT NULL,
+    windows_completed INTEGER NOT NULL DEFAULT 0,
+    result_json TEXT
+) STRICT;
+CREATE INDEX IF NOT EXISTS mailing_list_fetch_history_finished
+ON mailing_list_fetch_history(finished_at DESC, history_id DESC);
+CREATE TABLE IF NOT EXISTS mailing_list_fetch_events (
+    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sequence INTEGER NOT NULL,
+    occurred_at TEXT NOT NULL,
+    event TEXT NOT NULL,
+    stream_id TEXT,
+    stream_name TEXT,
+    message TEXT NOT NULL DEFAULT ''
+) STRICT;
+CREATE INDEX IF NOT EXISTS mailing_list_fetch_events_sequence
+ON mailing_list_fetch_events(sequence DESC, event_id DESC);
 """
 
 _MIGRATE_V1_TO_V2 = _SCHEMA[
@@ -409,7 +435,39 @@ _MIGRATE_V1_TO_V2 = _SCHEMA[
 _MIGRATE_V2_TO_V3 = _SCHEMA[
     _SCHEMA.index("CREATE TABLE artifact_streams") :
     _SCHEMA.index("CREATE INDEX artifacts_sha256")
-] + _SCHEMA[_SCHEMA.index("CREATE INDEX artifact_stream_dependencies_upstream") :]
+] + _SCHEMA[
+    _SCHEMA.index("CREATE INDEX artifact_stream_dependencies_upstream") :
+    _SCHEMA.index("CREATE TABLE IF NOT EXISTS mailing_list_fetch_history")
+]
+
+_MIGRATE_V5_TO_V6 = """
+CREATE TABLE IF NOT EXISTS mailing_list_fetch_history (
+    history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stream_id TEXT NOT NULL,
+    stream_name TEXT NOT NULL,
+    state TEXT NOT NULL
+        CHECK (state IN ('completed','failed','cancelled','abandoned')),
+    message TEXT NOT NULL DEFAULT '',
+    queued_at TEXT,
+    started_at TEXT,
+    finished_at TEXT NOT NULL,
+    windows_completed INTEGER NOT NULL DEFAULT 0,
+    result_json TEXT
+) STRICT;
+CREATE INDEX IF NOT EXISTS mailing_list_fetch_history_finished
+ON mailing_list_fetch_history(finished_at DESC, history_id DESC);
+CREATE TABLE IF NOT EXISTS mailing_list_fetch_events (
+    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sequence INTEGER NOT NULL,
+    occurred_at TEXT NOT NULL,
+    event TEXT NOT NULL,
+    stream_id TEXT,
+    stream_name TEXT,
+    message TEXT NOT NULL DEFAULT ''
+) STRICT;
+CREATE INDEX IF NOT EXISTS mailing_list_fetch_events_sequence
+ON mailing_list_fetch_events(sequence DESC, event_id DESC);
+"""
 
 _MIGRATE_V3_TO_V4 = """
 ALTER TABLE mailing_list_runs ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'succeeded'
@@ -599,7 +657,7 @@ class RepositoryDatabase:
                 version = int(row[0])
                 if version == SCHEMA_VERSION:
                     return False
-                if version not in {1, 2, 3, 4}:
+                if version not in {1, 2, 3, 4, 5}:
                     raise StorageError(
                         "incompatible_schema",
                         f"repository schema version {version} is unsupported; "
@@ -617,6 +675,8 @@ class RepositoryDatabase:
                     scripts.append(_MIGRATE_V2_TO_V3)
                 if version in {2, 3} and "lifecycle_status" not in mailing_columns:
                     scripts.append(_MIGRATE_V3_TO_V4)
+                if version <= 5:
+                    scripts.append(_MIGRATE_V5_TO_V6)
                 for script in scripts:
                     for statement in script.split(";"):
                         if statement.strip():

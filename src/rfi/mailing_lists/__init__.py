@@ -29,6 +29,7 @@ from rfi.mailing_lists.service import (
 )
 from rfi.mailing_lists.workflow import (
     ArchiveValidationResult,
+    FetchProgress,
     FetchUpToDateResult,
     LinuxMailingListWorkflowService,
     LoreCatalogEntry,
@@ -49,6 +50,7 @@ __all__ = [
     "AcquisitionLimits", "AcquisitionManifest", "AcquisitionMessage", "AcquisitionPreview",
     "AcquisitionRunStatus", "RelationshipAcquisitionStatus",
     "ArchiveValidationResult",
+    "FetchProgress",
     "FetchUpToDateResult",
     "ArchiveMessage", "ConnectivityState",
     "DiscussionProjection", "DiscussionSummary", "FixtureMailingListArchive", "InclusionReason",

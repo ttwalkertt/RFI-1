@@ -1139,7 +1139,9 @@ def create_admin_server(
         mailing_list_query_service,
         archive_factory=LoreArchive,
     )
-    mailing_list_fetch_queue = MailingListFetchQueue(mailing_list_workflow)
+    mailing_list_fetch_queue = MailingListFetchQueue(
+        mailing_list_workflow, history=mailing_list_repository,
+    )
     return AdminConsole(
         (host, port),
         ConceptService(repository),

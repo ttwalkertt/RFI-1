@@ -133,6 +133,37 @@ and status panel; queued jobs are not replayed. Durable acquisition manifests an
 so effective coverage reconstructs after restart. The browser polls status every 1.5 seconds; no
 websocket, daemon, scheduler, or general job framework was introduced.
 
+### Running-job progress (TASK-032)
+
+`fetch_up_to_date(...)` accepts an optional `on_progress` callback emitted at acquisition-window
+boundaries. The `FetchProgress` value contains phase, message, window start/end, and completed
+window count plus discovery-offset advancement when bounded continuation moves forward. The
+callback is best-effort: an exception while publishing progress never fails the fetch. The queue
+worker wraps the callback in a closure that acquires the existing condition lock, updates
+`FetchJob.progress`, `FetchJob.latest_progress_message`, `FetchJob.last_progress_at`, and
+`FetchJob.updated_at`, and emits a coalesced `progress` event every third update. The browser
+renders the running job's latest progress message, current window, and last-progress timestamp
+through the existing 1.5-second polling path.
+
+### Stale-running protection (liveness hardening)
+
+The queue monitors each running fetch and marks it failed if no meaningful progress update arrives
+for 180 seconds while cancellation is not already requested. The queue then requests cooperative
+cancellation and emits a terminal failure with an actionable operator message. Terminalization is
+single-authority: a timeout, cancellation, exception, or normal completion can produce only one
+terminal state for the job, and `_running_job_id` is always cleared in a `finally` path so no
+stale `running` item remains visible after worker exit.
+
+### Durable bounded terminal history (TASK-032)
+
+Two SQLite tables (`mailing_list_fetch_history`, `mailing_list_fetch_events`) store terminal job
+summaries and bounded queue events for operator scrollback. Terminal history is bounded to 50
+entries and event scrollback to 200 entries. Pruning is deterministic: oldest eligible entries are
+removed first. Active process-local jobs are never pruned. Terminal history and selected events
+survive restart; queued and running work do not. The snapshot response includes `history`,
+`history_limit`, `durable_events`, and `durable_event_limit` fields. The browser renders terminal
+history newest-first with timestamps and state badges. See ADR 0024 for the full contract.
+
 ## REST API
 
 All enqueue and cancellation responses use HTTP 202 and return before acquisition completes.
@@ -167,11 +198,13 @@ compatible. The generic Streams API and `/streams` page were not changed.
 | --- | --- | --- |
 | Summary/editor browser workflow | Daily operation, progressive configuration, result inspection | Complete |
 | Catch-up orchestration | Coverage derivation, overlap, bounded multi-window execution | Complete |
-| Process-local fetch queue | FIFO, duplicate suppression, cancellation, bounded status | Complete |
+| Process-local fetch queue | FIFO, duplicate suppression, cancellation, progress, timestamps | Complete |
+| Durable terminal history | Bounded SQLite terminal-job and event scrollback | Complete |
 | Source, stream revision, and acquisition services | Governed configuration and bounded execution | Complete and preserved |
 | Artifact and provenance repositories | Immutable evidence and inspectability | Complete and preserved |
 | Browser status refresh | 1.5-second process-local polling | Complete |
 | Durable scheduling and queue recovery | Cross-restart background work | Not Started (out of scope) |
+| Durable terminal history | Bounded SQLite terminal-job and event scrollback | Complete (TASK-032) |
 
 The architectural change is a minimal operations orchestration layer. It adds neither a durable
 cursor nor a scheduling authority. Important limitations are cooperative (not preemptive) network

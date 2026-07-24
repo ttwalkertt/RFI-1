@@ -342,3 +342,22 @@ class DiscussionProjection:
     summary: DiscussionSummary
     messages: tuple[MessageSummary, ...]
     result_truncated: bool
+
+
+@dataclass(frozen=True)
+class FetchProgress:
+    """Operator-relevant progress snapshot from a running mailing-list fetch.
+
+    Emitted at acquisition-window boundaries by the workflow's progress
+    callback.  Contains only operator-relevant fields — no internal state,
+    no per-message detail.  The callback is best-effort: an exception while
+    publishing progress must never fail the fetch.
+    """
+
+    phase: str
+    message: str
+    window_start: str | None = None
+    window_end: str | None = None
+    windows_completed: int = 0
+    discovery_offset: int | None = None
+    occurred_at: str | None = None
