@@ -643,6 +643,7 @@ class MailingListCase(unittest.TestCase):
             "mailing_list_discussion_members", "mailing_list_discussions",
             "mailing_list_relationships", "mailing_list_messages",
             "mailing_list_run_items", "mailing_list_runs", "mailing_list_sources",
+            "mailing_list_fetch_history", "mailing_list_fetch_events",
         ]
         with RepositoryDatabase.open(self.state).connect() as connection:
             connection.execute("PRAGMA foreign_keys=OFF")
@@ -650,7 +651,7 @@ class MailingListCase(unittest.TestCase):
                 connection.execute(f"DROP TABLE {table}")
             connection.execute("UPDATE schema_metadata SET schema_version=1")
         database = RepositoryDatabase.open(self.state)
-        self.assertEqual(database.validate()["schema_version"], 5)
+        self.assertEqual(database.validate()["schema_version"], 6)
         with database.connect(read_only=True) as connection:
             names = {row[0] for row in connection.execute(
                 "SELECT name FROM sqlite_schema WHERE type='table'"

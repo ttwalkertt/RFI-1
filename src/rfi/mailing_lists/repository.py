@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -645,6 +646,120 @@ class MailingListRepository:
                 "derived_state_absent",
                 "mailing-list query state is absent; run the offline rebuild command",
             )
+
+    # ---- Process Local Fetch Queue durable operator history ----
+
+    FETCH_HISTORY_LIMIT = 50
+    FETCH_EVENT_LIMIT = 200
+
+    def record_fetch_history(
+        self, *, stream_id: str, stream_name: str, state: str, message: str,
+        queued_at: str | None, started_at: str | None, finished_at: str,
+        windows_completed: int = 0, result: dict[str, Any] | None = None,
+    ) -> None:
+        """Persist one terminal fetch-job summary for operator scrollback."""
+        payload = canonical_json(result) if result is not None else None
+        try:
+            with self._database.transaction() as connection:
+                connection.execute(
+                    "INSERT INTO mailing_list_fetch_history "
+                    "(stream_id, stream_name, state, message, queued_at, started_at, "
+                    "finished_at, windows_completed, result_json) "
+                    "VALUES (?,?,?,?,?,?,?,?,?)",
+                    (stream_id, stream_name, state, message, queued_at, started_at,
+                     finished_at, windows_completed, payload),
+                )
+                self._prune_fetch_history(connection)
+        except StorageError as error:
+            raise MailingListError("repository_failure", str(error)) from error
+
+    def record_fetch_event(
+        self, *, sequence: int, occurred_at: str, event: str,
+        stream_id: str | None, stream_name: str | None, message: str,
+    ) -> None:
+        """Persist one queue event for operator scrollback."""
+        try:
+            with self._database.transaction() as connection:
+                connection.execute(
+                    "INSERT INTO mailing_list_fetch_events "
+                    "(sequence, occurred_at, event, stream_id, stream_name, message) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (sequence, occurred_at, event, stream_id, stream_name, message),
+                )
+                self._prune_fetch_events(connection)
+        except StorageError as error:
+            raise MailingListError("repository_failure", str(error)) from error
+
+    def fetch_history(self) -> tuple[dict[str, Any], ...]:
+        """Return terminal fetch summaries newest-first, bounded by retention."""
+        try:
+            with self._database.connect(read_only=True) as connection:
+                rows = connection.execute(
+                    "SELECT stream_id, stream_name, state, message, queued_at, "
+                    "started_at, finished_at, windows_completed, result_json "
+                    "FROM mailing_list_fetch_history "
+                    "ORDER BY finished_at DESC, history_id DESC "
+                    f"LIMIT {self.FETCH_HISTORY_LIMIT}"
+                ).fetchall()
+        except StorageError as error:
+            raise MailingListError("repository_failure", str(error)) from error
+        return tuple(self._fetch_history_row(row) for row in rows)
+
+    def fetch_events(self) -> tuple[dict[str, Any], ...]:
+        """Return bounded queue events newest-first for operator scrollback."""
+        try:
+            with self._database.connect(read_only=True) as connection:
+                rows = connection.execute(
+                    "SELECT sequence, occurred_at, event, stream_id, stream_name, message "
+                    "FROM mailing_list_fetch_events "
+                    "ORDER BY sequence DESC, event_id DESC "
+                    f"LIMIT {self.FETCH_EVENT_LIMIT}"
+                ).fetchall()
+        except StorageError as error:
+            raise MailingListError("repository_failure", str(error)) from error
+        return tuple(self._fetch_event_row(row) for row in rows)
+
+    @staticmethod
+    def _fetch_history_row(row: sqlite3.Row) -> dict[str, Any]:
+        result_json = row["result_json"]
+        return {
+            "stream_id": row["stream_id"],
+            "stream_name": row["stream_name"],
+            "state": row["state"],
+            "message": row["message"],
+            "queued_at": row["queued_at"],
+            "started_at": row["started_at"],
+            "finished_at": row["finished_at"],
+            "windows_completed": row["windows_completed"],
+            "result": json.loads(result_json) if result_json else None,
+        }
+
+    @staticmethod
+    def _fetch_event_row(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "sequence": row["sequence"],
+            "occurred_at": row["occurred_at"],
+            "event": row["event"],
+            "stream_id": row["stream_id"],
+            "stream_name": row["stream_name"],
+            "message": row["message"],
+        }
+
+    def _prune_fetch_history(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            "DELETE FROM mailing_list_fetch_history WHERE history_id NOT IN ("
+            "  SELECT history_id FROM mailing_list_fetch_history "
+            f"  ORDER BY finished_at DESC, history_id DESC LIMIT {self.FETCH_HISTORY_LIMIT}"
+            ")"
+        )
+
+    def _prune_fetch_events(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            "DELETE FROM mailing_list_fetch_events WHERE event_id NOT IN ("
+            "  SELECT event_id FROM mailing_list_fetch_events "
+            f"  ORDER BY sequence DESC, event_id DESC LIMIT {self.FETCH_EVENT_LIMIT}"
+            ")"
+        )
 
     def validate_connectivity(self) -> dict[str, int | str]:
         """Prove every connected/truncated member has one complete acyclic path to root."""

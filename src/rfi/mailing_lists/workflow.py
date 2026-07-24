@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any, Callable
 
 from rfi.mailing_lists.contracts import (
+    FetchProgress,
     AcquisitionManifest,
     AcquisitionMessage,
     AcquisitionRunStatus,
@@ -518,9 +519,17 @@ class LinuxMailingListWorkflowService:
         return self._effective_last_fetch(self.stream_service.detail(stream_id).draft)
 
     def fetch_up_to_date(
-        self, stream_id: str, *, cancelled: Callable[[], bool] | None = None
+        self, stream_id: str, *, cancelled: Callable[[], bool] | None = None,
+        on_progress: Callable[[FetchProgress], None] | None = None,
     ) -> FetchUpToDateResult:
         """Acquire deterministic overlapping bounded windows through today."""
+        def publish(progress: FetchProgress) -> None:
+            if on_progress is None:
+                return
+            try:
+                on_progress(progress)
+            except Exception:
+                pass
         revision = self.stream_service.detail(stream_id)
         if revision.draft.input_kind != "external" or revision.draft.schema_id != "mail.message":
             raise MailingListError(
@@ -553,6 +562,13 @@ class LinuxMailingListWorkflowService:
                     "acquisition_cancelled", "mailing-list catch-up was cancelled"
                 )
             window_end = min(cursor + timedelta(days=31), through)
+            publish(FetchProgress(
+                phase="acquiring",
+                message=f"Acquiring window {cursor.isoformat()} through {window_end.isoformat()}.",
+                window_start=cursor.isoformat(),
+                window_end=window_end.isoformat(),
+                windows_completed=completed,
+            ))
             window = replace(
                 criteria, date_from=cursor.isoformat(), date_through=window_end.isoformat()
             )
@@ -589,6 +605,16 @@ class LinuxMailingListWorkflowService:
                         run_ids.append(str(latest["run_id"]))
                     if error.code == "no_seed_matches" and offset == 0:
                         completed += 1
+                        publish(FetchProgress(
+                            phase="window_complete",
+                            message=(
+                                f"Window {cursor.isoformat()} through "
+                                f"{window_end.isoformat()} had no seed matches."
+                            ),
+                            window_start=cursor.isoformat(),
+                            window_end=window_end.isoformat(),
+                            windows_completed=completed,
+                        ))
                         cursor = window_end + timedelta(days=1)
                         break
                     raise
@@ -634,6 +660,16 @@ class LinuxMailingListWorkflowService:
                     offset += len(manifest.seed_ids)
                     continue
                 completed += 1
+                publish(FetchProgress(
+                    phase="window_complete",
+                    message=(
+                        f"Window {cursor.isoformat()} through "
+                        f"{window_end.isoformat()} completed."
+                    ),
+                    window_start=cursor.isoformat(),
+                    window_end=window_end.isoformat(),
+                    windows_completed=completed,
+                ))
                 cursor = window_end + timedelta(days=1)
                 break
             if status not in {"completed", "continuation_pending"}:

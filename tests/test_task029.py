@@ -311,7 +311,7 @@ class FakeWorkflow:
     def saved(self):
         return self.items
 
-    def fetch_up_to_date(self, stream_id: str, *, cancelled):
+    def fetch_up_to_date(self, stream_id: str, *, cancelled, on_progress=None):
         self.calls.append(stream_id)
         self.started.set()
         if self.blocking:
