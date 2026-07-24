@@ -47,6 +47,8 @@ class FetchJob:
     message: str = ""
     result: dict[str, Any] | None = None
     progress: dict[str, Any] | None = None
+    latest_progress_message: str | None = None
+    last_progress_at: str | None = None
     updated_at: str | None = None
 
 
@@ -64,6 +66,8 @@ class MailingListFetchQueue:
     """One-worker FIFO with duplicate suppression and cooperative cancellation."""
 
     PROGRESS_EVENT_MIN_INTERVAL = 3
+    STALE_PROGRESS_SECONDS = 180
+    WORKER_MONITOR_SECONDS = 0.25
 
     def __init__(
         self,
@@ -71,16 +75,22 @@ class MailingListFetchQueue:
         *,
         history: FetchHistoryStore | None = None,
         clock: Callable[[], str] | None = None,
+        now: Callable[[], datetime] | None = None,
         identifiers: Callable[[], str] | None = None,
         event_limit: int = 200,
         job_limit: int = 100,
+        stale_progress_seconds: int = STALE_PROGRESS_SECONDS,
+        worker_monitor_seconds: float = WORKER_MONITOR_SECONDS,
     ) -> None:
         self.workflow = workflow
         self.history = history
         self.clock = clock or (lambda: datetime.now(UTC).isoformat())
+        self.now = now or (lambda: datetime.now(UTC))
         self.identifiers = identifiers or (lambda: f"fetch-{uuid.uuid4().hex}")
         self.event_limit = event_limit
         self.job_limit = job_limit
+        self.stale_progress_seconds = stale_progress_seconds
+        self.worker_monitor_seconds = worker_monitor_seconds
         self._condition = threading.Condition()
         self._pending: deque[str] = deque()
         self._jobs: dict[str, FetchJob] = {}
@@ -89,7 +99,7 @@ class MailingListFetchQueue:
         self._sequence = 0
         self._running_job_id: str | None = None
         self._running_cancel = threading.Event()
-        self._last_progress_sequence: int = 0
+        self._progress_updates_since_event = 0
         self._closing = False
         self._worker = threading.Thread(
             target=self._work, name="mailing-list-fetch-queue", daemon=True
@@ -158,11 +168,15 @@ class MailingListFetchQueue:
             cancellation_requested = self._running_job_id is not None
             if cancellation_requested:
                 running = self._jobs[self._running_job_id]
-                self._running_cancel.set()
-                self._event(
-                    "cancellation_requested", running.stream_id, running.stream_name,
-                    "Cancellation will take effect at the next safe acquisition checkpoint.",
-                )
+                if running.state == "running":
+                    self._running_cancel.set()
+                    running.updated_at = self.clock()
+                    self._event(
+                        "cancellation_requested", running.stream_id, running.stream_name,
+                        "Cancellation will take effect at the next safe acquisition checkpoint.",
+                    )
+                else:
+                    cancellation_requested = False
             self._condition.notify_all()
             return {
                 "abandoned": abandoned,
@@ -175,10 +189,11 @@ class MailingListFetchQueue:
                 asdict(self._jobs[job_id]) for job_id in self._pending
                 if self._jobs[job_id].state == "queued"
             ]
-            running = (
-                asdict(self._jobs[self._running_job_id])
-                if self._running_job_id is not None else None
-            )
+            running = None
+            if self._running_job_id is not None:
+                candidate = self._jobs[self._running_job_id]
+                if candidate.state == "running":
+                    running = asdict(candidate)
             recent = [
                 asdict(self._jobs[job_id]) for job_id in reversed(self._job_order)
                 if self._jobs[job_id].state not in {"queued", "running"}
@@ -225,7 +240,7 @@ class MailingListFetchQueue:
                     continue
                 self._running_job_id = job_id
                 self._running_cancel = threading.Event()
-                self._last_progress_sequence = 0
+                self._progress_updates_since_event = 0
                 job.state = "running"
                 job.started_at = self.clock()
                 job.updated_at = job.started_at
@@ -236,56 +251,134 @@ class MailingListFetchQueue:
                 with self._condition:
                     job.progress = asdict(progress)
                     job.progress["occurred_at"] = self.clock()
-                    job.updated_at = job.progress["occurred_at"]
+                    job.last_progress_at = job.progress["occurred_at"]
+                    job.updated_at = job.last_progress_at
+                    job.latest_progress_message = progress.message
                     job.message = progress.message
                     self._maybe_progress_event(job)
 
+            result_box: dict[str, Any] = {}
+            error_box: dict[str, BaseException] = {}
+            done = threading.Event()
+
+            def execute_fetch() -> None:
+                try:
+                    result_box["result"] = self.workflow.fetch_up_to_date(
+                        job.stream_id,
+                        cancelled=self._running_cancel.is_set,
+                        on_progress=on_progress,
+                    )
+                except BaseException as error:
+                    error_box["error"] = error
+                finally:
+                    done.set()
+
+            fetch_thread = threading.Thread(
+                target=execute_fetch,
+                name=f"mailing-list-fetch-{job.job_id}",
+                daemon=True,
+            )
+            fetch_thread.start()
+
+            terminalized = False
+
+            def terminalize(state: str, event: str, message: str) -> None:
+                nonlocal terminalized
+                if terminalized:
+                    return
+                terminalized = True
+                job.state = state
+                job.finished_at = self.clock()
+                job.updated_at = job.finished_at
+                job.message = message
+                self._event(event, job.stream_id, job.stream_name, job.message)
+                self._persist_history(job)
+
             try:
-                result = self.workflow.fetch_up_to_date(
-                    job.stream_id, cancelled=self._running_cancel.is_set,
-                    on_progress=on_progress,
-                )
-            except MailingListError as error:
+                while not done.wait(self.worker_monitor_seconds):
+                    with self._condition:
+                        if terminalized or job.state != "running":
+                            continue
+                        if self._running_cancel.is_set():
+                            continue
+                        stale_seconds = self._stale_seconds(job)
+                        if stale_seconds is None or stale_seconds < self.stale_progress_seconds:
+                            continue
+                        self._running_cancel.set()
+                        terminalize(
+                            "failed",
+                            "failed",
+                            (
+                                "Fetch stalled without meaningful progress for "
+                                f"{self.stale_progress_seconds} seconds; "
+                                "cancellation was requested "
+                                "at the next safe checkpoint."
+                            ),
+                        )
+
+                error = error_box.get("error")
+                result = result_box.get("result")
                 with self._condition:
-                    if error.code == "acquisition_cancelled":
-                        job.state = "cancelled"
-                        job.message = "Running fetch was cancelled at a safe checkpoint."
-                        event = "cancelled"
-                    else:
-                        job.state = "failed"
-                        job.message = str(error)
-                        event = "failed"
-                    job.finished_at = self.clock()
-                    self._event(event, job.stream_id, job.stream_name, job.message)
-                    self._persist_history(job)
-            except Exception:
-                with self._condition:
-                    job.state = "failed"
-                    job.finished_at = self.clock()
-                    job.message = "Fetch failed unexpectedly; inspect server diagnostics."
-                    self._event("failed", job.stream_id, job.stream_name, job.message)
-                    self._persist_history(job)
-            else:
-                with self._condition:
-                    job.state = "completed"
-                    job.finished_at = self.clock()
-                    job.message = result.message
-                    job.result = asdict(result)
-                    self._event("completed", job.stream_id, job.stream_name, job.message)
-                    self._persist_history(job)
+                    if not terminalized:
+                        if isinstance(error, MailingListError):
+                            if error.code == "acquisition_cancelled":
+                                terminalize(
+                                    "cancelled",
+                                    "cancelled",
+                                    "Running fetch was cancelled at a safe checkpoint.",
+                                )
+                            else:
+                                terminalize("failed", "failed", str(error))
+                        elif error is not None:
+                            terminalize(
+                                "failed",
+                                "failed",
+                                "Fetch failed unexpectedly; inspect server diagnostics.",
+                            )
+                        else:
+                            if result is None:
+                                terminalize(
+                                    "failed",
+                                    "failed",
+                                    "Fetch worker returned no result; inspect server diagnostics.",
+                                )
+                            else:
+                                job.result = asdict(result)
+                                terminalize("completed", "completed", result.message)
             finally:
                 with self._condition:
+                    if job.state == "running":
+                        terminalize(
+                            "failed",
+                            "failed",
+                            "Fetch worker exited without a terminal state; marked failed.",
+                        )
                     self._running_job_id = None
                     self._condition.notify_all()
 
     def _maybe_progress_event(self, job: FetchJob) -> None:
-        current = self._sequence
-        if current - self._last_progress_sequence < self.PROGRESS_EVENT_MIN_INTERVAL:
+        self._progress_updates_since_event += 1
+        if self._progress_updates_since_event < self.PROGRESS_EVENT_MIN_INTERVAL:
             return
-        self._last_progress_sequence = current
+        self._progress_updates_since_event = 0
         self._event(
             "progress", job.stream_id, job.stream_name, job.message,
         )
+
+    def _stale_seconds(self, job: FetchJob) -> float | None:
+        candidate = job.last_progress_at or job.started_at
+        if candidate is None:
+            return None
+        try:
+            timestamp = datetime.fromisoformat(candidate)
+        except ValueError:
+            return None
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=UTC)
+        now = self.now()
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=UTC)
+        return (now - timestamp).total_seconds()
 
     def _event(
         self, event: str, stream_id: str | None, stream_name: str | None, message: str

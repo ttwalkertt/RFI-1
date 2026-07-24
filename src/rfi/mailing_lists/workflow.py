@@ -624,6 +624,18 @@ class LinuxMailingListWorkflowService:
                         "mailing-list catch-up was cancelled after preserving completed evidence",
                     )
                 run_ids.append(manifest.run_id)
+                next_offset = offset + len(manifest.seed_ids)
+                publish(FetchProgress(
+                    phase="offset_advanced",
+                    message=(
+                        f"Window {cursor.isoformat()} through {window_end.isoformat()} "
+                        f"advanced discovery offset to {next_offset}."
+                    ),
+                    window_start=cursor.isoformat(),
+                    window_end=window_end.isoformat(),
+                    windows_completed=completed,
+                    discovery_offset=next_offset,
+                ))
                 if (
                     manifest.relationship_status
                     == RelationshipAcquisitionStatus.CONTINUATION_PENDING

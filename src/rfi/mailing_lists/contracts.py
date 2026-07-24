@@ -359,4 +359,5 @@ class FetchProgress:
     window_start: str | None = None
     window_end: str | None = None
     windows_completed: int = 0
+    discovery_offset: int | None = None
     occurred_at: str | None = None

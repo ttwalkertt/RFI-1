@@ -137,12 +137,22 @@ websocket, daemon, scheduler, or general job framework was introduced.
 
 `fetch_up_to_date(...)` accepts an optional `on_progress` callback emitted at acquisition-window
 boundaries. The `FetchProgress` value contains phase, message, window start/end, and completed
-window count. The callback is best-effort: an exception while publishing progress never fails the
-fetch. The queue worker wraps the callback in a closure that acquires the existing condition lock,
-updates `FetchJob.progress`, `FetchJob.message`, and `FetchJob.updated_at`, and emits a coalesced
-`progress` event. Progress events are rate-limited to a minimum of 3 sequence gaps to prevent
-flooding. The browser renders the running job's progress message, current window, and
-latest-update timestamp through the existing 1.5-second polling path.
+window count plus discovery-offset advancement when bounded continuation moves forward. The
+callback is best-effort: an exception while publishing progress never fails the fetch. The queue
+worker wraps the callback in a closure that acquires the existing condition lock, updates
+`FetchJob.progress`, `FetchJob.latest_progress_message`, `FetchJob.last_progress_at`, and
+`FetchJob.updated_at`, and emits a coalesced `progress` event every third update. The browser
+renders the running job's latest progress message, current window, and last-progress timestamp
+through the existing 1.5-second polling path.
+
+### Stale-running protection (liveness hardening)
+
+The queue monitors each running fetch and marks it failed if no meaningful progress update arrives
+for 180 seconds while cancellation is not already requested. The queue then requests cooperative
+cancellation and emits a terminal failure with an actionable operator message. Terminalization is
+single-authority: a timeout, cancellation, exception, or normal completion can produce only one
+terminal state for the job, and `_running_job_id` is always cleared in a `finally` path so no
+stale `running` item remains visible after worker exit.
 
 ### Durable bounded terminal history (TASK-032)
 

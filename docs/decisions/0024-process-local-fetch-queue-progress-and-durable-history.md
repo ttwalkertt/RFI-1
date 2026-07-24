@@ -27,13 +27,15 @@ without changing the execution model:
 
 1. **Running-job progress**: `LinuxMailingListWorkflowService.fetch_up_to_date`
    accepts an optional `on_progress: Callable[[FetchProgress], None]` callback
-   emitted at acquisition-window boundaries (the existing ~31-day window).
+   emitted at acquisition-window boundaries (the existing ~31-day window) and
+   at bounded discovery-offset advancement during continuation.
    The callback is best-effort: an exception while publishing progress never
    fails the fetch. The `FetchProgress` dataclass contains only
    operator-relevant fields: phase, message, window_start, window_end,
    windows_completed, and occurred_at.
 
-2. **Timestamps**: `FetchJob` gains `updated_at` and `progress` fields.
+2. **Timestamps**: `FetchJob` gains `updated_at`, `last_progress_at`,
+   `latest_progress_message`, and `progress` fields.
    `QueueEvent` already carries `occurred_at`. All timestamps are UTC ISO-8601
    strings produced by the queue's clock. The browser renders them with
    `toLocaleString()` / `toLocaleTimeString()`.
@@ -44,7 +46,15 @@ without changing the execution model:
    bounded to 50 terminal entries and 200 events. Pruning is deterministic:
    oldest eligible entries are removed first. Active process-local jobs are
    never pruned by history retention. Progress events are coalesced with a
-   minimum interval of 3 sequence gaps to prevent flooding.
+   every third progress update to prevent flooding.
+
+4. **Stale-running protection**: the queue monitors each running fetch and
+   marks it failed if no meaningful progress update arrives for 180 seconds
+   while cancellation is not already requested. The queue requests cooperative
+   cancellation at the next safe checkpoint and emits a single terminal
+   failure message. Terminalization is single-authority so timeout,
+   cancellation, exception, and completion cannot produce competing terminal
+   states for one job.
 
 ## Progress callback contract
 
