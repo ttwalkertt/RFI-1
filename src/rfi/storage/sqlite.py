@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -227,6 +227,28 @@ CREATE TABLE mailing_list_runs (
     error_code TEXT,
     retryable INTEGER NOT NULL DEFAULT 0 CHECK (retryable IN (0,1))
 ) STRICT;
+CREATE TABLE IF NOT EXISTS canonical_mailing_list_messages (
+    canonical_message_id TEXT PRIMARY KEY,
+    normalized_message_id TEXT NOT NULL UNIQUE,
+    artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+    document_id TEXT NOT NULL REFERENCES documents(document_id),
+    created_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL
+) STRICT;
+CREATE TABLE IF NOT EXISTS mailing_list_message_conflicts (
+    conflict_id TEXT PRIMARY KEY,
+    normalized_message_id TEXT NOT NULL,
+    canonical_message_id TEXT REFERENCES canonical_mailing_list_messages(canonical_message_id),
+    canonical_artifact_id TEXT,
+    candidate_artifact_id TEXT NOT NULL,
+    candidate_document_id TEXT NOT NULL,
+    source_id TEXT REFERENCES mailing_list_sources(source_id),
+    run_id TEXT,
+    detected_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS mailing_list_message_conflicts_identity
+ON mailing_list_message_conflicts(normalized_message_id);
 CREATE TABLE mailing_list_run_items (
     run_id TEXT NOT NULL REFERENCES mailing_list_runs(run_id),
     source_id TEXT NOT NULL REFERENCES mailing_list_sources(source_id),
@@ -239,6 +261,12 @@ CREATE TABLE mailing_list_run_items (
     is_seed INTEGER NOT NULL CHECK (is_seed IN (0,1)),
     connectivity_state TEXT NOT NULL CHECK (connectivity_state IN
       ('connected','truncated','incomplete','quarantined')),
+    canonical_message_id TEXT REFERENCES canonical_mailing_list_messages(canonical_message_id),
+    observation_type TEXT NOT NULL CHECK (observation_type IN
+      ('fetched','reused','unavailable')),
+    content_fetched INTEGER NOT NULL CHECK (content_fetched IN (0,1)),
+    artifact_created INTEGER NOT NULL CHECK (artifact_created IN (0,1)),
+    canonical_created INTEGER NOT NULL CHECK (canonical_created IN (0,1)),
     PRIMARY KEY (run_id, external_message_id)
 ) STRICT;
 CREATE TABLE mailing_list_messages (
@@ -477,6 +505,113 @@ ALTER TABLE mailing_list_runs ADD COLUMN retryable INTEGER NOT NULL DEFAULT 0
   CHECK (retryable IN (0,1));
 """
 
+_MIGRATE_V6_TO_V7 = """
+CREATE TABLE canonical_mailing_list_messages (
+    canonical_message_id TEXT PRIMARY KEY,
+    normalized_message_id TEXT NOT NULL UNIQUE,
+    artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+    document_id TEXT NOT NULL REFERENCES documents(document_id),
+    created_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL
+) STRICT;
+CREATE TABLE mailing_list_message_conflicts (
+    conflict_id TEXT PRIMARY KEY,
+    normalized_message_id TEXT NOT NULL,
+    canonical_message_id TEXT REFERENCES canonical_mailing_list_messages(canonical_message_id),
+    canonical_artifact_id TEXT,
+    candidate_artifact_id TEXT NOT NULL,
+    candidate_document_id TEXT NOT NULL,
+    source_id TEXT REFERENCES mailing_list_sources(source_id),
+    run_id TEXT,
+    detected_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL
+) STRICT;
+CREATE INDEX mailing_list_message_conflicts_identity
+ON mailing_list_message_conflicts(normalized_message_id);
+ALTER TABLE mailing_list_run_items ADD COLUMN canonical_message_id TEXT
+  REFERENCES canonical_mailing_list_messages(canonical_message_id);
+ALTER TABLE mailing_list_run_items ADD COLUMN observation_type TEXT NOT NULL DEFAULT 'reused'
+  CHECK (observation_type IN ('fetched','reused','unavailable'));
+ALTER TABLE mailing_list_run_items ADD COLUMN content_fetched INTEGER NOT NULL DEFAULT 0
+  CHECK (content_fetched IN (0,1));
+ALTER TABLE mailing_list_run_items ADD COLUMN artifact_created INTEGER NOT NULL DEFAULT 0
+  CHECK (artifact_created IN (0,1));
+ALTER TABLE mailing_list_run_items ADD COLUMN canonical_created INTEGER NOT NULL DEFAULT 0
+  CHECK (canonical_created IN (0,1));
+"""
+
+
+def _canonical_message_id(normalized_message_id: str) -> str:
+    import hashlib
+
+    return "canonical-mail-" + hashlib.sha256(normalized_message_id.encode()).hexdigest()[:32]
+
+
+def _backfill_task035(connection: sqlite3.Connection) -> None:
+    """Add canonical mappings only for unambiguous retained RFC822 history."""
+    from rfi.mailing_lists.parser import normalize_message_id
+
+    rows = connection.execute(
+        "SELECT i.run_id,i.source_id,i.external_message_id,i.artifact_id,i.document_id,"
+        "a.media_type,r.requested_at FROM mailing_list_run_items i "
+        "JOIN artifacts a ON a.artifact_id=i.artifact_id "
+        "JOIN mailing_list_runs r ON r.run_id=i.run_id "
+        "ORDER BY r.requested_at,i.run_id,i.source_id,i.external_message_id"
+    ).fetchall()
+    grouped: dict[str, list[sqlite3.Row]] = {}
+    for row in rows:
+        normalized = normalize_message_id(str(row[2]))
+        if str(row[5]) != "message/rfc822" or normalized is None:
+            connection.execute(
+                "UPDATE mailing_list_run_items SET observation_type='unavailable' "
+                "WHERE run_id=? AND external_message_id=?",
+                (str(row[0]), str(row[2])),
+            )
+            continue
+        grouped.setdefault(normalized, []).append(row)
+    for normalized, candidates in grouped.items():
+        artifacts = {str(row[3]) for row in candidates}
+        canonical_id = _canonical_message_id(normalized)
+        if len(artifacts) != 1:
+            for row in candidates:
+                payload = canonical_json({
+                    "reason": "historical_message_id_byte_conflict",
+                    "normalized_message_id": normalized,
+                    "candidate_artifact_id": str(row[3]),
+                    "candidate_document_id": str(row[4]),
+                    "source_id": str(row[1]),
+                    "run_id": str(row[0]),
+                })
+                import hashlib
+                conflict_id = "mail-conflict-" + hashlib.sha256(payload.encode()).hexdigest()[:32]
+                connection.execute(
+                    "INSERT OR IGNORE INTO mailing_list_message_conflicts VALUES "
+                    "(?,?,?,?,?,?,?,?,?,?)",
+                    (conflict_id, normalized, None, None, str(row[3]), str(row[4]),
+                     str(row[1]), str(row[0]), utc_now(), payload),
+                )
+            continue
+        chosen = candidates[0]
+        payload = canonical_json({
+            "canonical_message_id": canonical_id,
+            "normalized_message_id": normalized,
+            "artifact_id": str(chosen[3]),
+            "document_id": str(chosen[4]),
+            "backfilled": True,
+        })
+        connection.execute(
+            "INSERT INTO canonical_mailing_list_messages VALUES (?,?,?,?,?,?)",
+            (canonical_id, normalized, str(chosen[3]), str(chosen[4]),
+             str(chosen[6]), payload),
+        )
+        connection.execute(
+            "UPDATE mailing_list_run_items SET canonical_message_id=? "
+            "WHERE external_message_id IN (%s) AND artifact_id=?" % ",".join(
+                "?" for _ in {str(row[2]) for row in candidates}
+            ),
+            (canonical_id, *sorted({str(row[2]) for row in candidates}), str(chosen[3])),
+        )
+
 _V4_LORE_TRANSPORT_DEFAULT = {
     "user_agent": "RFI-1 bounded-mailing-list/2",
     "minimum_request_interval_seconds": 1.0,
@@ -657,7 +792,7 @@ class RepositoryDatabase:
                 version = int(row[0])
                 if version == SCHEMA_VERSION:
                     return False
-                if version not in {1, 2, 3, 4, 5}:
+                if version not in {1, 2, 3, 4, 5, 6}:
                     raise StorageError(
                         "incompatible_schema",
                         f"repository schema version {version} is unsupported; "
@@ -677,6 +812,22 @@ class RepositoryDatabase:
                     scripts.append(_MIGRATE_V3_TO_V4)
                 if version <= 5:
                     scripts.append(_MIGRATE_V5_TO_V6)
+                existing_tables = {
+                    str(item[0]) for item in connection.execute(
+                        "SELECT name FROM sqlite_schema WHERE type='table'"
+                    )
+                }
+                run_item_columns = {
+                    str(item[1]) for item in connection.execute(
+                        "PRAGMA table_info(mailing_list_run_items)"
+                    )
+                }
+                if (
+                    version != 1
+                    and version <= 6
+                    and "canonical_mailing_list_messages" not in existing_tables
+                ):
+                    scripts.append(_MIGRATE_V6_TO_V7)
                 for script in scripts:
                     for statement in script.split(";"):
                         if statement.strip():
@@ -695,6 +846,8 @@ class RepositoryDatabase:
                         )
                 if version <= 4 and _migrate_v4_task028_legacy_linux_block_source(connection):
                     self.advance_revision(connection)
+                if version <= 6 and "canonical_message_id" not in run_item_columns:
+                    _backfill_task035(connection)
                 connection.execute(
                     "UPDATE schema_metadata SET schema_version = ?, applied_at = ? "
                     "WHERE singleton = 1",
@@ -797,6 +950,11 @@ class RepositoryDatabase:
                     )
                 integrity = str(connection.execute("PRAGMA integrity_check").fetchone()[0])
                 foreign_keys = connection.execute("PRAGMA foreign_key_check").fetchall()
+                canonical_rows = connection.execute(
+                    "SELECT c.canonical_message_id,c.normalized_message_id,c.artifact_id,"
+                    "d.current_artifact_id FROM canonical_mailing_list_messages c "
+                    "JOIN documents d ON d.document_id=c.document_id"
+                ).fetchall()
                 tables = connection.execute(
                     "SELECT name, sql FROM sqlite_schema WHERE type = 'table' ORDER BY name"
                 ).fetchall()
@@ -814,6 +972,19 @@ class RepositoryDatabase:
             raise StorageError(
                 "foreign_key_failure", "repository database has invalid relationships"
             )
+        from rfi.mailing_lists.parser import normalize_message_id
+
+        for row in canonical_rows:
+            normalized = normalize_message_id(str(row[1]))
+            if (
+                normalized != str(row[1])
+                or str(row[0]) != _canonical_message_id(str(row[1]))
+                or str(row[2]) != str(row[3])
+            ):
+                raise StorageError(
+                    "canonical_message_failure",
+                    "canonical mailing-list message mapping is invalid",
+                )
         return {
             "schema_version": SCHEMA_VERSION,
             "integrity": "ok",

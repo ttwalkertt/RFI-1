@@ -28,9 +28,9 @@ from rfi.mailing_lists.contracts import (
     ParsedMessage,
     SelectionCriteria,
 )
-from rfi.mailing_lists.parser import parse_message, unavailable_ancestor
+from rfi.mailing_lists.parser import normalize_message_id, parse_message, unavailable_ancestor
 from rfi.storage import RepositoryDatabase, StorageError, state_root_for
-from rfi.storage.sqlite import canonical_json
+from rfi.storage.sqlite import canonical_json, utc_now
 
 
 def message_key(source_id: str, external_message_id: str) -> str:
@@ -41,6 +41,11 @@ def message_key(source_id: str, external_message_id: str) -> str:
 def document_id(source_id: str, external_message_id: str) -> str:
     digest = hashlib.sha256(f"{source_id}\0{external_message_id}".encode()).hexdigest()
     return f"mail.{digest[:32]}"
+
+
+def canonical_message_id(normalized_message_id: str) -> str:
+    digest = hashlib.sha256(normalized_message_id.encode()).hexdigest()
+    return f"canonical-mail-{digest[:32]}"
 
 
 class MailingListRepository:
@@ -182,6 +187,30 @@ class MailingListRepository:
                 ).fetchone()
         return str(row[0]) if row else None
 
+    def canonical_message(self, external_id: str) -> dict[str, str] | None:
+        """Resolve one valid normalized external identity globally."""
+        normalized = normalize_message_id(external_id)
+        if normalized is None:
+            return None
+        with self._database.connect(read_only=True) as connection:
+            blocked = connection.execute(
+                "SELECT 1 FROM mailing_list_message_conflicts "
+                "WHERE normalized_message_id=? AND canonical_message_id IS NULL LIMIT 1",
+                (normalized,),
+            ).fetchone()
+            if blocked is not None:
+                raise MailingListError(
+                    "message_id_conflict",
+                    "historical conflicting bytes prevent canonical Message-ID registration",
+                    details={"normalized_message_id": normalized},
+                )
+            row = connection.execute(
+                "SELECT canonical_message_id,normalized_message_id,artifact_id,document_id "
+                "FROM canonical_mailing_list_messages WHERE normalized_message_id=?",
+                (normalized,),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
     def retain_message(
         self,
         source: MailingListSource,
@@ -197,18 +226,54 @@ class MailingListRepository:
         """Retain exact bytes once; return message/document/artifact identity and creation."""
         digest = hashlib.sha256(raw).hexdigest()
         expected_artifact = f"artifact-{digest}"
-        existing = self.existing_artifact(source.source_id, storage_external_id)
-        if existing is not None:
-            if existing != expected_artifact:
+        canonical = self.canonical_message(storage_external_id)
+        if canonical is not None:
+            if canonical["artifact_id"] != expected_artifact:
+                self._record_message_conflict(
+                    storage_external_id, expected_artifact, document_id(
+                        source.source_id, storage_external_id
+                    ), source.source_id, run_id, canonical,
+                )
+                raise MailingListError(
+                    "message_id_conflict",
+                    "the same external Message-ID resolves to conflicting immutable bytes",
+                    details={
+                        "normalized_message_id": storage_external_id,
+                        "canonical_artifact_id": canonical["artifact_id"],
+                        "candidate_artifact_id": expected_artifact,
+                    },
+                )
+            return (
+                message_key(source.source_id, storage_external_id),
+                canonical["document_id"],
+                canonical["artifact_id"],
+                False,
+            )
+        with self._database.connect(read_only=True) as connection:
+            legacy = connection.execute(
+                "SELECT i.artifact_id,i.document_id FROM mailing_list_run_items i "
+                "JOIN artifacts a ON a.artifact_id=i.artifact_id "
+                "WHERE i.source_id=? AND i.external_message_id=? "
+                "AND a.media_type='message/rfc822' ORDER BY i.run_id LIMIT 1",
+                (source.source_id, storage_external_id),
+            ).fetchone()
+            if legacy is None:
+                legacy = connection.execute(
+                    "SELECT o.artifact_id,o.document_id FROM artifact_observations o "
+                    "JOIN artifacts a ON a.artifact_id=o.artifact_id "
+                    "WHERE o.source_id=? AND o.document_id=? AND a.media_type='message/rfc822' "
+                    "ORDER BY o.observed_at,o.observation_id LIMIT 1",
+                    (source.source_id, document_id(source.source_id, storage_external_id)),
+                ).fetchone()
+        if legacy is not None:
+            if str(legacy[0]) != expected_artifact:
                 raise MailingListError(
                     "message_id_conflict",
                     "the same external Message-ID resolves to conflicting immutable bytes",
                 )
             return (
                 message_key(source.source_id, storage_external_id),
-                document_id(source.source_id, storage_external_id),
-                existing,
-                False,
+                str(legacy[1]), str(legacy[0]), False,
             )
         doc_id = document_id(source.source_id, storage_external_id)
         candidate = CandidateDocument(
@@ -259,6 +324,34 @@ class MailingListRepository:
             receipt.artifact_created,
         )
 
+    def _record_message_conflict(
+        self, external_id: str, candidate_artifact_id: str, candidate_document_id: str,
+        source_id: str, run_id: str, canonical: dict[str, str],
+    ) -> None:
+        """Persist actionable fail-closed diagnostics without mutating canonical content."""
+        normalized = normalize_message_id(external_id)
+        assert normalized is not None
+        payload = canonical_json({
+            "reason": "message_id_byte_conflict",
+            "normalized_message_id": normalized,
+            "canonical_message_id": canonical["canonical_message_id"],
+            "canonical_artifact_id": canonical["artifact_id"],
+            "candidate_artifact_id": candidate_artifact_id,
+            "candidate_document_id": candidate_document_id,
+            "source_id": source_id,
+            "run_id": run_id,
+        })
+        conflict_id = "mail-conflict-" + hashlib.sha256(payload.encode()).hexdigest()[:32]
+        with self._database.transaction() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO mailing_list_message_conflicts VALUES "
+                "(?,?,?,?,?,?,?,?,?,?)",
+                (conflict_id, normalized, canonical["canonical_message_id"],
+                 canonical["artifact_id"], candidate_artifact_id,
+                 candidate_document_id, source_id, run_id, utc_now(), payload),
+            )
+            self._database.advance_revision(connection)
+
     def retain_unavailable_ancestor(
         self,
         source: MailingListSource,
@@ -278,7 +371,16 @@ class MailingListRepository:
         }).encode("utf-8")
         digest = hashlib.sha256(payload).hexdigest()
         expected_artifact = f"artifact-{digest}"
-        existing = self.existing_artifact(source.source_id, external_id)
+        with self._database.connect(read_only=True) as connection:
+            prior = connection.execute(
+                "SELECT i.artifact_id,i.document_id FROM mailing_list_run_items i "
+                "JOIN artifacts a ON a.artifact_id=i.artifact_id "
+                "WHERE i.source_id=? AND i.external_message_id=? "
+                "AND a.media_type='application/vnd.rfi.mailing-list-tombstone+json' "
+                "ORDER BY i.run_id LIMIT 1",
+                (source.source_id, external_id),
+            ).fetchone()
+        existing = str(prior[0]) if prior is not None else None
         if existing is not None:
             if existing != expected_artifact:
                 raise MailingListError(
@@ -287,7 +389,7 @@ class MailingListRepository:
                 )
             return (
                 message_key(source.source_id, external_id),
-                document_id(source.source_id, external_id),
+                str(prior[1]),
                 existing,
                 False,
             )
@@ -371,12 +473,63 @@ class MailingListRepository:
                     ),
                 )
                 for item in run_items:
+                    normalized = normalize_message_id(item["external_message_id"])
+                    canonical_id = None
+                    canonical_created = False
+                    if not item.get("is_tombstone", False) and normalized is not None:
+                        blocked = connection.execute(
+                            "SELECT 1 FROM mailing_list_message_conflicts "
+                            "WHERE normalized_message_id=? AND canonical_message_id IS NULL "
+                            "LIMIT 1", (normalized,),
+                        ).fetchone()
+                        if blocked is not None:
+                            raise MailingListError(
+                                "message_id_conflict",
+                                "historical conflict prevents canonical registration",
+                            )
+                        existing = connection.execute(
+                            "SELECT canonical_message_id,artifact_id,document_id "
+                            "FROM canonical_mailing_list_messages "
+                            "WHERE normalized_message_id=?", (normalized,),
+                        ).fetchone()
+                        if existing is None:
+                            canonical_id = canonical_message_id(normalized)
+                            payload = canonical_json({
+                                "canonical_message_id": canonical_id,
+                                "normalized_message_id": normalized,
+                                "artifact_id": item["artifact_id"],
+                                "document_id": item["document_id"],
+                            })
+                            connection.execute(
+                                "INSERT INTO canonical_mailing_list_messages "
+                                "VALUES (?,?,?,?,?,?)",
+                                (canonical_id, normalized, item["artifact_id"],
+                                 item["document_id"], manifest.requested_at, payload),
+                            )
+                            canonical_created = True
+                        else:
+                            canonical_id = str(existing[0])
+                            if str(existing[1]) != item["artifact_id"]:
+                                raise MailingListError(
+                                    "message_id_conflict",
+                                    "canonical Message-ID resolves to conflicting bytes",
+                                )
                     connection.execute(
-                        "INSERT INTO mailing_list_run_items VALUES (?,?,?,?,?,?,?,?)",
+                        "INSERT INTO mailing_list_run_items "
+                        "(run_id,source_id,external_message_id,artifact_id,document_id,"
+                        "inclusion_reason,is_seed,connectivity_state,canonical_message_id,"
+                        "observation_type,content_fetched,artifact_created,canonical_created) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (
                             manifest.run_id, manifest.source_id, item["external_message_id"],
                             item["artifact_id"], item["document_id"], item["inclusion_reason"],
                             int(item["is_seed"]), item["connectivity_state"],
+                            canonical_id,
+                            "unavailable" if item.get("is_tombstone", False) else
+                            "fetched" if canonical_created else "reused",
+                            int(item.get("content_fetched", False)),
+                            int(item.get("artifact_created", False)),
+                            int(canonical_created),
                         ),
                     )
                 self._replace_derived(connection, messages, discussions)

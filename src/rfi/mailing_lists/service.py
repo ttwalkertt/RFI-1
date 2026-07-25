@@ -143,10 +143,16 @@ def derive_projection(
         key = (record["source_id"], record["external_message_id"])
         prior = combined.get(key)
         if prior is not None and prior["artifact_id"] != record["artifact_id"]:
-            raise MailingListError(
-                "message_id_conflict", "retained Message-ID has conflicting artifacts"
-            )
-        combined[key] = record
+            if prior.get("is_tombstone", False) and not record.get("is_tombstone", False):
+                combined[key] = record
+            elif record.get("is_tombstone", False) and not prior.get("is_tombstone", False):
+                pass
+            else:
+                raise MailingListError(
+                    "message_id_conflict", "retained Message-ID has conflicting artifacts"
+                )
+        else:
+            combined[key] = record
         states.setdefault(key, set()).add(record["connectivity_state"])
         policy_limits[key] = policy_limits.get(key, False) or bool(
             record.get("descendant_policy_limited", False)
@@ -381,6 +387,9 @@ class MailingListAcquisitionService:
                 "descendant_policy_limited": plan["descendant_policy_limited"],
                 "is_tombstone": bool(item.get("is_tombstone", False)),
                 "unavailable_details": item.get("unavailable_details"),
+                "content_fetched": not item.get("reuse", False)
+                and not item.get("is_tombstone", False),
+                "artifact_created": artifact_created,
             })
         existing = self.repository.parsed_retained_records()
         messages, discussions = derive_projection(existing + retained)
@@ -510,13 +519,11 @@ class MailingListAcquisitionService:
             expected = normalize_message_id(external_id) or external_id
             existing = known(expected)
             if existing is not None and not is_seed:
-                if is_seed:
-                    acquired_ids.add(expected)
                 if not resuming and expected in retained and expected not in items:
                     prior = retained[expected]
                     items[expected] = {
                         "raw": None, "location": "", "parsed": prior["parsed"],
-                        "inclusion_reason": reason.value, "is_seed": False,
+                        "inclusion_reason": reason.value, "is_seed": is_seed,
                         "forced_state": None, "fallback_archive_url": None,
                         "is_tombstone": bool(prior.get("is_tombstone", False)),
                         "unavailable_details": prior.get("unavailable_details"),

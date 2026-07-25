@@ -16,6 +16,7 @@ _PATCH_PREFIX = re.compile(r"^\s*\[(?:patch|rfc)(?:[^]]*)]\s*", re.IGNORECASE)
 
 
 def normalize_message_id(value: str | None) -> str | None:
+    """Return the single repository-owned canonical form of a Message-ID."""
     if value is None:
         return None
     matches = _MESSAGE_ID.findall(value)

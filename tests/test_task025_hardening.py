@@ -401,7 +401,7 @@ class MigrationBoundaryCase(unittest.TestCase):
                     )
                 connection.execute("UPDATE schema_metadata SET schema_version=3")
             migrated = RepositoryDatabase.open(state)
-            self.assertEqual(migrated.validate()["schema_version"], 6)
+            self.assertEqual(migrated.validate()["schema_version"], 7)
             restored = MailingListRepository(state).source(configured.source_id)
             self.assertEqual(restored.transport, LoreTransportPolicy())
             with migrated.connect(read_only=True) as connection:

@@ -36,6 +36,36 @@ DDL migration. Schema version 4 adds explicit acquisition lifecycle, error, and 
 columns. Artifact bytes remain outside SQLite. Existing firm-artifact queries ignore sources
 whose repository projection is `mailing-list`.
 
+### Implemented canonical identity slice (TASK-035)
+
+Schema version 7 adds `canonical_mailing_list_messages` as the one active global mapping from a
+valid normalized Message-ID to repository-owned canonical identity and the existing artifact and
+document authorities. Its deterministic `canonical-mail-<hash>` key is repository identity; the
+unique normalized Message-ID is external identity. `source_id` is deliberately absent. Exact bytes
+remain exclusively owned by `artifacts` and the content-addressed content store.
+
+`mailing_list_run_items` remains the sole per-run observation authority. Each row now records its
+nullable canonical message, `fetched`/`reused`/`unavailable` outcome, and independent booleans for
+content fetched, artifact created, and canonical identity created. Canonical registration or
+verification and insertion of its causing observation occur in the same structured-state
+transaction. Confirmed-unavailable tombstones retain artifact evidence but have no canonical
+message reference and do not prevent later real RFC822 content from establishing one.
+
+Schema v6 upgrade is additive and deterministic. Unambiguous historical RFC822 candidates are
+backfilled through the same `normalize_message_id` implementation used by parsing, lookup,
+registration, and conflict detection. Historical Message-IDs with multiple artifact identities are
+left uncollapsed, recorded in `mailing_list_message_conflicts`, and blocked from silent canonical
+registration. Existing runs, run items, artifacts, documents, relationships, and discussion
+projections are neither deleted nor rewritten. Historical observations cannot reliably prove
+whether their original run downloaded bytes, so backfilled rows conservatively report `reused`
+with all creation/fetch booleans false.
+
+This deliberately departs from the broad global-schema proposal by retaining source-scoped message,
+relationship, and discussion projections and by evolving `mailing_list_run_items` instead of
+introducing parallel run-observation tables. Those choices preserve one observation authority and
+keep parser versions, relationship identity, discussion identity, patch series, and generalized
+evidence-store work deferred.
+
 ## Bounded two-stage acquisition
 
 Every request needs explicit Message-IDs, a query, date bounds, or topic terms. The foundational
