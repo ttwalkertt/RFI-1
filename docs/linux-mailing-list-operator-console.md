@@ -137,22 +137,27 @@ websocket, daemon, scheduler, or general job framework was introduced.
 
 `fetch_up_to_date(...)` accepts an optional `on_progress` callback emitted at acquisition-window
 boundaries. The `FetchProgress` value contains phase, message, window start/end, and completed
-window count plus discovery-offset advancement when bounded continuation moves forward. The
-callback is best-effort: an exception while publishing progress never fails the fetch. The queue
-worker wraps the callback in a closure that acquires the existing condition lock, updates
+window count plus discovery-offset advancement when bounded continuation moves forward. A separate
+best-effort `on_activity` callback records internal liveness after bounded discovery, archive-message,
+and relationship-page operations without creating per-message queue events. Exceptions from either
+callback never fail acquisition. The queue worker wraps the callbacks in closures that acquire the
+existing condition lock, updates
 `FetchJob.progress`, `FetchJob.latest_progress_message`, `FetchJob.last_progress_at`, and
-`FetchJob.updated_at`, and emits a coalesced `progress` event every third update. The browser
-renders the running job's latest progress message, current window, and last-progress timestamp
-through the existing 1.5-second polling path.
+`FetchJob.updated_at`, and separately maintains `FetchJob.last_activity_at`. Progress events remain
+coalesced every third update. Activity is not appended to event scrollback; at most once every 60
+seconds the running item receives a concise status refresh through the existing 1.5-second polling
+path.
 
 ### Stale-running protection (liveness hardening)
 
-The queue monitors each running fetch and marks it failed if no meaningful progress update arrives
-for 180 seconds while cancellation is not already requested. The queue then requests cooperative
-cancellation and emits a terminal failure with an actionable operator message. Terminalization is
-single-authority: a timeout, cancellation, exception, or normal completion can produce only one
-terminal state for the job, and `_running_job_id` is always cleared in a `finally` path so no
-stale `running` item remains visible after worker exit.
+The queue monitors internal acquisition activity rather than sparse workflow progress. At 60-second
+intervals without an activity checkpoint it refreshes the running status to explain that the current
+bounded archive operation is still pending. If no activity checkpoint arrives for 180 seconds while
+cancellation is not already requested, the queue emits a non-terminal `stalled` warning and requests
+cooperative cancellation. The job remains visibly running until the acquisition reaches a safe
+checkpoint; only then does the acknowledged watchdog cancellation become a terminal failure. A
+user-requested cancellation remains a terminal `cancelled` result. Terminalization is single-authority,
+and `_running_job_id` is always cleared in a `finally` path.
 
 ### Durable bounded terminal history (TASK-032)
 

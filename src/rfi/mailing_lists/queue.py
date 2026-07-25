@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Any, Callable, Protocol
 
-from rfi.mailing_lists.contracts import FetchProgress, MailingListError
+from rfi.mailing_lists.contracts import FetchActivity, FetchProgress, MailingListError
 from rfi.mailing_lists.workflow import LinuxMailingListWorkflowService
 
 
@@ -49,6 +49,11 @@ class FetchJob:
     progress: dict[str, Any] | None = None
     latest_progress_message: str | None = None
     last_progress_at: str | None = None
+    last_activity_at: str | None = None
+    last_feedback_at: str | None = None
+    latest_activity_message: str | None = None
+    stalled_at: str | None = None
+    cancellation_requested_at: str | None = None
     updated_at: str | None = None
 
 
@@ -66,6 +71,7 @@ class MailingListFetchQueue:
     """One-worker FIFO with duplicate suppression and cooperative cancellation."""
 
     PROGRESS_EVENT_MIN_INTERVAL = 3
+    ACTIVITY_FEEDBACK_SECONDS = 60
     STALE_PROGRESS_SECONDS = 180
     WORKER_MONITOR_SECONDS = 0.25
 
@@ -80,6 +86,7 @@ class MailingListFetchQueue:
         event_limit: int = 200,
         job_limit: int = 100,
         stale_progress_seconds: int = STALE_PROGRESS_SECONDS,
+        activity_feedback_seconds: int = ACTIVITY_FEEDBACK_SECONDS,
         worker_monitor_seconds: float = WORKER_MONITOR_SECONDS,
     ) -> None:
         self.workflow = workflow
@@ -90,6 +97,7 @@ class MailingListFetchQueue:
         self.event_limit = event_limit
         self.job_limit = job_limit
         self.stale_progress_seconds = stale_progress_seconds
+        self.activity_feedback_seconds = activity_feedback_seconds
         self.worker_monitor_seconds = worker_monitor_seconds
         self._condition = threading.Condition()
         self._pending: deque[str] = deque()
@@ -170,7 +178,8 @@ class MailingListFetchQueue:
                 running = self._jobs[self._running_job_id]
                 if running.state == "running":
                     self._running_cancel.set()
-                    running.updated_at = self.clock()
+                    running.cancellation_requested_at = self.clock()
+                    running.updated_at = running.cancellation_requested_at
                     self._event(
                         "cancellation_requested", running.stream_id, running.stream_name,
                         "Cancellation will take effect at the next safe acquisition checkpoint.",
@@ -244,18 +253,49 @@ class MailingListFetchQueue:
                 job.state = "running"
                 job.started_at = self.clock()
                 job.updated_at = job.started_at
+                job.last_activity_at = job.started_at
+                job.last_feedback_at = job.started_at
                 job.message = "Running bounded acquisition windows."
                 self._event("started", job.stream_id, job.stream_name, job.message)
 
             def on_progress(progress: FetchProgress) -> None:
                 with self._condition:
+                    if self._running_job_id != job.job_id or job.state != "running":
+                        return
                     job.progress = asdict(progress)
                     job.progress["occurred_at"] = self.clock()
                     job.last_progress_at = job.progress["occurred_at"]
+                    job.last_activity_at = job.last_progress_at
+                    job.last_feedback_at = job.last_progress_at
                     job.updated_at = job.last_progress_at
                     job.latest_progress_message = progress.message
                     job.message = progress.message
                     self._maybe_progress_event(job)
+
+            def on_activity(activity: FetchActivity) -> None:
+                with self._condition:
+                    if self._running_job_id != job.job_id or job.state != "running":
+                        return
+                    job.last_activity_at = self.clock()
+                    if job.stalled_at is not None:
+                        return
+                    recovered_from_wait = bool(
+                        job.latest_activity_message
+                        and "waiting for the current bounded archive operation"
+                        in job.latest_activity_message
+                    )
+                    if (
+                        not recovered_from_wait
+                        and self._seconds_since(job.last_feedback_at)
+                        < self.activity_feedback_seconds
+                    ):
+                        return
+                    job.last_feedback_at = job.last_activity_at
+                    job.updated_at = job.last_activity_at
+                    job.latest_activity_message = (
+                        f"Still acquiring the current window. {activity.message}"
+                    )
+                    job.message = job.latest_activity_message
 
             result_box: dict[str, Any] = {}
             error_box: dict[str, BaseException] = {}
@@ -267,6 +307,7 @@ class MailingListFetchQueue:
                         job.stream_id,
                         cancelled=self._running_cancel.is_set,
                         on_progress=on_progress,
+                        on_activity=on_activity,
                     )
                 except BaseException as error:
                     error_box["error"] = error
@@ -302,18 +343,35 @@ class MailingListFetchQueue:
                         if self._running_cancel.is_set():
                             continue
                         stale_seconds = self._stale_seconds(job)
-                        if stale_seconds is None or stale_seconds < self.stale_progress_seconds:
+                        if stale_seconds is None:
                             continue
+                        if (
+                            stale_seconds >= self.activity_feedback_seconds
+                            and stale_seconds < self.stale_progress_seconds
+                            and self._seconds_since(job.last_feedback_at)
+                            >= self.activity_feedback_seconds
+                        ):
+                            job.last_feedback_at = self.clock()
+                            job.updated_at = job.last_feedback_at
+                            job.latest_activity_message = (
+                                "Still acquiring the current window; waiting for the current "
+                                "bounded archive operation to reach a checkpoint."
+                            )
+                            job.message = job.latest_activity_message
+                        if stale_seconds < self.stale_progress_seconds:
+                            continue
+                        job.stalled_at = self.clock()
+                        job.cancellation_requested_at = job.stalled_at
+                        job.updated_at = job.stalled_at
+                        job.latest_activity_message = (
+                            "No acquisition activity reached a checkpoint for "
+                            f"{self.stale_progress_seconds} seconds; cancellation was requested "
+                            "at the next safe checkpoint."
+                        )
+                        job.message = job.latest_activity_message
                         self._running_cancel.set()
-                        terminalize(
-                            "failed",
-                            "failed",
-                            (
-                                "Fetch stalled without meaningful progress for "
-                                f"{self.stale_progress_seconds} seconds; "
-                                "cancellation was requested "
-                                "at the next safe checkpoint."
-                            ),
+                        self._event(
+                            "stalled", job.stream_id, job.stream_name, job.message,
                         )
 
                 error = error_box.get("error")
@@ -322,11 +380,20 @@ class MailingListFetchQueue:
                     if not terminalized:
                         if isinstance(error, MailingListError):
                             if error.code == "acquisition_cancelled":
-                                terminalize(
-                                    "cancelled",
-                                    "cancelled",
-                                    "Running fetch was cancelled at a safe checkpoint.",
-                                )
+                                if job.stalled_at is not None:
+                                    terminalize(
+                                        "failed",
+                                        "failed",
+                                        "Fetch stalled without acquisition activity for "
+                                        f"{self.stale_progress_seconds} seconds; cancellation "
+                                        "completed at a safe checkpoint.",
+                                    )
+                                else:
+                                    terminalize(
+                                        "cancelled",
+                                        "cancelled",
+                                        "Running fetch was cancelled at a safe checkpoint.",
+                                    )
                             else:
                                 terminalize("failed", "failed", str(error))
                         elif error is not None:
@@ -366,19 +433,22 @@ class MailingListFetchQueue:
         )
 
     def _stale_seconds(self, job: FetchJob) -> float | None:
-        candidate = job.last_progress_at or job.started_at
+        candidate = job.last_activity_at or job.last_progress_at or job.started_at
+        return self._seconds_since(candidate)
+
+    def _seconds_since(self, candidate: str | None) -> float:
         if candidate is None:
-            return None
+            return 0.0
         try:
             timestamp = datetime.fromisoformat(candidate)
         except ValueError:
-            return None
+            return 0.0
         if timestamp.tzinfo is None:
             timestamp = timestamp.replace(tzinfo=UTC)
         now = self.now()
         if now.tzinfo is None:
             now = now.replace(tzinfo=UTC)
-        return (now - timestamp).total_seconds()
+        return max(0.0, (now - timestamp).total_seconds())
 
     def _event(
         self, event: str, stream_id: str | None, stream_name: str | None, message: str

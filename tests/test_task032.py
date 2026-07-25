@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 from rfi.firms import FirmRepository
 from rfi.mailing_lists import (
+    FetchActivity,
     FetchProgress,
     FetchUpToDateResult,
     LinuxMailingListWorkflowService,
@@ -233,6 +234,28 @@ class QueueProgressCase(unittest.TestCase):
         result = self.workflow.fetch_up_to_date(stream_id, on_progress=bad_callback)
         self.assertEqual(result.status, "completed")
 
+    def test_activity_callback_reports_internal_bounded_work(self) -> None:
+        stream_id = self.create()
+        activity_calls: list[FetchActivity] = []
+
+        result = self.workflow.fetch_up_to_date(
+            stream_id, on_activity=activity_calls.append
+        )
+
+        self.assertEqual(result.status, "completed")
+        phases = {item.phase for item in activity_calls}
+        self.assertIn("discovery_complete", phases)
+        self.assertIn("archive_message_fetched", phases)
+
+    def test_activity_callback_exception_does_not_fail_acquisition(self) -> None:
+        stream_id = self.create()
+
+        def bad_callback(_activity: FetchActivity) -> None:
+            raise RuntimeError("activity publisher failed")
+
+        result = self.workflow.fetch_up_to_date(stream_id, on_activity=bad_callback)
+        self.assertEqual(result.status, "completed")
+
     def test_queue_updates_running_job_progress_before_terminal(self) -> None:
         progress_seen = threading.Event()
 
@@ -243,7 +266,9 @@ class QueueProgressCase(unittest.TestCase):
             def saved(self):
                 return self._items
 
-            def fetch_up_to_date(self, stream_id, *, cancelled, on_progress=None):
+            def fetch_up_to_date(
+                self, stream_id, *, cancelled, on_progress=None, on_activity=None
+            ):
                 if on_progress is not None:
                     on_progress(FetchProgress(
                         phase="acquiring",
@@ -292,7 +317,9 @@ class QueueProgressCase(unittest.TestCase):
             def saved(self):
                 return self._items
 
-            def fetch_up_to_date(self, stream_id, *, cancelled, on_progress=None):
+            def fetch_up_to_date(
+                self, stream_id, *, cancelled, on_progress=None, on_activity=None
+            ):
                 if on_progress is not None:
                     on_progress(FetchProgress(
                         phase="acquiring",
@@ -338,7 +365,9 @@ class QueueProgressCase(unittest.TestCase):
             def saved(self):
                 return self._items
 
-            def fetch_up_to_date(self, stream_id, *, cancelled, on_progress=None):
+            def fetch_up_to_date(
+                self, stream_id, *, cancelled, on_progress=None, on_activity=None
+            ):
                 nonlocal call_count
                 for index in range(20):
                     if on_progress is not None:
@@ -414,7 +443,9 @@ class QueueProgressCase(unittest.TestCase):
             def saved(self):
                 return self._items
 
-            def fetch_up_to_date(self, stream_id, *, cancelled, on_progress=None):
+            def fetch_up_to_date(
+                self, stream_id, *, cancelled, on_progress=None, on_activity=None
+            ):
                 raise RuntimeError("boom")
 
         queue = MailingListFetchQueue(FailingWorkflow())  # type: ignore[arg-type]
@@ -431,8 +462,54 @@ class QueueProgressCase(unittest.TestCase):
         finally:
             queue.close()
 
-    def test_operation_timeout_terminalizes_with_actionable_reason(self) -> None:
+    def test_activity_heartbeats_prevent_false_stall_and_are_rate_limited(self) -> None:
+        activity_complete = threading.Event()
+
+        class ActiveWorkflow:
+            def __init__(self) -> None:
+                self._items = [SimpleNamespace(stream_id="one", stream_name="ONE")]
+
+            def saved(self):
+                return self._items
+
+            def fetch_up_to_date(
+                self, stream_id, *, cancelled, on_progress=None, on_activity=None
+            ):
+                for _index in range(15):
+                    if on_activity is not None:
+                        on_activity(FetchActivity(
+                            phase="archive_message_fetched",
+                            message="A bounded archive message request completed.",
+                        ))
+                    threading.Event().wait(0.02)
+                activity_complete.set()
+                while not cancelled():
+                    threading.Event().wait(0.01)
+                raise MailingListError("acquisition_cancelled", "cancelled")
+
+        queue = MailingListFetchQueue(
+            ActiveWorkflow(), stale_progress_seconds=0.08,
+            activity_feedback_seconds=0.03, worker_monitor_seconds=0.005,
+        )  # type: ignore[arg-type]
+        try:
+            queue.enqueue("one")
+            self.assertTrue(activity_complete.wait(1))
+            snapshot = queue.snapshot()
+            self.assertIsNotNone(snapshot["running"])
+            self.assertIsNotNone(snapshot["running"]["last_activity_at"])
+            self.assertIn("Still acquiring", snapshot["running"]["latest_activity_message"])
+            self.assertNotIn("stalled", [item["event"] for item in snapshot["events"]])
+            self.assertNotIn(
+                "archive_message_fetched", [item["event"] for item in snapshot["events"]]
+            )
+        finally:
+            queue.cancel_all()
+            queue.close()
+
+    def test_operation_timeout_warns_before_terminal_failure(self) -> None:
         started = threading.Event()
+        cancellation_seen = threading.Event()
+        release = threading.Event()
 
         class NoProgressWorkflow:
             def __init__(self) -> None:
@@ -441,18 +518,40 @@ class QueueProgressCase(unittest.TestCase):
             def saved(self):
                 return self._items
 
-            def fetch_up_to_date(self, stream_id, *, cancelled, on_progress=None):
+            def fetch_up_to_date(
+                self, stream_id, *, cancelled, on_progress=None, on_activity=None
+            ):
                 started.set()
                 while not cancelled():
                     threading.Event().wait(0.01)
+                cancellation_seen.set()
+                release.wait(1)
                 raise MailingListError("acquisition_cancelled", "cancelled")
 
         queue = MailingListFetchQueue(
-            NoProgressWorkflow(), stale_progress_seconds=1, worker_monitor_seconds=0.01,
+            NoProgressWorkflow(), stale_progress_seconds=0.12,
+            activity_feedback_seconds=0.04, worker_monitor_seconds=0.005,
         )  # type: ignore[arg-type]
         try:
             queue.enqueue("one")
             self.assertTrue(started.wait(1))
+            for _index in range(100):
+                snapshot = queue.snapshot()
+                if snapshot["running"] and snapshot["running"]["latest_activity_message"]:
+                    break
+                threading.Event().wait(0.005)
+            snapshot = queue.snapshot()
+            self.assertIn("Still acquiring", snapshot["running"]["latest_activity_message"])
+            self.assertTrue(cancellation_seen.wait(1))
+            snapshot = queue.snapshot()
+            self.assertIsNotNone(snapshot["running"])
+            self.assertIsNotNone(snapshot["running"]["stalled_at"])
+            self.assertIsNotNone(snapshot["running"]["cancellation_requested_at"])
+            self.assertEqual(snapshot["recent"], [])
+            self.assertIn("stalled", [item["event"] for item in snapshot["events"]])
+            stalled_message = snapshot["running"]["latest_activity_message"]
+            self.assertIn("cancellation was requested", stalled_message)
+            release.set()
             for _index in range(400):
                 snapshot = queue.snapshot()
                 if snapshot["recent"]:
@@ -460,8 +559,9 @@ class QueueProgressCase(unittest.TestCase):
                 threading.Event().wait(0.01)
             snapshot = queue.snapshot()
             self.assertEqual(snapshot["recent"][0]["state"], "failed")
-            self.assertIn("stalled without meaningful progress", snapshot["recent"][0]["message"])
+            self.assertIn("stalled without acquisition activity", snapshot["recent"][0]["message"])
         finally:
+            release.set()
             queue.close()
 
     def test_cancellation_and_timeout_do_not_compete(self) -> None:
@@ -474,7 +574,9 @@ class QueueProgressCase(unittest.TestCase):
             def saved(self):
                 return self._items
 
-            def fetch_up_to_date(self, stream_id, *, cancelled, on_progress=None):
+            def fetch_up_to_date(
+                self, stream_id, *, cancelled, on_progress=None, on_activity=None
+            ):
                 started.set()
                 while not cancelled():
                     threading.Event().wait(0.01)
@@ -510,7 +612,9 @@ class QueueProgressCase(unittest.TestCase):
             def saved(self):
                 return self._items
 
-            def fetch_up_to_date(self, stream_id, *, cancelled, on_progress=None):
+            def fetch_up_to_date(
+                self, stream_id, *, cancelled, on_progress=None, on_activity=None
+            ):
                 raise SystemExit(5)
 
         queue = MailingListFetchQueue(BaseExceptionWorkflow())  # type: ignore[arg-type]
@@ -567,7 +671,9 @@ class QueueWithHistoryCase(unittest.TestCase):
             def saved(self):
                 return self._items
 
-            def fetch_up_to_date(self, stream_id, *, cancelled, on_progress=None):
+            def fetch_up_to_date(
+                self, stream_id, *, cancelled, on_progress=None, on_activity=None
+            ):
                 raise MailingListError("test_failure", "Simulated failure")
 
         queue = self._make_queue(FailingWorkflow())  # type: ignore[arg-type]
@@ -590,7 +696,9 @@ class QueueWithHistoryCase(unittest.TestCase):
             def saved(self):
                 return self._items
 
-            def fetch_up_to_date(self, stream_id, *, cancelled, on_progress=None):
+            def fetch_up_to_date(
+                self, stream_id, *, cancelled, on_progress=None, on_activity=None
+            ):
                 self.started.set()
                 while not cancelled():
                     threading.Event().wait(0.01)
@@ -655,7 +763,9 @@ class QueueWithHistoryCase(unittest.TestCase):
             def saved(self):
                 return self._items
 
-            def fetch_up_to_date(self, stream_id, *, cancelled, on_progress=None):
+            def fetch_up_to_date(
+                self, stream_id, *, cancelled, on_progress=None, on_activity=None
+            ):
                 self.started.set()
                 while not cancelled():
                     threading.Event().wait(0.01)
@@ -754,6 +864,9 @@ class BrowserTimestampCase(unittest.TestCase):
         self.assertIn("running.progress", html)
         self.assertIn("running.last_progress_at", html)
         self.assertIn("latest_progress_message", html)
+        self.assertIn("latest_activity_message", html)
+        self.assertIn("running.last_activity_at", html)
+        self.assertIn("Last activity", html)
         self.assertIn("updated_at", html)
 
 

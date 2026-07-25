@@ -48,13 +48,14 @@ without changing the execution model:
    never pruned by history retention. Progress events are coalesced with a
    every third progress update to prevent flooding.
 
-4. **Stale-running protection**: the queue monitors each running fetch and
-   marks it failed if no meaningful progress update arrives for 180 seconds
-   while cancellation is not already requested. The queue requests cooperative
-   cancellation at the next safe checkpoint and emits a single terminal
-   failure message. Terminalization is single-authority so timeout,
-   cancellation, exception, and completion cannot produce competing terminal
-   states for one job.
+4. **Stale-running protection**: a separate best-effort activity callback marks
+   bounded discovery, archive-message, and relationship-page checkpoints without
+   producing per-message queue events. The queue provides a rate-limited running
+   status refresh after 60 seconds without a checkpoint. At 180 seconds it emits
+   a non-terminal `stalled` warning and requests cooperative cancellation at the
+   next safe checkpoint. The job becomes terminal only when the worker returns;
+   an acknowledged watchdog cancellation is failed, while an operator-requested
+   cancellation remains cancelled. Terminalization remains single-authority.
 
 ## Progress callback contract
 

@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any, Callable
 
 from rfi.mailing_lists.contracts import (
+    FetchActivity,
     FetchProgress,
     AcquisitionManifest,
     AcquisitionMessage,
@@ -521,6 +522,7 @@ class LinuxMailingListWorkflowService:
     def fetch_up_to_date(
         self, stream_id: str, *, cancelled: Callable[[], bool] | None = None,
         on_progress: Callable[[FetchProgress], None] | None = None,
+        on_activity: Callable[[FetchActivity], None] | None = None,
     ) -> FetchUpToDateResult:
         """Acquire deterministic overlapping bounded windows through today."""
         def publish(progress: FetchProgress) -> None:
@@ -528,6 +530,13 @@ class LinuxMailingListWorkflowService:
                 return
             try:
                 on_progress(progress)
+            except Exception:
+                pass
+        def publish_activity(activity: FetchActivity) -> None:
+            if on_activity is None:
+                return
+            try:
+                on_activity(activity)
             except Exception:
                 pass
         revision = self.stream_service.detail(stream_id)
@@ -597,7 +606,7 @@ class LinuxMailingListWorkflowService:
                     manifest = service.acquire(
                         source_id, window, limits, cancelled=cancelled,
                         discovery_offset=offset, coverage_batch_id=batch_id,
-                        prior_batches_complete=True,
+                        prior_batches_complete=True, on_activity=publish_activity,
                     )
                 except MailingListError as error:
                     latest = self._new_acquisition(source_id, before)

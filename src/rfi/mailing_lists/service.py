@@ -22,6 +22,7 @@ from rfi.mailing_lists.contracts import (
     ConnectivityState,
     DiscussionProjection,
     DiscussionSummary,
+    FetchActivity,
     InclusionReason,
     MailingListArchive,
     MailingListError,
@@ -308,6 +309,7 @@ class MailingListAcquisitionService:
         self, source_id: str, criteria: SelectionCriteria, limits: AcquisitionLimits,
         *, cancelled: Callable[[], bool] | None = None, discovery_offset: int = 0,
         coverage_batch_id: str | None = None, prior_batches_complete: bool = True,
+        on_activity: Callable[[FetchActivity], None] | None = None,
     ) -> AcquisitionManifest:
         # Configuration errors are not acquisition attempts and cannot satisfy the
         # run table's governed-source foreign key.
@@ -335,6 +337,7 @@ class MailingListAcquisitionService:
             plan = self._plan(
                 source_id, criteria, limits, cancelled=cancelled,
                 discovery_offset=discovery_offset, continuation=continuation,
+                on_activity=on_activity,
             )
         except MailingListError as error:
             if error.code == "acquisition_cancelled":
@@ -449,7 +452,16 @@ class MailingListAcquisitionService:
               limits: AcquisitionLimits, *,
               cancelled: Callable[[], bool] | None = None,
               discovery_offset: int = 0,
-              continuation: dict[str, Any] | None = None) -> dict[str, Any]:
+              continuation: dict[str, Any] | None = None,
+              on_activity: Callable[[FetchActivity], None] | None = None) -> dict[str, Any]:
+        def publish_activity(phase: str, message: str) -> None:
+            if on_activity is None:
+                return
+            try:
+                on_activity(FetchActivity(phase=phase, message=message))
+            except Exception:
+                pass
+
         self.repository.source(source_id)
         self._check_cancelled(cancelled)
         if continuation is None:
@@ -467,6 +479,10 @@ class MailingListAcquisitionService:
         else:
             seeds = tuple(str(item) for item in continuation.get("seeds", ()))
             seed_truncated = bool(continuation.get("discovery_has_more", False))
+        publish_activity(
+            "discovery_complete",
+            f"Discovery returned {len(seeds)} bounded seed messages.",
+        )
         self._check_cancelled(cancelled)
         if not seeds:
             raise MailingListError("no_seed_matches", "bounded selection found no messages")
@@ -510,6 +526,10 @@ class MailingListAcquisitionService:
                     acquired_ids.add(expected)
                 return expected
             archive_message = self.archive.fetch(expected)
+            publish_activity(
+                "archive_message_fetched",
+                "A bounded archive message request completed.",
+            )
             parsed = parse_message(archive_message.raw)
             storage_id = parsed.external_message_id or (
                 "malformed-" + hashlib.sha256(archive_message.raw).hexdigest()[:32]
@@ -728,6 +748,10 @@ class MailingListAcquisitionService:
                         children, has_more = self.archive.direct_children(parent, page_size)
                     else:
                         children, has_more = page(parent, page_size, page_offset)
+                    publish_activity(
+                        "relationship_page_fetched",
+                        "A bounded relationship page request completed.",
+                    )
                 except MailingListError as error:
                     failures.append(error)
                     warnings.append(f"descendant enumeration failed: {error.code}")

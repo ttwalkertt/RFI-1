@@ -361,3 +361,16 @@ class FetchProgress:
     windows_completed: int = 0
     discovery_offset: int | None = None
     occurred_at: str | None = None
+
+
+@dataclass(frozen=True)
+class FetchActivity:
+    """Best-effort internal liveness signal for a running fetch.
+
+    Activity is intentionally separate from operator progress. It may be
+    emitted at relatively frequent bounded-work checkpoints, but consumers
+    must rate-limit any user-facing presentation.
+    """
+
+    phase: str
+    message: str
