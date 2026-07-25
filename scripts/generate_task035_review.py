@@ -63,7 +63,7 @@ def main() -> int:
 
     ticket = ROOT / (
         "tasks/TASK-035-canonical-mailing-list-message-identity-"
-        "and-observation-slice-revA.md"
+        "and-observation-slice.md"
     )
     shutil.copy2(ticket, PACKAGE / "ticket.md")
     head = git("rev-parse", "HEAD")
@@ -71,8 +71,17 @@ def main() -> int:
     parent = git("rev-parse", "HEAD^")
     changed = git("diff", "--name-only", f"{parent}..{head}").splitlines()
     (PACKAGE / "changed-files.txt").write_text("\n".join(changed) + "\n", encoding="utf-8")
+    status = git("status", "--short", "--branch")
+    unstaged_stat = git("diff", "--stat", "HEAD")
+    staged_stat = git("diff", "--cached", "--stat")
     (PACKAGE / "repository-status.txt").write_text(
-        f"branch: {branch}\ncommit: {head}\n\n{git('status', '--short', '--branch')}\n",
+        f"branch: {branch}\ncommit: {head}\n\n"
+        "$ git status --short --branch\n"
+        f"{status}\n\n"
+        "$ git diff --stat HEAD\n"
+        f"{unstaged_stat}\n\n"
+        "$ git diff --cached --stat\n"
+        f"{staged_stat}\n",
         encoding="utf-8",
     )
     report = f"""# TASK-035 completion report
@@ -123,7 +132,9 @@ with the ticket's one-authority and boundedness requirements.
   `test_unavailable_then_available_keeps_both_evidence_forms`.
 - Integrity and backup/restore: the same file,
   `test_integrity_constraints_and_backup_restore`.
-- Exact regression and full validation outputs are under `validation/`.
+- Mailing-list regression: **104 tests passed**, matching the captured result in
+  `validation/mailing-list-regression.txt`.
+- Exact focused and full validation outputs are under `validation/`.
 
 ## Known limitations and deferred decisions
 
