@@ -5,6 +5,11 @@ concept, target-firm, and source-profile admin console. The installed `rfi` comm
 `python -m rfi` call the same
 implementation. Run `rfi --help` and `rfi <command> --help` to discover options and examples.
 
+The SEC-specific authoritative Form 10-K workflow is independently available as
+`rfi sec-retrieve --firm FIRM_ID`. See
+[SEC authoritative retrieval workflow](sec-authoritative-retrieval-workflow.md) for its identity,
+reconciliation, cancellation, and immutable-ingestion contracts.
+
 ## Command structure
 
 ```text

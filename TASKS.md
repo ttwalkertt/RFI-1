@@ -40,6 +40,7 @@
 | TASK-029 | Simplified Linux mailing-list operator workflow | Complete |
 | TASK-031 | Resumable Lore relationship acquisition | Done |
 | TASK-032 | Process Local Fetch Queue progress, timestamps, and durable bounded history | Complete |
+| TASK-036 | SEC authoritative retrieval workflow | Complete |
 
 ## Architectural Progression
 

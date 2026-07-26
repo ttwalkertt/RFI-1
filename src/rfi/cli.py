@@ -6,10 +6,14 @@ import argparse
 import json
 import sys
 from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Sequence
 
-from rfi.acquisition import AcquisitionRepository
+from rfi.acquisition import (
+    AcquisitionRepository, SecForm10KAdapter, SecProviderClient,
+    user_agent_from_environment,
+)
 from rfi.admin import create_admin_server
 from rfi.catalog_import import (
     CatalogImportError,
@@ -31,6 +35,10 @@ from rfi.mailing_lists import (
     SelectionCriteria,
 )
 from rfi.pull import PullError, PullRequest, PullStatus, create_pull_workflow
+from rfi.sec import (
+    FirmIdentifierSecResolver, SecRepository, SecRetrievalWorkflow, SecWorkflowError,
+    SecWorkflowOutcome,
+)
 from rfi.source_profiles import (
     SourceProfileError,
     SourceProfileRepository,
@@ -161,6 +169,16 @@ def parser() -> argparse.ArgumentParser:
         action="store_true",
         help="pull every firm with a saved source profile",
     )
+    sec = commands.add_parser(
+        "sec-retrieve",
+        help="run the authoritative bounded SEC Form 10-K workflow",
+        description=(
+            "Resolve or reuse durable SEC issuer knowledge, retrieve one deterministic "
+            "Form 10-K, and ingest it through immutable repository authority."
+        ),
+    )
+    _add_state(sec)
+    sec.add_argument("--firm", required=True, metavar="FIRM_ID")
     backup = commands.add_parser(
         "backup", help="create a verified SQLite and content-store backup"
     )
@@ -397,6 +415,23 @@ def pull_sources(state: Path, firm_ids: tuple[str, ...], all_configured: bool) -
     return 0 if result.status == PullStatus.COMPLETED else 1
 
 
+def sec_retrieve(state: Path, firm_id: str) -> int:
+    """Run the independently invocable authoritative SEC workflow."""
+    _open_state(state)
+    provider = SecProviderClient(user_agent_from_environment)
+    workflow = SecRetrievalWorkflow(
+        FirmRepository.open(state / "firm-catalog"), SecRepository(state),
+        AcquisitionRepository(state / "acquisition"), FirmIdentifierSecResolver(provider),
+        SecForm10KAdapter(provider, lambda: datetime.now(UTC).isoformat()),
+    )
+    result = workflow.run(firm_id)
+    print(json.dumps(asdict(result), indent=2, sort_keys=True))
+    return 0 if result.outcome in {
+        SecWorkflowOutcome.SUCCESS, SecWorkflowOutcome.SUCCESS_WITH_SOURCE_BOOTSTRAP,
+        SecWorkflowOutcome.NON_APPLICABLE, SecWorkflowOutcome.NO_QUALIFYING_FILING,
+    } else 1
+
+
 def verify_state(state: Path) -> None:
     """Verify both authorities through repository-owned integrity checks."""
     _open_state(state)
@@ -566,6 +601,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 tuple(arguments.firm),
                 arguments.all_configured,
             )
+        elif arguments.command == "sec-retrieve":
+            return sec_retrieve(arguments.state, arguments.firm)
         elif arguments.command == "backup":
             _open_state(arguments.state)
             print(json.dumps(create_backup(arguments.state, arguments.output), indent=2))
@@ -584,6 +621,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         FirmError,
         SourceProfileError,
         PullError,
+        SecWorkflowError,
         MailingListError,
         StreamError,
         StorageError,

@@ -651,7 +651,7 @@ class MailingListCase(unittest.TestCase):
                 connection.execute(f"DROP TABLE {table}")
             connection.execute("UPDATE schema_metadata SET schema_version=1")
         database = RepositoryDatabase.open(self.state)
-        self.assertEqual(database.validate()["schema_version"], 7)
+        self.assertEqual(database.validate()["schema_version"], 8)
         with database.connect(read_only=True) as connection:
             names = {row[0] for row in connection.execute(
                 "SELECT name FROM sqlite_schema WHERE type='table'"

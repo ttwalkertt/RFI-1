@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 6332,
+      "destination_size": 6395,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "1fe4edf2fd7d14847a806375d9c31f1c9f6b9c15a291610334fe1cdcb2c08590",
-      "content_change": "task roadmap reconciled through TASK-031 relationship continuation"
+      "destination_sha256": "31d986734a19b4a1cf4c125e13d001af49524f9bcae18360b81e650033b066e2",
+      "content_change": "task roadmap reconciled through TASK-036 SEC authoritative retrieval"
     },
     {
       "source": "ROADMAP.md",

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -203,6 +203,29 @@ CREATE TABLE pull_runs (
     status TEXT NOT NULL,
     requested_at TEXT NOT NULL,
     completed_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL
+) STRICT;
+CREATE TABLE sec_sources (
+    firm_id TEXT PRIMARY KEY REFERENCES firms(firm_id),
+    applicability TEXT NOT NULL CHECK (applicability IN ('direct','parent','non_applicable')),
+    legal_issuer TEXT NOT NULL,
+    cik TEXT,
+    filing_regime TEXT NOT NULL,
+    parent_firm_id TEXT REFERENCES firms(firm_id),
+    verification_status TEXT NOT NULL CHECK (verification_status = 'verified'),
+    verified_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL,
+    CHECK ((applicability = 'non_applicable') = (cik IS NULL)),
+    CHECK ((applicability = 'parent') = (parent_firm_id IS NOT NULL))
+) STRICT;
+CREATE TABLE sec_workflow_runs (
+    run_id TEXT PRIMARY KEY,
+    firm_id TEXT NOT NULL REFERENCES firms(firm_id),
+    status TEXT NOT NULL,
+    current_state TEXT NOT NULL,
+    requested_at TEXT NOT NULL,
+    completed_at TEXT,
+    cancellation_requested INTEGER NOT NULL CHECK (cancellation_requested IN (0,1)),
     canonical_json TEXT NOT NULL
 ) STRICT;
 CREATE TABLE mailing_list_sources (
@@ -540,6 +563,32 @@ ALTER TABLE mailing_list_run_items ADD COLUMN canonical_created INTEGER NOT NULL
   CHECK (canonical_created IN (0,1));
 """
 
+_MIGRATE_V7_TO_V8 = """
+CREATE TABLE IF NOT EXISTS sec_sources (
+    firm_id TEXT PRIMARY KEY REFERENCES firms(firm_id),
+    applicability TEXT NOT NULL CHECK (applicability IN ('direct','parent','non_applicable')),
+    legal_issuer TEXT NOT NULL,
+    cik TEXT,
+    filing_regime TEXT NOT NULL,
+    parent_firm_id TEXT REFERENCES firms(firm_id),
+    verification_status TEXT NOT NULL CHECK (verification_status = 'verified'),
+    verified_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL,
+    CHECK ((applicability = 'non_applicable') = (cik IS NULL)),
+    CHECK ((applicability = 'parent') = (parent_firm_id IS NOT NULL))
+) STRICT;
+CREATE TABLE IF NOT EXISTS sec_workflow_runs (
+    run_id TEXT PRIMARY KEY,
+    firm_id TEXT NOT NULL REFERENCES firms(firm_id),
+    status TEXT NOT NULL,
+    current_state TEXT NOT NULL,
+    requested_at TEXT NOT NULL,
+    completed_at TEXT,
+    cancellation_requested INTEGER NOT NULL CHECK (cancellation_requested IN (0,1)),
+    canonical_json TEXT NOT NULL
+) STRICT;
+"""
+
 
 def _canonical_message_id(normalized_message_id: str) -> str:
     import hashlib
@@ -792,7 +841,7 @@ class RepositoryDatabase:
                 version = int(row[0])
                 if version == SCHEMA_VERSION:
                     return False
-                if version not in {1, 2, 3, 4, 5, 6}:
+                if version not in {1, 2, 3, 4, 5, 6, 7}:
                     raise StorageError(
                         "incompatible_schema",
                         f"repository schema version {version} is unsupported; "
@@ -828,6 +877,8 @@ class RepositoryDatabase:
                     and "canonical_mailing_list_messages" not in existing_tables
                 ):
                     scripts.append(_MIGRATE_V6_TO_V7)
+                if version <= 7 and "sec_sources" not in existing_tables:
+                    scripts.append(_MIGRATE_V7_TO_V8)
                 for script in scripts:
                     for statement in script.split(";"):
                         if statement.strip():
