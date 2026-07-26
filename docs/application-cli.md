@@ -21,6 +21,8 @@ rfi pull (--firm FIRM_ID ... | --all-configured) [--state PATH]
 rfi verify [--state PATH]
 rfi backup [--state PATH] --output ZIP
 rfi restore --input ZIP [--state FRESH_PATH]
+rfi config --state PATH export --output rfi-config.yaml
+rfi config --state PATH import --file rfi-config.yaml
 rfi mailing-list --state PATH configure-linux-block
 rfi mailing-list --state PATH configure-lore-source --source ID --list-id ID \
   --display-name NAME --archive-base-url HTTPS_URL [transport policy options]
@@ -191,6 +193,33 @@ does not repair or discard evidence.
 `rfi backup` creates a new ZIP using SQLite's online backup API and includes every immutable
 content object plus a checksummed member manifest. `rfi restore` accepts only a fresh destination,
 verifies the complete archive, and re-runs schema and hybrid integrity checks before success.
+
+For an RBF artifact reset, preserve a full backup for rollback, then use the separate
+configuration-only workflow:
+
+```sh
+rfi backup --state OLD_STATE --output pre-reset-full-backup.zip
+rfi config --state OLD_STATE export --output rfi-config.yaml
+rfi init --state NEW_STATE
+rfi config --state NEW_STATE import --file rfi-config.yaml
+```
+
+The versioned YAML contains current effective firms, firm source profiles and their retrieval
+choices, governed mailing-list sources and transport policy, verified SEC source identities, and
+current effective stream definitions. Relationships use stable firm, source, canonical artifact
+family, and stream identifiers. The canonical artifact-family keys in a firm source profile are
+configuration vocabulary; they are not retained evidence artifact IDs.
+
+The package excludes artifact bytes and metadata, documents, evidence artifact IDs and hashes,
+acquisition and queue history, coverage, checkpoints, projections, stream and pull runs,
+memberships, mailing-list messages and discussions, and conflicts. It also excludes historical
+configuration revisions and local state paths. Reacquire evidence after import.
+
+Import requires an already initialized current-schema target, validates the whole package in an
+isolated current-schema staging repository, and applies only validated configuration in one target
+transaction. Exact re-import is idempotent. A stable identity whose target configuration differs
+causes an actionable conflict and no changes. This is a reset-enablement format, not a migration,
+synchronization, selective artifact restore, or replacement for full-state backup/restore.
 
 ## Failure behavior and boundaries
 

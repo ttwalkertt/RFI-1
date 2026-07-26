@@ -2,7 +2,7 @@
 
 ## Status
 
-**Draft**
+**Complete**
 
 ---
 
@@ -310,3 +310,51 @@ Do not:
 An operator can preserve durable RFI configuration, initialize a clean state repository, restore the configuration, and reacquire artifacts without manually rebuilding firms, sources, streams, policies, or other supported setup.
 
 No artifact or artifact-related data crosses the reset boundary.
+
+---
+
+## Completion Evidence
+
+Implemented `rfi config export` and `rfi config import` as a version-1 deterministic YAML contract.
+The supported inventory is current effective firms, firm source profiles, governed mailing-list
+sources and transport policy, verified SEC source identities, and current effective streams.
+Configuration relationships are reconstructed through stable firm, source, canonical artifact
+family, and stream identifiers. Revision IDs, database row IDs, original paths, and historical
+configuration revisions are not part of the package contract.
+
+Import opens only an initialized current-schema target, parses and validates the complete package
+by reconstructing it in an isolated current-schema staging repository, detects material conflicts
+by stable identity, and copies only missing validated configuration rows in one target transaction.
+Exact repetition creates no rows. Existing full-state backup and restore code is unchanged.
+
+`tests/test_task038.py` provides focused export, deterministic serialization, malformed/version and
+target compatibility, transaction/no-mutation, conflict, idempotence, exclusion, and end-to-end RBF
+reset coverage. Its end-to-end case performs fixture-backed Linux Block Layer acquisition and a
+stream run in the source state, imports into fresh initialized state, proves artifact and
+artifact-derived tables are empty, and starts fixture-backed acquisition preview using only restored
+configuration.
+
+Validation completed on 2026-07-26:
+
+- focused TASK-038 suite: **PASS**, 5 tests;
+- focused TASK-038 plus unchanged full-state backup/restore regression: **PASS**, 13 tests;
+- full `make validate`: **PASS**, including 384 tests, offline architectural proofs, lint,
+  formatting, type checking, import, documentation, design baseline, and source archive build;
+- review package: `.artifacts/review/TASK-038/`.
+
+## Architectural Status Summary
+
+- Configuration package boundary: **Complete** for acquisition-resumption configuration listed
+  above; versioned independently from SQLite.
+- Configuration import: **Complete** for validated, conflict-safe, idempotent, transactional import
+  into current-schema initialized state.
+- RBF reset workflow: **Complete** for export → init → import → reacquire, with Linux Block Layer
+  end-to-end proof.
+- Full-state rollback: **Complete and unchanged**; `rfi backup`/`rfi restore` remain the only way to
+  preserve and restore evidence and operational history.
+- Artifact migration or synchronization: **Not started and explicitly out of scope**.
+- Important limitation: only current effective configuration is transferred; configuration revision
+  history, browser-local preferences, consulting workspaces, and secrets/environment credentials are
+  not transferred.
+- Next architectural milestone: perform the operator-controlled RBF reset and reacquisition using
+  the reviewed package while retaining the full-state rollback backup.

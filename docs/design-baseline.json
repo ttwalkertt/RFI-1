@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 6395,
+      "destination_size": 6469,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "31d986734a19b4a1cf4c125e13d001af49524f9bcae18360b81e650033b066e2",
-      "content_change": "task roadmap reconciled through TASK-036 SEC authoritative retrieval"
+      "destination_sha256": "405a1f42504de46b02aff2890c39f1359d4ffb13645df28a27e8115ce7e200e3",
+      "content_change": "task roadmap reconciled through TASK-038 configuration reset support"
     },
     {
       "source": "ROADMAP.md",

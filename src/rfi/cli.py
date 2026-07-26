@@ -51,6 +51,9 @@ from rfi.storage import (
     create_backup,
     restore_backup,
 )
+from rfi.storage.configuration import (
+    ConfigurationError, export_configuration, import_configuration,
+)
 from rfi.streams import StreamError, StreamRepository, StreamService, draft_from_dict, template_yaml
 
 DEFAULT_STATE = Path(".artifacts/runtime/rfi-1")
@@ -189,6 +192,19 @@ def parser() -> argparse.ArgumentParser:
     )
     _add_state(restore)
     restore.add_argument("--input", type=_state, required=True, metavar="ZIP")
+    config = commands.add_parser(
+        "config", help="export or import configuration without artifact state"
+    )
+    _add_state(config)
+    config_actions = config.add_subparsers(dest="config_action", required=True)
+    config_export = config_actions.add_parser(
+        "export", help="export deterministic acquisition configuration YAML"
+    )
+    config_export.add_argument("--output", type=_state, required=True, metavar="YAML")
+    config_import = config_actions.add_parser(
+        "import", help="import configuration into initialized current-schema state"
+    )
+    config_import.add_argument("--file", type=_state, required=True, metavar="YAML")
     verify = commands.add_parser(
         "verify", help="verify SQLite, relationships, and immutable content"
     )
@@ -443,6 +459,20 @@ def verify_state(state: Path) -> None:
                       "mailing_lists": mailing_lists}, indent=2, sort_keys=True))
 
 
+def config_operation(arguments: argparse.Namespace) -> None:
+    """Export or transactionally import configuration-only state."""
+    if arguments.config_action == "export":
+        rendered = export_configuration(arguments.state)
+        arguments.output.write_text(rendered, encoding="utf-8")
+        print(json.dumps({"output": str(arguments.output), "format": "rfi-config", "version": 1}))
+        return
+    try:
+        text = arguments.file.read_text(encoding="utf-8")
+    except OSError as error:
+        raise ApplicationError(f"cannot read configuration file: {arguments.file}") from error
+    print(json.dumps(import_configuration(arguments.state, text), indent=2, sort_keys=True))
+
+
 def mailing_list_operation(arguments: argparse.Namespace) -> None:
     """Run one bounded mailing-list operator action through public contracts."""
     _open_state(arguments.state)
@@ -608,6 +638,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(create_backup(arguments.state, arguments.output), indent=2))
         elif arguments.command == "restore":
             print(json.dumps(restore_backup(arguments.input, arguments.state), indent=2))
+        elif arguments.command == "config":
+            config_operation(arguments)
         elif arguments.command == "mailing-list":
             mailing_list_operation(arguments)
         elif arguments.command == "stream":
@@ -625,6 +657,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         MailingListError,
         StreamError,
         StorageError,
+        ConfigurationError,
         OSError,
     ) as error:
         print(f"rfi: error: {error}", file=sys.stderr)

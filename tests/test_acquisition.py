@@ -403,6 +403,7 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "source_profiles/template.py",
                 "storage/__init__.py",
                 "storage/backup.py",
+                "storage/configuration.py",
                 "storage/sqlite.py",
                 "streams/__init__.py",
                 "streams/contracts.py",
