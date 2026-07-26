@@ -100,4 +100,15 @@ permission-enabled full runs cleared all unit tests; the final run passed every 
 ## Archive
 
 This review directory is packaged as `../TASK-038-review-package.zip`. The archive preserves the
-stable relative path `TASK-038/README.md` and was verified with both `unzip -t` and `unzip -l`.
+stable relative `TASK-038/` review paths and was verified with both `unzip -t` and `unzip -l`.
+
+The archive is self-contained and includes:
+
+- this architectural review and inventory;
+- explicit RBF reset, export/import, and exclusion proof narratives under `TASK-038/evidence/`;
+- focused TASK-038 and full-state-backup regression output under `TASK-038/validation/`;
+- complete `make validate` output under `TASK-038/validation/`;
+- the authoritative task ticket and operator documentation;
+- the committed configuration implementation and CLI integration;
+- the executable TASK-038 acceptance tests and repository boundary tests;
+- implementation commit metadata and a SHA-256 manifest.

@@ -1,0 +1,36 @@
+test_cli_export_init_import_operator_workflow (tests.test_task038.ConfigurationResetCase.test_cli_export_init_import_operator_workflow) ... ok
+test_conflict_and_late_validation_failure_leave_target_unchanged (tests.test_task038.ConfigurationResetCase.test_conflict_and_late_validation_failure_leave_target_unchanged) ... ok
+test_export_is_deterministic_versioned_and_contains_no_evidence_identifiers (tests.test_task038.ConfigurationResetCase.test_export_is_deterministic_versioned_and_contains_no_evidence_identifiers) ... ok
+test_missing_uninitialized_incompatible_and_malformed_targets_are_refused (tests.test_task038.ConfigurationResetCase.test_missing_uninitialized_incompatible_and_malformed_targets_are_refused) ... ok
+test_reset_import_restores_configuration_only_and_can_start_acquisition (tests.test_task038.ConfigurationResetCase.test_reset_import_restores_configuration_only_and_can_start_acquisition) ... ok
+test_backup_restore_reproduces_queries_and_checksums (tests.test_task021.SQLiteFoundationTests.test_backup_restore_reproduces_queries_and_checksums) ... RFI-1 state: /private/var/folders/q3/p5qzfr9d539bwbp25pxxnm380000gn/T/tmpqb91h3uh/state
+- created authoritative SQLite repository and immutable content store
+- schema version: 9
+ok
+test_clean_repeated_initialization_and_explicit_seed (tests.test_task021.SQLiteFoundationTests.test_clean_repeated_initialization_and_explicit_seed) ... ok
+test_cli_reports_missing_state_without_sql_details (tests.test_task021.SQLiteFoundationTests.test_cli_reports_missing_state_without_sql_details) ... ok
+test_duplicate_identity_restart_query_and_stale_cursor (tests.test_task021.SQLiteFoundationTests.test_duplicate_identity_restart_query_and_stale_cursor) ... RFI-1 state: /private/var/folders/q3/p5qzfr9d539bwbp25pxxnm380000gn/T/tmporjyl6fk/state
+- created authoritative SQLite repository and immutable content store
+- schema version: 9
+ok
+test_incompatible_schema_and_legacy_state_fail_explicitly (tests.test_task021.SQLiteFoundationTests.test_incompatible_schema_and_legacy_state_fail_explicitly) ... RFI-1 state: /private/var/folders/q3/p5qzfr9d539bwbp25pxxnm380000gn/T/tmpgc4xzvoi/state
+- created authoritative SQLite repository and immutable content store
+- schema version: 9
+ok
+test_missing_content_and_parameter_boundary_fail_closed (tests.test_task021.SQLiteFoundationTests.test_missing_content_and_parameter_boundary_fail_closed) ... RFI-1 state: /private/var/folders/q3/p5qzfr9d539bwbp25pxxnm380000gn/T/tmp_88ikijd/state
+- created authoritative SQLite repository and immutable content store
+- schema version: 9
+ok
+test_schema_version_configuration_constraints_and_no_blob (tests.test_task021.SQLiteFoundationTests.test_schema_version_configuration_constraints_and_no_blob) ... RFI-1 state: /private/var/folders/q3/p5qzfr9d539bwbp25pxxnm380000gn/T/tmpddey046m/state
+- created authoritative SQLite repository and immutable content store
+- schema version: 9
+ok
+test_transaction_rollback_leaves_only_detectable_orphan (tests.test_task021.SQLiteFoundationTests.test_transaction_rollback_leaves_only_detectable_orphan) ... RFI-1 state: /private/var/folders/q3/p5qzfr9d539bwbp25pxxnm380000gn/T/tmpecg1w26n/state
+- created authoritative SQLite repository and immutable content store
+- schema version: 9
+ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 1.674s
+
+OK
