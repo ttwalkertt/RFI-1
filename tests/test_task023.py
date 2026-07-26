@@ -506,28 +506,83 @@ class MailingListCase(unittest.TestCase):
         )
         self.assertEqual(len(relationships), 4)
 
-    def test_conflicting_external_identity_fails_closed(self) -> None:
+    def test_conflicting_external_identity_is_quarantined_and_continues(self) -> None:
         root_id = "<task023-root@kernel.example>"
         self.service.acquire(
             LINUX_BLOCK_SOURCE.source_id,
             SelectionCriteria(message_ids=(root_id,)),
             AcquisitionLimits(descendant_depth=0),
         )
+        canonical_before = self.repository.canonical_message(root_id)
+        continued_id = "<task037-continued@kernel.example>"
         conflicting = FixtureMailingListArchive({
             root_id: ArchiveMessage(
                 raw_message(root_id, "different subject", body="conflicting bytes"),
                 "fixture:conflict",
-            )
+            ),
+            continued_id: ArchiveMessage(
+                raw_message(continued_id, "continued message"), "fixture:continued"
+            ),
         })
         service = MailingListAcquisitionService(
             self.repository, conflicting, identifiers=self.identifiers.__next__
         )
-        with self.assertRaisesRegex(MailingListError, "conflicting immutable bytes"):
-            service.acquire(
-                LINUX_BLOCK_SOURCE.source_id,
-                SelectionCriteria(message_ids=(root_id,)),
-                AcquisitionLimits(descendant_depth=0),
-            )
+        manifest = service.acquire(
+            LINUX_BLOCK_SOURCE.source_id,
+            SelectionCriteria(message_ids=(root_id, continued_id)),
+            AcquisitionLimits(seed_limit=2, context_limit=2, descendant_depth=0),
+        )
+        self.assertEqual(manifest.run_status.value, "succeeded")
+        self.assertEqual(manifest.conflict_count, 1)
+        self.assertEqual(manifest.conflicted_message_ids, (root_id,))
+        self.assertEqual(self.repository.canonical_message(root_id), canonical_before)
+        conflicts = self.query.unresolved_conflicts(manifest.run_id)
+        self.assertEqual(len(conflicts), 1)
+        self.assertNotEqual(
+            conflicts[0]["candidate_artifact_id"], canonical_before["artifact_id"]
+        )
+        self.assertEqual(
+            self.repository.artifacts.read_artifact(
+                conflicts[0]["candidate_artifact_id"]
+            ),
+            raw_message(root_id, "different subject", body="conflicting bytes"),
+        )
+        self.assertIsNotNone(self.repository.canonical_message(continued_id))
+        self.assertFalse(manifest.coverage_complete)
+
+        repeated = service.acquire(
+            LINUX_BLOCK_SOURCE.source_id,
+            SelectionCriteria(message_ids=(root_id, continued_id)),
+            AcquisitionLimits(seed_limit=2, context_limit=2, descendant_depth=0),
+        )
+        self.assertEqual(repeated.conflict_count, 1)
+        all_conflicts = self.query.unresolved_conflicts()
+        self.assertEqual(len(all_conflicts), 1)
+        self.assertEqual(all_conflicts[0]["occurrence_count"], 2)
+        candidate_id = all_conflicts[0]["candidate_artifact_id"]
+        self.assertEqual(
+            sum(
+                1 for row in self.repository.artifacts.artifact_metadata()
+                if row["artifact_id"] == candidate_id
+            ),
+            1,
+        )
+
+    def test_non_conflict_repository_failure_still_aborts_acquisition(self) -> None:
+        with patch.object(
+            self.repository, "retain_message",
+            side_effect=MailingListError(
+                "repository_failure", "injected non-conflict repository failure"
+            ),
+        ):
+            with self.assertRaisesRegex(
+                MailingListError, "injected non-conflict repository failure"
+            ):
+                self.service.acquire(
+                    LINUX_BLOCK_SOURCE.source_id,
+                    SelectionCriteria(message_ids=("<task023-root@kernel.example>",)),
+                    AcquisitionLimits(descendant_depth=0),
+                )
 
     def test_structured_publication_failure_never_admits_and_retry_recovers(self) -> None:
         criteria = SelectionCriteria(message_ids=("<task023-a1@kernel.example>",))
@@ -651,7 +706,7 @@ class MailingListCase(unittest.TestCase):
                 connection.execute(f"DROP TABLE {table}")
             connection.execute("UPDATE schema_metadata SET schema_version=1")
         database = RepositoryDatabase.open(self.state)
-        self.assertEqual(database.validate()["schema_version"], 8)
+        self.assertEqual(database.validate()["schema_version"], 9)
         with database.connect(read_only=True) as connection:
             names = {row[0] for row in connection.execute(
                 "SELECT name FROM sqlite_schema WHERE type='table'"

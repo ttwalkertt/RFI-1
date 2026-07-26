@@ -229,10 +229,13 @@ class MailingListRepository:
         canonical = self.canonical_message(storage_external_id)
         if canonical is not None:
             if canonical["artifact_id"] != expected_artifact:
-                self._record_message_conflict(
-                    storage_external_id, expected_artifact, document_id(
-                        source.source_id, storage_external_id
-                    ), source.source_id, run_id, canonical,
+                candidate_document_id, artifact_created = self._retain_conflict_candidate(
+                    source, run_id, storage_external_id, parsed, raw, location,
+                    inclusion_reason, requested_at, fallback_archive_url,
+                )
+                conflict_id = self._record_message_conflict(
+                    storage_external_id, expected_artifact, candidate_document_id,
+                    source.source_id, run_id, canonical,
                 )
                 raise MailingListError(
                     "message_id_conflict",
@@ -241,6 +244,10 @@ class MailingListRepository:
                         "normalized_message_id": storage_external_id,
                         "canonical_artifact_id": canonical["artifact_id"],
                         "candidate_artifact_id": expected_artifact,
+                        "candidate_document_id": candidate_document_id,
+                        "artifact_created": artifact_created,
+                        "conflict_id": conflict_id,
+                        "quarantined_candidate_retained": True,
                     },
                 )
             return (
@@ -324,13 +331,63 @@ class MailingListRepository:
             receipt.artifact_created,
         )
 
+    def _retain_conflict_candidate(
+        self, source: MailingListSource, run_id: str, external_id: str,
+        parsed: ParsedMessage, raw: bytes, location: str, inclusion_reason: str,
+        requested_at: str, fallback_archive_url: str | None,
+    ) -> tuple[str, bool]:
+        """Retain conflicting bytes under a stable non-canonical document identity."""
+        digest = hashlib.sha256(raw).hexdigest()
+        normalized = normalize_message_id(external_id)
+        assert normalized is not None
+        identity = hashlib.sha256(f"{normalized}\0{digest}".encode()).hexdigest()[:32]
+        doc_id = f"mail-conflict.{identity}"
+        with self._database.connect(read_only=True) as connection:
+            prior = connection.execute(
+                "SELECT 1 FROM artifact_observations WHERE artifact_id=? AND document_id=? "
+                "LIMIT 1", (f"artifact-{digest}", doc_id),
+            ).fetchone()
+        if prior is not None:
+            return doc_id, False
+        candidate = CandidateDocument(
+            f"candidate.mail-conflict.{identity}", source.source_id, doc_id,
+            DiscoveryProvenance(
+                requested_at, "lore-message-id-conflict", {"message_id": normalized},
+                (location,), {
+                    "repository_projection": "mailing-list-conflict-quarantine",
+                    "list_id": source.list_id, "subject": parsed.subject,
+                    "sender": parsed.sender, "message_date": parsed.message_date,
+                    "inclusion_reason": inclusion_reason, "run_id": run_id,
+                    "cross_archive_fallback": fallback_archive_url is not None,
+                    "fallback_archive_url": fallback_archive_url,
+                },
+            ),
+        )
+        try:
+            receipt = self._artifacts.record_success(
+                f"attempt.mail-conflict.{identity}", candidate,
+                RetrievalResult(
+                    raw, "message/rfc822", requested_at, "lore-public-inbox",
+                    {"message_id": normalized},
+                    {"lossless_archive_representation": True, "quarantined": True},
+                ),
+            )
+        except (ConflictError, IntegrityError) as error:
+            raise MailingListError("repository_failure", str(error)) from error
+        return receipt.document_id, receipt.artifact_created
+
     def _record_message_conflict(
         self, external_id: str, candidate_artifact_id: str, candidate_document_id: str,
         source_id: str, run_id: str, canonical: dict[str, str],
-    ) -> None:
+    ) -> str:
         """Persist actionable fail-closed diagnostics without mutating canonical content."""
         normalized = normalize_message_id(external_id)
         assert normalized is not None
+        identity_payload = canonical_json({
+            "normalized_message_id": normalized,
+            "canonical_artifact_id": canonical["artifact_id"],
+            "candidate_artifact_id": candidate_artifact_id,
+        })
         payload = canonical_json({
             "reason": "message_id_byte_conflict",
             "normalized_message_id": normalized,
@@ -339,18 +396,52 @@ class MailingListRepository:
             "candidate_artifact_id": candidate_artifact_id,
             "candidate_document_id": candidate_document_id,
             "source_id": source_id,
-            "run_id": run_id,
+            "status": "unresolved",
         })
-        conflict_id = "mail-conflict-" + hashlib.sha256(payload.encode()).hexdigest()[:32]
+        conflict_id = "mail-conflict-" + hashlib.sha256(
+            identity_payload.encode()
+        ).hexdigest()[:32]
+        observed_at = utc_now()
         with self._database.transaction() as connection:
             connection.execute(
-                "INSERT OR IGNORE INTO mailing_list_message_conflicts VALUES "
-                "(?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO mailing_list_message_conflicts "
+                "(conflict_id,normalized_message_id,canonical_message_id,"
+                "canonical_artifact_id,candidate_artifact_id,candidate_document_id,"
+                "source_id,run_id,detected_at,last_detected_at,status,occurrence_count,"
+                "canonical_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(conflict_id) DO UPDATE SET run_id=excluded.run_id,"
+                "last_detected_at=excluded.last_detected_at,"
+                "occurrence_count=mailing_list_message_conflicts.occurrence_count+1",
                 (conflict_id, normalized, canonical["canonical_message_id"],
                  canonical["artifact_id"], candidate_artifact_id,
-                 candidate_document_id, source_id, run_id, utc_now(), payload),
+                 candidate_document_id, source_id, run_id, observed_at, observed_at,
+                 "unresolved", 1, payload),
+            )
+            connection.execute(
+                "INSERT INTO mailing_list_message_conflict_observations VALUES "
+                "(?,?,?,?,?,?,?)",
+                (run_id, conflict_id, normalized, candidate_artifact_id, source_id,
+                 observed_at, "conflicted_skipped"),
             )
             self._database.advance_revision(connection)
+        return conflict_id
+
+    def unresolved_message_conflicts(
+        self, *, run_id: str | None = None
+    ) -> tuple[dict[str, Any], ...]:
+        where = "WHERE c.status='unresolved'"
+        parameters: tuple[object, ...] = ()
+        if run_id is not None:
+            where += " AND EXISTS (SELECT 1 FROM mailing_list_message_conflict_observations o " \
+                "WHERE o.conflict_id=c.conflict_id AND o.run_id=?)"
+            parameters = (run_id,)
+        return self.rows(
+            "SELECT c.conflict_id,c.normalized_message_id,c.canonical_message_id,"
+            "c.canonical_artifact_id,c.candidate_artifact_id,c.candidate_document_id,"
+            "c.source_id,c.detected_at,c.last_detected_at,c.status,c.occurrence_count "
+            "FROM mailing_list_message_conflicts c " + where +
+            " ORDER BY c.last_detected_at DESC,c.conflict_id", parameters,
+        )
 
     def retain_unavailable_ancestor(
         self,

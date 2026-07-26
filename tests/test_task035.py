@@ -115,14 +115,14 @@ class CanonicalMessageCase(unittest.TestCase):
         self.assertEqual(observations[1]["content_fetched"], 1)
         self.assertEqual(second.artifact_count_created, 0)
 
-    def test_conflicting_bytes_fail_closed_with_diagnostic(self) -> None:
+    def test_conflicting_bytes_quarantine_without_changing_canonical(self) -> None:
         self.acquire()
         before = self.repository.rows("SELECT * FROM canonical_mailing_list_messages")[0]
         conflict_archive = FixtureMailingListArchive({
             NORMALIZED_ID: ArchiveMessage(raw_message(body="different"), "fixture:conflict")
         })
-        with self.assertRaisesRegex(MailingListError, "conflicting immutable bytes"):
-            self.acquire(self.service(archive=conflict_archive))
+        manifest = self.acquire(self.service(archive=conflict_archive))
+        self.assertEqual(manifest.conflict_count, 1)
         after = self.repository.rows("SELECT * FROM canonical_mailing_list_messages")[0]
         self.assertEqual(after["artifact_id"], before["artifact_id"])
         diagnostics = self.repository.rows("SELECT * FROM mailing_list_message_conflicts")
@@ -214,7 +214,7 @@ class CanonicalMessageCase(unittest.TestCase):
             connection.execute("DROP TABLE canonical_mailing_list_messages")
             connection.execute("UPDATE schema_metadata SET schema_version=6")
         upgraded = RepositoryDatabase.open(self.state)
-        self.assertEqual(upgraded.validate()["schema_version"], 8)
+        self.assertEqual(upgraded.validate()["schema_version"], 9)
         observations = MailingListRepository(self.state).rows(
             "SELECT run_id,canonical_message_id,observation_type "
             "FROM mailing_list_run_items"

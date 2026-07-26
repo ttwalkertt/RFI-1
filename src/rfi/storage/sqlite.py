@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -268,10 +268,23 @@ CREATE TABLE IF NOT EXISTS mailing_list_message_conflicts (
     source_id TEXT REFERENCES mailing_list_sources(source_id),
     run_id TEXT,
     detected_at TEXT NOT NULL,
+    last_detected_at TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('unresolved','resolved')),
+    occurrence_count INTEGER NOT NULL CHECK (occurrence_count > 0),
     canonical_json TEXT NOT NULL
 ) STRICT;
 CREATE INDEX IF NOT EXISTS mailing_list_message_conflicts_identity
 ON mailing_list_message_conflicts(normalized_message_id);
+CREATE TABLE IF NOT EXISTS mailing_list_message_conflict_observations (
+    run_id TEXT NOT NULL,
+    conflict_id TEXT NOT NULL REFERENCES mailing_list_message_conflicts(conflict_id),
+    normalized_message_id TEXT NOT NULL,
+    candidate_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+    source_id TEXT NOT NULL REFERENCES mailing_list_sources(source_id),
+    observed_at TEXT NOT NULL,
+    outcome TEXT NOT NULL CHECK (outcome = 'conflicted_skipped'),
+    PRIMARY KEY (run_id, conflict_id)
+) STRICT;
 CREATE TABLE mailing_list_run_items (
     run_id TEXT NOT NULL REFERENCES mailing_list_runs(run_id),
     source_id TEXT NOT NULL REFERENCES mailing_list_sources(source_id),
@@ -563,6 +576,29 @@ ALTER TABLE mailing_list_run_items ADD COLUMN canonical_created INTEGER NOT NULL
   CHECK (canonical_created IN (0,1));
 """
 
+_MIGRATE_V8_TO_V9_CONFLICT_CASE = """
+ALTER TABLE mailing_list_message_conflicts ADD COLUMN last_detected_at TEXT;
+ALTER TABLE mailing_list_message_conflicts ADD COLUMN status TEXT NOT NULL DEFAULT 'unresolved'
+  CHECK (status IN ('unresolved','resolved'));
+ALTER TABLE mailing_list_message_conflicts ADD COLUMN occurrence_count INTEGER NOT NULL DEFAULT 1
+  CHECK (occurrence_count > 0);
+UPDATE mailing_list_message_conflicts SET last_detected_at=detected_at
+  WHERE last_detected_at IS NULL;
+"""
+
+_MIGRATE_V8_TO_V9_OBSERVATIONS = """
+CREATE TABLE mailing_list_message_conflict_observations (
+    run_id TEXT NOT NULL,
+    conflict_id TEXT NOT NULL REFERENCES mailing_list_message_conflicts(conflict_id),
+    normalized_message_id TEXT NOT NULL,
+    candidate_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+    source_id TEXT NOT NULL REFERENCES mailing_list_sources(source_id),
+    observed_at TEXT NOT NULL,
+    outcome TEXT NOT NULL CHECK (outcome = 'conflicted_skipped'),
+    PRIMARY KEY (run_id, conflict_id)
+) STRICT;
+"""
+
 _MIGRATE_V7_TO_V8 = """
 CREATE TABLE IF NOT EXISTS sec_sources (
     firm_id TEXT PRIMARY KEY REFERENCES firms(firm_id),
@@ -633,11 +669,22 @@ def _backfill_task035(connection: sqlite3.Connection) -> None:
                 })
                 import hashlib
                 conflict_id = "mail-conflict-" + hashlib.sha256(payload.encode()).hexdigest()[:32]
+                observed_at = utc_now()
                 connection.execute(
-                    "INSERT OR IGNORE INTO mailing_list_message_conflicts VALUES "
-                    "(?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT OR IGNORE INTO mailing_list_message_conflicts "
+                    "(conflict_id,normalized_message_id,canonical_message_id,"
+                    "canonical_artifact_id,candidate_artifact_id,candidate_document_id,"
+                    "source_id,run_id,detected_at,last_detected_at,status,occurrence_count,"
+                    "canonical_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (conflict_id, normalized, None, None, str(row[3]), str(row[4]),
-                     str(row[1]), str(row[0]), utc_now(), payload),
+                     str(row[1]), str(row[0]), observed_at, observed_at, "unresolved", 1,
+                     payload),
+                )
+                connection.execute(
+                    "INSERT OR IGNORE INTO mailing_list_message_conflict_observations "
+                    "VALUES (?,?,?,?,?,?,?)",
+                    (str(row[0]), conflict_id, normalized, str(row[3]), str(row[1]),
+                     observed_at, "conflicted_skipped"),
                 )
             continue
         chosen = candidates[0]
@@ -841,7 +888,7 @@ class RepositoryDatabase:
                 version = int(row[0])
                 if version == SCHEMA_VERSION:
                     return False
-                if version not in {1, 2, 3, 4, 5, 6, 7}:
+                if version not in {1, 2, 3, 4, 5, 6, 7, 8}:
                     raise StorageError(
                         "incompatible_schema",
                         f"repository schema version {version} is unsupported; "
@@ -871,6 +918,11 @@ class RepositoryDatabase:
                         "PRAGMA table_info(mailing_list_run_items)"
                     )
                 }
+                conflict_columns = {
+                    str(item[1]) for item in connection.execute(
+                        "PRAGMA table_info(mailing_list_message_conflicts)"
+                    )
+                }
                 if (
                     version != 1
                     and version <= 6
@@ -879,6 +931,11 @@ class RepositoryDatabase:
                     scripts.append(_MIGRATE_V6_TO_V7)
                 if version <= 7 and "sec_sources" not in existing_tables:
                     scripts.append(_MIGRATE_V7_TO_V8)
+                if version != 1 and version <= 8:
+                    if "last_detected_at" not in conflict_columns:
+                        scripts.append(_MIGRATE_V8_TO_V9_CONFLICT_CASE)
+                    if "mailing_list_message_conflict_observations" not in existing_tables:
+                        scripts.append(_MIGRATE_V8_TO_V9_OBSERVATIONS)
                 for script in scripts:
                     for statement in script.split(";"):
                         if statement.strip():

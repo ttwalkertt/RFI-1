@@ -719,6 +719,7 @@ class LinuxMailingListWorkflowService:
             "messages": [
                 asdict(item) for item in self.query_service.acquisition_messages(run_id)
             ],
+            "conflicts": list(self.query_service.unresolved_conflicts(run_id)),
         }
 
     def draft_for(self, stream_id: str) -> MailingListWorkflowDraft:

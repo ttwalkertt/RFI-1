@@ -355,6 +355,7 @@ class MailingListAcquisitionService:
         retained: list[dict[str, Any]] = []
         created = 0
         idempotent = 0
+        conflicts: list[str] = []
         for external_id, item in sorted(plan["items"].items()):
             if item.get("reuse", False):
                 key = message_key(source_id, external_id)
@@ -369,11 +370,24 @@ class MailingListAcquisitionService:
                     )
                 )
             else:
-                key, doc_id, artifact_id, artifact_created = self.repository.retain_message(
-                    source, run_id, external_id, item["parsed"], item["raw"],
-                    item["location"], item["inclusion_reason"], requested_at,
-                    item["fallback_archive_url"],
-                )
+                try:
+                    key, doc_id, artifact_id, artifact_created = (
+                        self.repository.retain_message(
+                            source, run_id, external_id, item["parsed"], item["raw"],
+                            item["location"], item["inclusion_reason"], requested_at,
+                            item["fallback_archive_url"],
+                        )
+                    )
+                except MailingListError as error:
+                    if not (
+                        error.code == "message_id_conflict"
+                        and error.details.get("quarantined_candidate_retained") is True
+                    ):
+                        raise
+                    created += int(bool(error.details["artifact_created"]))
+                    idempotent += int(not bool(error.details["artifact_created"]))
+                    conflicts.append(external_id)
+                    continue
             del key
             created += int(artifact_created)
             idempotent += int(not artifact_created)
@@ -417,6 +431,7 @@ class MailingListAcquisitionService:
             }
             and not plan["unexpected_truncation"]
             and not plan["failures"]
+            and not conflicts
             and plan["state"] == ConnectivityState.CONNECTED
         )
         manifest = AcquisitionManifest(
@@ -443,6 +458,7 @@ class MailingListAcquisitionService:
             )),
             plan["relationship_status"], plan["continuation"],
             plan["relationship_records_processed"],
+            len(conflicts), tuple(sorted(conflicts)),
         )
         self.repository.publish(manifest, retained, messages, discussions)
         return manifest
@@ -923,6 +939,9 @@ class MailingListQueryService:
         row["retryable"] = bool(row["retryable"])
         row["manifest"] = json.loads(str(row.pop("canonical_json")))
         return row
+
+    def unresolved_conflicts(self, run_id: str | None = None) -> tuple[dict[str, Any], ...]:
+        return self.repository.unresolved_message_conflicts(run_id=run_id)
 
     def acquisition_messages(
         self, run_id: str, limit: int = 100

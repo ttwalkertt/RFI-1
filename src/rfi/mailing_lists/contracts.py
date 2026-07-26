@@ -259,6 +259,8 @@ class AcquisitionManifest:
     )
     relationship_continuation: dict[str, object] | None = None
     relationship_records_processed: int = 0
+    conflict_count: int = 0
+    conflicted_message_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
