@@ -51,6 +51,21 @@ class FixedResolver:
         return self.resolution
 
 
+class CancelAfterStateRepository(SecRepository):
+    """Request cancellation after one durable transition for boundary coverage."""
+
+    def __init__(self, root: Path, target: SecWorkflowState) -> None:
+        super().__init__(root)
+        self.target = target
+        self.triggered = False
+
+    def save_run(self, record: dict[str, object]) -> None:
+        super().save_run(record)
+        if record["current_state"] == self.target.value and not self.triggered:
+            self.triggered = True
+            super().cancel(str(record["run_id"]))
+
+
 class SecWorkflowTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -186,6 +201,36 @@ class SecWorkflowTests(unittest.TestCase):
                          (SecWorkflowState.RECEIVED, SecWorkflowState.CANCELLED))
         self.assertEqual(self.transport.requests, 0)
         self.assertEqual(self.repository.run(run_id)["cancellation_requested"], True)
+
+    def test_cancellation_after_source_validation_stops_before_retrieval(self) -> None:
+        self.repository.persist_source(self.direct_source(), None)
+        repository = CancelAfterStateRepository(
+            self.root, SecWorkflowState.SOURCE_VALIDATED
+        )
+        workflow = SecRetrievalWorkflow(
+            self.firms, repository, self.acquisition, self.resolver, self.adapter,
+            clock, self.ids.__next__,
+        )
+        run_id = workflow.initiate("seagate")
+        result = workflow.execute(run_id)
+
+        self.assertEqual(result.outcome, SecWorkflowOutcome.CANCELLED)
+        self.assertEqual(
+            result.states,
+            (
+                SecWorkflowState.RECEIVED,
+                SecWorkflowState.APPLICABILITY_DETERMINED,
+                SecWorkflowState.SOURCE_LOADED,
+                SecWorkflowState.SOURCE_VALIDATED,
+                SecWorkflowState.CANCELLED,
+            ),
+        )
+        journal = repository.run(run_id)
+        self.assertTrue(journal["cancellation_requested"])
+        self.assertEqual(journal["states"], [state.value for state in result.states])
+        self.assertEqual(self.transport.requests, 0)
+        self.assertEqual(self.acquisition.sources(), [])
+        self.assertEqual(self.acquisition.artifact_metadata(), [])
 
 
 if __name__ == "__main__":
