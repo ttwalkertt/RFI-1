@@ -54,3 +54,11 @@ source-profile configuration while retaining SQLite as the runtime/query project
   editor-owned firm.
 - Missing or malformed managed SEC identity fails before a blank enabled candidate can be admitted.
 - The repair does not write `sec_sources` or weaken managed-write protection.
+
+## Maintenance repair acceptance criteria
+
+- SEC primary-document validation accepts the proven Microsoft Inline XBRL XML/comment prolog.
+- HTML recognition remains bounded and rejects comments containing decoy HTML, missing roots, and
+  roots beyond the inspection boundary.
+- The exact Microsoft 10-K accession succeeds through the existing provider without changing
+  configuration, adapter selection, filing policy, or immutable evidence semantics.

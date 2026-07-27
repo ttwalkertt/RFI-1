@@ -35,6 +35,26 @@ each synthesize `CIK:0000789019`; the durable pull plan selects `sec-form-10k`, 
 `sec-form-8k`, respectively. `parser_hint` remains blank because existing selection is by canonical
 artifact and mode, exactly as for editor-owned firms.
 
+## SEC Inline XBRL maintenance repair
+
+Microsoft's selected 2025 primary filing is valid Inline XBRL served by SEC as `text/html`, but it
+begins with an XML declaration and three complete generator comments. Its `<html>` root starts at
+byte 272. The provider's former `lstrip()[:256]` signature check therefore produced the false
+`invalid_artifact_content` failure even though identity, filing selection, URL construction, and
+adapter routing were correct.
+
+Primary-document validation now inspects at most the first 4 KiB and recognizes a root after bounded
+HTML whitespace, complete comments, an optional XML declaration, and an optional HTML doctype. It
+requires a real `<html` element boundary and rejects comment decoys, unterminated/missing roots, and
+roots outside the inspection limit. Media-type, empty-content, content-length, redirect, response
+size, and immutable-ingress behavior are unchanged.
+
+A read-only live acceptance check retrieved accession `0000950170-25-100235`, primary document
+`msft-20250630.htm`, through `SecProviderClient`: HTTP 200, normalized media type `text/html`,
+8,158,067 bytes, SHA-256
+`99d693f6c1544144ebeee92954f151a85bc62111837530a42855953bc01d0bbe`. No repository state was
+written by that check.
+
 ## Ownership and failure behavior
 
 - RFI reads but never creates, edits, patches, or rewrites authoritative files.
@@ -56,9 +76,11 @@ artifact and mode, exactly as for editor-owned firms.
 - Pull, numbered-form adapter, SEC workflow, synthesis, and TASK-041 regression suite: 53 tests
   passed. Existing editor-owned fixture pulls retain their prior behavior.
 - Legacy migrations from schema versions 1, 2, 3, 5, 6, 9, and 10 reach schema version 11.
-- Canonical `make validate`: PASS; all 402 tests passed, followed by lint, format, typecheck,
+- Canonical `make validate`: PASS; all 403 tests passed, followed by lint, format, typecheck,
   import, documentation, baseline, deterministic proof, and source-archive integrity gates.
 - The fixture-backed pull compared all `sec_sources` rows before and after and found no change.
+- Inline XBRL maintenance regression plus SEC provider, numbered-form, workflow, and TASK-041
+  suites: 42 tests passed.
 - Published and packaged JSON Schema files are byte-for-byte identical; `git diff --check` passes.
 - `make review-package` reproduces focused, regression, diff, and full validation and emits a
   self-contained archive under `.artifacts/review/` with checksums and ZIP integrity evidence.

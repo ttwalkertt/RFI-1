@@ -122,6 +122,15 @@ before capability matching. The fixture-backed Microsoft pull records `sec-form-
 and acquisition engine. `parser_hint` remains blank because the existing convention selects by
 artifact plus mode. Exact `sec_sources` rows are unchanged before and after the pull.
 
+## SEC Inline XBRL maintenance repair
+
+The selected Microsoft 10-K is valid SEC-hosted Inline XBRL whose XML declaration and generator
+comments place the `<html>` root at byte 272. The former 256-byte signature search rejected it.
+Validation now parses only a 4 KiB prefix, permits the proven bounded prolog forms, and requires a
+real HTML root boundary. Focused tests reject comment decoys, missing roots, and roots beyond the
+limit. The exact live accession was read successfully without repository mutation; configuration,
+filing selection, adapter routing, `sec_sources`, and immutable ingress are unchanged.
+
 ## Startup, transaction, and failure
 
 SQLite initialization/migration precedes file handling. Structural and complete-set semantic

@@ -448,6 +448,50 @@ class SecProviderFailureTests(unittest.TestCase):
             client.primary_document("1137789", "0001137789-25-000002", "file.htm")
         self.assertEqual(oversized.exception.code, "artifact_size_limit_exceeded")
 
+    def test_inline_xbrl_prolog_is_bounded_and_decoy_html_is_rejected(self) -> None:
+        client, fixture, _timing = provider()
+        inline_xbrl = (
+            b"<?xml version='1.0' encoding='ASCII'?>\n"
+            b"<!-- DFIN Inline XBRL Document -->\n"
+            b"<!--" + (b"x" * 260) + b"-->\n"
+            b'<html xmlns="http://www.w3.org/1999/xhtml"><body>filing</body></html>'
+        )
+        self.assertGreater(inline_xbrl.lower().find(b"<html"), 256)
+        fixture.responses.append(
+            SecHttpResponse(
+                200,
+                {"content-type": "text/html"},
+                inline_xbrl,
+                "https://www.sec.gov/x",
+            )
+        )
+        document = client.primary_document(
+            "1137789", "0001137789-25-000002", "file.htm"
+        )
+        self.assertEqual(document.content, inline_xbrl)
+
+        invalid = (
+            b"<!-- <html> is only comment text -->",
+            b"<?xml version='1.0'?><!-- complete comment without a root -->",
+            b"<html",
+            (b" " * 4_096) + b"<html></html>",
+        )
+        for content in invalid:
+            with self.subTest(prefix=content[:40]):
+                fixture.responses.append(
+                    SecHttpResponse(
+                        200,
+                        {"content-type": "text/html"},
+                        content,
+                        "https://www.sec.gov/x",
+                    )
+                )
+                with self.assertRaises(AdapterFailure) as caught:
+                    client.primary_document(
+                        "1137789", "0001137789-25-000002", "file.htm"
+                    )
+                self.assertEqual(caught.exception.code, "invalid_artifact_content")
+
     def test_missing_runtime_identity_and_invalid_cik_stop_before_network(self) -> None:
         fixture = SecFixtureTransport()
         client = SecProviderClient(lambda: "", fixture)

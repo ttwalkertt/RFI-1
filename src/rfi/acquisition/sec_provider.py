@@ -20,6 +20,47 @@ SEC_ARCHIVES_ORIGIN = "https://www.sec.gov"
 _ACCESSION = re.compile(r"^\d{10}-\d{2}-\d{6}$")
 _PRIMARY_DOCUMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _CONTACT = re.compile(r"^[^\s/]+(?:/[^\s]+)?\s+[^\s@]+@[^\s@]+\.[^\s@]+$")
+_HTML_PROLOG_LIMIT = 4_096
+_HTML_SPACE = b" \t\r\n\f"
+
+
+def _skip_html_space_and_comments(value: bytes, position: int) -> int | None:
+    """Skip bounded HTML whitespace and complete comments, rejecting truncation."""
+    while True:
+        while position < len(value) and value[position] in _HTML_SPACE:
+            position += 1
+        if not value.startswith(b"<!--", position):
+            return position
+        end = value.find(b"-->", position + 4)
+        if end < 0:
+            return None
+        position = end + 3
+
+
+def _has_html_document_signature(content: bytes) -> bool:
+    """Recognize an HTML root after a bounded XML/HTML document prolog."""
+    prefix = content[:_HTML_PROLOG_LIMIT].lower()
+    position = _skip_html_space_and_comments(prefix, 0)
+    if position is None:
+        return False
+    if prefix.startswith(b"<?xml", position):
+        end = prefix.find(b"?>", position + 5)
+        if end < 0:
+            return False
+        position = _skip_html_space_and_comments(prefix, end + 2)
+        if position is None:
+            return False
+    if prefix.startswith(b"<!doctype html", position):
+        end = prefix.find(b">", position + len(b"<!doctype html"))
+        if end < 0:
+            return False
+        position = _skip_html_space_and_comments(prefix, end + 1)
+        if position is None:
+            return False
+    if not prefix.startswith(b"<html", position):
+        return False
+    boundary = position + len(b"<html")
+    return boundary < len(prefix) and prefix[boundary] in _HTML_SPACE + b">/"
 
 
 class SecResponseTooLarge(ValueError):
@@ -249,8 +290,7 @@ class SecProviderClient:
                     "truncated_artifact_content",
                 )
         if media_type in {"text/html", "application/xhtml+xml"}:
-            prefix = response.content.lstrip()[:256].lower()
-            if b"<html" not in prefix and b"<!doctype html" not in prefix:
+            if not _has_html_document_signature(response.content):
                 raise AdapterFailure(
                     FailureClass.PERMANENT_RETRIEVAL,
                     "SEC primary filing HTML signature is invalid",
