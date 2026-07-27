@@ -400,6 +400,7 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "source_profiles/contracts.py",
                 "source_profiles/repository.py",
                 "source_profiles/service.py",
+                "source_profiles/synthesis.py",
                 "source_profiles/template.py",
                 "storage/__init__.py",
                 "storage/backup.py",

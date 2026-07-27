@@ -16,6 +16,7 @@ from rfi.source_profiles.contracts import (
     SourceProfileRevision,
     SourceProfileView,
 )
+from rfi.source_profiles.synthesis import effective_items
 
 
 class SourceProfileService:
@@ -44,10 +45,12 @@ class SourceProfileService:
                 SourceProfileItem(item.artifact_id, item.default_enabled)
                 for item in self.template.artifacts
             )
-            return SourceProfileView(
-                firm_id, None, 0, items, "", None, None, None, True
-            )
-        return self._view(revision)
+            return self._view_effective(firm_id, None, 0, items, "", None, None, None, True)
+        return self._view_effective(
+            firm_id, revision.source_profile_revision_id, revision.revision_number,
+            revision.items, revision.operator_notes, revision.created_at, revision.updated_at,
+            revision.supersedes_revision_id, False,
+        )
 
     def history(self, firm_id: str) -> tuple[SourceProfileRevision, ...]:
         """Return only saved immutable revisions; defaults are not fabricated history."""
@@ -166,16 +169,16 @@ class SourceProfileService:
             raise SourceProfileError(f"retrieval candidate {name} must be a string array")
         return tuple(value)
 
-    @staticmethod
-    def _view(revision: SourceProfileRevision) -> SourceProfileView:
-        return SourceProfileView(
-            revision.firm_id,
-            revision.source_profile_revision_id,
-            revision.revision_number,
-            revision.items,
-            revision.operator_notes,
-            revision.created_at,
-            revision.updated_at,
-            revision.supersedes_revision_id,
-            False,
+    def _view_effective(self, firm_id: str, revision_id: str | None, number: int,
+                        items: tuple[SourceProfileItem, ...], notes: str,
+                        created: str | None, updated: str | None, supersedes: str | None,
+                        is_default: bool) -> SourceProfileView:
+        effective = effective_items(self.firms, firm_id, items)
+        synthesized = tuple(
+            raw.artifact_id for raw, shown in zip(items, effective)
+            if not raw.retrieval_candidates and shown.retrieval_candidates
         )
+        identity = self.firms.external_identity(firm_id, "sec")
+        identities = (asdict(identity),) if identity else ()
+        return SourceProfileView(firm_id, revision_id, number, effective, notes, created,
+                                 updated, supersedes, is_default, synthesized, identities)

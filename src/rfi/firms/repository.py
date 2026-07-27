@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import re
+from importlib import resources
 from dataclasses import asdict
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -14,6 +15,7 @@ from typing import Any
 from rfi.firms.contracts import (
     FirmDraft,
     FirmError,
+    FirmExternalIdentity,
     FirmIdentifier,
     FirmRevision,
     FirmStatus,
@@ -73,6 +75,7 @@ class FirmRepository:
         except StorageError as error:
             raise FirmError(str(error)) from error
         repository = cls(root)
+        repository._load_reference_identities()
         repository.verify()
         return repository
 
@@ -84,6 +87,7 @@ class FirmRepository:
         except StorageError as error:
             raise FirmError(str(error)) from error
         repository = cls(root)
+        repository._load_reference_identities()
         repository.verify()
         return repository
 
@@ -96,6 +100,7 @@ class FirmRepository:
         if fail_before_publish:
             raise FirmError("injected interrupted write before firm catalog publication")
         self._publish(revision, create=True)
+        self._load_reference_identities((draft.firm_id,))
         return revision
 
     def create_batch(
@@ -151,6 +156,7 @@ class FirmRepository:
                 self._database.advance_revision(connection)
         except StorageError as error:
             raise FirmError(str(error)) from error
+        self._load_reference_identities(tuple(item.firm_id for item in revisions))
         return revisions
 
     def validate(self, draft: FirmDraft, current_firm_id: str | None = None) -> None:
@@ -277,6 +283,53 @@ class FirmRepository:
                 continue
             result.append(item)
         return tuple(sorted(result, key=lambda item: (-item.relevance, item.firm_id)))
+
+    def external_identity(
+        self, firm_id: str, provider: str
+    ) -> FirmExternalIdentity | None:
+        self.get(firm_id)
+        with self._database.connect(read_only=True) as connection:
+            row = connection.execute(
+                "SELECT canonical_json FROM firm_external_identities "
+                "WHERE firm_id=? AND provider=?", (firm_id, provider.casefold()),
+            ).fetchone()
+        return FirmExternalIdentity(**json.loads(str(row[0]))) if row else None
+
+    def _load_reference_identities(self, only: tuple[str, ...] = ()) -> int:
+        """Populate missing identities from immutable versioned reference data."""
+        target = resources.files("rfi").joinpath("resources/reference-identities-v1.json")
+        value = json.loads(target.read_text(encoding="utf-8"))
+        if value.get("schema_version") != 1 or value.get("catalog_version") != 1:
+            raise FirmError("unsupported reference identity catalog")
+        provider = str(value["provider"]).casefold()
+        known = set(self._state()["current_revisions"])
+        selected = set(only) if only else known
+        created = 0
+        with self._database.transaction() as connection:
+            for item in value["identities"]:
+                firm_id = str(item["firm_id"])
+                if firm_id not in known or firm_id not in selected:
+                    continue
+                identity = FirmExternalIdentity(provider=provider, **{
+                    key: item[key] for key in (
+                        "legal_name", "identifier", "regime", "verification_status",
+                        "verified_at", "verification_source",
+                    )
+                })
+                if identity.verification_status != "verified":
+                    raise FirmError("reference identities must be verified")
+                inserted = connection.execute(
+                    "INSERT OR IGNORE INTO firm_external_identities VALUES "
+                    "(?,?,?,?,?,?,?,?,?,?)",
+                    (firm_id, provider, identity.legal_name, identity.identifier,
+                     identity.regime, identity.verification_status, identity.verified_at,
+                     identity.verification_source, value["catalog_version"],
+                     canonical_json(asdict(identity))),
+                ).rowcount
+                created += inserted
+            if created:
+                self._database.advance_revision(connection)
+        return created
 
     def verify(self) -> dict[str, int | str]:
         """Fail closed on schema, chain, digest, pointer, or file inconsistencies."""

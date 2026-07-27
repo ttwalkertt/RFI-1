@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -108,6 +108,19 @@ CREATE TABLE firm_domains (
     revision_id TEXT NOT NULL REFERENCES firm_revisions(revision_id),
     domain TEXT NOT NULL,
     PRIMARY KEY (revision_id, domain)
+) STRICT;
+CREATE TABLE IF NOT EXISTS firm_external_identities (
+    firm_id TEXT NOT NULL REFERENCES firms(firm_id),
+    provider TEXT NOT NULL,
+    legal_name TEXT NOT NULL,
+    identifier TEXT NOT NULL,
+    regime TEXT NOT NULL,
+    verification_status TEXT NOT NULL,
+    verified_at TEXT NOT NULL,
+    verification_source TEXT NOT NULL,
+    catalog_version INTEGER NOT NULL CHECK (catalog_version > 0),
+    canonical_json TEXT NOT NULL,
+    PRIMARY KEY (firm_id, provider)
 ) STRICT;
 CREATE TABLE source_profiles (
     firm_id TEXT PRIMARY KEY REFERENCES firms(firm_id),
@@ -625,6 +638,22 @@ CREATE TABLE IF NOT EXISTS sec_workflow_runs (
 ) STRICT;
 """
 
+_MIGRATE_V9_TO_V10 = """
+CREATE TABLE IF NOT EXISTS firm_external_identities (
+    firm_id TEXT NOT NULL REFERENCES firms(firm_id),
+    provider TEXT NOT NULL,
+    legal_name TEXT NOT NULL,
+    identifier TEXT NOT NULL,
+    regime TEXT NOT NULL,
+    verification_status TEXT NOT NULL,
+    verified_at TEXT NOT NULL,
+    verification_source TEXT NOT NULL,
+    catalog_version INTEGER NOT NULL CHECK (catalog_version > 0),
+    canonical_json TEXT NOT NULL,
+    PRIMARY KEY (firm_id, provider)
+) STRICT;
+"""
+
 
 def _canonical_message_id(normalized_message_id: str) -> str:
     import hashlib
@@ -888,7 +917,7 @@ class RepositoryDatabase:
                 version = int(row[0])
                 if version == SCHEMA_VERSION:
                     return False
-                if version not in {1, 2, 3, 4, 5, 6, 7, 8}:
+                if version not in {1, 2, 3, 4, 5, 6, 7, 8, 9}:
                     raise StorageError(
                         "incompatible_schema",
                         f"repository schema version {version} is unsupported; "
@@ -900,6 +929,8 @@ class RepositoryDatabase:
                     for item in connection.execute("PRAGMA table_info(mailing_list_runs)")
                 }
                 scripts = []
+                if version <= 9:
+                    scripts.append(_MIGRATE_V9_TO_V10)
                 if version == 1:
                     scripts.append(_MIGRATE_V1_TO_V2)
                 if version <= 2:

@@ -218,7 +218,7 @@ class PullWorkflow:
         return tuple(self._firms.get(firm_id) for firm_id in request.firm_ids)
 
     def _planner(self) -> PullPlanner:
-        return PullPlanner(self._template, self._adapters)
+        return PullPlanner(self._template, self._adapters, self._firms)
 
     def _execute_firm(self, run_id: str, plan: PlannedFirm) -> FirmPullResult:
         artifacts = tuple(
