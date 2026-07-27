@@ -11,7 +11,7 @@ from pathlib import Path
 
 from rfi.admin import create_admin_server
 from rfi.concepts import ConceptRepository
-from rfi.firms import FirmRepository, sample_firms
+from rfi.firms import FirmDraft, FirmRepository
 from rfi.source_profiles import (
     SourceProfileDraft,
     SourceProfileItem,
@@ -21,19 +21,27 @@ from rfi.source_profiles import (
 
 
 class PullConfigurationNavigationTests(unittest.TestCase):
+    firm_id = "task024-no-sec-identity"
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.state = Path(self.temporary.name) / "state"
         ConceptRepository.initialize(self.state)
         firms = FirmRepository.initialize(self.state / "firm-catalog")
-        firms.create(sample_firms()[0])
+        firms.create(
+            FirmDraft(
+                self.firm_id,
+                "TASK-024 Synthetic Firm",
+                "2020-01-01",
+            )
+        )
         template = load_canonical_template()
         profiles = SourceProfileRepository.initialize(
             self.state / "source-profiles", template
         )
         profiles.publish(
             SourceProfileDraft(
-                "seagate", (SourceProfileItem("sec_10q", True, ()),)
+                self.firm_id, (SourceProfileItem("sec_10q", True, ()),)
             ),
             None,
         )
@@ -57,7 +65,7 @@ class PullConfigurationNavigationTests(unittest.TestCase):
     def test_pull_results_api_supplies_exact_navigation_identity(self) -> None:
         request = urllib.request.Request(
             self.base + "/api/pulls",
-            data=json.dumps({"firm_ids": ["seagate"]}).encode(),
+            data=json.dumps({"firm_ids": [self.firm_id]}).encode(),
             method="POST",
             headers={"Content-Type": "application/json"},
         )
@@ -76,7 +84,7 @@ class PullConfigurationNavigationTests(unittest.TestCase):
         artifact = next(
             item for item in firm["artifacts"] if item["artifact_id"] == "sec_10q"
         )
-        self.assertEqual(firm["firm_id"], "seagate")
+        self.assertEqual(firm["firm_id"], self.firm_id)
         self.assertEqual(artifact["artifact_id"], "sec_10q")
         self.assertEqual(artifact["outcome"], "configuration_problem")
         self.assertGreaterEqual(

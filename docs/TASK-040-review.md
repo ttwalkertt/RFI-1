@@ -21,8 +21,26 @@ See `docs/decisions/0025-reference-firm-identities-and-effective-source-profiles
 ## Validation
 
 - Focused TASK-040 plus source-profile/Pull/SEC/configuration regression suite: 38 tests passed.
-- Full repository suite: 388 tests exercised; the bounded desktop runner ended after 30 seconds while
-  localhost integration tests were still progressing, with no TASK-040 failure reported.
+- TASK-024 regression repair: the obsolete Seagate fixture was replaced with the synthetic
+  `task024-no-sec-identity` firm. Its enabled 10-Q item has no effective candidate, the aggregate
+  result remains `failed`, and the pull-results API retains the exact firm/artifact navigation
+  identity. The complementary TASK-040 test proves seeded Seagate receives `CIK:0001137789` and is
+  not classified as missing candidate configuration.
+- Baseline inventory repair: `scripts/check_baseline.py` now includes exactly
+  `resources/reference-identities-v1.json` and `source_profiles/synthesis.py` in its ordered product
+  file inventory; focused baseline validation passed.
+- Final canonical validation command: `/usr/bin/time -p make validate`.
+- Final canonical result: PASS in 54.85 seconds. All 392 tests passed; no tests were skipped or
+  deselected. Acquisition, engine, EDGAR, SEC API, TASK-005 through TASK-023 deterministic proofs,
+  lint, format, typecheck, import, documentation, and baseline gates passed. The source archive built
+  with 412 members, 2,563,076 bytes, SHA-256
+  `e4d959969d85c33d4e51c4b59f218583770efea1dd8ffd455ccc6d21d8e958f0`, and integrity PASS.
+- Focused commands: `/usr/bin/time -p make baseline-check` passed in 0.05 seconds;
+  `/usr/bin/time -p env PYTHONPATH=src .venv/bin/python -m unittest
+  tests.test_task024.PullConfigurationNavigationTests.test_pull_results_api_supplies_exact_navigation_identity
+  -v` passed 1 test in 0.88 seconds; `/usr/bin/time -p env PYTHONPATH=src .venv/bin/python -m
+  unittest tests.test_task040 -v` passed 5 tests in 0.32 seconds. Neither focused suite reported skips
+  or deselections.
 - Repository policy lint, format, and typecheck: PASS.
 - Manual validation: created Alphabet and a noncatalog firm; inspected identity attachment, synthesized
   10-K locator, explicit override, reset, non-SEC isolation, and absence of SEC URLs/CIKs from stored

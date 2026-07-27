@@ -91,6 +91,20 @@ class Task040Tests(unittest.TestCase):
         self.assertNotIn("CIK:0001652044", payload)
         self.assertNotIn("sec.gov", payload)
 
+    def test_seeded_seagate_sec_item_is_not_missing_candidate_configuration(self) -> None:
+        firm = self.firms.create(self.firm("seagate"))
+        profile = self.profiles.publish(SourceProfileDraft("seagate", (
+            SourceProfileItem("sec_10q", True),
+        )), None)
+        planner = PullPlanner(self.template, RetrievalAdapterRegistry(), self.firms)
+        plan = planner.plan(firm, profile)
+        artifact = next(x for x in plan.artifacts if x.artifact_id == "sec_10q")
+        self.assertEqual(artifact.candidates[0].locator, "CIK:0001137789")
+        self.assertNotEqual(
+            artifact.attemptability_diagnostic,
+            "No retrieval candidate configured.",
+        )
+
     def test_version_nine_repository_migrates(self) -> None:
         path = self.root / DATABASE_NAME
         with sqlite3.connect(path) as connection:
