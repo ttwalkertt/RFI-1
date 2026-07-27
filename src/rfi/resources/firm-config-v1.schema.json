@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfi.local/schemas/firm-config-v1.schema.json",
+  "title": "RFI Firm Configuration v1",
+  "description": "Authoritative externally generated configuration for one RFI firm and its currently supported SEC sources.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "config_id", "status", "firm", "sources"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "config_id": {"$ref": "#/$defs/stable_id"},
+    "status": {"enum": ["draft", "active", "paused", "retired"]},
+    "comments": {"type": "string"},
+    "firm": {"$ref": "#/$defs/firm"},
+    "sources": {"$ref": "#/$defs/sources"}
+  },
+  "$defs": {
+    "stable_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "maxLength": 80
+    },
+    "nonempty_string": {"type": "string", "minLength": 1},
+    "date": {"type": "string", "format": "date"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "domain": {
+      "type": "string",
+      "pattern": "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+    },
+    "firm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "display_name", "legal_name", "subtitle", "priority", "valid_from",
+        "jurisdiction", "aliases", "identifiers", "domains"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/stable_id"},
+        "display_name": {"$ref": "#/$defs/nonempty_string"},
+        "legal_name": {"$ref": "#/$defs/nonempty_string"},
+        "subtitle": {"type": "string", "minLength": 1, "maxLength": 120},
+        "priority": {"type": "integer", "minimum": 0, "maximum": 100},
+        "valid_from": {"$ref": "#/$defs/date"},
+        "valid_through": {"$ref": "#/$defs/date"},
+        "jurisdiction": {"$ref": "#/$defs/nonempty_string"},
+        "headquarters": {"type": "string"},
+        "sector": {"type": "string"},
+        "industry": {"type": "string"},
+        "aliases": {
+          "type": "array", "uniqueItems": true,
+          "items": {"$ref": "#/$defs/nonempty_string"}
+        },
+        "identifiers": {
+          "type": "array", "items": {"$ref": "#/$defs/firm_identifier"}
+        },
+        "domains": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/domain"}
+        },
+        "technology_focus": {
+          "type": "array", "uniqueItems": true,
+          "items": {"$ref": "#/$defs/nonempty_string"}
+        },
+        "source_hints": {
+          "type": "array", "items": {"$ref": "#/$defs/source_hint"}
+        },
+        "comments": {"type": "string"}
+      }
+    },
+    "firm_identifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+        "value": {"$ref": "#/$defs/nonempty_string"},
+        "market": {"$ref": "#/$defs/nonempty_string"}
+      }
+    },
+    "source_hint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+        "value": {"$ref": "#/$defs/nonempty_string"},
+        "comments": {"type": "string"}
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sec"],
+      "properties": {
+        "sec": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sec_source"}]}
+      }
+    },
+    "sec_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled", "cik", "registrant_name", "filing_regime", "verification",
+        "artifacts"
+      ],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "cik": {"type": "string", "pattern": "^[0-9]{10}$"},
+        "registrant_name": {"$ref": "#/$defs/nonempty_string"},
+        "filing_regime": {"$ref": "#/$defs/nonempty_string"},
+        "verification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "verified_at", "source"],
+          "properties": {
+            "status": {"const": "verified"},
+            "verified_at": {"$ref": "#/$defs/date_time"},
+            "source": {"$ref": "#/$defs/nonempty_string"}
+          }
+        },
+        "artifacts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["sec_10k", "sec_10q", "sec_8k", "sec_20f", "sec_6k"]
+          }
+        },
+        "comments": {"type": "string"}
+      }
+    }
+  }
+}

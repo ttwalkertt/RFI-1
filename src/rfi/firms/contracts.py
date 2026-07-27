@@ -30,6 +30,19 @@ class FirmIdentifier:
 
 
 @dataclass(frozen=True)
+class FirmExternalIdentity:
+    """Verified durable identity assigned by an external registry provider."""
+
+    provider: str
+    legal_name: str
+    identifier: str
+    regime: str
+    verification_status: str
+    verified_at: str
+    verification_source: str
+
+
+@dataclass(frozen=True)
 class FirmReference:
     """Stable integration reference; callers may optionally pin recognition semantics."""
 
@@ -54,6 +67,7 @@ class FirmDraft:
     canonical_name: str
     valid_from: str
     legal_name: str = ""
+    subtitle: str = ""
     aliases: tuple[str, ...] = ()
     identifiers: tuple[FirmIdentifier, ...] = ()
     domains: tuple[str, ...] = ()
@@ -78,6 +92,7 @@ class FirmRevision:
     revision_number: int
     canonical_name: str
     legal_name: str
+    subtitle: str
     aliases: tuple[str, ...]
     identifiers: tuple[FirmIdentifier, ...]
     domains: tuple[str, ...]
@@ -129,3 +144,8 @@ class FirmCatalog(Protocol):
         minimum_relevance: float | None = None,
     ) -> tuple[FirmRevision, ...]:
         """Search current firm records through public recognition metadata."""
+
+    def external_identity(
+        self, firm_id: str, provider: str
+    ) -> FirmExternalIdentity | None:
+        """Return verified provider identity attached to a stable firm."""

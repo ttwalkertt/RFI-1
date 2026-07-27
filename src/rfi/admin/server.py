@@ -27,6 +27,7 @@ from rfi.artifacts import (
 )
 from rfi.concepts import ConceptError, ConceptRepository, ConceptService
 from rfi.firms import FirmError, FirmRepository, FirmService
+from rfi.firm_configuration import prepare_firm_configuration
 from rfi.mailing_lists import (
     LinuxMailingListWorkflowService,
     LoreArchive,
@@ -883,7 +884,11 @@ class AdminHandler(BaseHTTPRequestHandler):
                 if self._first(query, "minimum_relevance")
                 else None,
             )
-            self._send_json(HTTPStatus.OK, {"items": [asdict(item) for item in items]})
+            self._send_json(HTTPStatus.OK, {"items": [
+                {**asdict(item), "configuration_authority":
+                 firm_service.configuration_authority(item.firm_id)}
+                for item in items
+            ]})
             return
         if method == "POST" and parts == ["api", "firms"]:
             self._send_json(HTTPStatus.CREATED, asdict(firm_service.create(self._body())))
@@ -929,7 +934,9 @@ class AdminHandler(BaseHTTPRequestHandler):
                 return
             if method == "GET" and len(parts) == 3:
                 revision_id = self._first(query, "revision_id") or None
-                self._send_json(HTTPStatus.OK, asdict(firm_service.detail(firm_id, revision_id)))
+                detail = asdict(firm_service.detail(firm_id, revision_id))
+                detail["configuration_authority"] = firm_service.configuration_authority(firm_id)
+                self._send_json(HTTPStatus.OK, detail)
                 return
             if method == "GET" and parts[3:] == ["history"]:
                 history = firm_service.history(firm_id)
@@ -1121,6 +1128,7 @@ def create_admin_server(
     """Create a local-default server backed by repository-controlled catalog state."""
     if not 0 <= port <= 65535:
         raise ConceptError("port must be between 0 and 65535")
+    prepare_firm_configuration(state)
     repository = ConceptRepository.open(state)
     firm_repository = FirmRepository.open(state / "firm-catalog")
     template = load_canonical_template()

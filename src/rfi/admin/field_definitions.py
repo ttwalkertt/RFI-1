@@ -125,6 +125,7 @@ FIELD_DEFINITIONS: Final[dict[str, str]] = {
         "The formal legal issuer or corporate name when known. It may differ from the "
         "canonical consulting name."
     ),
+    "subtitle": "A short operator-facing orientation shown with the firm name.",
     "firm_aliases": (
         "Alternative company, issuer, or commonly used names that help recognize the target. "
         "They are hints, not extracted entity assertions."

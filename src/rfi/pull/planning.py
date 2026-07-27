@@ -12,6 +12,7 @@ from rfi.source_profiles.contracts import (
     SourceProfileItem,
     SourceProfileRevision,
 )
+from rfi.source_profiles.synthesis import effective_items
 
 
 @dataclass(frozen=True)
@@ -39,10 +40,12 @@ class PullPlanner:
     """Expand enabled profile items and classify adapter availability."""
 
     def __init__(
-        self, template: AcquisitionTemplate, adapters: RetrievalAdapterRegistry
+        self, template: AcquisitionTemplate, adapters: RetrievalAdapterRegistry,
+        firms: object | None = None,
     ) -> None:
         self._template = template
         self._adapters = adapters
+        self._firms = firms
         self._artifacts = {item.artifact_id: item for item in template.artifacts}
 
     def plan(
@@ -59,6 +62,8 @@ class PullPlanner:
                 for item in self._template.artifacts
             )
         )
+        if self._firms is not None:
+            items = effective_items(self._firms, firm.firm_id, items)  # type: ignore[arg-type]
         artifacts = []
         for item in items:
             if not item.enabled:

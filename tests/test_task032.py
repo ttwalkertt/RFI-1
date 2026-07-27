@@ -841,7 +841,7 @@ class SchemaMigrationCase(unittest.TestCase):
                 connection.execute("UPDATE schema_metadata SET schema_version=5")
                 connection.commit()
             migrated = RepositoryDatabase.open(state)
-            self.assertEqual(migrated.validate()["schema_version"], 9)
+            self.assertEqual(migrated.validate()["schema_version"], 11)
             with migrated.connect(read_only=True) as connection:
                 tables = {row[0] for row in connection.execute(
                     "SELECT name FROM sqlite_schema WHERE type='table'"

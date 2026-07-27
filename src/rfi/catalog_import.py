@@ -43,6 +43,7 @@ FIRM_FIELDS = (
     Field("canonical_name", required=True, placeholder="Example Firm, Inc."),
     Field("valid_from", "date", required=True, placeholder="YYYY-MM-DD"),
     Field("legal_name", placeholder="Example Firm, Inc."),
+    Field("subtitle", placeholder="Short operator-facing orientation."),
     Field("aliases", "strings", default=(), placeholder=("Example Firm",)),
     Field("identifiers", "objects", default=(), children=IDENTIFIER_FIELDS),
     Field("domains", "strings", default=(), placeholder=("example.com",)),

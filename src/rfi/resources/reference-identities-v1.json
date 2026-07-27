@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "catalog_version": 1,
+  "provider": "sec",
+  "identities": [
+    {"firm_id":"alphabet","legal_name":"Alphabet Inc.","identifier":"0001652044","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"amazon","legal_name":"Amazon.com, Inc.","identifier":"0001018724","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"amd","legal_name":"Advanced Micro Devices, Inc.","identifier":"0000002488","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"apple","legal_name":"Apple Inc.","identifier":"0000320193","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"broadcom","legal_name":"Broadcom Inc.","identifier":"0001730168","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"dell","legal_name":"Dell Technologies Inc.","identifier":"0001571996","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"hewlett-packard-enterprise","legal_name":"Hewlett Packard Enterprise Company","identifier":"0001645590","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"ibm","legal_name":"International Business Machines Corporation","identifier":"0000051143","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"intel","legal_name":"Intel Corporation","identifier":"0000050863","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"meta","legal_name":"Meta Platforms, Inc.","identifier":"0001326801","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"micron","legal_name":"Micron Technology, Inc.","identifier":"0000723125","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"microsoft","legal_name":"Microsoft Corporation","identifier":"0000789019","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"nvidia","legal_name":"NVIDIA Corporation","identifier":"0001045810","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"samsung-electronics","legal_name":"Samsung Electronics Co., Ltd.","identifier":"0000887225","regime":"foreign-private-issuer","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"seagate","legal_name":"Seagate Technology Holdings plc","identifier":"0001137789","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"tsmc","legal_name":"Taiwan Semiconductor Manufacturing Company Limited","identifier":"0001046179","regime":"foreign-private-issuer","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"},
+    {"firm_id":"western-digital","legal_name":"Western Digital Corporation","identifier":"0000106040","regime":"domestic","verification_status":"verified","verified_at":"2026-07-27T00:00:00+00:00","verification_source":"SEC EDGAR submissions identity"}
+  ]
+}
