@@ -88,6 +88,21 @@ class ConnectedDiscussionExpansion:
     schema_id = "mail.message"
     strategy = "connected_discussion"
 
+    @staticmethod
+    def _publication_component(
+        projections: tuple[ArtifactProjection, ...],
+    ) -> tuple[ArtifactProjection, ...]:
+        """Apply the independent all-or-none connected-component publication policy."""
+        incomplete = [
+            item for item in projections if item.completeness not in {"connected", "truncated"}
+        ]
+        if incomplete:
+            raise StreamError(
+                "incomplete_context",
+                "connected discussion publication requires a complete component",
+            )
+        return projections
+
     def validate(self, expansion: dict[str, Any]) -> tuple[dict[str, str], ...]:
         errors = []
         if not bool(expansion.get("ancestor_closure", True)):
@@ -117,12 +132,14 @@ class ConnectedDiscussionExpansion:
                 "connected discussion expansion rejected incomplete or quarantined context",
             )
         contexts = tuple(sorted({item.context_id for item in direct if item.context_id}))
-        expanded = repository.context(self.schema_id, contexts)
-        if len(expanded) > draft.bounds["expanded_limit"]:
-            raise StreamError(
-                "expansion_limit",
-                "connected context exceeds expanded_limit; no partial component was published",
-            )
+        expanded = self._publication_component(
+            tuple(repository.context(self.schema_id, contexts))
+        )
+        # ``expanded_limit`` is the legacy internal spelling of the configured
+        # acquisition-batch allowance (canonical ``bounds.total_artifacts``).
+        # The independent publication policy is component integrity rather than
+        # a second numeric limit: the repository publishes every member below in
+        # one transaction or publishes none.
         direct_ids = {item.artifact_id for item in direct}
         direct_by_context: dict[str, list[ArtifactProjection]] = {}
         for seed in direct:

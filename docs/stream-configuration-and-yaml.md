@@ -89,6 +89,12 @@ Representative complete files are
 [`task026-external.yaml`](../fixtures/streams/task026-external.yaml) and
 [`task026-derived.yaml`](../fixtures/streams/task026-derived.yaml).
 
+For Lore connected-discussion streams, `total_artifacts` controls the maximum seed-plus-context
+artifacts retained by one acquisition run. It does not cap the saved membership of a completed
+connected component: resumable acquisition can build that component across several bounded runs,
+after which publication is atomic. Existing definitions retain this deterministic interpretation;
+no configuration or repository migration is required.
+
 ## Selection policy
 
 A policy node has exactly one form:

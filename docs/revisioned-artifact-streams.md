@@ -155,3 +155,9 @@ deletes and recreates only membership and lineage rows inside one transaction; t
 helper that clears materialized memberships is not a run/publication operation. Mailing projection
 rebuild replaces only mailing-derived message, relationship, discussion, and discussion-member
 rows. Neither path deletes acquisition records, artifact rows, documents, or content bytes.
+
+For Lore-backed connected-discussion streams, canonical `bounds.total_artifacts` is an acquisition
+batch allowance, not a completed-component publication ceiling. Resumable acquisition may assemble
+a larger discussion over multiple bounded runs. Once the component is complete, its entire
+membership plan is published by the transaction above or none of it is published. Membership reads
+remain paginated independently of component size.

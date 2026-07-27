@@ -42,6 +42,7 @@
 | TASK-032 | Process Local Fetch Queue progress, timestamps, and durable bounded history | Complete |
 | TASK-036 | SEC authoritative retrieval workflow | Complete |
 | TASK-038 | Configuration backup and restore for RBF resets | Complete |
+| TASK-039 | Split acquisition batch limits from stream publication limits | Done |
 
 ## Architectural Progression
 

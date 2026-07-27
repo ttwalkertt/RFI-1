@@ -70,6 +70,10 @@ TASK-031 relationship continuation is covered by `make task031-test`. The gated 
 one-context-record, depth-zero Lore acquisition and reports honestly that live data does not exercise
 the complete deterministic continuation case.
 
+TASK-039 acquisition/publication policy separation is covered by `make task039-test`. The focused
+suite proves bounded multi-run acquisition, complete-component publication, atomic rollback and
+retry, deterministic `bounds.total_artifacts` translation, and paginated membership delivery.
+
 ## TASK-011 target-firm workflow
 
 Run `make task011-proof` for the seeded HDD firm catalog, conflict, revision, restart, and stable

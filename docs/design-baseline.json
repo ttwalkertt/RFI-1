@@ -17,10 +17,10 @@
       "source": "README.md",
       "destination": "README.md",
       "source_size": 5104,
-      "destination_size": 7157,
+      "destination_size": 7402,
       "source_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
-      "destination_sha256": "72559c409da19070cfc96c3fb3dd732eb2f7f923dd64d04270343c591b106a0e",
-      "content_change": "documentation index and status extended through TASK-031 relationship continuation"
+      "destination_sha256": "de5c64ed613f574d1fef9f719110906b7fe51157d1d7fd1f6990a8adc4dbb51d",
+      "content_change": "documentation index and status extended through TASK-039 policy separation"
     },
     {
       "source": "DESIGN_PRINCIPLES.md",
@@ -53,19 +53,19 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 6469,
+      "destination_size": 6553,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "405a1f42504de46b02aff2890c39f1359d4ffb13645df28a27e8115ce7e200e3",
-      "content_change": "task roadmap reconciled through TASK-038 configuration reset support"
+      "destination_sha256": "001339b1b2dbb0f7e014a689923ba1cd17af9e9cec3183802d8767b430d2b0c5",
+      "content_change": "task roadmap reconciled through TASK-039 acquisition/publication policy separation"
     },
     {
       "source": "ROADMAP.md",
       "destination": "ROADMAP.md",
       "source_size": 3371,
-      "destination_size": 6155,
+      "destination_size": 6539,
       "source_sha256": "1de0192a023e8c046f2cdedc2fe61592345d2e06b324c9b49b2c2b25424dfdad",
-      "destination_sha256": "342f790a8474c0a2b58fbacb5c55378b6f047f8e4a87d41893dcba8d51946c44",
-      "content_change": "roadmap updated through TASK-031 relationship continuation"
+      "destination_sha256": "87572a2f3390e055a8e83e12700eac3fcc85e7618d3b03a54cb106e010bae5a8",
+      "content_change": "roadmap updated through TASK-039 acquisition/publication policy separation"
     },
     {
       "source": "ARCHITECTURE.md",

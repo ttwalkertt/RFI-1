@@ -1,7 +1,7 @@
 # TASK-039 — Split Acquisition Batch Limits from Stream Publication Limits
 
 ## Status
-Draft
+Done
 
 ## Objective
 
@@ -75,3 +75,14 @@ Configuration compatibility should be preserved or deterministically translated 
 - Regression reproducing the current Linux Mailing Lists failure.
 - Proof that a discussion larger than one acquisition batch publishes successfully.
 - Full `make validate`.
+
+## Completion Evidence
+
+- `tests/test_task039.py` proves a connected discussion larger than the configured acquisition
+  batch completes across at least three bounded runs and publishes successfully.
+- The same focused suite proves injected mid-component publication failure exposes no membership,
+  retry publishes the whole component, paginated membership queries remain valid, and the existing
+  `bounds.total_artifacts` value deterministically retains its acquisition-batch interpretation.
+- ADR 0024 records the policy boundary and compatibility rationale.
+- Focused TASK-039/TASK-031/TASK-025 regression validation and full `make validate` passed; exact
+  outputs and integrity metadata are retained in the TASK-039 review package.

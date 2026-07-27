@@ -205,3 +205,9 @@ frames and provider-page offsets live in append-only SQLite acquisition manifest
 date windows wait for terminal relationship state, coverage remains withheld while continuation is
 pending, and valid retained artifacts remain structurally classified from their own header paths.
 Per-request adapter limits remain unchanged.
+
+TASK-039 separates that bounded acquisition contract from saved-stream publication. Canonical
+`bounds.total_artifacts` remains the deterministic per-run acquisition allowance. Completed
+connected components publish under an independent all-or-none component-integrity policy, with
+atomic repository publication and paginated membership delivery; no repository migration is
+required.
