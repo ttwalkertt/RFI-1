@@ -6,13 +6,13 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "RFI-1 contributors" }]
-dependencies = ["PyYAML>=6.0,<7"]
+dependencies = ["PyYAML>=6.0,<7", "jsonschema>=4.0,<5"]
 
 [project.scripts]
 rfi = "rfi.cli:main"
 
 [tool.setuptools.package-data]
-rfi = ["admin/*.html", "admin/*.js", "resources/*.yaml"]
+rfi = ["admin/*.html", "admin/*.js", "resources/*.json", "resources/*.yaml"]
 
 [tool.rfi]
 source-root = "src"

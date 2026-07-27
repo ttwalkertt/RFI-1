@@ -22,6 +22,10 @@ from rfi.catalog_import import (
 )
 from rfi.concepts import ConceptError, ConceptRepository, sample_concepts
 from rfi.firms import FirmError, FirmRepository, sample_firms
+from rfi.firm_configuration import (
+    FirmConfigurationError,
+    prepare_firm_configuration,
+)
 from rfi.mailing_lists import (
     AcquisitionLimits,
     LINUX_BLOCK_SOURCE,
@@ -347,6 +351,7 @@ def initialize(state: Path) -> None:
     firm_state = state / "firm-catalog"
     source_profile_state = state / "source-profiles"
     template = load_canonical_template()
+    prepare_firm_configuration(state)
     ConceptRepository.initialize(state)
     FirmRepository.initialize(firm_state)
     SourceProfileRepository.initialize(source_profile_state, template)
@@ -367,6 +372,7 @@ def _open_state(
         RepositoryDatabase.open(state)
     except StorageError as error:
         raise ApplicationError(str(error)) from error
+    prepare_firm_configuration(state)
     template = load_canonical_template()
     source_profile_state = state / "source-profiles"
     source_profiles = SourceProfileRepository.open(source_profile_state, template)
@@ -407,7 +413,6 @@ def seed(state: Path, files: tuple[Path, ...] = ()) -> None:
 
 def serve(state: Path, host: str, port: int) -> None:
     """Run the integrated admin console until interrupted by the operator."""
-    _open_state(state)
     server = create_admin_server(state, host, port)
     bound_host, bound_port = server.server_address[:2]
     display_host = "127.0.0.1" if bound_host in {"0.0.0.0", "::"} else bound_host
@@ -651,6 +656,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         CatalogImportError,
         ConceptError,
         FirmError,
+        FirmConfigurationError,
         SourceProfileError,
         PullError,
         SecWorkflowError,

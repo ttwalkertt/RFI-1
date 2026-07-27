@@ -146,6 +146,7 @@ class SourceProfileView:
     is_default: bool
     synthesized_artifact_ids: tuple[str, ...] = ()
     external_identities: tuple[dict[str, str], ...] = ()
+    configuration_authority: dict[str, object] | None = None
 
 
 class SourceProfileCatalog(Protocol):

@@ -48,6 +48,11 @@ class FirmService:
         """Return inspectable immutable history."""
         return self.catalog.history(firm_id)
 
+    def configuration_authority(self, firm_id: str) -> dict[str, Any] | None:
+        """Return external ownership metadata when the concrete catalog provides it."""
+        authority = getattr(self.catalog, "configuration_authority", None)
+        return authority(firm_id) if authority is not None else None
+
     def create(self, payload: dict[str, Any]) -> FirmRevision:
         """Validate JSON-compatible input and create one stable firm."""
         return self.catalog.create(self.draft(payload))
@@ -110,6 +115,7 @@ class FirmService:
                 firm_id=str(payload.get("firm_id", "")),
                 canonical_name=str(payload.get("canonical_name", "")),
                 legal_name=str(payload.get("legal_name", "")),
+                subtitle=str(payload.get("subtitle", "")),
                 aliases=tuple(payload.get("aliases", ())),
                 identifiers=identifiers,
                 domains=tuple(payload.get("domains", ())),

@@ -192,6 +192,10 @@ class FirmRepository:
         fail_before_publish: bool = False,
     ) -> FirmRevision:
         """Append a revision using optimistic current-revision validation."""
+        if self.is_externally_managed(firm_id):
+            raise FirmError(
+                f"firm configuration is externally managed and read-only: {firm_id}"
+            )
         if firm_id != draft.firm_id:
             raise FirmError("a revision cannot change the stable firm identifier")
         state = self._state()
@@ -295,6 +299,30 @@ class FirmRepository:
             ).fetchone()
         return FirmExternalIdentity(**json.loads(str(row[0]))) if row else None
 
+    def is_externally_managed(self, firm_id: str) -> bool:
+        """Return whether startup JSON owns the current firm configuration."""
+        with self._database.connect(read_only=True) as connection:
+            return connection.execute(
+                "SELECT 1 FROM firm_config_authorities WHERE firm_id=?", (firm_id,)
+            ).fetchone() is not None
+
+    def configuration_authority(self, firm_id: str) -> dict[str, Any] | None:
+        """Return inspectable external authority metadata without exposing a write path."""
+        with self._database.connect(read_only=True) as connection:
+            row = connection.execute(
+                "SELECT config_id,schema_version,source_name,canonical_json "
+                "FROM firm_config_authorities WHERE firm_id=?", (firm_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "authority": "external-json",
+            "config_id": str(row[0]),
+            "schema_version": int(row[1]),
+            "source_name": str(row[2]),
+            "configuration": json.loads(str(row[3])),
+        }
+
     def _load_reference_identities(self, only: tuple[str, ...] = ()) -> int:
         """Populate missing identities from immutable versioned reference data."""
         target = resources.files("rfi").joinpath("resources/reference-identities-v1.json")
@@ -377,6 +405,8 @@ class FirmRepository:
             raise FirmError(f"invalid firm identifier: {draft.firm_id}")
         if not draft.canonical_name.strip():
             raise FirmError("canonical name is required")
+        if len(draft.subtitle) > 120:
+            raise FirmError("firm subtitle must not exceed 120 characters")
         start = _parse_date(draft.valid_from, "valid_from", required=True)
         end = _parse_date(draft.valid_through, "valid_through")
         if start and end and end < start:
@@ -463,9 +493,13 @@ class FirmRepository:
             "updated_at": revision.updated_at,
             "supersedes_revision_id": revision.supersedes_revision_id,
         }
-        material.pop("relevance")
+        material.pop("subtitle")
         legacy = "firm-revision-" + hashlib.sha256(_canonical(material)).hexdigest()
-        if revision.relevance != 0 or legacy != revision.revision_id:
+        if legacy == revision.revision_id:
+            return
+        material.pop("relevance")
+        oldest = "firm-revision-" + hashlib.sha256(_canonical(material)).hexdigest()
+        if revision.relevance != 0 or oldest != revision.revision_id:
             raise FirmError(f"firm revision digest mismatch: {revision.revision_id}")
 
     def _state(self) -> dict[str, Any]:
@@ -510,6 +544,7 @@ class FirmRepository:
         except json.JSONDecodeError as error:
             raise FirmError("cannot read firm revision structured state") from error
         value.setdefault("relevance", 0.0)
+        value.setdefault("subtitle", "")
         value["status"] = FirmStatus(value["status"])
         value["aliases"] = tuple(value["aliases"])
         value["domains"] = tuple(value["domains"])

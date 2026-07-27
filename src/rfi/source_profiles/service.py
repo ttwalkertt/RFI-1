@@ -180,5 +180,8 @@ class SourceProfileService:
         )
         identity = self.firms.external_identity(firm_id, "sec")
         identities = (asdict(identity),) if identity else ()
+        authority_reader = getattr(self.firms, "configuration_authority", None)
+        authority = authority_reader(firm_id) if authority_reader is not None else None
         return SourceProfileView(firm_id, revision_id, number, effective, notes, created,
-                                 updated, supersedes, is_default, synthesized, identities)
+                                 updated, supersedes, is_default, synthesized, identities,
+                                 authority)

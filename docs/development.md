@@ -55,6 +55,11 @@ state location, and use `rfi --help` or `rfi <command> --help` for host, port, d
 and lifecycle behavior. See the [application CLI guide](application-cli.md) for the full operator
 workflow and failure semantics. Routine application use no longer requires task-specific scripts.
 
+Externally generated firm configuration is discovered only from
+`STATE/firm-config/*.firm-config.json`. RFI validates and materializes the complete set before
+serving or acquisition and never writes those files. See the
+[external firm configuration guide](external-firm-configuration.md).
+
 Use `.venv/bin/rfi seed --print-schema` to print the canonical external catalog template, then
 `.venv/bin/rfi seed --file FILE [-f FILE ...]` to validate and idempotently import curated target
 firms alongside the starter seed. See the application CLI guide for format and failure semantics.

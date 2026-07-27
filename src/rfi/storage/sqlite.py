@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -121,6 +121,13 @@ CREATE TABLE IF NOT EXISTS firm_external_identities (
     catalog_version INTEGER NOT NULL CHECK (catalog_version > 0),
     canonical_json TEXT NOT NULL,
     PRIMARY KEY (firm_id, provider)
+) STRICT;
+CREATE TABLE firm_config_authorities (
+    firm_id TEXT PRIMARY KEY REFERENCES firms(firm_id),
+    config_id TEXT NOT NULL UNIQUE,
+    schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+    source_name TEXT NOT NULL,
+    canonical_json TEXT NOT NULL
 ) STRICT;
 CREATE TABLE source_profiles (
     firm_id TEXT PRIMARY KEY REFERENCES firms(firm_id),
@@ -654,6 +661,16 @@ CREATE TABLE IF NOT EXISTS firm_external_identities (
 ) STRICT;
 """
 
+_MIGRATE_V10_TO_V11 = """
+CREATE TABLE IF NOT EXISTS firm_config_authorities (
+    firm_id TEXT PRIMARY KEY REFERENCES firms(firm_id),
+    config_id TEXT NOT NULL UNIQUE,
+    schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+    source_name TEXT NOT NULL,
+    canonical_json TEXT NOT NULL
+) STRICT;
+"""
+
 
 def _canonical_message_id(normalized_message_id: str) -> str:
     import hashlib
@@ -917,7 +934,7 @@ class RepositoryDatabase:
                 version = int(row[0])
                 if version == SCHEMA_VERSION:
                     return False
-                if version not in {1, 2, 3, 4, 5, 6, 7, 8, 9}:
+                if version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}:
                     raise StorageError(
                         "incompatible_schema",
                         f"repository schema version {version} is unsupported; "
@@ -929,6 +946,8 @@ class RepositoryDatabase:
                     for item in connection.execute("PRAGMA table_info(mailing_list_runs)")
                 }
                 scripts = []
+                if version <= 10:
+                    scripts.append(_MIGRATE_V10_TO_V11)
                 if version <= 9:
                     scripts.append(_MIGRATE_V9_TO_V10)
                 if version == 1:

@@ -67,6 +67,7 @@ class FirmDraft:
     canonical_name: str
     valid_from: str
     legal_name: str = ""
+    subtitle: str = ""
     aliases: tuple[str, ...] = ()
     identifiers: tuple[FirmIdentifier, ...] = ()
     domains: tuple[str, ...] = ()
@@ -91,6 +92,7 @@ class FirmRevision:
     revision_number: int
     canonical_name: str
     legal_name: str
+    subtitle: str
     aliases: tuple[str, ...]
     identifiers: tuple[FirmIdentifier, ...]
     domains: tuple[str, ...]

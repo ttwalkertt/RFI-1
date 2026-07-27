@@ -80,6 +80,14 @@ class SourceProfileRepository:
         fail_before_publish: bool = False,
     ) -> SourceProfileRevision:
         """Atomically publish a first or subsequent immutable profile revision."""
+        with self._database.connect(read_only=True) as connection:
+            managed = connection.execute(
+                "SELECT 1 FROM firm_config_authorities WHERE firm_id=?", (draft.firm_id,)
+            ).fetchone()
+        if managed is not None:
+            raise SourceProfileError(
+                f"firm configuration is externally managed and read-only: {draft.firm_id}"
+            )
         state = self._state()
         normalized = self.normalize(draft)
         current_id = state["current_revisions"].get(draft.firm_id)
@@ -102,42 +110,7 @@ class SourceProfileRepository:
             )
         try:
             with self._database.transaction() as connection:
-                payload = canonical_json(asdict(revision))
-                connection.execute(
-                    "INSERT INTO source_profile_revisions VALUES (?,?,?,?,?,?)",
-                    (
-                        revision.source_profile_revision_id,
-                        revision.firm_id,
-                        revision.revision_number,
-                        revision.supersedes_revision_id,
-                        revision.created_at,
-                        payload,
-                    ),
-                )
-                for ordinal, item in enumerate(revision.items):
-                    connection.execute(
-                        "INSERT INTO source_profile_items VALUES (?,?,?,?,?)",
-                        (
-                            revision.source_profile_revision_id,
-                            item.artifact_id,
-                            ordinal,
-                            int(item.enabled),
-                            item.operator_notes,
-                        ),
-                    )
-                    connection.executemany(
-                        "INSERT INTO retrieval_candidates VALUES (?,?,?,?,?)",
-                        (
-                            (
-                                revision.source_profile_revision_id,
-                                item.artifact_id,
-                                candidate.priority,
-                                candidate.mode,
-                                canonical_json(asdict(candidate)),
-                            )
-                            for candidate in item.retrieval_candidates
-                        ),
-                    )
+                self._insert_revision(connection, revision)
                 if current_id is None:
                     connection.execute(
                         "INSERT INTO source_profiles VALUES (?,?)",
@@ -438,3 +411,42 @@ class SourceProfileRepository:
             for item in value["items"]
         )
         return SourceProfileRevision(**value)
+
+    def _insert_revision(self, connection: Any, revision: SourceProfileRevision) -> None:
+        """Insert one immutable revision inside a caller-owned transaction."""
+        payload = canonical_json(asdict(revision))
+        connection.execute(
+            "INSERT INTO source_profile_revisions VALUES (?,?,?,?,?,?)",
+            (
+                revision.source_profile_revision_id,
+                revision.firm_id,
+                revision.revision_number,
+                revision.supersedes_revision_id,
+                revision.created_at,
+                payload,
+            ),
+        )
+        for ordinal, item in enumerate(revision.items):
+            connection.execute(
+                "INSERT INTO source_profile_items VALUES (?,?,?,?,?)",
+                (
+                    revision.source_profile_revision_id,
+                    item.artifact_id,
+                    ordinal,
+                    int(item.enabled),
+                    item.operator_notes,
+                ),
+            )
+            connection.executemany(
+                "INSERT INTO retrieval_candidates VALUES (?,?,?,?,?)",
+                (
+                    (
+                        revision.source_profile_revision_id,
+                        item.artifact_id,
+                        candidate.priority,
+                        candidate.mode,
+                        canonical_json(asdict(candidate)),
+                    )
+                    for candidate in item.retrieval_candidates
+                ),
+            )

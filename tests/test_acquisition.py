@@ -353,6 +353,7 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "concepts/repository.py",
                 "concepts/samples.py",
                 "concepts/service.py",
+                "firm_configuration.py",
                 "firms/__init__.py",
                 "firms/contracts.py",
                 "firms/repository.py",
