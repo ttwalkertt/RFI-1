@@ -107,6 +107,21 @@ overwrite.
 SEC JSON identity populates `firm_external_identities`; unchanged TASK-040 synthesis supplies CIK
 candidates for enabled SEC artifacts. Runtime filing endpoints and identities remain derived.
 
+## Executable SEC candidate repair
+
+The raw materialized profile intentionally persists no derived candidates. Its effective SEC
+candidate is synthesized from verified identity as `identifier` plus `CIK:<10 digits>`. The unsafe
+gap was that synthesis bypasses repository candidate normalization and the planner previously used
+artifact/mode compatibility without reapplying canonical required fields. The planner could
+therefore call a malformed blank candidate runnable until adapter execution rejected it.
+
+Synthesis now accepts only verified nonzero 10-digit CIKs. Materialization refuses enabled managed
+SEC artifacts that cannot synthesize the locator. Planning applies the canonical mode requirements
+before capability matching. The fixture-backed Microsoft pull records `sec-form-10k`,
+`sec-form-10q`, and `sec-form-8k` selections and completes through the existing provider adapters
+and acquisition engine. `parser_hint` remains blank because the existing convention selects by
+artifact plus mode. Exact `sec_sources` rows are unchanged before and after the pull.
+
 ## Startup, transaction, and failure
 
 SQLite initialization/migration precedes file handling. Structural and complete-set semantic
@@ -142,6 +157,8 @@ workflow-owned.
 | SQLite materializer | Atomic append/upsert projection with stable IDs | Complete |
 | Authority enforcement | Managed writes rejected; read inspection retained | Complete |
 | SEC external identity/synthesis | Verified CIK metadata and effective candidates | Complete |
+| Pull candidate validation | Canonical required fields before capability matching | Complete |
+| Numbered-form execution | Existing SEC adapters through acquisition ingress | Complete |
 | Mutable SEC workflow knowledge | Resolver-owned `sec_sources` refresh | Complete, unchanged |
 | Immutable acquisition/evidence | Artifacts and provenance | Complete, unchanged |
 | Full-fleet file conversion | Convert remaining firms | Not Started |

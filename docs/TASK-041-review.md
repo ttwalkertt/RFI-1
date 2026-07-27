@@ -12,6 +12,29 @@ upserts verified SEC identities, and records the external authority. It preserve
 and never changes `sec_sources`, acquisition runs or attempts, artifacts, observations, provenance,
 resolved URLs, discussions, reports, or other runtime evidence.
 
+## Executable SEC candidate repair
+
+The working editor-owned path is: `FirmRepository.external_identity` supplies a verified CIK;
+`effective_items` synthesizes an `identifier` candidate; `PullPlanner` checks the canonical mode and
+the `RetrievalAdapterRegistry`; the selected numbered-form adapter resolves current filing metadata
+through SEC submissions, retrieves the primary filing through SEC archives, and sends exact bytes
+through the existing acquisition engine and immutable repository ingress.
+
+The current repository did not reproduce the claimed blank synthesis when Microsoft had its
+verified identity. Before this repair, the raw stored managed profile intentionally had no derived
+candidate, while its effective 10-K candidate was already
+`{mode: identifier, locator: CIK:0000789019, url: "", parser_hint: ""}`. The actual unsafe gap was
+that synthesized candidates bypassed `SourceProfileRepository` normalization and pull planning
+treated artifact/mode compatibility alone as runnable. A malformed synthesized candidate could
+therefore be presented as runnable until the adapter rejected it.
+
+After repair, synthesis accepts only a verified nonzero 10-digit SEC CIK. Materialization refuses an
+enabled managed SEC artifact unless it produces the executable identifier locator, and planning
+applies the canonical mode's required fields before adapter matching. Microsoft 10-K, 10-Q, and 8-K
+each synthesize `CIK:0000789019`; the durable pull plan selects `sec-form-10k`, `sec-form-10q`, and
+`sec-form-8k`, respectively. `parser_hint` remains blank because existing selection is by canonical
+artifact and mode, exactly as for editor-owned firms.
+
 ## Ownership and failure behavior
 
 - RFI reads but never creates, edits, patches, or rewrites authoritative files.
@@ -26,13 +49,16 @@ resolved URLs, discussions, reports, or other runtime evidence.
 
 ## Validation
 
-- Focused TASK-041 suite: 8 tests passed, covering valid Microsoft materialization, deterministic
+- Focused TASK-041 suite: 10 tests passed, covering valid Microsoft materialization, deterministic
   structural and semantic rejection, duplicate identities, rollback, repeated overwrite,
-  evidence preservation, missing-file refusal, read access, and managed-write rejection.
-- Configuration and acquisition regression suite: 64 tests passed.
+  evidence preservation, missing-file refusal, read access, managed-write rejection, canonical
+  required-field enforcement, exact adapter planning, and an offline fixture-backed Microsoft pull.
+- Pull, numbered-form adapter, SEC workflow, synthesis, and TASK-041 regression suite: 53 tests
+  passed. Existing editor-owned fixture pulls retain their prior behavior.
 - Legacy migrations from schema versions 1, 2, 3, 5, 6, 9, and 10 reach schema version 11.
-- Canonical `make validate`: PASS; all 400 tests passed, followed by lint, format, typecheck,
+- Canonical `make validate`: PASS; all 402 tests passed, followed by lint, format, typecheck,
   import, documentation, baseline, deterministic proof, and source-archive integrity gates.
+- The fixture-backed pull compared all `sec_sources` rows before and after and found no change.
 - Published and packaged JSON Schema files are byte-for-byte identical; `git diff --check` passes.
 - `make review-package` reproduces focused, regression, diff, and full validation and emits a
   self-contained archive under `.artifacts/review/` with checksums and ZIP integrity evidence.
@@ -55,6 +81,8 @@ resolved URLs, discussions, reports, or other runtime evidence.
 | SQLite materializer | Atomic append/upsert projection with stable firm IDs | Complete |
 | Authority enforcement | Reject managed writes while retaining inspection | Complete |
 | SEC identity and synthesis | Verified CIK projection and effective candidates | Complete |
+| Pull candidate validation | Canonical required fields before adapter matching | Complete |
+| Numbered-form execution | Existing 10-K, 10-Q, and 8-K adapters | Complete |
 | Mutable SEC workflow knowledge | Resolver-owned `sec_sources` state | Complete, unchanged |
 | Immutable acquisition evidence | Artifacts, observations, and provenance | Complete, unchanged |
 | Remaining firm conversion | External files for the rest of the fleet | Not Started |

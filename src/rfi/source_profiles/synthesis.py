@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
+import re
+
 from rfi.firms.contracts import FirmCatalog, FirmExternalIdentity
 from rfi.source_profiles.contracts import RetrievalCandidate, SourceProfileItem
 
 SEC_ARTIFACTS = frozenset({"sec_10k", "sec_10q", "sec_8k", "sec_20f", "sec_6k"})
+_SEC_CIK = re.compile(r"^[0-9]{10}$")
 
 
 def synthesized_candidate(
     identity: FirmExternalIdentity | None, artifact_id: str
 ) -> RetrievalCandidate | None:
     """Return the deterministic provider default without persisting runtime URLs."""
-    if (identity is None or identity.provider != "sec"
-            or identity.verification_status != "verified" or artifact_id not in SEC_ARTIFACTS):
+    if (
+        identity is None
+        or identity.provider != "sec"
+        or identity.verification_status != "verified"
+        or not _SEC_CIK.fullmatch(identity.identifier)
+        or identity.identifier == "0000000000"
+        or artifact_id not in SEC_ARTIFACTS
+    ):
         return None
     return RetrievalCandidate("identifier", 1, locator=f"CIK:{identity.identifier}")
 

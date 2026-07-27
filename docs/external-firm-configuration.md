@@ -63,6 +63,13 @@ The initial Microsoft example enables current 10-K, 10-Q, and 8-K artifacts. The
 no schedules, SEC endpoint URLs, amendment/exhibit policy, historical selection policy, arbitrary
 non-SEC parsers, or unimplemented adapters.
 
+For each enabled SEC artifact, startup requires the verified external identity to synthesize the
+existing executable `identifier` candidate with locator `CIK:<10 digits>`. Pull planning applies the
+canonical retrieval-mode requirements before capability matching. The numbered-form adapter is
+then selected by canonical artifact plus mode (`sec-form-10k`, `sec-form-10q`, or `sec-form-8k`);
+`parser_hint` is not required and remains blank. Failure to synthesize a valid locator refuses
+startup without writing `sec_sources`.
+
 ## Verification
 
 Run focused coverage with:

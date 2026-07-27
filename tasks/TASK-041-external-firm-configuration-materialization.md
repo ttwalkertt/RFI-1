@@ -45,3 +45,12 @@ source-profile configuration while retaining SQLite as the runtime/query project
 - Focused preservation, synthesis, startup, API, migration, and canonical validation pass.
 - A review package records ownership, tables, startup ordering, rollback, preservation, limitations,
   and an Architectural Status Summary.
+
+## Repair acceptance criteria
+
+- Synthesized managed SEC candidates satisfy the canonical retrieval-mode requirements.
+- Microsoft 10-K, 10-Q, and 8-K planning selects the existing numbered-form adapters.
+- A fixture-backed Microsoft pull traverses the same planner, adapter, and acquisition path as an
+  editor-owned firm.
+- Missing or malformed managed SEC identity fails before a blank enabled candidate can be admitted.
+- The repair does not write `sec_sources` or weaken managed-write protection.

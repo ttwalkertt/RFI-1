@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from rfi.firms.contracts import FirmRevision
 from rfi.pull.adapters import RetrievalAdapterRegistry
@@ -47,6 +47,7 @@ class PullPlanner:
         self._adapters = adapters
         self._firms = firms
         self._artifacts = {item.artifact_id: item for item in template.artifacts}
+        self._modes = {item.mode: item for item in template.retrieval_modes}
 
     def plan(
         self,
@@ -69,13 +70,20 @@ class PullPlanner:
             if not item.enabled:
                 continue
             canonical = self._artifacts[item.artifact_id]
-            runnable = tuple(
+            configured = tuple(
                 candidate
                 for candidate in item.retrieval_candidates
+                if self._has_required_configuration(candidate)
+            )
+            runnable = tuple(
+                candidate
+                for candidate in configured
                 if self._adapters.compatible(item.artifact_id, candidate)
             )
             if not item.retrieval_candidates:
                 diagnostic = "No retrieval candidate configured."
+            elif not configured:
+                diagnostic = "Retrieval candidate lacks required configuration."
             elif not runnable:
                 diagnostic = "No adapter available for this retrieval mode."
             else:
@@ -90,3 +98,23 @@ class PullPlanner:
                 )
             )
         return PlannedFirm(firm, profile, items, tuple(artifacts))
+
+    def _has_required_configuration(self, candidate: RetrievalCandidate) -> bool:
+        """Apply the canonical mode contract to synthesized as well as persisted candidates."""
+        mode = self._modes.get(candidate.mode)
+        if mode is None:
+            return False
+        values = asdict(candidate)
+        populated = set()
+        for name, value in values.items():
+            if name in {"mode", "priority"}:
+                continue
+            if isinstance(value, str):
+                present = bool(value.strip())
+            else:
+                present = value not in ((), [], None)
+            if present:
+                populated.add(name)
+        return set(mode.required_fields).issubset(populated) and (
+            not mode.required_any or bool(set(mode.required_any).intersection(populated))
+        )

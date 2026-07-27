@@ -16,6 +16,11 @@ from rfi.acquisition import (
     CandidateDocument,
     DiscoveryProvenance,
     RetrievalResult,
+    SecForm10KAdapter,
+    SecForm10QAdapter,
+    SecForm8KAdapter,
+    SecHttpResponse,
+    SecProviderClient,
     SourceProfile,
 )
 from rfi.admin import create_admin_server
@@ -28,6 +33,17 @@ from rfi.firm_configuration import (
     prepare_firm_configuration,
 )
 from rfi.firms import FirmDraft, FirmRepository
+from rfi.pull import (
+    ArtifactOutcome,
+    PullRequest,
+    PullRunRepository,
+    PullStatus,
+    PullWorkflow,
+    RetrievalAdapterCapability,
+    RetrievalAdapterRegistration,
+    RetrievalAdapterRegistry,
+)
+from rfi.pull.planning import PullPlanner
 from rfi.sec import SecApplicability, SecRepository, SecSourceKnowledge
 from rfi.source_profiles import (
     SourceProfileDraft,
@@ -36,10 +52,84 @@ from rfi.source_profiles import (
     SourceProfileService,
     load_canonical_template,
 )
+from rfi.source_profiles.contracts import RetrievalCandidate, SourceProfileRevision
 from rfi.storage import RepositoryDatabase
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE = ROOT / "docs/microsoft.firm-config.example.json"
+
+
+class MicrosoftSecTransport:
+    """Offline production-provider replacement for the managed Microsoft pull path."""
+
+    def __init__(self) -> None:
+        self.requests: list[str] = []
+        self.time = 0.0
+        self.submissions = json.dumps(
+            {
+                "cik": "0000789019",
+                "entityType": "operating",
+                "name": "MICROSOFT CORP",
+                "filings": {
+                    "recent": {
+                        "accessionNumber": [
+                            "0000789019-26-000003",
+                            "0000789019-26-000002",
+                            "0000789019-26-000001",
+                        ],
+                        "filingDate": ["2026-07-03", "2026-07-02", "2026-07-01"],
+                        "reportDate": ["2026-07-03", "2026-06-30", "2026-06-30"],
+                        "acceptanceDateTime": [
+                            "2026-07-03T12:00:00Z",
+                            "2026-07-02T12:00:00Z",
+                            "2026-07-01T12:00:00Z",
+                        ],
+                        "form": ["8-K", "10-Q", "10-K"],
+                        "primaryDocument": ["msft-8k.htm", "msft-10q.htm", "msft-10k.htm"],
+                    },
+                    "files": [],
+                },
+            },
+            separators=(",", ":"),
+        ).encode()
+
+    def monotonic(self) -> float:
+        return self.time
+
+    def sleep(self, seconds: float) -> None:
+        self.time += seconds
+
+    def request(
+        self,
+        url: str,
+        headers: dict[str, str],
+        timeout_seconds: float,
+        maximum_bytes: int,
+    ) -> SecHttpResponse:
+        del timeout_seconds, maximum_bytes
+        self.requests.append(url)
+        self.assert_runtime_identity(headers)
+        if "/submissions/" in url:
+            content = self.submissions
+            media_type = "application/json"
+        else:
+            content = f"<html><body>{url}</body></html>".encode()
+            media_type = "text/html"
+        return SecHttpResponse(
+            200,
+            {"content-type": media_type, "content-length": str(len(content))},
+            content,
+            url,
+        )
+
+    @staticmethod
+    def assert_runtime_identity(headers: dict[str, str]) -> None:
+        if not headers.get("User-Agent"):
+            raise AssertionError("SEC fixture request omitted runtime identity")
+
+
+def task041_clock() -> str:
+    return "2026-07-27T12:00:00Z"
 
 
 class FirmConfigurationTests(unittest.TestCase):
@@ -93,6 +183,138 @@ class FirmConfigurationTests(unittest.TestCase):
         )
         ten_k = next(item for item in view.items if item.artifact_id == "sec_10k")
         self.assertEqual(ten_k.retrieval_candidates[0].locator, "CIK:0000789019")
+        self.assertEqual(ten_k.retrieval_candidates[0].parser_hint, "")
+
+    def test_microsoft_sec_candidates_plan_and_execute_existing_numbered_form_adapters(
+        self,
+    ) -> None:
+        self.write(self.value())
+        initialize(self.state)
+        firms = FirmRepository.open(self.state / "firm-catalog")
+        template = load_canonical_template()
+        profiles = SourceProfileRepository.open(self.state / "source-profiles", template)
+        profile = profiles.get("microsoft")
+        identity = firms.external_identity("microsoft", "sec")
+        self.assertEqual(identity.identifier, "0000789019")  # type: ignore[union-attr]
+
+        transport = MicrosoftSecTransport()
+        provider = SecProviderClient(
+            lambda: "RFI-1-TASK-041 fixture@example.invalid",
+            transport,
+            minimum_request_interval_seconds=0.1,
+            monotonic=transport.monotonic,
+            sleeper=transport.sleep,
+        )
+        numbered_forms = (
+            SecForm10KAdapter(provider, task041_clock),
+            SecForm10QAdapter(provider, task041_clock),
+            SecForm8KAdapter(provider, task041_clock),
+        )
+        adapters = RetrievalAdapterRegistry(
+            tuple(
+                RetrievalAdapterRegistration(
+                    RetrievalAdapterCapability(
+                        adapter.adapter_id,
+                        adapter.artifact_ids,
+                        adapter.retrieval_modes,
+                    ),
+                    adapter,
+                )
+                for adapter in numbered_forms
+            )
+        )
+        plan = PullPlanner(template, adapters, firms).plan(firms.get("microsoft"), profile)
+        expected_adapters = {
+            "sec_10k": "sec-form-10k",
+            "sec_10q": "sec-form-10q",
+            "sec_8k": "sec-form-8k",
+        }
+        for artifact_id, adapter_id in expected_adapters.items():
+            artifact = next(item for item in plan.artifacts if item.artifact_id == artifact_id)
+            self.assertEqual(len(artifact.runnable_candidates), 1)
+            candidate = artifact.runnable_candidates[0]
+            self.assertEqual(candidate.locator, "CIK:0000789019")
+            self.assertEqual((candidate.url, candidate.parser_hint), ("", ""))
+            self.assertEqual(
+                adapters.select(artifact_id, candidate).capability.adapter_id,
+                adapter_id,
+            )
+
+        with RepositoryDatabase.open(self.state).connect(read_only=True) as connection:
+            sec_sources_before = connection.execute(
+                "SELECT * FROM sec_sources ORDER BY firm_id"
+            ).fetchall()
+        workflow = PullWorkflow(
+            firms,
+            profiles,
+            template,
+            AcquisitionRepository(self.state / "acquisition"),
+            adapters,
+            PullRunRepository(self.state / "pull-workflows"),
+            task041_clock,
+            lambda: "task041microsoft",
+        )
+        result = workflow.run(PullRequest(("microsoft",)))
+        self.assertEqual(result.status, PullStatus.COMPLETED, result)
+        durable_plan = workflow.results(result.run_id)["plan"][0]["artifacts"]
+        outcomes = {item.artifact_id: item for item in result.firms[0].artifacts}
+        for artifact_id, adapter_id in expected_adapters.items():
+            self.assertEqual(outcomes[artifact_id].outcome, ArtifactOutcome.SUCCESS)
+            self.assertEqual(outcomes[artifact_id].attempts[0].adapter_id, adapter_id)
+            planned = next(
+                item for item in durable_plan if item["artifact_id"] == artifact_id
+            )
+            self.assertEqual(
+                planned["adapter_selections"],
+                [{"priority": 1, "adapter_id": adapter_id}],
+            )
+        self.assertTrue(
+            any("/submissions/CIK0000789019.json" in url for url in transport.requests)
+        )
+        with RepositoryDatabase.open(self.state).connect(read_only=True) as connection:
+            self.assertEqual(
+                connection.execute("SELECT * FROM sec_sources ORDER BY firm_id").fetchall(),
+                sec_sources_before,
+            )
+
+    def test_blank_deterministic_candidate_is_not_runnable(self) -> None:
+        self.write(self.value())
+        initialize(self.state)
+        firms = FirmRepository.open(self.state / "firm-catalog")
+        template = load_canonical_template()
+        transport = MicrosoftSecTransport()
+        provider = SecProviderClient(
+            lambda: "RFI-1-TASK-041 fixture@example.invalid", transport
+        )
+        adapter = SecForm10KAdapter(provider, task041_clock)
+        adapters = RetrievalAdapterRegistry(
+            (
+                RetrievalAdapterRegistration(
+                    RetrievalAdapterCapability(
+                        adapter.adapter_id, adapter.artifact_ids, adapter.retrieval_modes
+                    ),
+                    adapter,
+                ),
+            )
+        )
+        profile = SourceProfileRevision(
+            "microsoft",
+            "invalid-blank-candidate-fixture",
+            1,
+            (SourceProfileItem("sec_10k", True, (RetrievalCandidate("identifier", 1),)),),
+            "",
+            task041_clock(),
+            task041_clock(),
+            None,
+        )
+        artifact = PullPlanner(template, adapters, firms).plan(
+            firms.get("microsoft"), profile
+        ).artifacts[0]
+        self.assertEqual(artifact.runnable_candidates, ())
+        self.assertEqual(
+            artifact.attemptability_diagnostic,
+            "Retrieval candidate lacks required configuration.",
+        )
 
     def test_malformed_schema_priority_unknown_and_subtitle_fail_before_mutation(self) -> None:
         database = self.initialize_empty()
@@ -107,6 +329,25 @@ class FirmConfigurationTests(unittest.TestCase):
         value = self.value()
         del value["firm"]["subtitle"]  # type: ignore[index]
         cases.append(("subtitle", "subtitle.firm-config.json", value, "'subtitle' is a required"))
+        value = self.value()
+        del value["sources"]["sec"]["cik"]  # type: ignore[index]
+        cases.append(("missing-cik", "missing-cik.firm-config.json", value, "'cik' is a required"))
+        value = self.value()
+        value["sources"]["sec"]["cik"] = "789019"  # type: ignore[index]
+        cases.append(("malformed-cik", "malformed-cik.firm-config.json", value, "does not match"))
+        value = self.value()
+        value["sources"]["sec"]["cik"] = "0000000000"  # type: ignore[index]
+        for identifier in value["firm"]["identifiers"]:  # type: ignore[index]
+            if identifier["kind"] == "cik":
+                identifier["value"] = "0000000000"
+        cases.append(
+            (
+                "zero-cik",
+                "zero-cik.firm-config.json",
+                value,
+                "enabled SEC artifact requires a verified 10-digit CIK",
+            )
+        )
         for label, name, value, expected in cases:
             with self.subTest(label=label):
                 directory = self.state / "firm-config"
@@ -216,9 +457,16 @@ class FirmConfigurationTests(unittest.TestCase):
         self.assertEqual(firms.get("microsoft").canonical_name, "Microsoft")
         self.assertEqual(len(firms.history("microsoft")), 2)
         prepare_firm_configuration(self.state)
-        self.assertEqual(firms.get("microsoft").canonical_name, "Microsoft")
+        microsoft = firms.get("microsoft")
+        self.assertEqual((microsoft.firm_id, microsoft.canonical_name), ("microsoft", "Microsoft"))
         self.assertEqual(len(firms.history("microsoft")), 3)
+        profile = profiles.get("microsoft")
+        self.assertEqual(profile.firm_id, "microsoft")  # type: ignore[union-attr]
         self.assertEqual(len(profiles.history("microsoft")), 3)
+        shown = SourceProfileService(profiles, firms, template).detail("microsoft")
+        for artifact_id in ("sec_10k", "sec_10q", "sec_8k"):
+            item = next(value for value in shown.items if value.artifact_id == artifact_id)
+            self.assertEqual(item.retrieval_candidates[0].locator, "CIK:0000789019")
 
     def test_evidence_artifact_provenance_and_sec_workflow_knowledge_are_preserved(self) -> None:
         self.initialize_empty()

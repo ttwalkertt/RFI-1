@@ -26,6 +26,7 @@ from rfi.source_profiles import (
     SourceProfileRepository,
     load_canonical_template,
 )
+from rfi.source_profiles.synthesis import synthesized_candidate
 from rfi.storage import RepositoryDatabase
 from rfi.storage.sqlite import canonical_json, utc_now
 
@@ -89,6 +90,17 @@ def _pointer(path: Any) -> str:
     )
 
 
+def _leaf_validation_errors(error: Any) -> tuple[Any, ...]:
+    """Expose actionable nested oneOf failures instead of an opaque parent diagnostic."""
+    if not error.context:
+        return (error,)
+    return tuple(
+        leaf
+        for child in error.context
+        for leaf in _leaf_validation_errors(child)
+    )
+
+
 def _load_structural(state: Path) -> tuple[tuple[str, dict[str, Any]], ...]:
     directory = configuration_directory(state)
     paths = tuple(sorted(directory.glob(CONFIG_PATTERN))) if directory.is_dir() else ()
@@ -106,7 +118,11 @@ def _load_structural(state: Path) -> tuple[tuple[str, dict[str, Any]], ...]:
             diagnostics.append(f"{path.name}:/: configuration root must be an object")
             continue
         errors = sorted(
-            validator.iter_errors(value),
+            (
+                leaf
+                for error in validator.iter_errors(value)
+                for leaf in _leaf_validation_errors(error)
+            ),
             key=lambda item: (_pointer(item.absolute_path), item.message),
         )
         diagnostics.extend(
@@ -239,6 +255,16 @@ def load_firm_configurations(
             else:
                 domains[key] = (source_name, firm_id)
         identity = _identity(value)
+        sec = value["sources"]["sec"]
+        if sec is not None and sec["enabled"]:
+            for index, artifact_id in enumerate(sec["artifacts"]):
+                candidate = synthesized_candidate(identity, artifact_id)
+                if candidate is None or not candidate.locator:
+                    diagnostics.append(
+                        f"{source_name}:/sources/sec/artifacts/{index}: enabled SEC "
+                        "artifact requires a verified 10-digit CIK that synthesizes an "
+                        "executable identifier candidate"
+                    )
         if identity is not None:
             firm_ciks = {
                 item.value for item in firm.identifiers if item.kind.casefold() == "cik"
