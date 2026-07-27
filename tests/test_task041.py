@@ -185,6 +185,35 @@ class FirmConfigurationTests(unittest.TestCase):
         self.assertEqual(ten_k.retrieval_candidates[0].locator, "CIK:0000789019")
         self.assertEqual(ten_k.retrieval_candidates[0].parser_hint, "")
 
+    def test_display_name_is_presentation_only_and_may_be_an_explicit_alias(self) -> None:
+        value = self.value()
+        value["firm"]["display_name"] = "Presentation Label"  # type: ignore[index]
+        value["firm"]["aliases"] = ["Presentation Label"]  # type: ignore[index]
+        self.write(value)
+
+        initialize(self.state)
+        firms = FirmRepository.open(self.state / "firm-catalog")
+        self.assertEqual(firms.get("microsoft").canonical_name, "Presentation Label")
+        self.assertEqual(firms.lookup("Presentation Label")[0].firm_id, "microsoft")
+
+        display_only = self.value()
+        display_only["config_id"] = "display-only"
+        display_only["firm"]["id"] = "display-only"  # type: ignore[index]
+        display_only["firm"]["display_name"] = "Unsearchable Presentation"  # type: ignore[index]
+        display_only["firm"]["legal_name"] = "Distinct Legal Corporation"  # type: ignore[index]
+        display_only["firm"]["aliases"] = []  # type: ignore[index]
+        display_only["firm"]["identifiers"] = []  # type: ignore[index]
+        display_only["firm"]["domains"] = ["distinct.example"]  # type: ignore[index]
+        display_only["sources"]["sec"] = None  # type: ignore[index]
+        self.write(display_only, "display-only.firm-config.json")
+
+        # Reload the complete authoritative set. The display label is still rendered,
+        # but it does not independently confer lookup identity.
+        prepare_firm_configuration(self.state)
+        firms = FirmRepository.open(self.state / "firm-catalog")
+        self.assertEqual(firms.get("display-only").canonical_name, "Unsearchable Presentation")
+        self.assertEqual(firms.lookup("Unsearchable Presentation"), ())
+
     def test_microsoft_sec_candidates_plan_and_execute_existing_numbered_form_adapters(
         self,
     ) -> None:

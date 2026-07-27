@@ -251,7 +251,12 @@ class FirmRepository:
         industry: str | None = None,
         minimum_relevance: float | None = None,
     ) -> tuple[FirmRevision, ...]:
-        """Search current records by identity, recognition, classification, and notes."""
+        """Search current records by identity, recognition, classification, and notes.
+
+        ``canonical_name`` is the operator-facing display label.  It is deliberately
+        excluded: a label only becomes searchable when it is also supplied as an alias
+        or another explicit recognition term.
+        """
         needle = query.strip().casefold()
         result: list[FirmRevision] = []
         state = self._state()
@@ -260,7 +265,6 @@ class FirmRepository:
             searchable = " ".join(
                 (
                     item.firm_id,
-                    item.canonical_name,
                     item.legal_name,
                     item.headquarters,
                     item.jurisdiction,
@@ -414,8 +418,6 @@ class FirmRepository:
         aliases = _unique(draft.aliases, "aliases")
         domains = _unique(tuple(value.casefold() for value in draft.domains), "domains")
         _unique(draft.technology_focus, "technology focus")
-        if draft.canonical_name.casefold() in {value.casefold() for value in aliases}:
-            raise FirmError("aliases must not repeat the canonical name")
         for domain in domains:
             if not _DOMAIN.fullmatch(domain):
                 raise FirmError(f"invalid domain: {domain}")
