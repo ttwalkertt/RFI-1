@@ -284,6 +284,12 @@ def parser() -> argparse.ArgumentParser:
     search.add_argument("text")
     search.add_argument("--source")
     search.add_argument("--limit", type=int, default=50)
+    lineage = mailing_actions.add_parser(
+        "lineage", help="inspect canonical lineage and observation-backed boundaries"
+    )
+    lineage.add_argument("--message-id", required=True)
+    lineage.add_argument("--source", help="restrict claims to one source projection")
+    lineage.add_argument("--limit", type=int, default=100)
     mailing_actions.add_parser("incomplete", help="list incomplete or quarantined material")
     mailing_actions.add_parser("rebuild", help="rebuild discussion indexes without network access")
     streams = commands.add_parser(
@@ -521,6 +527,11 @@ def mailing_list_operation(arguments: argparse.Namespace) -> None:
     if action == "search":
         print(json.dumps({"items": [asdict(item) for item in query.search(
             arguments.text, arguments.source, arguments.limit)]}, indent=2, default=str))
+        return
+    if action == "lineage":
+        print(json.dumps(query.canonical_lineage(
+            arguments.message_id, source_id=arguments.source, limit=arguments.limit
+        ), indent=2, default=str))
         return
     if action == "incomplete":
         print(json.dumps({"items": [asdict(item) for item in query.incomplete()]},

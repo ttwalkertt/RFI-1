@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -338,9 +338,39 @@ CREATE TABLE mailing_list_messages (
     text_content TEXT NOT NULL,
     connectivity_state TEXT NOT NULL CHECK (connectivity_state IN
       ('connected','truncated','incomplete','quarantined')),
+    canonical_message_id TEXT REFERENCES canonical_mailing_list_messages(canonical_message_id),
     canonical_json TEXT NOT NULL,
     UNIQUE (source_id, external_message_id)
 ) STRICT;
+CREATE TABLE IF NOT EXISTS mailing_list_relationship_claims (
+    claim_id TEXT PRIMARY KEY,
+    child_canonical_message_id TEXT NOT NULL
+      REFERENCES canonical_mailing_list_messages(canonical_message_id),
+    referenced_raw TEXT NOT NULL,
+    referenced_normalized_message_id TEXT,
+    claim_role TEXT NOT NULL CHECK (claim_role IN
+      ('immediate_parent','ancestor_reference')),
+    evidence_type TEXT NOT NULL CHECK (evidence_type IN
+      ('header_in_reply_to','header_references','provider_immediate_parent',
+       'fallback_heuristic_parent')),
+    source_id TEXT NOT NULL REFERENCES mailing_list_sources(source_id),
+    child_external_message_id TEXT NOT NULL,
+    child_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+    observation_run_id TEXT NOT NULL REFERENCES mailing_list_runs(run_id),
+    reference_ordinal INTEGER CHECK (reference_ordinal IS NULL OR reference_ordinal >= 0),
+    acquisition_path TEXT NOT NULL CHECK (acquisition_path IN
+      ('configured_archive','cross_archive_fallback')),
+    evidenced_delivery_source_id TEXT REFERENCES mailing_list_sources(source_id),
+    algorithm_id TEXT,
+    observed_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL,
+    CHECK ((evidence_type = 'header_references') = (reference_ordinal IS NOT NULL)),
+    CHECK ((evidence_type = 'fallback_heuristic_parent') = (algorithm_id IS NOT NULL))
+) STRICT;
+CREATE INDEX IF NOT EXISTS mailing_list_relationship_claims_child
+ON mailing_list_relationship_claims(child_canonical_message_id,claim_role,evidence_type);
+CREATE INDEX IF NOT EXISTS mailing_list_relationship_claims_reference
+ON mailing_list_relationship_claims(referenced_normalized_message_id,claim_role);
 CREATE TABLE mailing_list_relationships (
     child_message_key TEXT PRIMARY KEY REFERENCES mailing_list_messages(message_key),
     parent_external_message_id TEXT NOT NULL,
@@ -671,6 +701,152 @@ CREATE TABLE IF NOT EXISTS firm_config_authorities (
 ) STRICT;
 """
 
+_MIGRATE_V11_TO_V12_MESSAGE_LINK = """
+ALTER TABLE mailing_list_messages ADD COLUMN canonical_message_id TEXT
+  REFERENCES canonical_mailing_list_messages(canonical_message_id);
+"""
+
+_MIGRATE_V11_TO_V12 = """
+CREATE TABLE IF NOT EXISTS mailing_list_relationship_claims (
+    claim_id TEXT PRIMARY KEY,
+    child_canonical_message_id TEXT NOT NULL
+      REFERENCES canonical_mailing_list_messages(canonical_message_id),
+    referenced_raw TEXT NOT NULL,
+    referenced_normalized_message_id TEXT,
+    claim_role TEXT NOT NULL CHECK (claim_role IN
+      ('immediate_parent','ancestor_reference')),
+    evidence_type TEXT NOT NULL CHECK (evidence_type IN
+      ('header_in_reply_to','header_references','provider_immediate_parent',
+       'fallback_heuristic_parent')),
+    source_id TEXT NOT NULL REFERENCES mailing_list_sources(source_id),
+    child_external_message_id TEXT NOT NULL,
+    child_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+    observation_run_id TEXT NOT NULL REFERENCES mailing_list_runs(run_id),
+    reference_ordinal INTEGER CHECK (reference_ordinal IS NULL OR reference_ordinal >= 0),
+    acquisition_path TEXT NOT NULL CHECK (acquisition_path IN
+      ('configured_archive','cross_archive_fallback')),
+    evidenced_delivery_source_id TEXT REFERENCES mailing_list_sources(source_id),
+    algorithm_id TEXT,
+    observed_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL,
+    CHECK ((evidence_type = 'header_references') = (reference_ordinal IS NOT NULL)),
+    CHECK ((evidence_type = 'fallback_heuristic_parent') = (algorithm_id IS NOT NULL))
+) STRICT;
+CREATE INDEX IF NOT EXISTS mailing_list_relationship_claims_child
+ON mailing_list_relationship_claims(child_canonical_message_id,claim_role,evidence_type);
+CREATE INDEX IF NOT EXISTS mailing_list_relationship_claims_reference
+ON mailing_list_relationship_claims(referenced_normalized_message_id,claim_role);
+"""
+
+
+def _backfill_task045(connection: sqlite3.Connection) -> None:
+    """Link source projections and derive bounded claims from retained observations."""
+    import hashlib
+
+    from rfi.mailing_lists.parser import normalize_message_id
+
+    canonical = {
+        str(row[0]): str(row[1])
+        for row in connection.execute(
+            "SELECT normalized_message_id,canonical_message_id "
+            "FROM canonical_mailing_list_messages"
+        )
+    }
+    retained = connection.execute(
+        "SELECT i.run_id,i.external_message_id,i.artifact_id,i.document_id,r.requested_at "
+        "FROM mailing_list_run_items i JOIN artifacts a ON a.artifact_id=i.artifact_id "
+        "JOIN mailing_list_runs r ON r.run_id=i.run_id "
+        "WHERE a.media_type='message/rfc822' "
+        "ORDER BY r.requested_at,i.run_id,i.source_id,i.external_message_id"
+    ).fetchall()
+    for row in retained:
+        normalized = normalize_message_id(str(row[1]))
+        if normalized is None:
+            continue
+        canonical_id = canonical.get(normalized)
+        if canonical_id is None:
+            canonical_id = _canonical_message_id(normalized)
+            payload = canonical_json({
+                "canonical_message_id": canonical_id,
+                "normalized_message_id": normalized,
+                "artifact_id": str(row[2]), "document_id": str(row[3]),
+                "backfilled_task045": True,
+            })
+            connection.execute(
+                "INSERT INTO canonical_mailing_list_messages VALUES (?,?,?,?,?,?)",
+                (canonical_id, normalized, str(row[2]), str(row[3]), str(row[4]), payload),
+            )
+            canonical[normalized] = canonical_id
+        connection.execute(
+            "UPDATE mailing_list_run_items SET canonical_message_id=? "
+            "WHERE run_id=? AND external_message_id=?",
+            (canonical_id, str(row[0]), str(row[1])),
+        )
+    for row in connection.execute(
+        "SELECT message_key,external_message_id FROM mailing_list_messages"
+    ).fetchall():
+        normalized = normalize_message_id(str(row[1]))
+        if normalized in canonical:
+            connection.execute(
+                "UPDATE mailing_list_messages SET canonical_message_id=? WHERE message_key=?",
+                (canonical[normalized], str(row[0])),
+            )
+    rows = connection.execute(
+        "SELECT m.message_key,m.source_id,m.external_message_id,m.artifact_id,m.canonical_json,"
+        "m.canonical_message_id,i.run_id,r.requested_at,r.canonical_json,"
+        "rel.parent_external_message_id "
+        "FROM mailing_list_messages m JOIN mailing_list_run_items i "
+        "ON i.source_id=m.source_id AND i.external_message_id=m.external_message_id "
+        "JOIN mailing_list_runs r ON r.run_id=i.run_id "
+        "LEFT JOIN mailing_list_relationships rel ON rel.child_message_key=m.message_key "
+        "WHERE m.canonical_message_id IS NOT NULL "
+        "ORDER BY m.message_key,r.requested_at,i.run_id"
+    ).fetchall()
+    seen_messages: set[str] = set()
+    for row in rows:
+        message_key = str(row[0])
+        if message_key in seen_messages:
+            continue
+        seen_messages.add(message_key)
+        projection = json.loads(str(row[4]))
+        manifest = json.loads(str(row[8]))
+        fallback = str(row[2]) in set(manifest.get("fallback_message_ids", ()))
+        assertions: list[tuple[str, str, str, int | None]] = []
+        parent = row[9]
+        if isinstance(parent, str) and parent:
+            assertions.append((parent, "immediate_parent", "header_in_reply_to", None))
+        for ordinal, reference in enumerate(projection.get("references", ())):
+            if isinstance(reference, str) and reference:
+                assertions.append((reference, "ancestor_reference", "header_references", ordinal))
+        for raw, role, evidence, ordinal in assertions:
+            normalized = normalize_message_id(raw)
+            if normalized is None:
+                continue
+            identity = canonical_json({
+                "child": str(row[5]), "raw": raw, "role": role,
+                "evidence": evidence, "source_id": str(row[1]),
+                "artifact_id": str(row[3]), "run_id": str(row[6]), "ordinal": ordinal,
+            })
+            claim_id = "mail-claim-" + hashlib.sha256(identity.encode()).hexdigest()[:32]
+            payload = canonical_json({
+                "claim_id": claim_id, "child_canonical_message_id": str(row[5]),
+                "referenced_raw": raw, "referenced_normalized_message_id": normalized,
+                "claim_role": role, "evidence_type": evidence, "source_id": str(row[1]),
+                "child_external_message_id": str(row[2]), "child_artifact_id": str(row[3]),
+                "observation_run_id": str(row[6]), "reference_ordinal": ordinal,
+                "acquisition_path": "cross_archive_fallback" if fallback else "configured_archive",
+                "evidenced_delivery_source_id": None, "algorithm_id": None,
+                "backfilled": True,
+            })
+            connection.execute(
+                "INSERT OR IGNORE INTO mailing_list_relationship_claims VALUES "
+                "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (claim_id, str(row[5]), raw, normalized, role, evidence, str(row[1]),
+                 str(row[2]), str(row[3]), str(row[6]), ordinal,
+                 "cross_archive_fallback" if fallback else "configured_archive",
+                 None, None, str(row[7]), payload),
+            )
+
 
 def _canonical_message_id(normalized_message_id: str) -> str:
     import hashlib
@@ -934,7 +1110,7 @@ class RepositoryDatabase:
                 version = int(row[0])
                 if version == SCHEMA_VERSION:
                     return False
-                if version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}:
+                if version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}:
                     raise StorageError(
                         "incompatible_schema",
                         f"repository schema version {version} is unsupported; "
@@ -973,6 +1149,10 @@ class RepositoryDatabase:
                         "PRAGMA table_info(mailing_list_message_conflicts)"
                     )
                 }
+                message_columns = {
+                    str(item[1])
+                    for item in connection.execute("PRAGMA table_info(mailing_list_messages)")
+                }
                 if (
                     version != 1
                     and version <= 6
@@ -986,6 +1166,13 @@ class RepositoryDatabase:
                         scripts.append(_MIGRATE_V8_TO_V9_CONFLICT_CASE)
                     if "mailing_list_message_conflict_observations" not in existing_tables:
                         scripts.append(_MIGRATE_V8_TO_V9_OBSERVATIONS)
+                if version != 1 and version <= 11 and "canonical_message_id" not in message_columns:
+                    scripts.append(_MIGRATE_V11_TO_V12_MESSAGE_LINK)
+                if (
+                    version != 1 and version <= 11
+                    and "mailing_list_relationship_claims" not in existing_tables
+                ):
+                    scripts.append(_MIGRATE_V11_TO_V12)
                 for script in scripts:
                     for statement in script.split(";"):
                         if statement.strip():
@@ -1006,6 +1193,8 @@ class RepositoryDatabase:
                     self.advance_revision(connection)
                 if version <= 6 and "canonical_message_id" not in run_item_columns:
                     _backfill_task035(connection)
+                if version <= 11:
+                    _backfill_task045(connection)
                 connection.execute(
                     "UPDATE schema_metadata SET schema_version = ?, applied_at = ? "
                     "WHERE singleton = 1",
@@ -1113,6 +1302,23 @@ class RepositoryDatabase:
                     "d.current_artifact_id FROM canonical_mailing_list_messages c "
                     "JOIN documents d ON d.document_id=c.document_id"
                 ).fetchall()
+                source_message_rows = connection.execute(
+                    "SELECT m.external_message_id,m.canonical_message_id,a.media_type "
+                    "FROM mailing_list_messages m JOIN artifacts a ON a.artifact_id=m.artifact_id"
+                ).fetchall()
+                claim_rows = connection.execute(
+                    "SELECT c.referenced_raw,c.referenced_normalized_message_id,c.claim_role,"
+                    "c.evidence_type,c.reference_ordinal,c.algorithm_id "
+                    "FROM mailing_list_relationship_claims c"
+                ).fetchall()
+                invalid_claim_observations = int(connection.execute(
+                    "SELECT count(*) FROM mailing_list_relationship_claims c "
+                    "WHERE NOT EXISTS (SELECT 1 FROM mailing_list_run_items i "
+                    "WHERE i.run_id=c.observation_run_id AND i.source_id=c.source_id "
+                    "AND i.external_message_id=c.child_external_message_id "
+                    "AND i.artifact_id=c.child_artifact_id "
+                    "AND i.canonical_message_id=c.child_canonical_message_id)"
+                ).fetchone()[0])
                 tables = connection.execute(
                     "SELECT name, sql FROM sqlite_schema WHERE type = 'table' ORDER BY name"
                 ).fetchall()
@@ -1143,6 +1349,44 @@ class RepositoryDatabase:
                     "canonical_message_failure",
                     "canonical mailing-list message mapping is invalid",
                 )
+        canonical_by_normalized = {
+            str(row[1]): str(row[0]) for row in canonical_rows
+        }
+        for row in source_message_rows:
+            if str(row[2]) != "message/rfc822":
+                continue
+            normalized = normalize_message_id(str(row[0]))
+            if (
+                normalized is None
+                or row[1] is None
+                or canonical_by_normalized.get(normalized) != str(row[1])
+            ):
+                raise StorageError(
+                    "canonical_message_failure",
+                    "source mailing-list message has an invalid canonical link",
+                )
+        for row in claim_rows:
+            normalized = normalize_message_id(str(row[0]))
+            if normalized != row[1]:
+                raise StorageError(
+                    "canonical_lineage_failure",
+                    "mailing-list relationship claim reference is invalid",
+                )
+            if (str(row[3]) == "header_references") != (row[4] is not None):
+                raise StorageError(
+                    "canonical_lineage_failure",
+                    "mailing-list relationship claim ordinal is invalid",
+                )
+            if (str(row[3]) == "fallback_heuristic_parent") != (row[5] is not None):
+                raise StorageError(
+                    "canonical_lineage_failure",
+                    "mailing-list relationship claim algorithm is invalid",
+                )
+        if invalid_claim_observations:
+            raise StorageError(
+                "canonical_lineage_failure",
+                "mailing-list relationship claim observation provenance is invalid",
+            )
         return {
             "schema_version": SCHEMA_VERSION,
             "integrity": "ok",

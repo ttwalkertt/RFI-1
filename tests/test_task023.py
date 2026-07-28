@@ -506,7 +506,7 @@ class MailingListCase(unittest.TestCase):
         )
         self.assertEqual(len(relationships), 4)
 
-    def test_conflicting_external_identity_is_quarantined_and_continues(self) -> None:
+    def test_conflicting_external_identity_is_quarantined_and_stops_truthfully(self) -> None:
         root_id = "<task023-root@kernel.example>"
         self.service.acquire(
             LINUX_BLOCK_SOURCE.source_id,
@@ -532,7 +532,10 @@ class MailingListCase(unittest.TestCase):
             SelectionCriteria(message_ids=(root_id, continued_id)),
             AcquisitionLimits(seed_limit=2, context_limit=2, descendant_depth=0),
         )
-        self.assertEqual(manifest.run_status.value, "succeeded")
+        self.assertEqual(manifest.run_status.value, "partial")
+        self.assertEqual(manifest.relationship_status, "failed")
+        self.assertEqual(manifest.error_code, "message_id_conflict")
+        self.assertIsNone(manifest.relationship_continuation)
         self.assertEqual(manifest.conflict_count, 1)
         self.assertEqual(manifest.conflicted_message_ids, (root_id,))
         self.assertEqual(self.repository.canonical_message(root_id), canonical_before)
@@ -706,7 +709,7 @@ class MailingListCase(unittest.TestCase):
                 connection.execute(f"DROP TABLE {table}")
             connection.execute("UPDATE schema_metadata SET schema_version=1")
         database = RepositoryDatabase.open(self.state)
-        self.assertEqual(database.validate()["schema_version"], 11)
+        self.assertEqual(database.validate()["schema_version"], 12)
         with database.connect(read_only=True) as connection:
             names = {row[0] for row in connection.execute(
                 "SELECT name FROM sqlite_schema WHERE type='table'"

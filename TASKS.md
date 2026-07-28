@@ -43,6 +43,7 @@
 | TASK-036 | SEC authoritative retrieval workflow | Complete |
 | TASK-038 | Configuration backup and restore for RBF resets | Complete |
 | TASK-039 | Split acquisition batch limits from stream publication limits | Done |
+| TASK-045 | Source-scoped mailing-list observations and canonical cross-list lineage | Complete |
 
 ## Architectural Progression
 

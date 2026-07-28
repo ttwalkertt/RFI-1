@@ -57,11 +57,13 @@ def parse_message(raw: bytes) -> ParsedMessage:
             date_value = parsed.astimezone(UTC).isoformat()
         except (TypeError, ValueError, OverflowError):
             warnings.append("malformed Date")
-    parent_ids = message_ids(message.get("In-Reply-To"))
+    raw_in_reply_to = str(message.get("In-Reply-To")) if message.get("In-Reply-To") else None
+    parent_ids = message_ids(raw_in_reply_to)
     if len(parent_ids) > 1:
         warnings.append("ambiguous In-Reply-To")
     parent = parent_ids[-1] if parent_ids else None
-    references = message_ids(message.get("References"))
+    raw_references = str(message.get("References")) if message.get("References") else None
+    references = message_ids(raw_references)
     text_parts: list[str] = []
     if message.is_multipart():
         for part in message.walk():
@@ -84,7 +86,8 @@ def parse_message(raw: bytes) -> ParsedMessage:
         warnings.append(f"unsupported MIME representation: {message.get_content_type()}")
     return ParsedMessage(
         external_id, subject, normalize_subject(subject), sender, date_value, parent,
-        references, "\n".join(text_parts), tuple(sorted(set(warnings)))
+        references, "\n".join(text_parts), tuple(sorted(set(warnings))),
+        raw_in_reply_to, raw_references, parent_ids,
     )
 
 

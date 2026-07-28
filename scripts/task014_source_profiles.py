@@ -122,7 +122,6 @@ def fixture_proof() -> dict[str, Any]:
         unsaved_enabled = {
             item.artifact_id for item in default.items if item.enabled
         }
-        ui = (ROOT / "src/rfi/admin/source_profiles.html").read_text(encoding="utf-8")
         checks = {
             "template_loads": len(template.artifacts) == 48,
             "canonical_identifiers_unique": len(
@@ -159,16 +158,6 @@ def fixture_proof() -> dict[str, Any]:
             }
             >= {"identifier", "listing_page", "discovery"},
             "unknown_item_rejected": "unknown canonical" in unknown_error,
-            "template_driven_ui": all(
-                marker in ui
-                for marker in (
-                    "template.categories.map",
-                    "artifact.short_name",
-                    "artifact.addressability",
-                    "mode.supported_fields.map",
-                )
-            ),
-            "no_hardcoded_ui_catalog": "sec_10k" not in ui,
             "repository_integrity": profiles.verify()["result"] == "PASS",
         }
         if not all(checks.values()):

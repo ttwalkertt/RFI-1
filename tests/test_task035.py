@@ -111,7 +111,7 @@ class CanonicalMessageCase(unittest.TestCase):
         self.assertEqual({row["canonical_message_id"] for row in observations}, {
             canonical[0]["canonical_message_id"]
         })
-        self.assertEqual(observations[1]["observation_type"], "reused")
+        self.assertEqual(observations[1]["observation_type"], "fetched")
         self.assertEqual(observations[1]["content_fetched"], 1)
         self.assertEqual(second.artifact_count_created, 0)
 
@@ -214,7 +214,7 @@ class CanonicalMessageCase(unittest.TestCase):
             connection.execute("DROP TABLE canonical_mailing_list_messages")
             connection.execute("UPDATE schema_metadata SET schema_version=6")
         upgraded = RepositoryDatabase.open(self.state)
-        self.assertEqual(upgraded.validate()["schema_version"], 11)
+        self.assertEqual(upgraded.validate()["schema_version"], 12)
         observations = MailingListRepository(self.state).rows(
             "SELECT run_id,canonical_message_id,observation_type "
             "FROM mailing_list_run_items"

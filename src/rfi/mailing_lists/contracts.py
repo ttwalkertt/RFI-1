@@ -274,6 +274,9 @@ class ParsedMessage:
     references: tuple[str, ...]
     text_content: str
     parse_warnings: tuple[str, ...] = ()
+    raw_in_reply_to: str | None = None
+    raw_references: str | None = None
+    in_reply_to_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -306,6 +309,7 @@ class MessageSummary:
     child_count: int
     depth: int | None = None
     is_tombstone: bool = False
+    canonical_message_id: str | None = None
 
 
 @dataclass(frozen=True)

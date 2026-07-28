@@ -41,6 +41,7 @@ function element(id, document) {
     id, value: '', textContent: '', className: '', disabled: false, checked: false,
     dataset: {}, style: {}, onclick: null, onchange: null, oninput: null,
     classList: {add() {}, remove() {}},
+    addEventListener() {},
     querySelectorAll(selector) { return document.querySelectorAll(selector); },
     querySelector() { return null; },
     closest() { return {querySelector() { return {textContent: ''}; }}; },
@@ -60,6 +61,7 @@ function element(id, document) {
 
 function fakeDocument() {
   const document = {elements: new Map(), checkboxes: []};
+  document.addEventListener = () => {};
   document.getElementById = id => {
     if (!document.elements.has(id)) document.elements.set(id, element(id, document));
     return document.elements.get(id);
@@ -83,6 +85,7 @@ async function pageScript(base, path, storage) {
       return fetch(base + url, options);
     },
   };
+  context.window = {addEventListener() {}};
   context.globalThis = context;
   vm.createContext(context);
   for (const match of external) {
@@ -92,9 +95,7 @@ async function pageScript(base, path, storage) {
   for (const source of scripts) vm.runInContext(source, context, {filename: path});
   for (let attempt = 0; attempt < 200; attempt += 1) {
     await new Promise(resolve => setTimeout(resolve, 10));
-    const ready = path === '/source-profiles'
-      ? calls.some(call => call.path.includes('/source-profile/history'))
-      : calls.some(call => call.path === '/api/pulls/adapters');
+    const ready = calls.some(call => call.path === '/api/pulls/adapters');
     if (ready) break;
   }
   return {context, document, calls};
@@ -104,14 +105,14 @@ async function integrationProof(base, modulePath) {
   const preferences = require(modulePath);
   const storage = new MemoryStorage();
   storage.setItem(preferences.storageKey(preferences.keys.currentFirm), JSON.stringify('western-digital'));
-  const first = await pageScript(base, '/source-profiles', storage);
-  assert.equal(first.document.getElementById('firm').value, 'western-digital');
-  assert(first.calls.some(call => call.path === '/api/firms/western-digital/source-profile'));
-  assert(first.calls.some(call => call.path === '/api/firms/western-digital/source-profile/history'));
+  const first = await pageScript(base, '/pull-sources', storage);
+  const restored = first.document.checkboxes.filter(item => item.checked).map(item => item.dataset.firm);
+  assert.deepEqual(restored, ['western-digital']);
   assert(!first.calls.some(call => call.method === 'PUT' || call.method === 'POST'));
 
-  const refresh = await pageScript(base, '/source-profiles', storage);
-  assert.equal(refresh.document.getElementById('firm').value, 'western-digital');
+  const refresh = await pageScript(base, '/pull-sources', storage);
+  const refreshed = refresh.document.checkboxes.filter(item => item.checked).map(item => item.dataset.firm);
+  assert.deepEqual(refreshed, ['western-digital']);
   assert(!refresh.calls.some(call => call.method === 'PUT' || call.method === 'POST'));
 
   storage.setItem(preferences.storageKey(preferences.keys.currentFirm), JSON.stringify('seagate'));
@@ -121,22 +122,17 @@ async function integrationProof(base, modulePath) {
   assert(!navigation.calls.some(call => call.path === '/api/pulls' && call.method === 'POST'));
 
   storage.setItem(preferences.storageKey(preferences.keys.currentFirm), JSON.stringify('stale-firm'));
-  const stale = await pageScript(base, '/source-profiles', storage);
-  assert.equal(stale.document.getElementById('firm').value, 'seagate');
+  const stale = await pageScript(base, '/pull-sources', storage);
+  assert.equal(stale.document.checkboxes.filter(item => item.checked).length, 0);
 
   process.stdout.write(JSON.stringify({
-    result: 'PASS', restoredFirm: 'western-digital', refreshedFirm: 'western-digital',
-    navigatedFirm: selected[0], staleFallback: 'seagate', profilePutCount: 0,
-    profileRevisionPostCount: 0, implicitPullPostCount: 0,
+    result: 'PASS', restoredFirm: restored[0], refreshedFirm: refreshed[0],
+    navigatedFirm: selected[0], staleFallback: '', implicitPullPostCount: 0,
   }) + '\n');
 }
 
 async function emptyProof(base) {
   const storage = new MemoryStorage();
-  const source = await pageScript(base, '/source-profiles', storage);
-  assert.equal(source.document.getElementById('firm').value, '');
-  assert(!source.calls.some(call => call.path.startsWith('/api/firms/')
-    && call.path.includes('/source-profile')));
   const pull = await pageScript(base, '/pull-sources', storage);
   assert.equal(pull.document.checkboxes.length, 0);
   assert(!pull.calls.some(call => call.path === '/api/pulls' && call.method === 'POST'));

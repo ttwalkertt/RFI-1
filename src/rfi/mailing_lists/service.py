@@ -34,7 +34,9 @@ from rfi.mailing_lists.contracts import (
     normalize_lore_archive,
 )
 from rfi.mailing_lists.parser import normalize_message_id, parse_message, unavailable_ancestor
-from rfi.mailing_lists.repository import MailingListRepository, message_key
+from rfi.mailing_lists.repository import (
+    MailingListRepository, canonical_message_id, message_key,
+)
 
 
 class MailingListSourceService:
@@ -223,6 +225,11 @@ def derive_projection(
             "normalized_subject": parsed.normalized_subject, "sender": parsed.sender,
             "message_date": parsed.message_date, "text_content": parsed.text_content,
             "connectivity_state": state,
+            "canonical_message_id": (
+                canonical_message_id(parsed.external_message_id)
+                if parsed.external_message_id and not record.get("is_tombstone", False)
+                else None
+            ),
             "is_tombstone": bool(record.get("is_tombstone", False)),
             "parent_external_message_id": parsed.immediate_parent_id,
             "parent_message_key": parent_message_key,
@@ -234,6 +241,15 @@ def derive_projection(
                 "normalized_subject_is_identity": False,
                 "is_tombstone": bool(record.get("is_tombstone", False)),
                 "unavailable_details": record.get("unavailable_details"),
+                "raw_in_reply_to": parsed.raw_in_reply_to,
+                "raw_references": parsed.raw_references,
+                "in_reply_to_ids": list(parsed.in_reply_to_ids),
+                "acquisition_path": (
+                    "cross_archive_fallback"
+                    if record.get("fallback_archive_url") is not None
+                    else "configured_archive"
+                ),
+                "evidenced_delivery_source_id": None,
             },
         })
     discussions: list[dict[str, Any]] = []
@@ -357,6 +373,7 @@ class MailingListAcquisitionService:
         idempotent = 0
         conflicts: list[str] = []
         for external_id, item in sorted(plan["items"].items()):
+            source_preexisting = self.repository.has_retained_rfc822(source_id, external_id)
             if item.get("reuse", False):
                 key = message_key(source_id, external_id)
                 doc_id = str(item["document_id"])
@@ -401,7 +418,8 @@ class MailingListAcquisitionService:
                 "descendant_policy_limited": plan["descendant_policy_limited"],
                 "is_tombstone": bool(item.get("is_tombstone", False)),
                 "unavailable_details": item.get("unavailable_details"),
-                "content_fetched": not item.get("reuse", False)
+                "content_fetched": not source_preexisting
+                and not item.get("reuse", False)
                 and not item.get("is_tombstone", False),
                 "artifact_created": artifact_created,
             })
@@ -421,11 +439,22 @@ class MailingListAcquisitionService:
             for item in discussions
             if item["source_id"] == source_id
         )
+        blocked = bool(conflicts) or plan["state"] == ConnectivityState.QUARANTINED
+        effective_relationship_status = (
+            RelationshipAcquisitionStatus.FAILED
+            if blocked else plan["relationship_status"]
+        )
+        effective_continuation = None if blocked else plan["continuation"]
+        effective_error_code = (
+            "message_id_conflict" if conflicts else
+            "message_id_mismatch" if plan["state"] == ConnectivityState.QUARANTINED else
+            plan["failures"][0].code if plan["failures"] else None
+        )
         coverage_complete = (
             prior_batches_complete
             and plan["discovery_complete"]
             and plan["required_ancestry_complete"]
-            and plan["relationship_status"] in {
+            and effective_relationship_status in {
                 RelationshipAcquisitionStatus.COMPLETE,
                 RelationshipAcquisitionStatus.POLICY_TRUNCATED,
             }
@@ -440,8 +469,9 @@ class MailingListAcquisitionService:
             run_discussions,
             dict(Counter(item["inclusion_reason"] for item in retained)),
             plan["state"], plan["truncated"], tuple(plan["warnings"]), created, idempotent,
-            AcquisitionRunStatus.PARTIAL if plan["failures"] else AcquisitionRunStatus.SUCCEEDED,
-            plan["failures"][0].code if plan["failures"] else None,
+            AcquisitionRunStatus.PARTIAL if plan["failures"] or blocked
+            else AcquisitionRunStatus.SUCCEEDED,
+            effective_error_code,
             any(error.retryable for error in plan["failures"]),
             discovery_offset, plan["discovery_has_more"],
             plan["relationship_truncated"], effective_batch_id, coverage_complete,
@@ -456,7 +486,7 @@ class MailingListAcquisitionService:
                 external_id for external_id, item in plan["items"].items()
                 if item.get("is_tombstone", False)
             )),
-            plan["relationship_status"], plan["continuation"],
+            effective_relationship_status, effective_continuation,
             plan["relationship_records_processed"],
             len(conflicts), tuple(sorted(conflicts)),
         )
@@ -943,6 +973,13 @@ class MailingListQueryService:
     def unresolved_conflicts(self, run_id: str | None = None) -> tuple[dict[str, Any], ...]:
         return self.repository.unresolved_message_conflicts(run_id=run_id)
 
+    def canonical_lineage(
+        self, external_id: str, *, source_id: str | None = None, limit: int = 100
+    ) -> dict[str, Any]:
+        return self.repository.canonical_lineage(
+            external_id, source_id=source_id, limit=limit
+        )
+
     def acquisition_messages(
         self, run_id: str, limit: int = 100
     ) -> tuple[AcquisitionMessage, ...]:
@@ -1159,4 +1196,5 @@ class MailingListQueryService:
             ConnectivityState(str(row["connectivity_state"])), int(row["child_count"]),
             int(row["depth"]) if row.get("depth") is not None else None,
             bool(canonical.get("is_tombstone", False)),
+            str(row["canonical_message_id"]) if row.get("canonical_message_id") else None,
         )

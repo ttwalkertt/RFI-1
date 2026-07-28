@@ -94,7 +94,6 @@ def main() -> int:
         "admin/linux_mailing_lists.html",
         "admin/pull_sources.html",
         "admin/server.py",
-        "admin/source_profiles.html",
         "admin/streams.html",
         "artifacts/__init__.py",
         "artifacts/contracts.py",
