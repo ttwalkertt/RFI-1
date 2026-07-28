@@ -24,7 +24,6 @@ HELP_TOPICS = (
     HelpTopic("repository", "Repository and state model"),
     HelpTopic("concepts", "Concept Catalog"),
     HelpTopic("firms", "Target Firms"),
-    HelpTopic("source-profiles", "Firm Source Profiles"),
     HelpTopic("source-readiness", "Source readiness and run eligibility"),
     HelpTopic("external-sources", "External Sources"),
     HelpTopic("acquisition", "Pull Sources and acquisition workflow"),
@@ -54,7 +53,6 @@ TOPICS_BY_ID = {topic.topic_id: topic for topic in HELP_TOPICS}
 PAGE_HELP_TOPICS = {
     "/concepts": "concepts",
     "/firms": "firms",
-    "/source-profiles": "source-profiles",
     "/external-sources": "external-sources",
     "/pull-sources": "acquisition",
     "/linux-mailing-lists": "linux-mailing-lists",

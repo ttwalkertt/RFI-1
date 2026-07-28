@@ -55,7 +55,7 @@ transition.
 
 ## Operator behavior
 
-Externally managed firms and source profiles remain visible in the Target Firms and Firm Profiles
+Externally managed firms and source profiles remain visible in the Target Firms
 pages and through GET APIs. They show the external filename and are read-only. Repository, service,
 and HTTP publication paths reject attempts to revise, retire, or save a managed firm/profile.
 

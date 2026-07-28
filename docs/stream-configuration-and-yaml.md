@@ -11,7 +11,7 @@ First create or inspect repository-global Lore/public-inbox transport authority 
 `/external-sources`. The page validates and explicitly saves stable source identity, display name,
 provider, list/archive identity, endpoint, pacing, concurrency, timeout, response-size bound, and
 retry/backoff policy. Saved identities are immutable; changed policy is cloned to a new source ID
-so prior acquisition meaning is not rewritten. This surface is distinct from `/source-profiles`,
+so prior acquisition meaning is not rewritten. This surface is distinct from `/firms`,
 whose profiles are owned by individual firms.
 
 Open `/streams` and work from top to bottom:

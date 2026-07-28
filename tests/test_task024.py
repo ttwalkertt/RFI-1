@@ -109,17 +109,15 @@ class PullConfigurationNavigationTests(unittest.TestCase):
         self.assertFalse(evidence["popupOrModal"])
 
     def test_source_profile_deep_link_contract_is_read_only_and_reveals_target(self) -> None:
-        with urllib.request.urlopen(self.base + "/source-profiles", timeout=3) as response:
+        with urllib.request.urlopen(self.base + "/firms", timeout=3) as response:
             html = response.read().decode()
         for marker in (
-            "requestedParams.get('firm_id')",
-            "requestedParams.get('artifact_id')",
-            "validRequest?requestedFirm:remembered",
-            "category.open=true",
-            "target.open=true",
+            "initial.get('firm_id')",
+            "initial.get('artifact_id')",
+            "showFirm(requested)",
+            "artifact.closest('details').open=true",
             "scrollIntoView({block:'center'})",
-            "focus({preventScroll:true})",
-            "classList.add('targeted')",
+            "artifact.focus()",
         ):
             self.assertIn(marker, html)
         for forbidden in (

@@ -332,7 +332,7 @@ class StreamCliAndBrowserCase(unittest.TestCase):
                 "Clone as new source", "Use in Stream Configuration",
             ):
                 self.assertIn(label, page)
-            self.assertIn('href="/source-profiles">Firm Profiles</a>', page)
+            self.assertIn('href="/firms">Target Firms</a>', page)
 
             def post(path: str, payload: dict[str, object]) -> dict[str, object]:
                 request = urllib.request.Request(

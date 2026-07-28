@@ -64,7 +64,7 @@ async function main(base) {
   const rendered = document.getElementById('results').innerHTML;
   const links = [...rendered.matchAll(/<a class="badge configuration-action"([^>]*)>/g)];
   assert.equal(links.length, 1);
-  assert(rendered.includes('/source-profiles?firm_id=firm+%26+co&amp;artifact_id=press%2Frelease%3F'));
+  assert(rendered.includes('/firms?firm_id=firm+%26+co&amp;artifact_id=press%2Frelease%3F'));
   assert(!links[0][1].includes('target='));
   assert(rendered.includes('<span class="badge">success</span>'));
   assert(rendered.includes('<span class="badge">configuration_problem</span>'));

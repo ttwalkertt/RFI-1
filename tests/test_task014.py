@@ -163,7 +163,7 @@ class CanonicalTemplateTests(unittest.TestCase):
             "src/rfi/source_profiles/contracts.py",
             "src/rfi/source_profiles/template.py",
             "src/rfi/source_profiles/service.py",
-            "src/rfi/admin/source_profiles.html",
+            "src/rfi/admin/firms.html",
         ):
             content = (ROOT / relative).read_text(encoding="utf-8")
             self.assertNotIn("sec_10k", content)
@@ -349,30 +349,23 @@ class SourceProfileAdminTests(unittest.TestCase):
             return error.code, value
 
     def test_template_driven_accordion_and_profile_revision_api(self) -> None:
-        status, html = self.request("/source-profiles?firm_id=seagate")
+        status, html = self.request("/firms?firm_id=seagate")
         self.assertEqual(status, 200)
         for marker in (
-            "Firm Source Profiles",
-            'details class="category"',
-            'details class="artifact"',
+            "Acquisition Profile",
+            'details class="acquisition-category"',
+            'details class="detail-section"',
             "artifact.short_name",
             "artifact.label",
             "artifact.addressability",
-            "Add prioritized retrieval candidate",
-            "candidate-fields",
-            "item-summary",
+            "Profile-level operator notes",
+            "acquisition-item",
+            "profileSummary",
             "/api/source-profile-template",
-            "event.stopPropagation()",
-            "function captureOpenState()",
-            "openState.categories.has(categoryIndex)",
-            "openState.artifacts.has(artifact.artifact_id)",
-            "function compareFirms(a,b)",
-            "sortedFirms=[...firms.items].sort(compareFirms)",
-            'id="save" class="primary" disabled',
-            "function profileSnapshot()",
-            "function updateDirtyState()",
-            "profileSnapshot()===cleanProfile",
-            "cleanProfile=profileSnapshot()",
+            "External JSON filename",
+            "Source-profile revision history",
+            "targetArtifact=initial.get('artifact_id')",
+            "artifact.closest('details').open=true",
         ):
             self.assertIn(marker, html)
         self.assertNotIn("sec_10k", html)

@@ -97,7 +97,7 @@ pipeline remain independent. Cross-firm deduplication is intentionally absent.
 
 ## Administration interface
 
-The firm-level interface is available at `/source-profiles`. It loads firms, the canonical
+Firm-owned acquisition inspection is integrated into the selected-firm detail at `/firms`. It loads the canonical
 template, profile state, and history through public JSON APIs. Categories and artifact rows are
 rendered by iterating the runtime template. Each compact artifact row shows the enable control,
 short name, display label, addressability, and configuration summary. Expanding the row reveals

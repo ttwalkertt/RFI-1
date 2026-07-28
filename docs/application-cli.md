@@ -71,8 +71,8 @@ Launch the integrated console:
 .venv/bin/rfi admin
 ```
 
-Open the displayed URL. The concept catalog is at `/` or `/concepts`, Target Firms is at `/firms`,
-firm-owned acquisition configuration is at `/source-profiles`, and repository-global governed
+Open the displayed URL. The concept catalog is at `/` or `/concepts`, firm identity and firm-owned
+acquisition configuration inspection are at `/firms`, and repository-global governed
 Lore/public-inbox profiles are at `/external-sources`. Press Ctrl-C to stop cleanly. The shared
 Pull Workflow is available at `/pull-sources`.
 

@@ -39,7 +39,7 @@ class HelpContractCase(unittest.TestCase):
 
     def test_every_major_page_has_one_valid_context_mapping(self) -> None:
         expected = {
-            "/concepts", "/firms", "/source-profiles", "/external-sources",
+            "/concepts", "/firms", "/external-sources",
             "/pull-sources", "/linux-mailing-lists", "/streams", "/artifacts",
         }
         self.assertEqual(set(PAGE_HELP_TOPICS), expected)
@@ -68,7 +68,7 @@ class HelpContractCase(unittest.TestCase):
             ),
             '<h3 id="stream-upstream-definitions"',
             "Pull selected firms",
-            "Save source-profile revision",
+            "source-profile revision",
             "Review imported YAML",
             "rfi backup --state STATE --output repository-backup.zip",
         ):

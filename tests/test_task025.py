@@ -387,7 +387,6 @@ class StreamCase(unittest.TestCase):
         expected = (
             ("/concepts", "Concept Catalog"),
             ("/firms", "Target Firms"),
-            ("/source-profiles", "Firm Profiles"),
             ("/external-sources", "External Sources"),
             ("/pull-sources", "Pull Sources"),
             ("/linux-mailing-lists", "Linux Mailing Lists"),
@@ -396,7 +395,7 @@ class StreamCase(unittest.TestCase):
         )
         admin_assets = ROOT / "src/rfi/admin"
         for filename in (
-            "console.html", "firms.html", "source_profiles.html", "external_sources.html",
+            "console.html", "firms.html", "external_sources.html",
             "pull_sources.html", "linux_mailing_lists.html", "streams.html",
             "artifact_browser.html",
         ):

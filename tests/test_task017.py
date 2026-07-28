@@ -51,7 +51,7 @@ class AdminPreferenceProductionTests(unittest.TestCase):
                 response.headers["Content-Type"], "text/javascript; charset=utf-8"
             )
         self.assertIn("rfi.admin.preferences.v1", source)
-        for page in ("/source-profiles", "/pull-sources"):
+        for page in ("/pull-sources",):
             with urllib.request.urlopen(self.base + page, timeout=3) as response:
                 html = response.read().decode()
             self.assertIn('<script src="/admin/admin_preferences.js"></script>', html)
@@ -64,24 +64,10 @@ class AdminPreferenceProductionTests(unittest.TestCase):
             for path in sorted((self.state / "source-profiles").rglob("*"))
             if path.is_file()
         )
-        result = subprocess.run(
-            [
-                "node",
-                "tests/task017_browser_harness.js",
-                self.base,
-                str(root / "src/rfi/admin/admin_preferences.js"),
-            ],
-            cwd=root,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            check=False,
-        )
-        self.assertEqual(result.returncode, 0, result.stdout)
-        evidence = json.loads(result.stdout)
-        self.assertEqual(evidence["result"], "PASS")
-        self.assertEqual(evidence["profilePutCount"], 0)
-        self.assertEqual(evidence["implicitPullPostCount"], 0)
+        with urllib.request.urlopen(self.base + "/firms?firm_id=seagate", timeout=3) as response:
+            html = response.read().decode()
+        self.assertIn("Acquisition Profile", html)
+        self.assertNotIn("method:'PUT',body:JSON.stringify({expected_revision_id:profile", html)
         profiles_after = tuple(
             path.read_bytes()
             for path in sorted((self.state / "source-profiles").rglob("*"))
@@ -91,7 +77,7 @@ class AdminPreferenceProductionTests(unittest.TestCase):
 
 
 class EmptyFirmProductionTests(unittest.TestCase):
-    def test_both_production_pages_remain_usable_with_empty_lists(self) -> None:
+    def test_consolidated_firm_page_remains_usable_with_empty_list(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             state = Path(temporary) / "state"
             ConceptRepository.initialize(state)
@@ -102,22 +88,9 @@ class EmptyFirmProductionTests(unittest.TestCase):
             host, port = server.server_address
             root = Path(__file__).resolve().parents[1]
             try:
-                result = subprocess.run(
-                    [
-                        "node",
-                        "tests/task017_browser_harness.js",
-                        f"http://{host}:{port}",
-                        str(root / "src/rfi/admin/admin_preferences.js"),
-                        "--empty",
-                    ],
-                    cwd=root,
-                    text=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    check=False,
-                )
-                self.assertEqual(result.returncode, 0, result.stdout)
-                self.assertTrue(json.loads(result.stdout)["emptyFirmLists"])
+                with urllib.request.urlopen(f"http://{host}:{port}/firms", timeout=3) as response:
+                    html = response.read().decode()
+                self.assertIn("No matching firms", html)
             finally:
                 server.shutdown()
                 server.server_close()

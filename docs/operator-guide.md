@@ -40,8 +40,8 @@ administration server against the same state directory used by later commands.
 opens existing state, prints the local URL and state path, and does not seed, migrate, repair, or
 open a browser. Stop the foreground server with Ctrl-C.
 
-Open the printed URL. Use the persistent top navigation for Concept Catalog, Target Firms, Firm
-Profiles, External Sources, Pull Sources, Linux Mailing Lists, Streams, and Artifacts. Every page
+Open the printed URL. Use the persistent top navigation for Concept Catalog, Target Firms,
+External Sources, Pull Sources, Linux Mailing Lists, Streams, and Artifacts. Every page
 has a Help action.
 Help is a separate browsing context, so invoking it does not submit, reset, close, or navigate the
 current form.
@@ -155,8 +155,8 @@ intelligence.
 
 ### When to use this page
 
-Use Target Firms before configuring firm-owned acquisition. Search and filter existing firms,
-inspect recognition metadata and history, or create/revise a target identity.
+Use Target Firms to search and filter existing firms, inspect recognition metadata and firm-owned
+acquisition profiles and history, or create/revise a target identity.
 
 ### Prerequisites
 
@@ -171,8 +171,8 @@ downstream reference. Do not encode mutable legal or market facts into that ID.
 3. Choose `Validate draft`; nothing is saved.
 4. Choose `Preview new revision` and review the change summary and recognition metadata.
 5. Choose `Save new revision`.
-6. Inspect the firm detail and Revision history, then continue to
-   [Firm Profiles](#source-profiles).
+6. Inspect the independently collapsible identity, names, classification, discovery, acquisition
+   profile, and revision-history sections. Acquisition configuration is read-only in this browser.
 
 ### What changes repository state
 
@@ -193,61 +193,13 @@ retrying. A failed validation or save keeps the form values. Historical revision
 publishes new firms transactionally. It does not revise existing firms. `rfi seed --print-schema`
 prints the canonical external catalog template.
 
-Related topics: [Firm Source Profiles](#source-profiles), [acquisition](#acquisition), and
-[Artifacts](#artifacts).
+The Acquisition Profile section shows canonical defaults or the current immutable source-profile
+revision, operator notes, enabled state, addressability classification, candidate counts, and
+source-profile history. Externally managed configuration is marked read-only with its JSON
+filename. Firm-owned profiles remain distinct from repository-global [External Sources](#external-sources).
 
-<!-- help-topic: source-profiles -->
-## Firm Source Profiles
-
-### Purpose
-
-Configure firm-owned acquisition intent using the repository-owned canonical artifact template.
-This page is for SEC filings and other firm artifacts. Lore/public-inbox transport belongs under
-[External Sources](#external-sources), not in a firm profile.
-
-### Prerequisites
-
-A [target firm](#firms) must exist. A profile may begin as displayed canonical defaults; defaults
-are not a saved revision. Retrieval candidates must use modes and fields permitted by each
-artifact item.
-
-### Typical workflow
-
-1. Choose `Target firm` or follow a configuration-problem link from
-   [Pull Sources](#acquisition).
-2. Expand an artifact category and artifact item.
-3. Enable intended artifacts and add prioritized retrieval candidates.
-4. Fill the mode-specific fields and optional operator notes.
-5. Choose `Validate`. This checks the draft and saves nothing.
-6. Choose `Save source-profile revision`.
-7. Confirm the profile revision in the page history, then inspect
-   [readiness](#source-readiness) under [Pull Sources](#acquisition).
-
-### Controls and state changes
-
-`Reload profile`, firm selection, expansion, and history inspection read state. Field changes live
-only in the page draft. `Validate` is non-persistent. `Save source-profile revision` publishes one
-immutable profile revision with optimistic current-revision checking. It does not create a target
-firm revision and does not retrieve anything. Historical profiles are read-only.
-
-The application snapshots the selected profile revision when a Pull Workflow starts. Later profile
-edits do not rewrite that run's configuration history.
-
-### Common problems and recovery
-
-If Save is disabled, select a firm and make a valid change. An enabled artifact with no compatible,
-complete candidate is incomplete and will not be runnable. Follow the linked configuration problem
-from Pull Sources back to the exact firm and artifact. On revision conflict, reload the current
-profile and reapply the intended edit. Preserve candidate priority because adapters attempt
-supported candidates deterministically.
-
-### CLI equivalent
-
-There is no general firm source-profile editing CLI. `rfi pull` consumes saved profiles; it does
-not create them.
-
-Related topics: [source readiness](#source-readiness), [Pull Sources](#acquisition), and
-[External Sources](#external-sources).
+Related topics: [source readiness](#source-readiness), [acquisition](#acquisition),
+[External Sources](#external-sources), and [Artifacts](#artifacts).
 
 <!-- help-topic: source-readiness -->
 ## Source readiness and run eligibility
@@ -270,13 +222,13 @@ definition. Derived streams require compatible saved upstream streams and an acy
 Readiness evaluation reads current configuration. It does not retrieve, publish a revision, or
 create a run. Execution is always a separate operator action.
 
-Recovery sequence: inspect counts, open the relevant [Firm Profile](#source-profiles) or
+Recovery sequence: inspect counts, open the relevant [Target Firm](#firms) or
 [External Source](#external-sources), validate and save the correction, then return to
 [Pull Sources](#acquisition) or [Streams](#streams), refresh, and re-evaluate. Never change a saved
 source identity to repair history; create a new source identity where its immutable policy must
 change.
 
-Related topics: [Firm Source Profiles](#source-profiles), [External Sources](#external-sources),
+Related topics: [Target Firms](#firms), [External Sources](#external-sources),
 [acquisition](#acquisition), and [streams](#streams).
 
 <!-- help-topic: external-sources -->
@@ -342,7 +294,7 @@ and per-attempt outcomes.
 
 ### Prerequisites
 
-A [target firm](#firms) and a saved [Firm Source Profile](#source-profiles) revision must exist. At
+A [target firm](#firms) and a saved firm source-profile revision must exist. At
 least one artifact should be enabled and [runnable](#source-readiness). Live SEC retrieval requires
 the governed runtime request identity where the selected adapter requires it. This page is not the
 Lore/public-inbox acquire interface.
@@ -350,14 +302,14 @@ Lore/public-inbox acquire interface.
 ### Acquisition procedure
 
 1. [Create or select a firm](#firms) under Target Firms.
-2. [Configure, validate, and save its Firm Source Profile](#source-profiles).
+2. Inspect its firm-owned Acquisition Profile under [Target Firms](#firms).
 3. Open Pull Sources and inspect [enabled, runnable, and incomplete counts](#source-readiness).
 4. Select one or more firms and choose `Pull selected firms`.
 5. Follow Workflow progress. Starting the pull persists a run and executes configured retrieval.
 6. Read Completed results and expand attempt details for adapter, priority, status, diagnostic,
    and details.
 7. Follow any linked `configuration_problem` to the exact
-   [Firm Profile](#source-profiles) artifact and correct it.
+   [Target Firm](#firms) acquisition artifact and inspect its configuration.
 8. Open [Artifacts](#artifacts) and locate the retained firm artifact and its acquisition
    observation.
 
@@ -376,9 +328,9 @@ idempotent while each materially distinct successful acquisition creates its own
 
 ### Common problems and recovery
 
-- No firms listed: save a [Firm Source Profile](#source-profiles) first.
+- No firms listed: a firm source-profile revision must be saved first.
 - Incomplete artifact: follow its configuration link, correct and save a
-  [profile revision](#source-profiles), then start a new pull. Existing run history remains
+  profile revision through its configuration authority, then start a new pull. Existing run history remains
   unchanged.
 - Retrieval failure: inspect attempt diagnostics, verify runtime request identity/network access,
   and retry as a new run when corrected.
@@ -392,7 +344,7 @@ rfi pull --state STATE --firm FIRM_A --firm FIRM_B
 rfi pull --state STATE --all-configured
 ```
 
-Related topics: [Firm Source Profiles](#source-profiles), [source readiness](#source-readiness),
+Related topics: [Target Firms](#firms), [source readiness](#source-readiness),
 [Artifacts](#artifacts), and [troubleshooting](#troubleshooting).
 
 <!-- help-topic: linux-mailing-lists -->
@@ -869,7 +821,7 @@ rfi verify --state FRESH_STATE
 rfi admin --state FRESH_STATE --port 8766
 ```
 
-6. Inspect expected [firms](#firms), [source profiles](#source-profiles),
+6. Inspect expected [firms and source profiles](#firms),
    [external sources](#external-sources), [artifacts](#artifacts), and [streams](#streams) before
    choosing which repository will be used for later operations.
 
@@ -907,7 +859,7 @@ Related topics: [repository model](#repository), [troubleshooting](#troubleshoot
 - Validation error: follow the displayed field/path, correct the browser draft, validate again.
 - Revision conflict: preserve needed draft values, reload the current revision, compare, and
   intentionally reapply. Never bypass optimistic checking.
-- No runnable firm artifacts: inspect [Firm Profiles](#source-profiles) and supported retrieval
+- No runnable firm artifacts: inspect [Target Firms](#firms) and supported retrieval
   candidates.
 - No governed stream source: create it under [External Sources](#external-sources), then return to
   [Streams](#streams).
@@ -918,7 +870,7 @@ Related topics: [repository model](#repository), [troubleshooting](#troubleshoot
 ### Acquisition and evidence failures
 
 - Configuration problem: use the result link to the exact firm/artifact, save a corrected
-  [profile revision](#source-profiles), and create a new [pull run](#acquisition).
+  profile revision through its configuration authority, and create a new [pull run](#acquisition).
 - Retrieval failure: inspect adapter attempt diagnostic and runtime network/request identity; retry
   only after the condition is understood.
 - Missing artifact: inspect the exact [pull](#acquisition) or [stream](#streams) result and revision.

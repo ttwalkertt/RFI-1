@@ -51,7 +51,6 @@ ADMIN_PREFERENCES_JS = (Path(__file__).parent / "admin_preferences.js").read_byt
 OPERATOR_NAVIGATION = (
     ("/concepts", "Concept Catalog"),
     ("/firms", "Target Firms"),
-    ("/source-profiles", "Firm Profiles"),
     ("/external-sources", "External Sources"),
     ("/pull-sources", "Pull Sources"),
     ("/linux-mailing-lists", "Linux Mailing Lists"),
@@ -283,7 +282,6 @@ _CONSOLE_ASSET = Path(__file__).with_name("console.html")
 if _CONSOLE_ASSET.exists():
     CONSOLE_HTML = _load_operator_page("console.html", "/concepts")
 FIRMS_HTML = _load_operator_page("firms.html", "/firms")
-SOURCE_PROFILES_HTML = _load_operator_page("source_profiles.html", "/source-profiles")
 EXTERNAL_SOURCES_HTML = _load_operator_page("external_sources.html", "/external-sources")
 LINUX_MAILING_LISTS_HTML = _load_operator_page(
     "linux_mailing_lists.html", "/linux-mailing-lists"
@@ -364,11 +362,12 @@ class AdminHandler(BaseHTTPRequestHandler):
                 self._send(HTTPStatus.OK, FIRMS_HTML.encode(), "text/html; charset=utf-8")
                 return
             if method == "GET" and path == "/source-profiles":
-                self._send(
-                    HTTPStatus.OK,
-                    SOURCE_PROFILES_HTML.encode(),
-                    "text/html; charset=utf-8",
-                )
+                target = "/firms" + (f"?{split.query}" if split.query else "")
+                self.send_response(HTTPStatus.PERMANENT_REDIRECT)
+                self.send_header("Location", target)
+                self.send_header("Content-Length", "0")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
                 return
             if method == "GET" and path == "/external-sources":
                 self._send(
