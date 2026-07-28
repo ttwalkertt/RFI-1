@@ -58,11 +58,11 @@ def fixture_proof() -> dict[str, Any]:
             industry="Data storage",
             technology_focus=("hard disk drives",),
             source_hints=(SourceDiscoveryHint("investor-relations", "ir.proof.example"),),
-            notes="Created through the public firm service.",
+            notes="Created through the public firm catalog.",
             status=FirmStatus.ACTIVE,
             valid_from="2024-01-01",
         )
-        created = service.create(asdict(draft))
+        created = repository.create(service.draft(asdict(draft)))
         revised_draft = replace(
             draft,
             aliases=("ProofCo", "Proof Storage Systems"),
@@ -76,7 +76,7 @@ def fixture_proof() -> dict[str, Any]:
             domains=("conflicting-proof.example",),
         )
         try:
-            service.create(asdict(conflict))
+            repository.create(service.draft(asdict(conflict)))
         except FirmError as error:
             conflict_message = str(error)
         else:

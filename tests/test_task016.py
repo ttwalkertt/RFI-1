@@ -492,6 +492,56 @@ class SecProviderFailureTests(unittest.TestCase):
                     )
                 self.assertEqual(caught.exception.code, "invalid_artifact_content")
 
+    def test_edgar_sgml_wrapped_primary_html_is_accepted_but_validated(self) -> None:
+        client, fixture, _timing = provider()
+        wrapped = (
+            b"<DOCUMENT>\n"
+            b"<TYPE>6-K\n"
+            b"<SEQUENCE>1\n"
+            b"<FILENAME>tm2620968d1_6k.htm\n"
+            b"<DESCRIPTION>FORM 6-K\n"
+            b"<TEXT>\n"
+            b"<HTML><BODY>filing</BODY></HTML>\n"
+            b"</TEXT>\n"
+            b"</DOCUMENT>\n"
+        )
+        fixture.responses.append(
+            SecHttpResponse(
+                200,
+                {"content-type": "text/html"},
+                wrapped,
+                "https://www.sec.gov/x",
+            )
+        )
+        document = client.primary_document(
+            "1577552", "0001104659-26-085556", "tm2620968d1_6k.htm"
+        )
+        self.assertEqual(document.content, wrapped)
+
+        invalid = (
+            wrapped.replace(b"<TEXT>\n", b"", 1),
+            wrapped.replace(b"tm2620968d1_6k.htm", b"different.htm", 1),
+            wrapped.replace(b"<SEQUENCE>1", b"<SEQUENCE>first", 1),
+            wrapped.replace(b"<HTML>", b"<!-- <HTML> -->", 1),
+        )
+        for content in invalid:
+            with self.subTest(prefix=content[:100]):
+                fixture.responses.append(
+                    SecHttpResponse(
+                        200,
+                        {"content-type": "text/html"},
+                        content,
+                        "https://www.sec.gov/x",
+                    )
+                )
+                with self.assertRaises(AdapterFailure) as caught:
+                    client.primary_document(
+                        "1577552",
+                        "0001104659-26-085556",
+                        "tm2620968d1_6k.htm",
+                    )
+                self.assertEqual(caught.exception.code, "invalid_artifact_content")
+
     def test_missing_runtime_identity_and_invalid_cik_stop_before_network(self) -> None:
         fixture = SecFixtureTransport()
         client = SecProviderClient(lambda: "", fixture)

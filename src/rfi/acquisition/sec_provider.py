@@ -63,6 +63,57 @@ def _has_html_document_signature(content: bytes) -> bool:
     return boundary < len(prefix) and prefix[boundary] in _HTML_SPACE + b">/"
 
 
+def _has_edgar_wrapped_html_signature(
+    content: bytes, expected_filename: str
+) -> bool:
+    """Recognize an SEC SGML document envelope containing the requested HTML file."""
+    prefix = content[:_HTML_PROLOG_LIMIT]
+    lower_prefix = prefix.lower()
+    position = 0
+    while position < len(prefix) and prefix[position] in _HTML_SPACE:
+        position += 1
+    document_tag = b"<document>"
+    if not lower_prefix.startswith(document_tag, position):
+        return False
+    position += len(document_tag)
+    if position >= len(prefix) or prefix[position] not in _HTML_SPACE:
+        return False
+
+    text_match = re.search(
+        rb"(?im)^[ \t]*<text>[ \t]*(?:\r?\n)", prefix[position:]
+    )
+    if text_match is None:
+        return False
+    header = prefix[position : position + text_match.start()]
+    fields: dict[bytes, bytes] = {}
+    allowed_fields = {b"type", b"sequence", b"filename", b"description"}
+    for line in header.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        field_match = re.fullmatch(rb"<([A-Za-z]+)>([^<>]*)", line)
+        if field_match is None:
+            return False
+        name = field_match.group(1).lower()
+        if name not in allowed_fields or name in fields:
+            return False
+        fields[name] = field_match.group(2).strip()
+
+    try:
+        encoded_filename = expected_filename.encode("ascii")
+    except UnicodeEncodeError:
+        return False
+    if not fields.get(b"type"):
+        return False
+    if not fields.get(b"sequence", b"").isdigit():
+        return False
+    if fields.get(b"filename") != encoded_filename:
+        return False
+
+    html_position = position + text_match.end()
+    return _has_html_document_signature(content[html_position:])
+
+
 class SecResponseTooLarge(ValueError):
     """Raised when a provider response crosses its declared byte boundary."""
 
@@ -290,7 +341,12 @@ class SecProviderClient:
                     "truncated_artifact_content",
                 )
         if media_type in {"text/html", "application/xhtml+xml"}:
-            if not _has_html_document_signature(response.content):
+            if not (
+                _has_html_document_signature(response.content)
+                or _has_edgar_wrapped_html_signature(
+                    response.content, primary_document
+                )
+            ):
                 raise AdapterFailure(
                     FailureClass.PERMANENT_RETRIEVAL,
                     "SEC primary filing HTML signature is invalid",
