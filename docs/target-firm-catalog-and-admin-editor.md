@@ -80,7 +80,7 @@ Start the existing local console and open `/firms`. The top navigation moves bet
 Catalog and Target Firms while retaining TASK-010's visual language and operator workflow:
 
 ```text
-List/Search → Detail/Browser → Edit/Create Revision → Validate → Preview → Save Revision
+List/Search → Detail/Browser → Edit Existing Firm → Validate → Preview → Save Revision
 ```
 
 The list searches names, aliases, identifiers, domains, technologies, notes, source hints, and
@@ -117,7 +117,7 @@ research when legal, market, or organizational details change.
 
 The local HTTP adapter exposes the same service used by Python callers:
 
-- `GET|POST /api/firms`
+- `GET /api/firms`
 - `POST /api/firms/validate`
 - `GET|PUT /api/firms/{firm_id}`
 - `GET /api/firms/{firm_id}/history`

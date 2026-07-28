@@ -889,9 +889,6 @@ class AdminHandler(BaseHTTPRequestHandler):
                 for item in items
             ]})
             return
-        if method == "POST" and parts == ["api", "firms"]:
-            self._send_json(HTTPStatus.CREATED, asdict(firm_service.create(self._body())))
-            return
         if method == "POST" and parts == ["api", "firms", "validate"]:
             body = self._body()
             current = body.pop("current_firm_id", None)

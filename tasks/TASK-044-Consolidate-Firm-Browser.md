@@ -76,3 +76,17 @@ Provide evidence of: 1. Browsing multiple firms. 2. Expand/collapse
 behavior. 3. Correct acquisition profile rendering. 4. External JSON
 authority/read-only display. 5. Firm Source Profiles removal. 6. Focused
 UI tests passing. 7. Full validation passing.
+
+### Follow-up authority repair
+
+Removed browser-driven creation of new target firms, including the blank editor path and
+`POST /api/firms`. Existing-firm revision and retirement remain available only where permitted;
+externally managed firms remain inspect-only. Verification additionally covers the absent creation
+control and route, permitted revision behavior, invalid external JSON rejection, idempotent reload,
+and first materialization of a previously unseen firm from valid `*.firm-config.json` authority.
+
+Repair verification completed 2026-07-27:
+
+- `PYTHONPATH=src .venv/bin/python -m unittest tests.test_task044 tests.test_task011 tests.test_task041`
+  — 25 tests passed.
+- `make validate` — passed.

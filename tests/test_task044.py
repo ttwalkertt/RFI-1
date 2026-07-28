@@ -43,7 +43,26 @@ class ConsolidatedFirmBrowserTests(SourceProfileAdminTests):
         ):
             self.assertIn(marker, html)
         self.assertNotIn('href="/source-profiles"', html)
+        self.assertNotIn("New target firm", html)
+        self.assertNotIn('id="new-firm"', html)
+        self.assertNotIn("fillEditor(value=null)", html)
+        self.assertNotIn("editing?await api('/api/firms/", html)
+        self.assertNotIn("This creates the first revision", html)
         self.assertEqual(html.count('aria-current="page"'), 1)
+
+    def test_manual_creation_route_is_absent_but_existing_revision_still_works(self) -> None:
+        payload = self.request("/api/firms/seagate")[1]
+        status, body = self.request("/api/firms", "POST", payload)
+        self.assertEqual(status, 404)
+        self.assertEqual(body["error"], "unknown API request")
+        expected = payload["revision_id"]
+        payload["notes"] = "Revised through the permitted existing-firm workflow."
+        status, revised = self.request(
+            "/api/firms/seagate", "PUT",
+            {"expected_revision_id": expected, "firm": payload},
+        )
+        self.assertEqual((status, revised["revision_number"]), (200, 2))
+        self.assertEqual(revised["notes"], payload["notes"])
 
     def test_existing_search_filter_metadata_and_profile_contracts_are_unchanged(self) -> None:
         status, firms = self.request(

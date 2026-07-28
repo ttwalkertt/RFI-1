@@ -140,7 +140,7 @@ class FirmCatalogTests(unittest.TestCase):
         invalid = {**payload, "relationships": [{"kind": "competitor", "target": "seagate"}]}
         self.assertFalse(service.validate(invalid)["valid"])
         self.assertIn("outside the firm identity authority", service.validate(invalid)["errors"][0])
-        created = service.create(payload)
+        created = self.repository.create(service.draft(payload))
         self.assertEqual(service.detail(created.firm_id).revision_id, created.revision_id)
         contracts = (SRC / "rfi/firms/contracts.py").read_text(encoding="utf-8")
         for forbidden in ("rfi.acquisition", "rfi.knowledge", "rfi.source_objects", "Path"):
@@ -231,17 +231,19 @@ class FirmAdminConsoleTests(unittest.TestCase):
         history = self.request("/api/firms/toshiba/history")[1]
         self.assertEqual(len(history["items"]), 1)
 
-    def test_create_validate_revise_conflict_and_restart_through_public_api(self) -> None:
-        payload = asdict(FirmCatalogTests.generic(self, "browser-firm"))
+    def test_validate_revise_conflict_and_restart_through_public_api(self) -> None:
+        current = self.request("/api/firms/seagate")[1]
+        payload = asdict(sample_firms()[0])
         status, validation = self.request("/api/firms/validate", "POST", payload)
         self.assertEqual((status, validation["valid"]), (200, True))
-        status, created = self.request("/api/firms", "POST", payload)
-        self.assertEqual((status, created["revision_number"]), (201, 1))
-        payload["aliases"] = [*payload["aliases"], "Browser Storage"]
+        status, removed = self.request("/api/firms", "POST", payload)
+        self.assertEqual(status, 404)
+        self.assertEqual(removed["error"], "unknown API request")
+        payload["aliases"] = [*payload["aliases"], "Browser Seagate"]
         status, revised = self.request(
-            "/api/firms/browser-firm",
+            "/api/firms/seagate",
             "PUT",
-            {"expected_revision_id": created["revision_id"], "firm": payload},
+            {"expected_revision_id": current["revision_id"], "firm": payload},
         )
         self.assertEqual((status, revised["revision_number"]), (200, 2))
         conflict = dict(payload)
@@ -254,7 +256,7 @@ class FirmAdminConsoleTests(unittest.TestCase):
         self.assertEqual((status, invalid["valid"]), (200, False))
         self.assertIn("conflicting firm domain", invalid["errors"][0])
         reopened = FirmRepository.open(self.root / "concept-catalog" / "firm-catalog")
-        self.assertEqual(reopened.get("browser-firm").aliases[-1], "Browser Storage")
+        self.assertEqual(reopened.get("seagate").aliases[-1], "Browser Seagate")
 
 
 if __name__ == "__main__":

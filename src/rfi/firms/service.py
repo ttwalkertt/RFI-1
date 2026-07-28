@@ -53,10 +53,6 @@ class FirmService:
         authority = getattr(self.catalog, "configuration_authority", None)
         return authority(firm_id) if authority is not None else None
 
-    def create(self, payload: dict[str, Any]) -> FirmRevision:
-        """Validate JSON-compatible input and create one stable firm."""
-        return self.catalog.create(self.draft(payload))
-
     def revise(
         self,
         firm_id: str,

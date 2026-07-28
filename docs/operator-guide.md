@@ -156,16 +156,16 @@ intelligence.
 ### When to use this page
 
 Use Target Firms to search and filter existing firms, inspect recognition metadata and firm-owned
-acquisition profiles and history, or create/revise a target identity.
+acquisition profiles and history, or revise an existing non-externally-managed target identity.
 
 ### Prerequisites
 
-The repository must be [initialized](#getting-started). Choose a stable `firm_id`; it remains the
-downstream reference. Do not encode mutable legal or market facts into that ID.
+The repository must be [initialized](#getting-started). New firm identities come from governed
+configuration loaders rather than this browser. A stable `firm_id` remains the downstream reference.
 
 ### Typical workflow
 
-1. Choose `New target firm`, or select a firm and choose `Edit / create revision`.
+1. Select an existing non-externally-managed firm and choose `Edit / create revision`.
 2. Enter canonical and legal names, aliases, identifiers, domains, location, classifications,
    technology focus, source-discovery hints, notes, relevance, status, and validity.
 3. Choose `Validate draft`; nothing is saved.
@@ -189,9 +189,10 @@ retrying. A failed validation or save keeps the form values. Historical revision
 
 ### CLI equivalent
 
-`rfi seed --file firms.yaml` validates a complete external firm batch before creating any firm and
-publishes new firms transactionally. It does not revise existing firms. `rfi seed --print-schema`
-prints the canonical external catalog template.
+`rfi seed --file firms.yaml` validates a complete external firm batch before materializing new
+firms transactionally. It does not revise existing firms. Governed `*.firm-config.json` files are
+the authority for externally managed firms. `rfi seed --print-schema` prints the canonical external
+catalog template.
 
 The Acquisition Profile section shows canonical defaults or the current immutable source-profile
 revision, operator notes, enabled state, addressability classification, candidate counts, and
@@ -301,7 +302,7 @@ Lore/public-inbox acquire interface.
 
 ### Acquisition procedure
 
-1. [Create or select a firm](#firms) under Target Firms.
+1. Select and inspect an existing firm under [Target Firms](#firms).
 2. Inspect its firm-owned Acquisition Profile under [Target Firms](#firms).
 3. Open Pull Sources and inspect [enabled, runnable, and incomplete counts](#source-readiness).
 4. Select one or more firms and choose `Pull selected firms`.
