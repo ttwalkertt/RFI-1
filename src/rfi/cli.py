@@ -413,6 +413,7 @@ def seed(state: Path, files: tuple[Path, ...] = ()) -> None:
 
 def serve(state: Path, host: str, port: int) -> None:
     """Run the integrated admin console until interrupted by the operator."""
+    print("Loading firm JSON configuration...", flush=True)
     server = create_admin_server(state, host, port)
     bound_host, bound_port = server.server_address[:2]
     display_host = "127.0.0.1" if bound_host in {"0.0.0.0", "::"} else bound_host

@@ -10,6 +10,7 @@ import threading
 import unittest
 import urllib.request
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -17,7 +18,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from rfi.admin import create_admin_server  # noqa: E402
-from rfi.cli import main  # noqa: E402
+from rfi.cli import main, serve  # noqa: E402
 
 
 class StableApplicationCliTests(unittest.TestCase):
@@ -103,6 +104,31 @@ class StableApplicationCliTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=3)
+
+    def test_admin_reports_firm_json_loading_before_final_startup_block(self) -> None:
+        class Server:
+            server_address = ("127.0.0.1", 8765)
+
+            def serve_forever(self) -> None:
+                return
+
+            def server_close(self) -> None:
+                return
+
+        output = io.StringIO()
+        with patch("rfi.cli.create_admin_server", return_value=Server()):
+            with contextlib.redirect_stdout(output):
+                serve(self.state, "127.0.0.1", 8765)
+        self.assertEqual(
+            output.getvalue().splitlines(),
+            [
+                "Loading firm JSON configuration...",
+                "RFI-1 admin console",
+                "Local URL: http://127.0.0.1:8765/",
+                f"State: {self.state}",
+                "Stop: press Ctrl-C",
+            ],
+        )
 
     def test_missing_state_invalid_port_and_incompatible_state_fail_clearly(self) -> None:
         code, _, errors = self.run_cli("seed", "--state", str(self.state))
