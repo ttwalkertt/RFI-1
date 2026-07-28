@@ -39,7 +39,7 @@ class HelpContractCase(unittest.TestCase):
 
     def test_every_major_page_has_one_valid_context_mapping(self) -> None:
         expected = {
-            "/concepts", "/firms", "/external-sources",
+            "/concepts", "/firms",
             "/pull-sources", "/linux-mailing-lists", "/streams", "/artifacts",
         }
         self.assertEqual(set(PAGE_HELP_TOPICS), expected)
@@ -58,10 +58,6 @@ class HelpContractCase(unittest.TestCase):
             '<h2 id="repository-protection"',
             "<pre><code>",
             'href="/help/artifacts#artifacts"',
-            (
-                'href="/help/external-sources#external-sources">save a repository-global '
-                "External Source</a>"
-            ),
             (
                 'href="/help/stream-upstream-definitions#stream-upstream-definitions">save '
                 "compatible upstream definitions</a>"

@@ -49,9 +49,8 @@ a normalized human name. If an occupied identity does not describe the same norm
 the façade appends a deterministic SHA-256 prefix and increases its length if necessary. Repeating
 the same intent therefore resolves the same source and current revision without duplicating either.
 
-The generic External Sources and Streams/YAML surfaces remain available for maintainers and
-advanced repository administration. They are not prerequisites and are not the product path for a
-Linux kernel engineer adding a mailing list.
+The Streams/YAML surface remains available for advanced stream administration. The governed source
+registry remains an internal repository service and is not a separate operator prerequisite.
 
 ## Lore discovery and connected context
 
@@ -90,7 +89,7 @@ Legacy governed-source records are resolved by archive/list identity before any 
 The supported canonicalization is deliberately narrow: HTTPS, the case-normalized
 `lore.kernel.org` host, one archive path component, and a canonical trailing slash. HTTP, alternate
 hosts, nested paths, queries, fragments, credentials, and ports are not aliases. Sources created
-through the validated External Sources contract are stored canonically and their existing identity
+through the validated governed-source service contract are stored canonically and their existing identity
 is reused. A schema-v5 migration repairs only the exact unused TASK-028 legacy `linux-block-lore`
 record that stored `https://lore-kernel-org/linux-block`. It atomically updates both persisted
 projections to `https://lore.kernel.org/linux-block/` without changing the source identity. Any

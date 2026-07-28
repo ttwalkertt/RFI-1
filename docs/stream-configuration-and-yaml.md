@@ -7,12 +7,9 @@ and canonical export encodes from it.
 
 ## Browser workflow
 
-First create or inspect repository-global Lore/public-inbox transport authority at
-`/external-sources`. The page validates and explicitly saves stable source identity, display name,
-provider, list/archive identity, endpoint, pacing, concurrency, timeout, response-size bound, and
-retry/backoff policy. Saved identities are immutable; changed policy is cloned to a new source ID
-so prior acquisition meaning is not rewritten. This surface is distinct from `/firms`,
-whose profiles are owned by individual firms.
+Streams use repository-provided governed Lore/public-inbox sources. Their stable identities and
+transport policies remain repository authority and are read-only in the operator console. This is
+distinct from `/firms`, whose profiles are owned by individual firms.
 
 Open `/streams` and work from top to bottom:
 

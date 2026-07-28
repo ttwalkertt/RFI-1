@@ -87,7 +87,6 @@ def main() -> int:
         "admin/admin_preferences.js",
         "admin/artifact_browser.html",
         "admin/console.html",
-        "admin/external_sources.html",
         "admin/field_definitions.py",
         "admin/firms.html",
         "admin/help.py",

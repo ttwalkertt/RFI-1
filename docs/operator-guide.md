@@ -41,7 +41,7 @@ opens existing state, prints the local URL and state path, and does not seed, mi
 open a browser. Stop the foreground server with Ctrl-C.
 
 Open the printed URL. Use the persistent top navigation for Concept Catalog, Target Firms,
-External Sources, Pull Sources, Linux Mailing Lists, Streams, and Artifacts. Every page
+Pull Sources, Linux Mailing Lists, Streams, and Artifacts. Every page
 has a Help action.
 Help is a separate browsing context, so invoking it does not submit, reset, close, or navigate the
 current form.
@@ -197,10 +197,10 @@ catalog template.
 The Acquisition Profile section shows canonical defaults or the current immutable source-profile
 revision, operator notes, enabled state, addressability classification, candidate counts, and
 source-profile history. Externally managed configuration is marked read-only with its JSON
-filename. Firm-owned profiles remain distinct from repository-global [External Sources](#external-sources).
+filename. Firm-owned profiles remain distinct from repository-global governed sources.
 
-Related topics: [source readiness](#source-readiness), [acquisition](#acquisition),
-[External Sources](#external-sources), and [Artifacts](#artifacts).
+Related topics: [source readiness](#source-readiness), [acquisition](#acquisition), and
+[Artifacts](#artifacts).
 
 <!-- help-topic: source-readiness -->
 ## Source readiness and run eligibility
@@ -223,67 +223,12 @@ definition. Derived streams require compatible saved upstream streams and an acy
 Readiness evaluation reads current configuration. It does not retrieve, publish a revision, or
 create a run. Execution is always a separate operator action.
 
-Recovery sequence: inspect counts, open the relevant [Target Firm](#firms) or
-[External Source](#external-sources), validate and save the correction, then return to
-[Pull Sources](#acquisition) or [Streams](#streams), refresh, and re-evaluate. Never change a saved
-source identity to repair history; create a new source identity where its immutable policy must
-change.
+Recovery sequence: inspect counts, open the relevant [Target Firm](#firms), then return to
+[Pull Sources](#acquisition) or [Streams](#streams), refresh, and re-evaluate. Governed stream
+sources are repository-provided inputs; source identity and transport policy are not managed in
+the operator console.
 
-Related topics: [Target Firms](#firms), [External Sources](#external-sources),
-[acquisition](#acquisition), and [streams](#streams).
-
-<!-- help-topic: external-sources -->
-## External Sources
-
-### Purpose
-
-Create and inspect repository-global governed Lore/public-inbox source profiles shared by streams.
-These are not target-firm profiles. They own provider/list/endpoint identity and bounded transport
-policy; streams reference only the stable source ID.
-
-### Prerequisites
-
-Know the stable source ID, display name, Lore list identity, HTTPS archive endpoint, honest request
-User-Agent, pacing, concurrency, timeout, response-size, retry, and backoff limits. The current UI
-supports the `Lore / public-inbox` provider.
-
-### Typical workflow
-
-1. Choose `New Lore source`.
-2. Complete Identity and provider and Bounded transport policy.
-3. Choose `Validate profile`. The complete proposal is checked and nothing is saved.
-4. Choose `Save governed source`.
-5. Select the saved source to inspect its immutable profile.
-6. Choose `Use in Stream Configuration` to continue to [Streams](#streams) with the stable source
-   selected.
-
-### State changes and immutability
-
-`Save governed source` creates the repository-global source identity. An exact existing profile is
-idempotent. Saved source identity and transport policy are immutable because acquisition and stream
-history may refer to them. `Clone as new source` copies fields into an unsaved draft; choose a new
-stable ID before saving. Validation, refresh, inspect, and clone preparation do not persist or
-contact the archive. Stream definitions cannot override endpoint, credentials, request identity,
-pacing, retry, timeout, response bounds, or cursors.
-
-### Common problems and recovery
-
-Use an HTTPS endpoint and values within the displayed bounds. If policy must change, inspect the
-old source, choose `Clone as new source`, assign a new stable ID, validate, save, and
-[revise the stream](#streams) to refer to the new source. Do not expect this page to acquire
-messages; bounded live preview/acquire is currently [CLI-only](#cli-reference).
-
-### CLI equivalent
-
-```sh
-rfi mailing-list --state STATE configure-lore-source \
-  --source SOURCE_ID --list-id LIST_ID --display-name NAME \
-  --archive-base-url HTTPS_URL
-rfi mailing-list --state STATE sources
-```
-
-Related topics: [streams](#streams), [source readiness](#source-readiness), and
-[Artifacts](#artifacts).
+Related topics: [Target Firms](#firms), [acquisition](#acquisition), and [streams](#streams).
 
 <!-- help-topic: acquisition -->
 ## Pull Sources and acquisition workflow
@@ -354,7 +299,7 @@ Related topics: [Target Firms](#firms), [source readiness](#source-readiness),
 ### Purpose
 
 Use **Linux Mailing Lists** to operate bounded Lore-backed evidence streams without first
-configuring External Sources or the generic Streams editor. The page coordinates those existing
+configuring governed sources or the generic Streams editor. The page coordinates those existing
 repository objects behind an operations-first summary and remains the normal starting point when
 the intended outcome is collecting Linux kernel mailing-list discussions.
 
@@ -403,7 +348,7 @@ never means a truncated test was complete.
 ### Common problems and recovery
 
 - An invalid Lore URL must be corrected to one canonical HTTPS archive URL.
-- If a prior **External Sources** record owns the generated archive identity with a different URL,
+- If a prior governed-source record owns the generated archive identity with a different URL,
   the workflow refuses to replace it. Sources created through current validation store supported
   trailing-slash and host-case variants canonically, so their stable identity is reused. The exact
   malformed, unused TASK-028 legacy Linux Block record is corrected once by schema migration v5,
@@ -600,8 +545,7 @@ evidence or saved upstream streams.
 
 ### Prerequisites
 
-For a Governed external source input, first
-[save a repository-global External Source](#external-sources). For Upstream streams,
+For a Governed external source input, select an existing repository-provided source. For Upstream streams,
 [save compatible upstream definitions](#stream-upstream-definitions). Know the intended artifact
 schema, selection criteria, context expansion, and hard bounds.
 
@@ -669,8 +613,7 @@ Use `rfi stream schema`, `validate`, `import`, `export`, `preview`, `save`, `run
 canonical interchange uses YAML.
 
 Related topics: [validation and preview](#stream-validation-preview), [YAML](#yaml),
-[revisions and lineage](#revisions-lineage), [External Sources](#external-sources), and
-[Artifacts](#artifacts).
+[revisions and lineage](#revisions-lineage), and [Artifacts](#artifacts).
 
 <!-- help-topic: stream-validation-preview -->
 ## Stream validation and preview
@@ -822,8 +765,8 @@ rfi verify --state FRESH_STATE
 rfi admin --state FRESH_STATE --port 8766
 ```
 
-6. Inspect expected [firms and source profiles](#firms),
-   [external sources](#external-sources), [artifacts](#artifacts), and [streams](#streams) before
+6. Inspect expected [firms and source profiles](#firms), [artifacts](#artifacts), and
+   [streams](#streams) before
    choosing which repository will be used for later operations.
 
 `verify` reads state and checks SQLite integrity, foreign keys, structured relationships, content
@@ -862,8 +805,8 @@ Related topics: [repository model](#repository), [troubleshooting](#troubleshoot
   intentionally reapply. Never bypass optimistic checking.
 - No runnable firm artifacts: inspect [Target Firms](#firms) and supported retrieval
   candidates.
-- No governed stream source: create it under [External Sources](#external-sources), then return to
-  [Streams](#streams).
+- No governed stream source: no repository-provided source is currently available; source
+  management is outside the operator console.
 - Stream cycle/schema/reference error: correct topology or schema in a new draft; saved history is
   immutable.
 - Run disabled: select a saved enabled current stream and ensure no unsaved/imported draft remains.

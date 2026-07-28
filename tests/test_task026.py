@@ -294,7 +294,7 @@ class StreamCliAndBrowserCase(unittest.TestCase):
             server.server_close()
             thread.join(timeout=2)
 
-    def test_repository_global_external_source_operator_path(self) -> None:
+    def test_repository_global_external_source_api_and_stream_consumer(self) -> None:
         source = {
             "source_id": "nvme-lore",
             "display_name": "Linux NVMe",
@@ -322,18 +322,6 @@ class StreamCliAndBrowserCase(unittest.TestCase):
         thread.start()
         base = f"http://127.0.0.1:{server.server_address[1]}"
         try:
-            with urllib.request.urlopen(base + "/external-sources") as response:
-                page = response.read().decode()
-            for label in (
-                "Repository-global authority", "Stable source ID", "Archive/list identity",
-                "Archive endpoint", "Minimum request interval", "Maximum concurrency",
-                "Timeout", "Maximum response bytes", "Maximum attempts per request",
-                "Initial backoff", "Maximum backoff", "Validate profile",
-                "Clone as new source", "Use in Stream Configuration",
-            ):
-                self.assertIn(label, page)
-            self.assertIn('href="/firms">Target Firms</a>', page)
-
             def post(path: str, payload: dict[str, object]) -> dict[str, object]:
                 request = urllib.request.Request(
                     base + path,
@@ -370,8 +358,9 @@ class StreamCliAndBrowserCase(unittest.TestCase):
 
             with urllib.request.urlopen(base + "/streams?source_id=nvme-lore") as response:
                 streams_page = response.read().decode()
-            self.assertIn("Repository-global external source", streams_page)
-            self.assertIn("Create or inspect governed sources", streams_page)
+            self.assertIn("Repository-provided governed source", streams_page)
+            self.assertIn("Existing governed sources are provided by the repository", streams_page)
+            self.assertNotIn('href="/external-sources"', streams_page)
             self.assertIn("requestedSource", streams_page)
         finally:
             server.shutdown()

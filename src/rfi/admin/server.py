@@ -51,7 +51,6 @@ ADMIN_PREFERENCES_JS = (Path(__file__).parent / "admin_preferences.js").read_byt
 OPERATOR_NAVIGATION = (
     ("/concepts", "Concept Catalog"),
     ("/firms", "Target Firms"),
-    ("/external-sources", "External Sources"),
     ("/pull-sources", "Pull Sources"),
     ("/linux-mailing-lists", "Linux Mailing Lists"),
     ("/streams", "Streams"),
@@ -282,7 +281,6 @@ _CONSOLE_ASSET = Path(__file__).with_name("console.html")
 if _CONSOLE_ASSET.exists():
     CONSOLE_HTML = _load_operator_page("console.html", "/concepts")
 FIRMS_HTML = _load_operator_page("firms.html", "/firms")
-EXTERNAL_SOURCES_HTML = _load_operator_page("external_sources.html", "/external-sources")
 LINUX_MAILING_LISTS_HTML = _load_operator_page(
     "linux_mailing_lists.html", "/linux-mailing-lists"
 )
@@ -368,13 +366,6 @@ class AdminHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", "0")
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
-                return
-            if method == "GET" and path == "/external-sources":
-                self._send(
-                    HTTPStatus.OK,
-                    EXTERNAL_SOURCES_HTML.encode(),
-                    "text/html; charset=utf-8",
-                )
                 return
             if method == "GET" and path == "/pull-sources":
                 self._send(
