@@ -42,6 +42,12 @@ from rfi.acquisition.fixture_adapters import (
 )
 from rfi.acquisition.repository import AcquisitionRepository
 from rfi.acquisition.interval import IntervalAcquisitionService
+from rfi.acquisition.earnings_transcripts import (
+    EarningsCallTranscriptAcquisition,
+    EarningsTranscriptHttpResponse,
+    EarningsTranscriptTransport,
+    UrllibEarningsTranscriptTransport,
+)
 from rfi.acquisition.runtime_config import load_runtime_configuration
 from rfi.acquisition.sec_form_10k import SecForm10KAdapter
 from rfi.acquisition.sec_form_10q import SecForm10QAdapter
@@ -81,6 +87,9 @@ __all__ = [
     "DirectUrlAdapter",
     "EngineFailurePoint",
     "EdgarAdapter",
+    "EarningsCallTranscriptAcquisition",
+    "EarningsTranscriptHttpResponse",
+    "EarningsTranscriptTransport",
     "FailurePoint",
     "IntervalAcquisitionFailure",
     "IntervalAcquisitionRequest",
@@ -110,6 +119,7 @@ __all__ = [
     "SecTransport",
     "SecUrllibTransport",
     "SourceProfile",
+    "UrllibEarningsTranscriptTransport",
     "credential_from_environment",
     "fixture_profiles",
     "load_live_profiles",

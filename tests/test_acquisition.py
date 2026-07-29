@@ -325,6 +325,7 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "acquisition/demo.py",
                 "acquisition/direct_url.py",
                 "acquisition/edgar.py",
+                "acquisition/earnings_transcripts.py",
                 "acquisition/engine.py",
                 "acquisition/fixture_adapters.py",
                 "acquisition/interval.py",
@@ -426,7 +427,10 @@ class ScopeBoundaryTests(unittest.TestCase):
             path.read_text(encoding="utf-8")
             for path in (SRC / "rfi" / "acquisition").glob("*.py")
             if path.name
-            not in {"direct_url.py", "edgar.py", "sec_api.py", "sec_provider.py"}
+            not in {
+                "direct_url.py", "earnings_transcripts.py", "edgar.py", "sec_api.py",
+                "sec_provider.py",
+            }
         ).lower()
         for term in ("requests", "urllib.request", "http.client", "socket"):
             with self.subTest(provider_neutral_term=term):

@@ -69,6 +69,7 @@ def main() -> int:
         "acquisition/contracts.py",
         "acquisition/demo.py",
         "acquisition/direct_url.py",
+        "acquisition/earnings_transcripts.py",
         "acquisition/edgar.py",
         "acquisition/engine.py",
         "acquisition/fixture_adapters.py",

@@ -27,6 +27,12 @@ within-invocation retries; repository persistence continues to own immutable evi
 identity, observations, and interval outcome history. Execution strategy is deliberately
 unspecified.
 
+TASK-048 supplies the first production consumer of that boundary: an artifact-specific, bounded
+official earnings-call transcript retriever. Discovery proposals remain non-authoritative inputs;
+deterministic source-host, date, media, and transcript validation gates the existing ingress, and
+coverage remains indeterminate unless an authoritative interval-spanning listing is affirmatively
+and completely evaluated.
+
 ---
 
 # Repository-First Philosophy

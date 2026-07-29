@@ -46,6 +46,7 @@
 | TASK-045 | Source-scoped mailing-list observations and canonical cross-list lineage | Complete |
 | TASK-046 | Remove External Sources operator screen | Complete |
 | TASK-047 | Shared date-delimited acquisition contract and integration | Done |
+| TASK-048 | Acquire official earnings-call transcripts | Done |
 
 ## Architectural Progression
 

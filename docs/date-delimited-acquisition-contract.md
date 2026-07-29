@@ -64,4 +64,8 @@ artifact without a resume protocol.
 
 TASK-047 includes only a non-production test double. It implements no earnings-call or press-release
 retriever, HTTP discovery, parsing, provider adapter, generic retrieval framework, or concurrency
-policy. Future artifact-family retrievers should initially implement this contract independently.
+policy. TASK-048 now provides the first production implementation for official textual
+earnings-call transcripts. It remains artifact-specific: bounded issuer/authorized-IR listing
+discovery and optional candidate proposals feed deterministic host, date, media, and transcript
+validation. Only validated envelopes cross this contract and enter the repository through the
+existing application service. Search-located proposals never establish complete coverage.
