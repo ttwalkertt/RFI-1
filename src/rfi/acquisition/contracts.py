@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass, field
+from datetime import date
 from enum import StrEnum
 from typing import Any
 
@@ -36,6 +37,127 @@ class RetrievalOutcome(StrEnum):
     FAILED = "failed"
     SKIPPED = "skipped"
     DUPLICATE = "duplicate"
+
+
+class IntervalCoverage(StrEnum):
+    """Observable coverage of one requested closed-open date interval."""
+
+    COMPLETE = "complete"
+    INCOMPLETE = "incomplete"
+    INDETERMINATE = "indeterminate"
+
+
+@dataclass(frozen=True)
+class IntervalAcquisitionRequest:
+    """Request artifacts for one firm and type in ``[start_date, end_date)``."""
+
+    firm_id: str
+    artifact_type: str
+    start_date: date
+    end_date: date
+
+    def __post_init__(self) -> None:
+        require_identifier(self.firm_id, "firm_id")
+        require_identifier(self.artifact_type, "artifact_type")
+        if not isinstance(self.start_date, date) or not isinstance(self.end_date, date):
+            raise ContractError("interval boundaries must be dates")
+        if self.start_date > self.end_date:
+            raise ContractError("start_date must not be after end_date")
+
+    def contains(self, value: date) -> bool:
+        """Return whether a date lies inside the closed-open interval."""
+        return self.start_date <= value < self.end_date
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "firm_id": self.firm_id,
+            "artifact_type": self.artifact_type,
+            "start_date": self.start_date.isoformat(),
+            "end_date": self.end_date.isoformat(),
+        }
+
+
+@dataclass(frozen=True)
+class IntervalArtifactEnvelope:
+    """One success expressed through the repository's existing ingress contract."""
+
+    candidate: CandidateDocument
+    artifact_date: date
+    retrieval: RetrievalResult
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.artifact_date, date):
+            raise ContractError("artifact_date must be a date")
+
+    @property
+    def source_artifact_id(self) -> str:
+        """Return the existing acquisition candidate identity for result correlation."""
+        return self.candidate.candidate_id
+
+
+@dataclass(frozen=True)
+class IntervalAcquisitionFailure:
+    """One explicit acquisition failure observed during an invocation."""
+
+    code: str
+    message: str
+    retryable: bool
+    source_artifact_id: str | None = None
+    details: dict[str, JsonValue] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        require_identifier(self.code, "failure code")
+        if not self.message.strip():
+            raise ContractError("failure message must not be blank")
+        if self.source_artifact_id is not None and not self.source_artifact_id.strip():
+            raise ContractError("failure source_artifact_id must not be blank")
+        validate_json(self.details, "failure details")
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        return {
+            "code": self.code,
+            "message": self.message,
+            "retryable": self.retryable,
+            "source_artifact_id": self.source_artifact_id,
+            "details": self.details,
+        }
+
+
+@dataclass(frozen=True)
+class IntervalAcquisitionResult:
+    """Order-independent successes, failures, and truthful interval coverage."""
+
+    artifacts: tuple[IntervalArtifactEnvelope, ...] = ()
+    failures: tuple[IntervalAcquisitionFailure, ...] = ()
+    coverage: IntervalCoverage = IntervalCoverage.INDETERMINATE
+
+    def __post_init__(self) -> None:
+        if self.coverage == IntervalCoverage.COMPLETE and self.failures:
+            raise ContractError("complete coverage cannot include acquisition failures")
+        source_ids = [item.source_artifact_id for item in self.artifacts]
+        if len(set(source_ids)) != len(source_ids):
+            raise ContractError("successful source artifact identities must not repeat")
+
+
+@dataclass(frozen=True)
+class IntervalArtifactReceipt:
+    """Repository-assigned identities for one successfully persisted envelope."""
+
+    source_artifact_id: str
+    document_id: str
+    artifact_id: str
+    artifact_created: bool
+
+
+@dataclass(frozen=True)
+class IntervalOutcomeReceipt:
+    """Durable receipt for one application-requested interval outcome."""
+
+    outcome_id: str
+    coverage: IntervalCoverage
+    artifacts: tuple[IntervalArtifactReceipt, ...]
+    failure_count: int
+    idempotent: bool
 
 
 class FailurePoint(StrEnum):

@@ -1,5 +1,10 @@
 # Acquisition substrate
 
+Date-delimited artifact-family acquisition uses the shared request/result boundary documented in
+[`date-delimited-acquisition-contract.md`](date-delimited-acquisition-contract.md). Successful
+interval artifacts enter through the substrate's existing success ingress; additive interval
+history does not replace artifact, document, attempt, or observation authority.
+
 TASK-002 implements the repository-owned boundary that accepts deterministic candidates and exact
 retrieval results from future adapters. It does not discover or retrieve anything itself.
 

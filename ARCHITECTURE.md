@@ -20,6 +20,13 @@ Its defining characteristic is the separation of three concerns:
 
 Each concern evolves independently while sharing a common repository.
 
+Date-delimited artifact-family retrievers share the observable contract in
+`docs/date-delimited-acquisition-contract.md`. The application validates canonical firm and artifact
+references and applies later retry policy; acquisition implementations own discovery and bounded
+within-invocation retries; repository persistence continues to own immutable evidence, duplicates,
+identity, observations, and interval outcome history. Execution strategy is deliberately
+unspecified.
+
 ---
 
 # Repository-First Philosophy

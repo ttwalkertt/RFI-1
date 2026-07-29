@@ -6,6 +6,12 @@ from rfi.acquisition.contracts import (
     Checkpoint,
     DiscoveryProvenance,
     FailurePoint,
+    IntervalAcquisitionFailure,
+    IntervalAcquisitionRequest,
+    IntervalAcquisitionResult,
+    IntervalArtifactEnvelope,
+    IntervalCoverage,
+    IntervalOutcomeReceipt,
     RetrievalOutcome,
     RetrievalResult,
     SourceProfile,
@@ -35,6 +41,7 @@ from rfi.acquisition.fixture_adapters import (
     fixture_profiles,
 )
 from rfi.acquisition.repository import AcquisitionRepository
+from rfi.acquisition.interval import IntervalAcquisitionService
 from rfi.acquisition.runtime_config import load_runtime_configuration
 from rfi.acquisition.sec_form_10k import SecForm10KAdapter
 from rfi.acquisition.sec_form_10q import SecForm10QAdapter
@@ -75,6 +82,13 @@ __all__ = [
     "EngineFailurePoint",
     "EdgarAdapter",
     "FailurePoint",
+    "IntervalAcquisitionFailure",
+    "IntervalAcquisitionRequest",
+    "IntervalAcquisitionResult",
+    "IntervalAcquisitionService",
+    "IntervalArtifactEnvelope",
+    "IntervalCoverage",
+    "IntervalOutcomeReceipt",
     "FailureClass",
     "FixtureCatalogAdapter",
     "FixtureFeedAdapter",

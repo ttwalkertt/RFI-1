@@ -72,6 +72,7 @@ def main() -> int:
         "acquisition/edgar.py",
         "acquisition/engine.py",
         "acquisition/fixture_adapters.py",
+        "acquisition/interval.py",
         "acquisition/persistence.py",
         "acquisition/repository.py",
         "acquisition/runtime_config.py",

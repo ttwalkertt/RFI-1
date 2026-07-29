@@ -125,7 +125,7 @@ class Task045Case(unittest.TestCase):
                 "UPDATE schema_metadata SET schema_version=11 WHERE singleton=1"
             )
         migrated = RepositoryDatabase.open(self.state)
-        self.assertEqual(migrated.validate()["schema_version"], 12)
+        self.assertEqual(migrated.validate()["schema_version"], 13)
         reopened = MailingListRepository(self.state)
         after = {
             table: int(reopened.rows(f"SELECT count(*) AS count FROM {table}")[0]["count"])

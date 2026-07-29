@@ -15,6 +15,10 @@ from rfi.acquisition.contracts import (
     ContractError,
     FailurePoint,
     IntegrityError,
+    IntervalAcquisitionRequest,
+    IntervalAcquisitionResult,
+    IntervalArtifactReceipt,
+    IntervalOutcomeReceipt,
     PartialFailure,
     ReplayResult,
     RetrievalOutcome,
@@ -361,6 +365,130 @@ class AcquisitionRepository:
         records = [(str(row[0]), self._decode(row[1], "attempt")) for row in attempts]
         records.extend((str(row[0]), self._decode(row[1], "checkpoint")) for row in checkpoints)
         return [record for _, record in sorted(records, key=lambda item: item[0])]
+
+    def record_interval_outcome(
+        self,
+        outcome_id: str,
+        request: IntervalAcquisitionRequest,
+        result: IntervalAcquisitionResult,
+        receipts: tuple[AcquisitionReceipt, ...],
+        recorded_at: str,
+    ) -> IntervalOutcomeReceipt:
+        """Link one interval outcome to artifacts ingested through existing persistence."""
+        require_identifier(outcome_id, "outcome_id")
+        if not recorded_at.strip():
+            raise ContractError("recorded_at must not be blank")
+        if len(receipts) != len(result.artifacts):
+            raise ContractError("every successful interval artifact requires an ingress receipt")
+        paired = sorted(
+            zip(result.artifacts, receipts, strict=True),
+            key=lambda item: item[0].source_artifact_id,
+        )
+        record = {
+            "schema_version": 1,
+            "record_type": "interval_acquisition_outcome",
+            "outcome_id": outcome_id,
+            "request": request.to_dict(),
+            "coverage": result.coverage.value,
+            "recorded_at": recorded_at,
+            "artifacts": [
+                {
+                    "source_artifact_id": envelope.source_artifact_id,
+                    "artifact_date": envelope.artifact_date.isoformat(),
+                    "attempt_id": receipt.attempt_id,
+                    "observation_id": receipt.observation_id,
+                    "artifact_id": receipt.artifact_id,
+                    "document_id": receipt.document_id,
+                }
+                for envelope, receipt in paired
+            ],
+            "failures": [
+                failure.to_dict()
+                for failure in sorted(
+                    result.failures,
+                    key=lambda item: (item.code, item.source_artifact_id or "", item.message),
+                )
+            ],
+        }
+        payload = canonical_json(record)
+        try:
+            with self._database.transaction() as connection:
+                prior = connection.execute(
+                    "SELECT canonical_json FROM interval_acquisition_outcomes WHERE outcome_id=?",
+                    (outcome_id,),
+                ).fetchone()
+                if prior is not None:
+                    if str(prior[0]) != payload:
+                        raise ConflictError(
+                            f"immutable interval outcome identity already differs: {outcome_id}"
+                        )
+                    return IntervalOutcomeReceipt(
+                        outcome_id,
+                        result.coverage,
+                        tuple(
+                            IntervalArtifactReceipt(
+                                envelope.source_artifact_id,
+                                receipt.document_id,
+                                receipt.artifact_id,
+                                False,
+                            )
+                            for envelope, receipt in paired
+                        ),
+                        len(result.failures),
+                        True,
+                    )
+                connection.execute(
+                    "INSERT INTO interval_acquisition_outcomes VALUES (?,?,?,?,?,?,?,?,?)",
+                    (
+                        outcome_id,
+                        request.firm_id,
+                        request.artifact_type,
+                        request.start_date.isoformat(),
+                        request.end_date.isoformat(),
+                        result.coverage.value,
+                        len(result.failures),
+                        recorded_at,
+                        payload,
+                    ),
+                )
+                for ordinal, (envelope, receipt) in enumerate(paired):
+                    connection.execute(
+                        "INSERT INTO interval_acquisition_artifacts VALUES (?,?,?,?,?)",
+                        (
+                            outcome_id,
+                            ordinal,
+                            receipt.attempt_id,
+                            receipt.observation_id,
+                            envelope.source_artifact_id,
+                        ),
+                    )
+                self._database.advance_revision(connection)
+            return IntervalOutcomeReceipt(
+                outcome_id,
+                result.coverage,
+                tuple(
+                    IntervalArtifactReceipt(
+                        envelope.source_artifact_id,
+                        receipt.document_id,
+                        receipt.artifact_id,
+                        receipt.artifact_created,
+                    )
+                    for envelope, receipt in paired
+                ),
+                len(result.failures),
+                False,
+            )
+        except StorageError as error:
+            raise IntegrityError(str(error)) from error
+
+    def interval_history(self) -> list[dict[str, Any]]:
+        """Return immutable interval outcomes in repository history order."""
+        with self._database.connect(read_only=True) as connection:
+            rows = connection.execute(
+                "SELECT canonical_json FROM interval_acquisition_outcomes "
+                "ORDER BY recorded_at,outcome_id"
+            ).fetchall()
+        return [self._decode(row[0], "interval acquisition outcome") for row in rows]
 
     def artifact_metadata(self) -> list[dict[str, Any]]:
         with self._database.connect(read_only=True) as connection:

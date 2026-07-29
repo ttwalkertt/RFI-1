@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -225,6 +225,30 @@ CREATE TABLE pull_runs (
     completed_at TEXT NOT NULL,
     canonical_json TEXT NOT NULL
 ) STRICT;
+CREATE TABLE interval_acquisition_outcomes (
+    outcome_id TEXT PRIMARY KEY,
+    firm_id TEXT NOT NULL REFERENCES firms(firm_id),
+    artifact_type TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    coverage TEXT NOT NULL CHECK (coverage IN ('complete','incomplete','indeterminate')),
+    failure_count INTEGER NOT NULL CHECK (failure_count >= 0),
+    recorded_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL,
+    CHECK (start_date <= end_date),
+    CHECK (coverage <> 'complete' OR failure_count = 0)
+) STRICT;
+CREATE TABLE interval_acquisition_artifacts (
+    outcome_id TEXT NOT NULL REFERENCES interval_acquisition_outcomes(outcome_id),
+    ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+    attempt_id TEXT NOT NULL REFERENCES acquisition_attempts(attempt_id),
+    observation_id TEXT NOT NULL REFERENCES artifact_observations(observation_id),
+    source_artifact_id TEXT NOT NULL,
+    PRIMARY KEY (outcome_id, ordinal),
+    UNIQUE (outcome_id, attempt_id)
+) STRICT;
+CREATE INDEX interval_acquisition_history
+ON interval_acquisition_outcomes(firm_id,artifact_type,start_date,end_date,recorded_at);
 CREATE TABLE sec_sources (
     firm_id TEXT PRIMARY KEY REFERENCES firms(firm_id),
     applicability TEXT NOT NULL CHECK (applicability IN ('direct','parent','non_applicable')),
@@ -738,6 +762,33 @@ CREATE INDEX IF NOT EXISTS mailing_list_relationship_claims_reference
 ON mailing_list_relationship_claims(referenced_normalized_message_id,claim_role);
 """
 
+_MIGRATE_V12_TO_V13 = """
+CREATE TABLE IF NOT EXISTS interval_acquisition_outcomes (
+    outcome_id TEXT PRIMARY KEY,
+    firm_id TEXT NOT NULL REFERENCES firms(firm_id),
+    artifact_type TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    coverage TEXT NOT NULL CHECK (coverage IN ('complete','incomplete','indeterminate')),
+    failure_count INTEGER NOT NULL CHECK (failure_count >= 0),
+    recorded_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL,
+    CHECK (start_date <= end_date),
+    CHECK (coverage <> 'complete' OR failure_count = 0)
+) STRICT;
+CREATE TABLE IF NOT EXISTS interval_acquisition_artifacts (
+    outcome_id TEXT NOT NULL REFERENCES interval_acquisition_outcomes(outcome_id),
+    ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+    attempt_id TEXT NOT NULL REFERENCES acquisition_attempts(attempt_id),
+    observation_id TEXT NOT NULL REFERENCES artifact_observations(observation_id),
+    source_artifact_id TEXT NOT NULL,
+    PRIMARY KEY (outcome_id, ordinal),
+    UNIQUE (outcome_id, attempt_id)
+) STRICT;
+CREATE INDEX IF NOT EXISTS interval_acquisition_history
+ON interval_acquisition_outcomes(firm_id,artifact_type,start_date,end_date,recorded_at);
+"""
+
 
 def _backfill_task045(connection: sqlite3.Connection) -> None:
     """Link source projections and derive bounded claims from retained observations."""
@@ -1110,7 +1161,7 @@ class RepositoryDatabase:
                 version = int(row[0])
                 if version == SCHEMA_VERSION:
                     return False
-                if version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}:
+                if version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}:
                     raise StorageError(
                         "incompatible_schema",
                         f"repository schema version {version} is unsupported; "
@@ -1122,6 +1173,8 @@ class RepositoryDatabase:
                     for item in connection.execute("PRAGMA table_info(mailing_list_runs)")
                 }
                 scripts = []
+                if version <= 12:
+                    scripts.append(_MIGRATE_V12_TO_V13)
                 if version <= 10:
                     scripts.append(_MIGRATE_V10_TO_V11)
                 if version <= 9:
