@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "config_id": "broadcom",
+  "status": "active",
+  "comments": "Externally maintained Broadcom configuration.",
+  "firm": {
+    "id": "broadcom",
+    "display_name": "Broadcom",
+    "legal_name": "Broadcom Inc.",
+    "subtitle": "Semiconductor and infrastructure software company",
+    "priority": 90,
+    "valid_from": "2018-01-01",
+    "jurisdiction": "Delaware, United States",
+    "headquarters": "Palo Alto, California, United States",
+    "sector": "Information Technology",
+    "industry": "Semiconductors",
+    "aliases": ["AVGO"],
+    "identifiers": [
+      {"kind": "ticker", "value": "AVGO", "market": "NASDAQ"},
+      {"kind": "cik", "value": "0001730168", "market": "SEC"}
+    ],
+    "domains": ["broadcom.com"],
+    "technology_focus": ["semiconductors", "networking", "infrastructure software"],
+    "source_hints": [
+      {
+        "kind": "investor-relations",
+        "value": "https://investors.broadcom.com/",
+        "comments": "Operator orientation only; not retrieved provenance."
+      }
+    ],
+    "comments": "Repository-managed example for the Broadcom source profile."
+  },
+  "sources": {
+    "sec": {
+      "enabled": true,
+      "cik": "0001730168",
+      "registrant_name": "Broadcom Inc.",
+      "filing_regime": "domestic",
+      "verification": {
+        "status": "verified",
+        "verified_at": "2026-07-27T00:00:00+00:00",
+        "source": "SEC EDGAR submissions identity"
+      },
+      "artifacts": ["sec_10k", "sec_10q", "sec_8k"],
+      "comments": "Runtime endpoints, accessions, and filing URLs are deliberately omitted."
+    },
+    "earnings_transcript": {
+      "enabled": true,
+      "listing_urls": ["https://investors.broadcom.com/company-information/past-events"],
+      "allowed_hosts": ["investors.broadcom.com"],
+      "comments": "Official issuer event listing."
+    }
+  }
+}

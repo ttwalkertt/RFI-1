@@ -353,6 +353,7 @@ class NumberedFormVerticalSliceTests(unittest.TestCase):
         self.assertEqual(
             claims,
             {
+                ("earnings_transcript",): "earnings-call-transcript",
                 ("sec_10k",): "sec-form-10k",
                 ("sec_10q",): "sec-form-10q",
                 ("sec_8k",): "sec-form-8k",

@@ -43,6 +43,12 @@
       },
       "artifacts": ["sec_10k", "sec_10q", "sec_8k"],
       "comments": "Runtime endpoints, accessions, and filing URLs are deliberately omitted."
+    },
+    "earnings_transcript": {
+      "enabled": true,
+      "listing_urls": ["https://www.microsoft.com/en-us/investor/events"],
+      "allowed_hosts": ["www.microsoft.com"],
+      "comments": "Official issuer earnings page listing the call transcript."
     }
   }
 }

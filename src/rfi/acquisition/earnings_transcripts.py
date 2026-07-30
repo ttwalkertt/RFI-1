@@ -7,7 +7,7 @@ import re
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
 from typing import Callable
 
@@ -22,6 +22,12 @@ from rfi.acquisition.contracts import (
     IntervalCoverage,
     RetrievalResult,
     SourceProfile,
+)
+from rfi.acquisition.engine import (
+    AdapterCandidate,
+    AdapterFailure,
+    DiscoveryPage,
+    FailureClass,
 )
 from rfi.storage.sqlite import utc_now
 
@@ -275,7 +281,8 @@ class EarningsCallTranscriptAcquisition:
         if media_type == "application/pdf":
             if not response.content.startswith(b"%PDF-"):
                 raise ValueError("PDF candidate lacks a PDF signature")
-            if not (_TRANSCRIPT.search(label) and _EARNINGS_CALL.search(label)):
+            evidence = urllib.parse.unquote(label + " " + response.url)
+            if not (_TRANSCRIPT.search(evidence) and _EARNINGS_CALL.search(evidence)):
                 raise ValueError("PDF link is not identified as an earnings-call transcript")
             return
         raise ValueError(f"unsupported transcript media type: {response.media_type}")
@@ -352,4 +359,119 @@ class EarningsCallTranscriptAcquisition:
         return IntervalAcquisitionFailure(
             code, str(error) or error.__class__.__name__, retryable, source_artifact_id,
             {"url": url, "error_type": error.__class__.__name__},
+        )
+
+
+class EarningsTranscriptPullAdapter:
+    """Expose TASK-048 through the acquisition-engine adapter used by Pull Sources."""
+
+    adapter_id = "earnings-call-transcript"
+    artifact_ids = ("earnings_transcript",)
+    retrieval_modes = ("listing_page",)
+    mechanism = "earnings_transcript"
+
+    def __init__(
+        self,
+        transport: EarningsTranscriptTransport | None = None,
+        clock: Callable[[], str] = utc_now,
+    ) -> None:
+        self._transport = transport
+        self._clock = clock
+        self._retrievals: dict[str, RetrievalResult] = {}
+
+    def discover(self, profile: SourceProfile, continuation: str | None) -> DiscoveryPage:
+        if continuation is not None:
+            raise AdapterFailure(
+                FailureClass.MALFORMED_ADAPTER,
+                "earnings transcript retrieval does not support continuation",
+                False,
+                "malformed_provider_response",
+            )
+        configured = self._configured_profile(profile)
+        try:
+            today = date.fromisoformat(self._clock()[:10])
+            request = IntervalAcquisitionRequest(
+                str(profile.policy["firm_id"]),
+                "earnings_transcript",
+                date(2000, 1, 1),
+                today + timedelta(days=1),
+            )
+            result = EarningsCallTranscriptAcquisition(
+                configured, self._transport, self._clock
+            ).acquire(request)
+        except AdapterFailure:
+            raise
+        except Exception as error:
+            raise AdapterFailure(
+                FailureClass.PERMANENT_RETRIEVAL,
+                str(error) or error.__class__.__name__,
+                False,
+                "transcript_discovery_failed",
+            ) from error
+        candidates = []
+        for envelope in result.artifacts:
+            candidate = AdapterCandidate(
+                envelope.candidate.candidate_id,
+                envelope.candidate.document_id,
+                len(candidates) + 1,
+                f"published-{envelope.artifact_date.isoformat()}",
+                envelope.candidate.provenance,
+            )
+            self._retrievals[candidate.candidate_id] = envelope.retrieval
+            candidates.append(candidate)
+        if not candidates and result.failures:
+            raise AdapterFailure(
+                FailureClass.TRANSIENT_ADAPTER
+                if any(item.retryable for item in result.failures)
+                else FailureClass.PERMANENT_RETRIEVAL,
+                "; ".join(item.message for item in result.failures),
+                any(item.retryable for item in result.failures),
+                result.failures[0].code,
+            )
+        return DiscoveryPage(
+            tuple(candidates),
+            None,
+            {
+                "adapter_id": self.adapter_id,
+                "coverage": result.coverage.value,
+                "failures": len(result.failures),
+                "listing_urls": len(configured.configuration["listing_urls"]),
+            },
+        )
+
+    def retrieve(self, profile: SourceProfile, candidate: AdapterCandidate) -> RetrievalResult:
+        self._configured_profile(profile)
+        try:
+            return self._retrievals.pop(candidate.candidate_id)
+        except KeyError as error:
+            raise AdapterFailure(
+                FailureClass.MALFORMED_ADAPTER,
+                "earnings transcript candidate was not produced by this discovery",
+                False,
+                "missing_transcript_candidate",
+            ) from error
+
+    def _configured_profile(self, profile: SourceProfile) -> SourceProfile:
+        if profile.mechanism != self.mechanism:
+            raise ContractError("earnings transcript source mechanism is invalid")
+        if profile.policy.get("artifact_id") != "earnings_transcript":
+            raise ContractError("earnings transcript adapter requires canonical artifact")
+        if profile.configuration.get("mode") != "listing_page":
+            raise ContractError("earnings transcript adapter requires listing_page mode")
+        listing_url = profile.configuration.get("url")
+        allowed_hosts = profile.configuration.get("preferred_domains")
+        if not isinstance(listing_url, str) or not listing_url:
+            raise ContractError("earnings transcript listing URL is missing")
+        if not isinstance(allowed_hosts, (list, tuple)) or any(
+            not isinstance(host, str) or not host for host in allowed_hosts
+        ):
+            raise ContractError("earnings transcript authorized hosts are invalid")
+        governed = {"listing_urls": [listing_url], "allowed_hosts": list(allowed_hosts)}
+        return SourceProfile(
+            profile.source_id,
+            profile.name,
+            profile.enabled,
+            self.mechanism,
+            governed,
+            profile.policy,
         )

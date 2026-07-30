@@ -516,7 +516,11 @@ class AcquisitionEngine:
         if status == RunStatus.COMPLETE:
             target = self._target_checkpoint(maximum_position, seen_candidates)
             if checkpoint_before != target:
-                if fail_at == EngineFailurePoint.BEFORE_CHECKPOINT_FINALIZATION:
+                if not seen_candidates:
+                    # A successfully evaluated empty listing is a truthful no-change result.
+                    # With no successful attempt there is deliberately no checkpoint to advance.
+                    pass
+                elif fail_at == EngineFailurePoint.BEFORE_CHECKPOINT_FINALIZATION:
                     failures += 1
                     status = RunStatus.PARTIAL
                     diagnostics.append(

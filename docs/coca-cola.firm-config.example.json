@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "config_id": "coca-cola",
+  "status": "active",
+  "comments": "Externally maintained Coca-Cola configuration.",
+  "firm": {
+    "id": "coca-cola",
+    "display_name": "The Coca-Cola Company",
+    "legal_name": "The Coca-Cola Company",
+    "subtitle": "Global beverage company",
+    "priority": 80,
+    "valid_from": "2019-01-01",
+    "jurisdiction": "Delaware, United States",
+    "headquarters": "Atlanta, Georgia, United States",
+    "sector": "Consumer Staples",
+    "industry": "Beverages",
+    "aliases": ["Coca-Cola", "KO"],
+    "identifiers": [{"kind": "ticker", "value": "KO", "market": "NYSE"}],
+    "domains": ["coca-colacompany.com"],
+    "technology_focus": [],
+    "source_hints": [
+      {
+        "kind": "investor-relations",
+        "value": "https://investors.coca-colacompany.com/",
+        "comments": "Operator orientation only; not retrieved provenance."
+      }
+    ],
+    "comments": "Repository-managed TASK-048 representative firm."
+  },
+  "sources": {
+    "sec": null,
+    "earnings_transcript": {
+      "enabled": true,
+      "listing_urls": ["https://investors.coca-colacompany.com/financial-information"],
+      "allowed_hosts": ["investors.coca-colacompany.com"],
+      "comments": "Official issuer financial-information listing."
+    }
+  }
+}

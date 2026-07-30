@@ -20,6 +20,7 @@ from rfi.firms import (
     SourceDiscoveryHint,
 )
 from rfi.source_profiles import (
+    RetrievalCandidate,
     SourceProfileDraft,
     SourceProfileError,
     SourceProfileItem,
@@ -182,11 +183,30 @@ def _identity(value: dict[str, Any]) -> FirmExternalIdentity | None:
 def _profile(value: dict[str, Any]) -> SourceProfileDraft:
     sec = value["sources"]["sec"]
     enabled = set(sec["artifacts"]) if sec is not None and sec["enabled"] else set()
+    transcripts = value["sources"].get("earnings_transcript")
     template = load_canonical_template()
+    transcript_candidates = ()
+    if transcripts is not None:
+        transcript_candidates = tuple(
+            RetrievalCandidate(
+                "listing_page", priority, url=url,
+                preferred_domains=tuple(transcripts["allowed_hosts"]),
+                operator_notes=transcripts.get("comments", ""),
+            )
+            for priority, url in enumerate(transcripts["listing_urls"], start=1)
+        )
     return SourceProfileDraft(
         value["firm"]["id"],
         tuple(
-            SourceProfileItem(artifact.artifact_id, artifact.artifact_id in enabled)
+            SourceProfileItem(
+                artifact.artifact_id,
+                artifact.artifact_id in enabled or (
+                    artifact.artifact_id == "earnings_transcript"
+                    and transcripts is not None
+                    and transcripts["enabled"]
+                ),
+                transcript_candidates if artifact.artifact_id == "earnings_transcript" else (),
+            )
             for artifact in template.artifacts
         ),
         value.get("comments", ""),

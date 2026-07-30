@@ -9,6 +9,7 @@ from rfi.acquisition import (
     DirectUrlAdapter,
 )
 from rfi.acquisition.edgar import USER_AGENT_VARIABLE, user_agent_from_environment
+from rfi.acquisition.earnings_transcripts import EarningsTranscriptPullAdapter
 from rfi.acquisition.runtime_config import load_runtime_configuration
 from rfi.acquisition.sec_form_10k import SecForm10KAdapter
 from rfi.acquisition.sec_form_10q import SecForm10QAdapter
@@ -64,11 +65,20 @@ def create_pull_workflow(state: Path) -> PullWorkflow:
         SecForm20FAdapter(provider, utc_now),
         SecForm6KAdapter(provider, utc_now),
     )
+    transcripts = EarningsTranscriptPullAdapter(clock=utc_now)
     adapters = RetrievalAdapterRegistry(
         (
             RetrievalAdapterRegistration(
                 RetrievalAdapterCapability("direct-url", (), ("direct_url",)),
                 direct_url,
+            ),
+            RetrievalAdapterRegistration(
+                RetrievalAdapterCapability(
+                    transcripts.adapter_id,
+                    transcripts.artifact_ids,
+                    transcripts.retrieval_modes,
+                ),
+                transcripts,
             ),
             *(
                 RetrievalAdapterRegistration(
