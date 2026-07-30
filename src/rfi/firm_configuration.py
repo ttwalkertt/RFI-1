@@ -184,17 +184,27 @@ def _profile(value: dict[str, Any]) -> SourceProfileDraft:
     sec = value["sources"]["sec"]
     enabled = set(sec["artifacts"]) if sec is not None and sec["enabled"] else set()
     transcripts = value["sources"].get("earnings_transcript")
+    releases = value["sources"].get("press_release")
     template = load_canonical_template()
-    transcript_candidates = ()
-    if transcripts is not None:
-        transcript_candidates = tuple(
-            RetrievalCandidate(
-                "listing_page", priority, url=url,
-                preferred_domains=tuple(transcripts["allowed_hosts"]),
-                operator_notes=transcripts.get("comments", ""),
-            )
-            for priority, url in enumerate(transcripts["listing_urls"], start=1)
-        )
+    firm = value["firm"]
+    hints = tuple(dict.fromkeys((
+        firm["display_name"], firm["legal_name"], *firm["aliases"],
+        *(item["value"] for item in firm["identifiers"]),
+        *(item["value"] for item in firm.get("source_hints", ())),
+    )))
+
+    def discovery_candidate(source: dict[str, Any] | None) -> tuple[RetrievalCandidate, ...]:
+        if source is None:
+            return ()
+        return (RetrievalCandidate(
+            "discovery", 1,
+            preferred_domains=tuple(firm["domains"]),
+            discovery_hints=hints,
+            discovery_class=source.get("discovery_class", "standard"),
+        ),)
+
+    transcript_candidates = discovery_candidate(transcripts)
+    release_candidates = discovery_candidate(releases)
     return SourceProfileDraft(
         value["firm"]["id"],
         tuple(
@@ -203,9 +213,9 @@ def _profile(value: dict[str, Any]) -> SourceProfileDraft:
                 artifact.artifact_id in enabled or (
                     artifact.artifact_id == "earnings_transcript"
                     and transcripts is not None
-                    and transcripts["enabled"]
-                ),
-                transcript_candidates if artifact.artifact_id == "earnings_transcript" else (),
+                ) or (artifact.artifact_id == "press_release" and releases is not None),
+                transcript_candidates if artifact.artifact_id == "earnings_transcript"
+                else release_candidates if artifact.artifact_id == "press_release" else (),
             )
             for artifact in template.artifacts
         ),

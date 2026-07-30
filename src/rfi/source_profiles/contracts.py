@@ -96,6 +96,7 @@ class RetrievalCandidate:
     expected_media_type: str = ""
     parser_hint: str = ""
     operator_notes: str = ""
+    discovery_class: str = ""
 
 
 @dataclass(frozen=True)

@@ -45,7 +45,6 @@ from rfi.acquisition.interval import IntervalAcquisitionService
 from rfi.acquisition.earnings_transcripts import (
     EarningsCallTranscriptAcquisition,
     EarningsTranscriptHttpResponse,
-    EarningsTranscriptPullAdapter,
     EarningsTranscriptTransport,
     UrllibEarningsTranscriptTransport,
 )
@@ -90,7 +89,6 @@ __all__ = [
     "EdgarAdapter",
     "EarningsCallTranscriptAcquisition",
     "EarningsTranscriptHttpResponse",
-    "EarningsTranscriptPullAdapter",
     "EarningsTranscriptTransport",
     "FailurePoint",
     "IntervalAcquisitionFailure",

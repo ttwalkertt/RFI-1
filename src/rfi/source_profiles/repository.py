@@ -278,6 +278,7 @@ class SourceProfileRepository:
             candidate.expected_media_type.strip(),
             candidate.parser_hint.strip(),
             candidate.operator_notes.strip(),
+            candidate.discovery_class.strip(),
         )
         mode = self._modes[candidate.mode]
         values: dict[str, Any] = asdict(normalized)

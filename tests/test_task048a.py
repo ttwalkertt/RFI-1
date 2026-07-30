@@ -1,9 +1,11 @@
-"""Focused integration evidence for TASK-048A Pull Sources wiring."""
+"""Focused integration and bounded-accounting evidence for TASK-048A."""
 
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from rfi.acquisition import (
@@ -11,10 +13,19 @@ from rfi.acquisition import (
     AcquisitionRepository,
     AdapterRegistry,
     EarningsTranscriptHttpResponse,
-    EarningsTranscriptPullAdapter,
     EarningsTranscriptTransport,
-    SourceProfile,
     RunStatus,
+    SourceProfile,
+)
+from rfi.discovery import (
+    BoundedTranscriptDiscovery,
+    BudgetedTranscriptTransport,
+    DiscoveryPolicy,
+    DiscoveryPolicyCatalog,
+    DiscoveryPolicyError,
+    DiscoverySearchResponse,
+    EarningsTranscriptPullAdapter,
+    load_discovery_policies,
 )
 from rfi.firm_configuration import prepare_firm_configuration
 from rfi.pull import create_pull_workflow
@@ -27,106 +38,203 @@ class TranscriptTransport(EarningsTranscriptTransport):
         self.responses = responses
 
     def get(self, url: str) -> EarningsTranscriptHttpResponse:
-        return self.responses[url]
+        value = self.responses[url]
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+
+class Search:
+    endpoint = "https://search.example/results"
+
+    def __init__(self, responses: tuple[DiscoverySearchResponse, ...]) -> None:
+        self.responses = list(responses)
+        self.queries: list[tuple[str, int]] = []
+
+    def search(self, query: str, limit: int) -> DiscoverySearchResponse:
+        self.queries.append((query, limit))
+        return self.responses.pop(0)
+
+
+def policy(**changes: int) -> DiscoveryPolicy:
+    return replace(DiscoveryPolicy(4, 10, 20, 2, 30, 8, 20_971_520, 60), **changes)
+
+
+def profile(*, hints: list[str], discovery_class: str = "standard") -> SourceProfile:
+    return SourceProfile(
+        "source-example", "Example transcripts", True, "earnings_transcript",
+        {"mode": "discovery", "discovery_hints": hints,
+         "discovery_class": discovery_class},
+        {"firm_id": "example", "artifact_id": "earnings_transcript"},
+    )
 
 
 class TranscriptPullIntegrationTests(unittest.TestCase):
-    def test_production_registry_declares_transcript_listing_capability(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            state = Path(directory)
-            RepositoryDatabase.initialize(state)
-            capabilities = create_pull_workflow(state).adapter_capabilities()
-        transcript = next(
-            item for item in capabilities if item["adapter_id"] == "earnings-call-transcript"
+    def test_policy_catalog_is_exact_and_unknown_class_fails(self) -> None:
+        catalog = load_discovery_policies()
+        self.assertEqual(tuple(catalog.classes), ("extended", "shallow", "standard"))
+        self.assertEqual(
+            catalog.resolve("shallow"),
+            DiscoveryPolicy(2, 5, 10, 1, 10, 3, 5_242_880, 20),
         )
-        self.assertEqual(transcript["artifact_ids"], ["earnings_transcript"])
-        self.assertEqual(transcript["retrieval_modes"], ["listing_page"])
+        self.assertEqual(catalog.resolve("standard"), policy())
+        self.assertEqual(
+            catalog.resolve("extended"),
+            DiscoveryPolicy(8, 15, 30, 3, 75, 15, 52_428_800, 180),
+        )
+        with self.assertRaisesRegex(DiscoveryPolicyError, "unknown discovery_class"):
+            catalog.resolve("unbounded")
 
-    def test_file_authority_enables_governed_transcript_candidate_read_only(self) -> None:
+    def test_policy_schema_rejects_bad_numeric_values(self) -> None:
+        base = json.loads(Path("config/discovery-policies.json").read_text())
+        cases = (-1, 0, 1.5, 10_000_000_000)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            schema = root / "schema.json"
+            schema.write_text(Path("docs/discovery-policies-v1.schema.json").read_text())
+            for index, value in enumerate(cases):
+                broken = json.loads(json.dumps(base))
+                broken["classes"]["standard"]["max_pages"] = value
+                target = root / f"bad-{index}.json"
+                target.write_text(json.dumps(broken))
+                with self.subTest(value=value), self.assertRaises(DiscoveryPolicyError):
+                    load_discovery_policies(target, schema)
+
+    def test_sparse_firm_projection_selects_independent_classes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)
             RepositoryDatabase.initialize(state)
             target = state / "firm-config"
             target.mkdir()
             target.joinpath("microsoft.firm-config.json").write_text(
-                Path("docs/microsoft.firm-config.example.json").read_text(encoding="utf-8"),
-                encoding="utf-8",
-            )
+                Path("docs/microsoft.firm-config.example.json").read_text())
             prepare_firm_configuration(state)
-            profile = SourceProfileRepository.open(
-                state / "source-profiles", load_canonical_template()
-            ).get("microsoft")
-            self.assertIsNotNone(profile)
-            transcript = next(
-                item for item in profile.items if item.artifact_id == "earnings_transcript"
-            )
-            self.assertTrue(transcript.enabled)
-            self.assertEqual(transcript.retrieval_candidates[0].parser_hint, "")
+            view = SourceProfileRepository.open(
+                state / "source-profiles", load_canonical_template()).get("microsoft")
+            self.assertIsNotNone(view)
+            items = {item.artifact_id: item for item in view.items}
             self.assertEqual(
-                transcript.retrieval_candidates[0].preferred_domains,
-                ("www.microsoft.com",),
+                items["earnings_transcript"].retrieval_candidates[0].discovery_class,
+                "extended",
             )
+            self.assertEqual(
+                items["press_release"].retrieval_candidates[0].discovery_class,
+                "standard",
+            )
+            raw = json.loads(Path("docs/microsoft.firm-config.example.json").read_text())
+            self.assertEqual(raw["sources"]["earnings_transcript"], {"discovery_class": "extended"})
+            self.assertNotIn("listing_urls", json.dumps(raw))
+            self.assertNotIn("allowed_hosts", json.dumps(raw))
 
-    def test_adapter_executes_listing_and_returns_repository_contracts(self) -> None:
-        listing = "https://ir.example.com/events"
-        transcript = "https://ir.example.com/2026-01-28-earnings-call-transcript.html"
+    def test_registry_claims_only_transcript_discovery(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            RepositoryDatabase.initialize(state)
+            capabilities = create_pull_workflow(state).adapter_capabilities()
+        item = next(x for x in capabilities if x["adapter_id"] == "earnings-call-transcript")
+        self.assertEqual(item["retrieval_modes"], ["discovery"])
+
+    def test_discovery_hands_third_party_url_to_existing_validator(self) -> None:
+        transcript = "https://third.example/example-2026-01-28-earnings-call-transcript.html"
+        search = Search((DiscoverySearchResponse((transcript,), 100),))
         transport = TranscriptTransport({
-            listing: EarningsTranscriptHttpResponse(
-                listing, 200, "text/html",
-                (
-                    f"<html><a href='{transcript}'>"
-                    "Earnings Call Transcript January 28, 2026</a></html>"
-                ).encode(),
-            ),
             transcript: EarningsTranscriptHttpResponse(
                 transcript, 200, "text/html",
                 b"<!doctype html><html>Quarterly earnings call transcript. "
-                b"Operator: Welcome. Chief Executive Officer: Remarks.</html>",
-            ),
-        })
-        source = SourceProfile(
-            "source-pull-example", "Example transcripts", True, "earnings_transcript",
-            {"mode": "listing_page", "url": listing,
-             "preferred_domains": ["ir.example.com"]},
-            {"firm_id": "example", "artifact_id": "earnings_transcript"},
-        )
+                b"Example Corporation. Operator: Welcome. "
+                b"Chief Executive Officer: Remarks.</html>")})
         adapter = EarningsTranscriptPullAdapter(
-            transport, lambda: "2026-07-30T12:00:00+00:00"
-        )
-        page = adapter.discover(source, None)
+            DiscoveryPolicyCatalog({"standard": policy()}, "standard"), search,
+            transport, lambda: "2026-07-30T12:00:00+00:00")
+        page = adapter.discover(profile(hints=["Example Corporation"]), None)
         self.assertEqual(len(page.candidates), 1)
-        result = adapter.retrieve(source, page.candidates[0])
+        result = adapter.retrieve(profile(hints=["Example Corporation"]), page.candidates[0])
         self.assertEqual(result.content, transport.responses[transcript].content)
-        self.assertEqual(result.mechanism, "earnings_transcript")
+        self.assertEqual(page.diagnostics["search_queries"], 1)
+        self.assertEqual(page.diagnostics["pages"], 4)  # search, discovery, listing, validation
 
-    def test_enabled_empty_official_listing_is_no_change_not_system_failure(self) -> None:
-        listing = "https://ir.example.com/events"
-        transport = TranscriptTransport({
-            listing: EarningsTranscriptHttpResponse(
-                listing, 200, "text/html", b"<html><a href='call.mp3'>Webcast</a></html>"
-            )
-        })
-        source = SourceProfile(
-            "source-empty-transcripts", "Empty official listing", True,
-            "earnings_transcript",
-            {"mode": "listing_page", "url": listing,
-             "preferred_domains": ["ir.example.com"]},
-            {"firm_id": "example", "artifact_id": "earnings_transcript"},
-        )
+    def test_exhausted_bound_is_indeterminate_and_not_system_failure(self) -> None:
+        search = Search((DiscoverySearchResponse(
+            ("https://a.example/", "https://b.example/"), 20
+        ),))
+        selected = policy(max_results_per_query=1)
+        adapter = EarningsTranscriptPullAdapter(
+            DiscoveryPolicyCatalog({"standard": selected}, "standard"), search,
+            TranscriptTransport({}), lambda: "2026-07-30T12:00:00+00:00")
+        source = profile(hints=["Example Corporation"])
         with tempfile.TemporaryDirectory() as directory:
             repository = AcquisitionRepository(Path(directory) / "acquisition")
             repository.register_source(source)
-            adapter = EarningsTranscriptPullAdapter(
-                transport, lambda: "2026-07-30T12:00:00+00:00"
-            )
             result = AcquisitionEngine(
                 repository, AdapterRegistry((adapter,)),
-                lambda: "2026-07-30T12:00:00+00:00",
-            ).run_source(source.source_id, "empty-listing")
+                lambda: "2026-07-30T12:00:00+00:00").run_source(
+                    source.source_id, "bounded")
         self.assertEqual(result.status, RunStatus.COMPLETE)
         self.assertEqual(result.candidates_discovered, 0)
         self.assertEqual(result.failures, 0)
-        self.assertEqual(result.durable_acquisitions, 0)
+
+    def test_page_host_byte_and_link_limits_count_requests_and_stop(self) -> None:
+        seed = "https://ir.example/events"
+        body = b"<a href='one'>one</a><a href='two'>two</a>"
+        budget = BudgetedTranscriptTransport(
+            TranscriptTransport({
+                seed: EarningsTranscriptHttpResponse(seed, 200, "text/html", body)
+            }),
+            policy(max_links_per_page=1, max_bytes=len(body) + 1))
+        result = BoundedTranscriptDiscovery(Search(()), budget, budget.policy).discover((), (seed,))
+        self.assertTrue(result.exhausted)
+        self.assertEqual(result.diagnostics["exhausted_budget"], "max_links_per_page")
+        self.assertEqual(result.diagnostics["pages"], 1)
+        self.assertEqual(result.diagnostics["bytes"], len(body))
+        self.assertEqual(result.diagnostics["distinct_hosts"], 1)
+
+    def test_search_page_host_byte_depth_and_elapsed_bounds_are_named(self) -> None:
+        seed = "https://one.example/start"
+        next_url = "https://two.example/next"
+        html = f"<a href='{next_url}'>ordinary page</a>".encode()
+
+        # Seed pages are depth zero, so an admitted traversal from a depth-zero seed
+        # exhausts max_depth=0 before a second fetch.
+        budget = BudgetedTranscriptTransport(
+            TranscriptTransport({
+                seed: EarningsTranscriptHttpResponse(seed, 200, "text/html", html)
+            }),
+            policy(max_depth=0))
+        result = BoundedTranscriptDiscovery(Search(()), budget, budget.policy).discover((), (seed,))
+        self.assertEqual(result.diagnostics["exhausted_budget"], "max_depth")
+        self.assertEqual(result.diagnostics["pages"], 1)
+
+        for field, selected in (
+            ("max_pages", policy(max_pages=1)),
+            ("max_distinct_hosts", policy(max_distinct_hosts=1)),
+            ("max_bytes", policy(max_bytes=1)),
+        ):
+            transport = TranscriptTransport({
+                seed: EarningsTranscriptHttpResponse(seed, 200, "text/html", b"xx"),
+                next_url: EarningsTranscriptHttpResponse(next_url, 200, "text/html", b"xx"),
+            })
+            bounded = BudgetedTranscriptTransport(transport, selected)
+            with self.subTest(field=field), self.assertRaises(Exception):
+                bounded.get(seed)
+                bounded.get(next_url)
+            self.assertEqual(bounded.exhausted_budget, field)
+
+        times = iter((0.0, 2.0))
+        elapsed = BudgetedTranscriptTransport(
+            TranscriptTransport({}), policy(max_elapsed_seconds=1), lambda: next(times))
+        with self.assertRaises(TimeoutError):
+            elapsed.get(seed)
+        self.assertEqual(elapsed.exhausted_budget, "max_elapsed_seconds")
+
+        search = Search((DiscoverySearchResponse((), 1),))
+        bounded = BudgetedTranscriptTransport(
+            TranscriptTransport({}), policy(max_search_queries=1)
+        )
+        result = BoundedTranscriptDiscovery(
+            search, bounded, bounded.policy
+        ).discover(("one", "two"), ())
+        self.assertEqual(result.diagnostics["search_queries"], 1)
+        self.assertEqual(result.diagnostics["exhausted_budget"], "max_search_queries")
 
 
 if __name__ == "__main__":

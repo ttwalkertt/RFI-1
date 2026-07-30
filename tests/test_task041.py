@@ -179,14 +179,15 @@ class FirmConfigurationTests(unittest.TestCase):
         view = SourceProfileService(profiles, firms, template).detail("microsoft")
         self.assertEqual(
             {item.artifact_id for item in view.items if item.enabled},
-            {"sec_10k", "sec_10q", "sec_8k", "earnings_transcript"},
+            {"sec_10k", "sec_10q", "sec_8k", "earnings_transcript", "press_release"},
         )
         transcript = next(
             item for item in view.items if item.artifact_id == "earnings_transcript"
         )
-        self.assertEqual(transcript.retrieval_candidates[0].mode, "listing_page")
+        self.assertEqual(transcript.retrieval_candidates[0].mode, "discovery")
+        self.assertEqual(transcript.retrieval_candidates[0].discovery_class, "extended")
         self.assertIn(
-            "www.microsoft.com", transcript.retrieval_candidates[0].preferred_domains
+            "microsoft.com", transcript.retrieval_candidates[0].preferred_domains
         )
         ten_k = next(item for item in view.items if item.artifact_id == "sec_10k")
         self.assertEqual(ten_k.retrieval_candidates[0].locator, "CIK:0000789019")

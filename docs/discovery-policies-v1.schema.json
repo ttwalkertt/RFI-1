@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfi.local/schemas/discovery-policies-v1.schema.json",
+  "title": "RFI Discovery Policies v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "default_class", "classes"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "default_class": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+    "classes": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/policy"},
+      "required": ["shallow", "standard", "extended"]
+    }
+  },
+  "$defs": {
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_search_queries", "max_results_per_query", "max_links_per_page",
+        "max_depth", "max_pages", "max_distinct_hosts", "max_bytes",
+        "max_elapsed_seconds"
+      ],
+      "properties": {
+        "max_search_queries": {"type": "integer", "minimum": 1, "maximum": 100},
+        "max_results_per_query": {"type": "integer", "minimum": 1, "maximum": 100},
+        "max_links_per_page": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "max_depth": {"type": "integer", "minimum": 0, "maximum": 10},
+        "max_pages": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "max_distinct_hosts": {"type": "integer", "minimum": 1, "maximum": 100},
+        "max_bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+        "max_elapsed_seconds": {"type": "integer", "minimum": 1, "maximum": 3600}
+      }
+    }
+  }
+}

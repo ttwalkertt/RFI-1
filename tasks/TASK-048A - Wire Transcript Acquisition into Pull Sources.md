@@ -41,3 +41,24 @@ configuration-backed Pull Sources workflow.
 -   Full `make validate`.
 -   Live proof showing an enabled transcript source executes through the
     normal Pull Sources workflow without dedicated scripts.
+
+## Architectural Status Summary
+
+-   **Configuration projection — Complete.** Firm JSON selects only a named
+    `discovery_class`; identity, aliases, domains, and existing IR hints are projected
+    read-only into a transient discovery candidate.
+-   **Repository discovery policy — Complete.** Versioned JSON owns the bounded
+    `shallow`, `standard`, and `extended` limits and is validated against its schema.
+-   **Transcript discovery and Pull Sources execution — Complete.** The production
+    Pull Sources registry selects the transcript adapter for `discovery` candidates,
+    executes bounded search/traversal, and hands candidate URLs to the TASK-048
+    validator and ordinary repository ingress.
+-   **Coverage and retained evidence — Usable with limitations.** Successful artifacts
+    retain normal provenance. Policy exhaustion remains indeterminate and identifies
+    the exhausted budget; discovery locations are operational and are not written back
+    into firm JSON.
+-   **Operator surface — Complete.** Existing source-profile and Pull Sources views
+    remain read-only; no editor, CRUD route, or persistence authority was added.
+-   **Next milestone.** A separately governed discovery adapter for other artifact
+    families, including press releases, can reuse the named policy selection without
+    changing firm configuration ownership.

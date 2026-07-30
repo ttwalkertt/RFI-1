@@ -43,6 +43,11 @@ retrieval_fields:
     description: Operator context about this candidate; never retrieved evidence.
     type: string
     multiple: false
+  - name: discovery_class
+    label: Discovery policy class
+    description: Repository-owned named limit policy for bounded source discovery.
+    type: string
+    multiple: false
 
 retrieval_modes:
   - mode: direct_url
@@ -72,7 +77,7 @@ retrieval_modes:
   - mode: discovery
     label: Bounded discovery
     description: Search is bounded by preferred domains, phrases, or operator guidance.
-    supported_fields: [priority, preferred_domains, discovery_hints, parser_hint, operator_notes]
+    supported_fields: [priority, preferred_domains, discovery_hints, discovery_class, operator_notes]
     required_fields: []
     required_any: [preferred_domains, discovery_hints]
 
@@ -111,7 +116,7 @@ categories:
     description: Company-authored news, commentary, customer, and partner materials.
     order: 30
     items:
-      - {id: press_release, short_name: Press release, label: Corporate press release, description: Formal company announcement., default_enabled: true, addressability: semi-deterministic, supported_retrieval_modes: [feed, listing_page, direct_url], order: 10}
+      - {id: press_release, short_name: Press release, label: Corporate press release, description: Formal company announcement., default_enabled: true, addressability: semi-deterministic, supported_retrieval_modes: [feed, listing_page, direct_url, discovery], order: 10}
       - {id: corporate_news, short_name: News item, label: Corporate news item, description: Company news outside the formal press-release stream., default_enabled: true, addressability: semi-deterministic, supported_retrieval_modes: [feed, listing_page, direct_url], order: 20}
       - {id: corporate_blog, short_name: Corp blog, label: Corporate blog, description: General company-authored blog content., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [feed, listing_page, direct_url], order: 30}
       - {id: engineering_blog, short_name: Eng blog, label: Engineering blog, description: Engineering-authored technical posts., default_enabled: false, addressability: semi-deterministic, supported_retrieval_modes: [feed, listing_page, discovery], order: 40}

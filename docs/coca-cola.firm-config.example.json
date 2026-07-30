@@ -30,10 +30,7 @@
   "sources": {
     "sec": null,
     "earnings_transcript": {
-      "enabled": true,
-      "listing_urls": ["https://investors.coca-colacompany.com/financial-information"],
-      "allowed_hosts": ["investors.coca-colacompany.com"],
-      "comments": "Official issuer financial-information listing."
+      "discovery_class": "extended"
     }
   }
 }

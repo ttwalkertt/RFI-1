@@ -123,6 +123,7 @@ class SourceProfileService:
             "expected_media_type",
             "parser_hint",
             "operator_notes",
+            "discovery_class",
         }
         unknown = set(value).difference(allowed)
         if unknown:
@@ -136,6 +137,7 @@ class SourceProfileService:
             "expected_media_type",
             "parser_hint",
             "operator_notes",
+            "discovery_class",
         ):
             field = value.get(name, "")
             if not isinstance(field, str):
@@ -153,6 +155,7 @@ class SourceProfileService:
             strings["expected_media_type"],
             strings["parser_hint"],
             strings["operator_notes"],
+            strings["discovery_class"],
         )
 
     @staticmethod
