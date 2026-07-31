@@ -26,7 +26,10 @@ class ReviewPackageTests(unittest.TestCase):
         (self.root / "implementation.txt").write_text(
             "committed implementation\n", encoding="utf-8"
         )
-        self.git("add", "implementation.txt")
+        (self.root / "implementation with spaces.txt").write_text(
+            "space-safe implementation\n", encoding="utf-8"
+        )
+        self.git("add", "implementation.txt", "implementation with spaces.txt")
         self.git("commit", "-m", "implementation")
         self.head = self.git("rev-parse", "HEAD").strip()
         self.source = self.root / "review.md"
@@ -64,6 +67,7 @@ class ReviewPackageTests(unittest.TestCase):
         self.assertEqual(metadata["review_range"], f"{self.base}..{self.head}")
         self.assertEqual(metadata["git_status"], "clean")
         self.assertIn("implementation.txt", changed)
+        self.assertIn("implementation with spaces.txt", changed)
         self.assertTrue((package / "repository/complete.patch").read_text())
         self.assertEqual(sorted(item["path"] for item in numstat), changed)
         self.assertEqual(verify_package(archive)["result"], "PASS")

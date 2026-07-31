@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shlex
 import shutil
 import subprocess
 import zipfile
@@ -153,10 +152,22 @@ def patch_files(patch: str) -> list[str]:
         if line.startswith("diff --git "):
             if current:
                 files.append(current[0] if deleted else current[1])
-            fields = shlex.split(line)
-            if len(fields) != 4 or not fields[2].startswith("a/") or not fields[3].startswith("b/"):
+            paths = line.removeprefix("diff --git ")
+            current = None
+            offset = 0
+            while True:
+                separator = paths.find(" b/", offset)
+                if separator < 0:
+                    break
+                first = paths[:separator]
+                second = paths[separator + 1:]
+                if first.startswith("a/") and second.startswith("b/"):
+                    current = (first[2:], second[2:])
+                    if current[0] == current[1]:
+                        break
+                offset = separator + 3
+            if current is None or current[0] != current[1]:
                 raise ValueError(f"unsupported patch header: {line}")
-            current = (fields[2][2:], fields[3][2:])
             deleted = False
         elif line.startswith("deleted file mode "):
             deleted = True
