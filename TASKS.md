@@ -48,6 +48,7 @@
 | TASK-047 | Shared date-delimited acquisition contract and integration | Done |
 | TASK-048 | Acquire official earnings-call transcripts | Done |
 | TASK-048B | Restore source-profile digest and startup compatibility | Complete |
+| TASK-050 | Commit-aware review-package generation and verification | Complete |
 
 ## Architectural Progression
 
