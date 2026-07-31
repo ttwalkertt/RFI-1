@@ -52,6 +52,9 @@ class DiscoveryPolicy:
     max_elapsed_seconds: int
 
 
+DISCOVERY_BUDGET_FIELDS = frozenset(DiscoveryPolicy.__dataclass_fields__)
+
+
 @dataclass(frozen=True)
 class DiscoveryPolicyCatalog:
     classes: dict[str, DiscoveryPolicy]
@@ -241,6 +244,7 @@ class BoundedTranscriptDiscovery:
         queries_submitted = 0
         exhausted = False
         exhausted_budget = ""
+        failures: list[tuple[str, str]] = []
         search_endpoint = getattr(self.search, "endpoint", "https://search.invalid/")
         for query in planned_queries:
             if queries_submitted >= self.policy.max_search_queries:
@@ -258,11 +262,13 @@ class BoundedTranscriptDiscovery:
                 queries_submitted += 1
                 response = self.search.search(query, self.policy.max_results_per_query)
                 self.transport.accept_response(response.received_bytes)
-            except Exception:
+            except Exception as error:
                 if self.transport.exhausted:
                     exhausted_budget = self.transport.exhausted_budget
-                exhausted = True
-                break
+                    exhausted = True
+                    break
+                failures.append(("search_failed", error.__class__.__name__))
+                continue
             if self.transport.monotonic() - self.transport.started >= (
                 self.policy.max_elapsed_seconds
             ):
@@ -275,7 +281,9 @@ class BoundedTranscriptDiscovery:
             urls.extend(response.urls[: self.policy.max_results_per_query])
             if exhausted:
                 break
-        queue = deque((url, 0) for url in dict.fromkeys(urls))
+        queue = deque() if exhausted else deque(
+            (url, 0) for url in dict.fromkeys(urls)
+        )
         visited: set[str] = set()
         listings: list[str] = []
         candidates: list[dict[str, str]] = []
@@ -287,11 +295,12 @@ class BoundedTranscriptDiscovery:
                 candidates.append({"url": url, "label": url})
             try:
                 response = self.transport.get(url)
-            except Exception:
-                exhausted = True
+            except Exception as error:
                 if self.transport.exhausted:
+                    exhausted = True
                     exhausted_budget = self.transport.exhausted_budget
                     break
+                failures.append(("page_fetch_failed", error.__class__.__name__))
                 continue
             visited.add(url)
             if response.media_type not in {"text/html", "application/xhtml+xml"}:
@@ -300,7 +309,11 @@ class BoundedTranscriptDiscovery:
                 continue
             listings.append(response.url)
             parser = _PageParser()
-            parser.feed(response.content.decode("utf-8", "replace"))
+            try:
+                parser.feed(response.content.decode("utf-8", "replace"))
+            except Exception as error:
+                failures.append(("page_parse_failed", error.__class__.__name__))
+                continue
             links = sorted(
                 parser.links,
                 key=lambda item: (
@@ -333,6 +346,10 @@ class BoundedTranscriptDiscovery:
         unique_candidates = tuple(
             dict((item["url"], item) for item in candidates).values()
         )
+        if exhausted_budget and exhausted_budget not in DISCOVERY_BUDGET_FIELDS:
+            raise RuntimeError("discovery reported an unknown exhausted budget")
+        if exhausted != bool(exhausted_budget):
+            raise RuntimeError("discovery exhaustion requires one named policy budget")
         return TranscriptDiscoveryResult(
             tuple(dict.fromkeys(listings)),
             unique_candidates,
@@ -346,6 +363,9 @@ class BoundedTranscriptDiscovery:
                 "candidate_urls": len(unique_candidates),
                 "bounds_exhausted": exhausted,
                 "exhausted_budget": exhausted_budget,
+                "discovery_failures": len(failures),
+                "discovery_failure_codes": ",".join(code for code, _ in failures),
+                "discovery_failure_types": ",".join(kind for _, kind in failures),
             },
         )
 

@@ -24,6 +24,7 @@ from rfi.discovery import (
     DiscoveryPolicyCatalog,
     DiscoveryPolicyError,
     DiscoverySearchResponse,
+    DISCOVERY_BUDGET_FIELDS,
     EarningsTranscriptPullAdapter,
     load_discovery_policies,
 )
@@ -70,6 +71,69 @@ def profile(*, hints: list[str], discovery_class: str = "standard") -> SourcePro
 
 
 class TranscriptPullIntegrationTests(unittest.TestCase):
+    def test_actual_policy_limit_names_exhausted_budget(self) -> None:
+        search = Search((DiscoverySearchResponse(
+            ("https://one.example/", "https://two.example/"), 10
+        ),))
+        bounded = BudgetedTranscriptTransport(
+            TranscriptTransport({}), policy(max_results_per_query=1)
+        )
+        result = BoundedTranscriptDiscovery(search, bounded, bounded.policy).discover(
+            ("Example",), ()
+        )
+        self.assertTrue(result.diagnostics["bounds_exhausted"])
+        self.assertEqual(
+            result.diagnostics["exhausted_budget"], "max_results_per_query"
+        )
+        self.assertEqual(result.diagnostics["discovery_failures"], 0)
+
+    def test_non_budget_search_failure_is_not_bound_exhaustion(self) -> None:
+        bounded = BudgetedTranscriptTransport(TranscriptTransport({}), policy())
+        result = BoundedTranscriptDiscovery(
+            Search(()), bounded, bounded.policy
+        ).discover(("Example",), ())
+        self.assertFalse(result.diagnostics["bounds_exhausted"])
+        self.assertEqual(result.diagnostics["exhausted_budget"], "")
+        self.assertEqual(result.diagnostics["discovery_failures"], 1)
+        self.assertEqual(result.diagnostics["discovery_failure_codes"], "search_failed")
+
+    def test_non_budget_page_fetch_failure_is_not_bound_exhaustion(self) -> None:
+        bounded = BudgetedTranscriptTransport(TranscriptTransport({}), policy())
+        result = BoundedTranscriptDiscovery(
+            Search(()), bounded, bounded.policy
+        ).discover((), ("https://missing.example/page",))
+        self.assertFalse(result.diagnostics["bounds_exhausted"])
+        self.assertEqual(result.diagnostics["exhausted_budget"], "")
+        self.assertEqual(result.diagnostics["discovery_failures"], 1)
+        self.assertEqual(
+            result.diagnostics["discovery_failure_codes"], "page_fetch_failed"
+        )
+
+    def test_every_exhausted_result_names_valid_policy_field(self) -> None:
+        results = []
+        for maximum in (0, 1):
+            seed = "https://ir.example/page"
+            content = b"<a href='next'>ordinary page</a>"
+            bounded = BudgetedTranscriptTransport(
+                TranscriptTransport({
+                    seed: EarningsTranscriptHttpResponse(
+                        seed, 200, "text/html", content
+                    )
+                }),
+                policy(max_depth=maximum),
+            )
+            result = BoundedTranscriptDiscovery(
+                Search(()), bounded, bounded.policy
+            ).discover((), (seed,))
+            if result.diagnostics["bounds_exhausted"]:
+                results.append(result)
+        self.assertTrue(results)
+        for result in results:
+            self.assertIn(
+                result.diagnostics["exhausted_budget"], DISCOVERY_BUDGET_FIELDS
+            )
+            self.assertNotEqual(result.diagnostics["exhausted_budget"], "")
+
     def test_policy_catalog_is_exact_and_unknown_class_fails(self) -> None:
         catalog = load_discovery_policies()
         self.assertEqual(tuple(catalog.classes), ("extended", "shallow", "standard"))
