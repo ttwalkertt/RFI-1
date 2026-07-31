@@ -47,6 +47,7 @@
 | TASK-046 | Remove External Sources operator screen | Complete |
 | TASK-047 | Shared date-delimited acquisition contract and integration | Done |
 | TASK-048 | Acquire official earnings-call transcripts | Done |
+| TASK-048B | Restore source-profile digest and startup compatibility | Complete |
 
 ## Architectural Progression
 

@@ -27,7 +27,7 @@ from rfi.artifacts import (
 )
 from rfi.concepts import ConceptError, ConceptRepository, ConceptService
 from rfi.firms import FirmError, FirmRepository, FirmService
-from rfi.firm_configuration import prepare_firm_configuration
+from rfi.firm_configuration import validate_firm_configuration
 from rfi.mailing_lists import (
     LinuxMailingListWorkflowService,
     LoreArchive,
@@ -1115,7 +1115,7 @@ def create_admin_server(
     """Create a local-default server backed by repository-controlled catalog state."""
     if not 0 <= port <= 65535:
         raise ConceptError("port must be between 0 and 65535")
-    prepare_firm_configuration(state)
+    validate_firm_configuration(state)
     repository = ConceptRepository.open(state)
     firm_repository = FirmRepository.open(state / "firm-catalog")
     template = load_canonical_template()

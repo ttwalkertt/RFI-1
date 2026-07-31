@@ -478,7 +478,7 @@ class FirmConfigurationTests(unittest.TestCase):
             prepare_firm_configuration(self.state)
         self.assertEqual(RepositoryDatabase.open(self.state).revision(), before)
 
-    def test_repeated_startup_replaces_editor_projection_and_preserves_history(self) -> None:
+    def test_explicit_repeated_materialization_preserves_history(self) -> None:
         self.initialize_empty()
         firms = FirmRepository.open(self.state / "firm-catalog")
         firms.create(FirmDraft(
@@ -504,6 +504,47 @@ class FirmConfigurationTests(unittest.TestCase):
         for artifact_id in ("sec_10k", "sec_10q", "sec_8k"):
             item = next(value for value in shown.items if value.artifact_id == artifact_id)
             self.assertEqual(item.retrieval_candidates[0].locator, "CIK:0000789019")
+
+    def test_admin_startup_validates_without_revision_or_authority_writes(self) -> None:
+        self.write(self.value())
+        initialize(self.state)
+        database = RepositoryDatabase.open(self.state)
+
+        def snapshot() -> tuple[object, ...]:
+            with database.connect(read_only=True) as connection:
+                return (
+                    database.revision(),
+                    tuple(connection.execute(
+                        "SELECT revision_id FROM firm_revisions ORDER BY revision_id"
+                    )),
+                    tuple(connection.execute(
+                        "SELECT revision_id FROM source_profile_revisions ORDER BY revision_id"
+                    )),
+                    tuple(connection.execute(
+                        "SELECT firm_id,current_revision_id FROM firms ORDER BY firm_id"
+                    )),
+                    tuple(connection.execute(
+                        "SELECT firm_id,current_revision_id FROM source_profiles "
+                        "ORDER BY firm_id"
+                    )),
+                )
+
+        before = snapshot()
+        database_bytes = (self.state / "repository.sqlite3").read_bytes()
+        first = create_admin_server(self.state, port=0)
+        first.server_close()
+        self.assertEqual(snapshot(), before)
+        self.assertEqual((self.state / "repository.sqlite3").read_bytes(), database_bytes)
+
+        changed_projection = self.value()
+        changed_projection["sources"]["earnings_transcript"] = {  # type: ignore[index]
+            "discovery_class": "extended"
+        }
+        self.write(changed_projection)
+        second = create_admin_server(self.state, port=0)
+        second.server_close()
+        self.assertEqual(snapshot(), before)
+        self.assertEqual((self.state / "repository.sqlite3").read_bytes(), database_bytes)
 
     def test_evidence_artifact_provenance_and_sec_workflow_knowledge_are_preserved(self) -> None:
         self.initialize_empty()

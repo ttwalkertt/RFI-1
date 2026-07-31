@@ -38,9 +38,12 @@ source-profile configuration while retaining SQLite as the runtime/query project
 ## Acceptance Criteria
 
 - The narrowed version-1 JSON Schema and Microsoft example are checked in and packaged.
-- Startup validates and transactionally materializes all discovered files before serving or pulling.
+- Fresh initialization validates and transactionally materializes all discovered files. Ordinary
+  startup validates and loads them without appending immutable projection history.
 - Microsoft can coexist with editor-owned firms and is inspectable but not editable.
-- Repeated startup may append revisions but produces the same effective configuration.
+- Ordinary startup performs no writes and preserves revision identifiers, history, chain links,
+  pointers, and the repository authority revision. Explicit governed materialization appends
+  revisions when configuration changes are deliberately applied.
 - Invalid or partially failing loads leave configuration and evidence unchanged.
 - Focused preservation, synthesis, startup, API, migration, and canonical validation pass.
 - A review package records ownership, tables, startup ordering, rollback, preservation, limitations,

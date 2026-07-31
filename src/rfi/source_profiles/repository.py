@@ -23,6 +23,9 @@ from rfi.storage import RepositoryDatabase, StorageError, state_root_for
 from rfi.storage.sqlite import canonical_json
 
 _SCHEMA_VERSION = 1
+_LEGACY_DIGEST_SCHEMA_VERSION = 1
+_UNVERSIONED_DISCOVERY_CLASS_DIGEST_SCHEMA_VERSION = 2
+_CURRENT_DIGEST_SCHEMA_VERSION = 3
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
 _DOMAIN = re.compile(
     r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
@@ -319,14 +322,27 @@ class SourceProfileRepository:
         supersedes: str | None,
         created_at: str,
         updated_at: str,
+        digest_schema_version: int = _CURRENT_DIGEST_SCHEMA_VERSION,
     ) -> SourceProfileRevision:
-        material = {
+        material: dict[str, Any] = {
             **asdict(draft),
             "revision_number": number,
             "created_at": created_at,
             "updated_at": updated_at,
             "supersedes_revision_id": supersedes,
         }
+        if digest_schema_version == _LEGACY_DIGEST_SCHEMA_VERSION:
+            for item in material["items"]:
+                for candidate in item["retrieval_candidates"]:
+                    candidate.pop("discovery_class")
+        elif digest_schema_version == _UNVERSIONED_DISCOVERY_CLASS_DIGEST_SCHEMA_VERSION:
+            pass
+        elif digest_schema_version == _CURRENT_DIGEST_SCHEMA_VERSION:
+            material["digest_schema_version"] = digest_schema_version
+        else:
+            raise SourceProfileError(
+                f"unsupported source-profile digest schema: {digest_schema_version}"
+            )
         revision_id = "source-profile-revision-" + hashlib.sha256(
             _canonical(material)
         ).hexdigest()
@@ -339,6 +355,7 @@ class SourceProfileRepository:
             created_at,
             updated_at,
             supersedes,
+            digest_schema_version,
         )
 
     def _validate_digest(self, revision: SourceProfileRevision) -> None:
@@ -348,6 +365,7 @@ class SourceProfileRepository:
             revision.supersedes_revision_id,
             revision.created_at,
             revision.updated_at,
+            revision.digest_schema_version,
         ).source_profile_revision_id
         if expected != revision.source_profile_revision_id:
             raise SourceProfileError(
@@ -394,8 +412,48 @@ class SourceProfileRepository:
         except json.JSONDecodeError as error:
             raise SourceProfileError("cannot read source-profile structured state") from error
 
+        candidate_shapes = {
+            "discovery_class" in candidate
+            for item in value.get("items", ())
+            for candidate in item.get("retrieval_candidates", ())
+        }
+        if len(candidate_shapes) > 1:
+            raise SourceProfileError(
+                "source-profile revision mixes candidate digest schemas"
+            )
+        implicit_schema = (
+            _UNVERSIONED_DISCOVERY_CLASS_DIGEST_SCHEMA_VERSION
+            if candidate_shapes == {True}
+            else _LEGACY_DIGEST_SCHEMA_VERSION
+        )
+        if "digest_schema_version" in value and value["digest_schema_version"] != (
+            _CURRENT_DIGEST_SCHEMA_VERSION
+        ):
+            raise SourceProfileError("source-profile digest schema marker is not authenticated")
+        digest_schema_version = value.get("digest_schema_version", implicit_schema)
+        if digest_schema_version not in {
+            _LEGACY_DIGEST_SCHEMA_VERSION,
+            _UNVERSIONED_DISCOVERY_CLASS_DIGEST_SCHEMA_VERSION,
+            _CURRENT_DIGEST_SCHEMA_VERSION,
+        }:
+            raise SourceProfileError(
+                f"unsupported source-profile digest schema: {digest_schema_version}"
+            )
+
         def candidate(value: dict[str, Any]) -> RetrievalCandidate:
             fields = dict(value)
+            has_discovery_class = "discovery_class" in fields
+            if digest_schema_version == _LEGACY_DIGEST_SCHEMA_VERSION and has_discovery_class:
+                raise SourceProfileError(
+                    "legacy source-profile candidate contains discovery_class"
+                )
+            if digest_schema_version in {
+                _UNVERSIONED_DISCOVERY_CLASS_DIGEST_SCHEMA_VERSION,
+                _CURRENT_DIGEST_SCHEMA_VERSION,
+            } and not has_discovery_class:
+                raise SourceProfileError(
+                    "current source-profile candidate lacks discovery_class"
+                )
             fields["preferred_domains"] = tuple(fields.get("preferred_domains", ()))
             fields["discovery_hints"] = tuple(fields.get("discovery_hints", ()))
             return RetrievalCandidate(**fields)
@@ -411,6 +469,7 @@ class SourceProfileRepository:
             )
             for item in value["items"]
         )
+        value["digest_schema_version"] = digest_schema_version
         return SourceProfileRevision(**value)
 
     def _insert_revision(self, connection: Any, revision: SourceProfileRevision) -> None:

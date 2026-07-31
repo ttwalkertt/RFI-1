@@ -25,6 +25,7 @@ from rfi.firms import FirmError, FirmRepository, sample_firms
 from rfi.firm_configuration import (
     FirmConfigurationError,
     prepare_firm_configuration,
+    validate_firm_configuration,
 )
 from rfi.mailing_lists import (
     AcquisitionLimits,
@@ -378,7 +379,7 @@ def _open_state(
         RepositoryDatabase.open(state)
     except StorageError as error:
         raise ApplicationError(str(error)) from error
-    prepare_firm_configuration(state)
+    validate_firm_configuration(state)
     template = load_canonical_template()
     source_profile_state = state / "source-profiles"
     source_profiles = SourceProfileRepository.open(source_profile_state, template)

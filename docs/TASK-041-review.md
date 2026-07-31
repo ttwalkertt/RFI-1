@@ -89,8 +89,9 @@ written by that check.
 
 - The first slice covers Microsoft and the existing SEC filing artifact vocabulary only.
 - All other firms remain SQLite/editor-owned until deliberately converted.
-- Each startup appends equivalent revisions; no hashes, no-op detection, file watching,
-  incremental reconciliation, or revision-history design is included.
+- TASK-048B separates startup validation from publication. Ordinary startup appends no revisions;
+  explicit initialization/materialization remains the governed write path. No file watching,
+  incremental reconciliation, or configuration generator is implemented.
 - No schedules, SEC URLs, amendments/exhibits, non-SEC adapters, YAML authoring, or RFI-side export
   and generation are part of the file contract.
 

@@ -503,3 +503,9 @@ def prepare_firm_configuration(
     return materialize_firm_configurations(
         state, database, configurations, fail_after_firms=fail_after_firms
     )
+
+
+def validate_firm_configuration(state: Path) -> tuple[LoadedFirmConfiguration, ...]:
+    """Validate and load external configuration without changing its SQLite projection."""
+    database = RepositoryDatabase.open(state)
+    return load_firm_configurations(state, database)

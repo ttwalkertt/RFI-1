@@ -44,8 +44,10 @@ URLs, and primary-document URLs continue to be derived during acquisition.
 
 ## Startup and rollback
 
-Database initialization/migration runs first. RFI then validates and materializes the complete file
-set in one `BEGIN IMMEDIATE` transaction before repositories are opened for serving or acquisition.
+Database initialization/migration runs first. Fresh initialization validates and materializes the
+complete file set in one `BEGIN IMMEDIATE` transaction. Ordinary serving and acquisition startup
+validates and loads the set without publishing projection revisions; explicit governed
+materialization applies deliberate configuration changes.
 Any persistence error rolls back every firm, identity, profile, current selector, ownership row, and
 repository revision change in the set. RFI does not continue with partially loaded configuration.
 

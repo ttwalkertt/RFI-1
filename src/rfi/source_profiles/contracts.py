@@ -130,6 +130,7 @@ class SourceProfileRevision:
     created_at: str
     updated_at: str
     supersedes_revision_id: str | None
+    digest_schema_version: int = 3
 
 
 @dataclass(frozen=True)
