@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
 from dataclasses import replace
+from pathlib import Path
+from unittest.mock import patch
 
 from rfi.acquisition import EarningsTranscriptHttpResponse, SourceProfile
+from rfi.acquisition.earnings_transcripts import TRANSCRIPT_ACCEPT
 from rfi.discovery import (
     BoundedTranscriptDiscovery,
     BudgetedTranscriptTransport,
@@ -15,9 +20,36 @@ from rfi.discovery import (
     EarningsTranscriptPullAdapter,
     TranscriptDiscoveryResult,
 )
+from rfi.firm_configuration import prepare_firm_configuration
+from rfi.pull import ArtifactOutcome, PullRequest, create_pull_workflow
+from rfi.storage import RepositoryDatabase
 
 
 HINT = "https://directory.example/transcripts/"
+STOCK_ANALYSIS_HINT = "https://stockanalysis.com/stocks/amzn/transcripts/"
+
+
+class LiveHttpResponse:
+    def __init__(self, url: str, content: bytes) -> None:
+        self._url = url
+        self._content = content
+        self.status = 200
+        self.headers = self
+
+    def __enter__(self) -> LiveHttpResponse:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def read(self, limit: int) -> bytes:
+        return self._content[:limit]
+
+    def geturl(self) -> str:
+        return self._url
+
+    def get_content_type(self) -> str:
+        return "text/html"
 
 
 class RecordingSearch:
@@ -131,6 +163,66 @@ class TraversalBudgetSemanticsTests(unittest.TestCase):
 
         self.assertEqual([item["url"] for item in result.candidate_proposals], [candidate])
         self.assertEqual(result.diagnostics["eligible_hyperlinks"], 1)
+
+    def test_production_pull_workflow_negotiates_directory_and_fetches_candidate(self) -> None:
+        candidate = STOCK_ANALYSIS_HINT + "999999-q2-2026/"
+        irrelevant = "".join(
+            f"<a href='/navigation/{index}'>Navigation {index}</a>"
+            for index in range(35)
+        )
+        listing = (
+            f"<!doctype html><html>{irrelevant}"
+            f"<a href='{candidate}'>Earnings Call: Q2 2026</a></html>"
+        ).encode()
+        transcript = (
+            b"<!doctype html><html><title>Amazon Q2 2026 Earnings Call Transcript</title>"
+            b"<body>Amazon.com, Inc. quarterly earnings call transcript July 30, 2026. "
+            b"Operator: Welcome. Chief Executive Officer: Prepared remarks.</body></html>"
+        )
+        requests = []
+
+        def urlopen(request, timeout):
+            self.assertEqual(timeout, 30.0)
+            self.assertEqual(request.get_header("Accept"), TRANSCRIPT_ACCEPT)
+            requests.append(request.full_url)
+            if request.full_url == STOCK_ANALYSIS_HINT:
+                return LiveHttpResponse(STOCK_ANALYSIS_HINT, listing)
+            if request.full_url == candidate:
+                return LiveHttpResponse(candidate, transcript)
+            self.fail(f"unexpected production Pull Sources request: {request.full_url}")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            RepositoryDatabase.initialize(state)
+            configured = state / "firm-config"
+            configured.mkdir()
+            value = json.loads(
+                Path("docs/amazon.firm-config.example.json").read_text(encoding="utf-8")
+            )
+            value["sources"]["sec"] = None
+            configured.joinpath("amazon.firm-config.json").write_text(
+                json.dumps(value), encoding="utf-8"
+            )
+            prepare_firm_configuration(state)
+
+            with patch(
+                "rfi.acquisition.earnings_transcripts.urllib.request.urlopen", urlopen
+            ):
+                result = create_pull_workflow(state).run(PullRequest(("amazon",)))
+
+        artifact = next(
+            item for item in result.firms[0].artifacts
+            if item.artifact_id == "earnings_transcript"
+        )
+        diagnostics = artifact.attempts[0].details["engine_diagnostics"][0]
+        self.assertEqual(artifact.outcome, ArtifactOutcome.SUCCESS)
+        self.assertEqual(diagnostics["configured_hint_status"], "used")
+        self.assertEqual(diagnostics["raw_hyperlinks"], 36)
+        self.assertEqual(diagnostics["eligible_hyperlinks"], 1)
+        self.assertEqual(diagnostics["traversed_hyperlinks"], 1)
+        self.assertEqual(diagnostics["candidate_urls"], 1)
+        self.assertEqual(diagnostics["search_queries"], 0)
+        self.assertEqual(requests, [STOCK_ANALYSIS_HINT, STOCK_ANALYSIS_HINT, candidate])
 
     def test_hint_first_acceptance_avoids_search_and_preserves_coverage_semantics(self) -> None:
         candidate = transcript_url(1)

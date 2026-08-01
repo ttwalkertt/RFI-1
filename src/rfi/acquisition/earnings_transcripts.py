@@ -43,6 +43,15 @@ _DAY_MONTH_DATE = re.compile(
     r"October|November|December)[- ](20\d{2})\b", re.I
 )
 
+TRANSCRIPT_ACCEPT = (
+    "text/html, application/xhtml+xml, application/pdf;q=0.9, */*;q=0.1"
+)
+
+
+def transcript_request_headers(user_agent: str) -> dict[str, str]:
+    """Negotiate the representations supported by transcript discovery and validation."""
+    return {"User-Agent": user_agent, "Accept": TRANSCRIPT_ACCEPT}
+
 
 @dataclass(frozen=True)
 class EarningsTranscriptHttpResponse:
@@ -71,13 +80,7 @@ class UrllibEarningsTranscriptTransport(EarningsTranscriptTransport):
     def get(self, url: str) -> EarningsTranscriptHttpResponse:
         request = urllib.request.Request(
             url,
-            headers={
-                "User-Agent": "RFI-1 transcript acquisition",
-                "Accept": (
-                    "text/html, application/xhtml+xml, application/pdf;q=0.9, "
-                    "*/*;q=0.1"
-                ),
-            },
+            headers=transcript_request_headers("RFI-1 transcript acquisition"),
         )
         with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
             content = response.read(self.maximum_bytes + 1)

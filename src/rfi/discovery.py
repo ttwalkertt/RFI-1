@@ -20,6 +20,7 @@ from rfi.acquisition.earnings_transcripts import (
     EarningsTranscriptHttpResponse,
     EarningsTranscriptTransport,
     UrllibEarningsTranscriptTransport,
+    transcript_request_headers,
 )
 from rfi.acquisition.contracts import (
     ContractError,
@@ -113,7 +114,7 @@ class DuckDuckGoHtmlSearch:
     def search(self, query: str, limit: int) -> DiscoverySearchResponse:
         request = urllib.request.Request(
             "https://html.duckduckgo.com/html/?" + urllib.parse.urlencode({"q": query}),
-            headers={"User-Agent": "RFI-1 bounded source discovery"},
+            headers=transcript_request_headers("RFI-1 bounded source discovery"),
         )
         with urllib.request.urlopen(request, timeout=20) as response:
             content = response.read(2_000_000)

@@ -19,6 +19,8 @@ from rfi.acquisition import (
     SourceProfile,
     UrllibEarningsTranscriptTransport,
 )
+from rfi.acquisition.earnings_transcripts import TRANSCRIPT_ACCEPT
+from rfi.discovery import DuckDuckGoHtmlSearch
 from rfi.firms import FirmRepository
 from rfi.firms.contracts import FirmDraft, FirmStatus
 from rfi.source_profiles import load_canonical_template
@@ -111,10 +113,29 @@ class EarningsTranscriptTests(unittest.TestCase):
         request = urlopen.call_args.args[0]
         self.assertEqual(
             request.get_header("Accept"),
-            "text/html, application/xhtml+xml, application/pdf;q=0.9, */*;q=0.1",
+            TRANSCRIPT_ACCEPT,
         )
         self.assertEqual(request.get_header("User-agent"), "RFI-1 transcript acquisition")
         self.assertEqual(result.media_type, "text/html")
+
+    def test_transcript_search_negotiates_the_same_supported_representations(self) -> None:
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = (
+            b"<html><a class='result__a' href='https://example.com/transcript'>"
+            b"Transcript</a></html>"
+        )
+        with patch(
+            "rfi.discovery.urllib.request.urlopen", return_value=response
+        ) as urlopen:
+            result = DuckDuckGoHtmlSearch().search("Example transcript", 1)
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.get_header("Accept"), TRANSCRIPT_ACCEPT)
+        self.assertEqual(
+            request.get_header("User-agent"), "RFI-1 bounded source discovery"
+        )
+        self.assertEqual(result.urls, ("https://example.com/transcript",))
 
     def test_one_multiple_html_pdf_and_closed_open_boundaries(self) -> None:
         urls = {
