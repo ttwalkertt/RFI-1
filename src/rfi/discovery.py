@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import json
+import heapq
+import re
+import socket
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
-from collections import Counter, deque
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Any, Callable, Protocol
 
 from jsonschema import Draft202012Validator
 
@@ -20,6 +24,7 @@ from rfi.acquisition.earnings_transcripts import (
     EarningsTranscriptHttpResponse,
     EarningsTranscriptTransport,
     UrllibEarningsTranscriptTransport,
+    normalize_transcript_url,
     transcript_request_headers,
 )
 from rfi.acquisition.contracts import (
@@ -52,9 +57,25 @@ class DiscoveryPolicy:
     max_distinct_hosts: int
     max_bytes: int
     max_elapsed_seconds: int
+    max_candidate_evaluations: int = 40
+    max_redirects: int = 10
 
 
 DISCOVERY_BUDGET_FIELDS = frozenset(DiscoveryPolicy.__dataclass_fields__)
+
+
+def redact_diagnostic_url(url: str) -> str:
+    """Bounded diagnostics preserve shape while removing query-sensitive values."""
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+        safe_query = urllib.parse.urlencode([(name, "REDACTED") for name, _ in query])
+        host = (parsed.hostname or "").casefold()
+        return urllib.parse.urlunsplit(
+            (parsed.scheme.casefold(), host, parsed.path or "/", safe_query, "")
+        )
+    except (TypeError, ValueError):
+        return "[invalid-url]"
 
 
 @dataclass(frozen=True)
@@ -170,7 +191,7 @@ class TranscriptDiscoveryResult:
     candidate_proposals: tuple[dict[str, str], ...]
     allowed_hosts: tuple[str, ...]
     exhausted: bool
-    diagnostics: dict[str, int | bool | str]
+    diagnostics: dict[str, Any]
 
 
 class BudgetedTranscriptTransport(EarningsTranscriptTransport):
@@ -189,12 +210,25 @@ class BudgetedTranscriptTransport(EarningsTranscriptTransport):
         self.pages = 0
         self.bytes = 0
         self.hosts: set[str] = set()
+        self.redirects = 0
         self.exhausted = False
         self.exhausted_budget = ""
 
     def get(self, url: str) -> EarningsTranscriptHttpResponse:
         self.begin_request(url)
         response = self.inner.get(url)
+        redirect_chain = tuple(getattr(response, "redirects", ()))
+        redirect_count = len(redirect_chain)
+        if (
+            not redirect_count
+            and normalize_transcript_url(response.url) != normalize_transcript_url(url)
+        ):
+            redirect_count = 1
+        self.redirects += redirect_count
+        if self.redirects > self.policy.max_redirects:
+            self.exhausted = True
+            self.exhausted_budget = "max_redirects"
+            raise ValueError("discovery redirect bound exhausted")
         self.accept_response(len(response.content))
         return response
 
@@ -224,7 +258,10 @@ class BudgetedTranscriptTransport(EarningsTranscriptTransport):
 
 
 class BoundedTranscriptDiscovery:
-    """Generate URL proposals from sparse firm identity and hints under one named policy."""
+    """Traverse a bounded deterministic transcript-link graph under one named policy."""
+
+    DIAGNOSTIC_SAMPLE_LIMIT = 8
+    RANKING_SAMPLE_LIMIT = 10
 
     def __init__(
         self,
@@ -240,81 +277,175 @@ class BoundedTranscriptDiscovery:
         self, identity_terms: tuple[str, ...], source_hints: tuple[str, ...],
         retained_anchors: tuple[dict[str, object], ...] = (),
     ) -> TranscriptDiscoveryResult:
-        hint_urls = tuple(
-            dict.fromkeys(
-                hint for hint in source_hints
-                if hint.startswith(("http://", "https://"))
-            )
-        )
+        hint_urls = tuple(dict.fromkeys(
+            hint for hint in source_hints if hint.startswith(("http://", "https://"))
+        ))
         planned_queries = tuple(
             f'"{term}" earnings call transcript' for term in identity_terms[:2] if term.strip()
         )
         queries_submitted = 0
         exhausted = False
         exhausted_budget = ""
-        failures: list[tuple[str, str]] = []
         search_endpoint = getattr(self.search, "endpoint", "https://search.invalid/")
+        queued: set[str] = set()
         visited: set[str] = set()
+        proposed: set[str] = set()
         listings: list[str] = []
-        candidates: list[dict[str, str]] = []
+        candidate_records: list[
+            tuple[int, tuple[object, ...], int, str, str, str, list[str], int]
+        ] = []
         raw_hyperlinks = 0
+        normalized_unique_hyperlinks = 0
         eligible_hyperlinks = 0
         traversed_hyperlinks = 0
+        queue_admitted = 0
+        candidate_admitted = 0
+        rejection_counts: Counter[str] = Counter()
+        cycle_counts: Counter[str] = Counter()
+        failure_counts: Counter[str] = Counter()
+        legacy_failures: list[tuple[str, str]] = []
+        validation_context: list[dict[str, object]] = []
+        rejected_samples: list[dict[str, str]] = []
+        ranking_samples: list[dict[str, object]] = []
         anchor_attempts: list[dict[str, object]] = []
-        configured_hint_attempted = False
-        bounded_traversal_attempted = False
+        hint_identities = {normalize_transcript_url(url) for url in hint_urls}
+        hint_hosts = {urllib.parse.urlsplit(url).hostname or "" for url in hint_urls}
+        configured_hint_attempt_sequence: list[dict[str, str]] = []
+        stage_sequence: list[str] = []
+        phase_priority = {"retained_anchor": 0, "configured_hint": 1,
+                          "bounded_traversal": 2}
 
-        def normalized_links(
-            base_url: str, links: list[tuple[str, str]]
-        ) -> tuple[tuple[str, str, bool], ...]:
-            normalized: dict[str, tuple[str, str, bool]] = {}
-            for href, label in links:
-                target = urllib.parse.urljoin(base_url, href)
-                parsed = urllib.parse.urlsplit(target)
-                if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-                    continue
-                target = urllib.parse.urlunsplit(
-                    (parsed.scheme, parsed.netloc, parsed.path, parsed.query, "")
+        def reject(reason: str, url: str, *, cycle: str = "") -> None:
+            rejection_counts[reason] += 1
+            if cycle:
+                cycle_counts[cycle] += 1
+            if len(rejected_samples) < self.DIAGNOSTIC_SAMPLE_LIMIT:
+                rejected_samples.append({"reason": reason, "url": redact_diagnostic_url(url)})
+
+        def failure(code: str, url: str, error: Exception | None = None, status: int = 0) -> None:
+            failure_counts[code] += 1
+            legacy_code = (
+                "search_failed" if code == "search_transport_failure"
+                else "page_parse_failed" if code == "page_parse_failure"
+                else "page_fetch_failed"
+            )
+            legacy_failures.append((legacy_code, error.__class__.__name__ if error else code))
+            if len(validation_context) < self.DIAGNOSTIC_SAMPLE_LIMIT:
+                item: dict[str, object] = {"classification": code,
+                                           "url": redact_diagnostic_url(url)}
+                if status:
+                    item["http_status"] = status
+                if error is not None:
+                    item["error_type"] = error.__class__.__name__
+                validation_context.append(item)
+
+        def transport_class(error: Exception, phase: str) -> str:
+            prefix = "hint_" if phase == "configured_hint" else "candidate_"
+            if "redirect" in str(error).casefold():
+                return "hint_redirect_rejected" if phase == "configured_hint" else "redirect_cycle"
+            if isinstance(error, (TimeoutError, socket.timeout)):
+                return prefix + "fetch_timeout"
+            if isinstance(error, urllib.error.HTTPError):
+                return prefix + "http_failure"
+            return prefix + "transport_failure"
+
+        def ranking(
+            target: str, label: str, is_candidate: bool, depth: int, parent: str
+        ) -> tuple[tuple[object, ...], list[str]]:
+            parsed = urllib.parse.urlsplit(target)
+            parent_host = (urllib.parse.urlsplit(parent).hostname or "").casefold()
+            host = (parsed.hostname or "").casefold()
+            evidence = urllib.parse.unquote(f"{label} {target}").casefold()
+            reasons: list[str] = []
+            hint_relation = host in hint_hosts or any(
+                target.startswith(identity.rsplit("/", 1)[0]) for identity in hint_identities
+            )
+            same_host = bool(host and host == parent_host)
+            terminology = int("transcript" in evidence) + int(any(
+                term in evidence for term in ("earnings", "quarter", "results", "conference call")
+            ))
+            period = int(bool(re.search(r"\bq[1-4]\b|20\d{2}", evidence)))
+            document = int(parsed.path.casefold().endswith((".html", ".htm", ".pdf")))
+            if hint_relation:
+                reasons.append("configured_hint_relation")
+            if same_host:
+                reasons.append("same_authoritative_host")
+            if terminology:
+                reasons.append("transcript_earnings_terminology")
+            if period:
+                reasons.append("reporting_period")
+            if document:
+                reasons.append("document_like_path")
+            reasons.append(f"depth_{depth}")
+            return (
+                not is_candidate, not hint_relation, not same_host, -terminology,
+                -period, -document, depth, target, label,
+            ), reasons
+
+        def classify_link(label: str, target: str) -> tuple[bool, bool]:
+            candidate = EarningsCallTranscriptAcquisition._looks_like_transcript(label, target)
+            evidence = urllib.parse.unquote(f"{label} {target}").casefold()
+            if not candidate and "transcripts" in evidence:
+                candidate = EarningsCallTranscriptAcquisition._looks_like_transcript(
+                    label, target.replace("transcripts", "transcript")
                 )
-                is_candidate = EarningsCallTranscriptAcquisition._looks_like_transcript(
-                    label, target
-                )
-                evidence = urllib.parse.unquote(f"{label} {target}").casefold()
-                # Natural link evidence commonly uses the plural path component
-                # "transcripts". Treat it as the same discovery token while leaving
-                # ordinary transcript validation unchanged.
-                if not is_candidate and "transcripts" in evidence:
-                    is_candidate = EarningsCallTranscriptAcquisition._looks_like_transcript(
-                        label, target.replace("transcripts", "transcript")
-                    )
-                if not is_candidate and "transcript" not in evidence:
-                    continue
-                previous = normalized.get(target)
-                if previous is None or (is_candidate and not previous[2]):
-                    normalized[target] = (target, label, is_candidate)
-            return tuple(normalized.values())
+            return candidate or "transcript" in evidence, candidate
 
         def traverse(
             urls: tuple[str, ...], phase: str,
             anchor_labels: dict[str, tuple[int, str]] | None = None,
         ) -> None:
             nonlocal exhausted, exhausted_budget
-            nonlocal raw_hyperlinks, eligible_hyperlinks, traversed_hyperlinks
-            nonlocal configured_hint_attempted, bounded_traversal_attempted
-            queue = deque((url, 0) for url in urls)
-            while queue:
-                url, depth = queue.popleft()
-                if url in visited:
-                    if anchor_labels and url in anchor_labels:
-                        position, form = anchor_labels[url]
+            nonlocal raw_hyperlinks, normalized_unique_hyperlinks
+            nonlocal eligible_hyperlinks, traversed_hyperlinks, queue_admitted
+            nonlocal candidate_admitted
+            if not urls:
+                return
+            stage_sequence.append(phase)
+            queue: list[tuple[tuple[object, ...], int, str, str, str, int, frozenset[str]]] = []
+            serial = 0
+            for position, observed in enumerate(urls):
+                try:
+                    identity = normalize_transcript_url(observed)
+                except ValueError:
+                    reject("invalid_url", observed)
+                    continue
+                if identity in queued or identity in visited:
+                    reject("already_queued" if identity in queued else "already_visited", observed,
+                           cycle="duplicate_identity")
+                    if anchor_labels and observed in anchor_labels:
+                        anchor_position, form = anchor_labels[observed]
                         anchor_attempts.append(self._anchor_diagnostic(
-                            position, form, url, "skipped"
+                            anchor_position, form, observed, "skipped"
                         ))
                     continue
-                configured_hint_attempted |= phase == "configured_hint"
-                bounded_traversal_attempted |= phase == "bounded_traversal"
-                if EarningsCallTranscriptAcquisition._looks_like_transcript(url, url):
-                    candidates.append({"url": url, "label": url})
+                queued.add(identity)
+                heapq.heappush(queue, ((position, identity), serial, observed, identity,
+                                       observed, 0, frozenset({identity})))
+                serial += 1
+                queue_admitted += 1
+            while queue:
+                _, _, url, identity, parent, depth, ancestors = heapq.heappop(queue)
+                queued.discard(identity)
+                if identity in visited:
+                    reject("already_visited", url, cycle="duplicate_identity")
+                    continue
+                is_seed_candidate = (
+                    EarningsCallTranscriptAcquisition._looks_like_transcript(url, url)
+                )
+                if is_seed_candidate:
+                    if identity not in proposed:
+                        seed_rank, seed_reasons = ranking(url, url, True, 0, url)
+                        candidate_records.append((
+                            phase_priority[phase], seed_rank, serial, url, url, identity,
+                            seed_reasons, 0,
+                        ))
+                        proposed.add(identity)
+                        candidate_admitted += 1
+                hint_attempt: dict[str, str] | None = None
+                if phase == "configured_hint":
+                    hint_attempt = {"url": redact_diagnostic_url(url), "status": "attempted"}
+                    configured_hint_attempt_sequence.append(hint_attempt)
                 try:
                     response = self.transport.get(url)
                 except Exception as error:
@@ -324,17 +455,53 @@ class BoundedTranscriptDiscovery:
                             position, form, url, "failed"
                         ))
                     if self.transport.exhausted:
+                        if hint_attempt is not None:
+                            hint_attempt["status"] = "budget_rejected"
                         exhausted = True
                         exhausted_budget = self.transport.exhausted_budget
                         break
-                    failures.append(("page_fetch_failed", error.__class__.__name__))
+                    if hint_attempt is not None:
+                        hint_attempt["status"] = "failed"
+                    failure(transport_class(error, phase), url, error)
+                    continue
+                visited.add(identity)
+                resolved_identity = normalize_transcript_url(response.url)
+                redirect_chain = tuple(getattr(response, "redirects", ()))
+                chain_identities: list[str] = []
+                try:
+                    chain_identities = [
+                        normalize_transcript_url(item) for item in redirect_chain
+                    ]
+                except ValueError:
+                    reject("redirect_invalid_url", response.url)
+                if identity in chain_identities or len(chain_identities) != len(
+                    set(chain_identities)
+                ):
+                    reject("redirect_cycle", response.url, cycle="redirect_cycle")
+                    failure("hint_redirect_rejected" if phase == "configured_hint"
+                            else "redirect_cycle", response.url, status=response.status)
+                    continue
+                if response.status < 200 or response.status >= 300:
+                    if hint_attempt is not None:
+                        hint_attempt["status"] = f"http_{response.status}"
+                    failure("hint_http_failure" if phase == "configured_hint"
+                            else "candidate_http_failure", response.url,
+                            status=response.status)
                     continue
                 if anchor_labels and url in anchor_labels:
                     position, form = anchor_labels[url]
                     anchor_attempts.append(self._anchor_diagnostic(
                         position, form, url, "succeeded"
                     ))
-                visited.add(url)
+                if hint_attempt is not None:
+                    hint_attempt["status"] = "fetched"
+                if resolved_identity != identity:
+                    if resolved_identity in ancestors or resolved_identity in visited:
+                        reject("redirect_cycle", response.url, cycle="redirect_cycle")
+                        failure("hint_redirect_rejected" if phase == "configured_hint"
+                                else "redirect_cycle", response.url, status=response.status)
+                        continue
+                    visited.add(resolved_identity)
                 if response.media_type not in {"text/html", "application/xhtml+xml"}:
                     if EarningsCallTranscriptAcquisition._looks_like_transcript(
                         "", response.url
@@ -346,34 +513,77 @@ class BoundedTranscriptDiscovery:
                 try:
                     parser.feed(response.content.decode("utf-8", "replace"))
                 except Exception as error:
-                    failures.append(("page_parse_failed", error.__class__.__name__))
+                    failure("page_parse_failure", response.url, error)
                     continue
                 raw_hyperlinks += len(parser.links)
-                links = sorted(
-                    normalized_links(response.url, parser.links),
-                    key=lambda item: (
-                        not item[2],
-                        item[0],
-                        item[1],
-                    ),
-                )
+                page_unique: set[str] = set()
+                links: list[tuple[tuple[object, ...], str, str, str, bool, list[str]]] = []
+                for href, label in parser.links:
+                    observed = urllib.parse.urljoin(response.url, href)
+                    try:
+                        target = normalize_transcript_url(observed)
+                    except ValueError:
+                        reject("non_http_or_invalid", observed)
+                        continue
+                    if target in page_unique:
+                        reject("duplicate_edge", observed, cycle="duplicate_edge")
+                        continue
+                    page_unique.add(target)
+                    normalized_unique_hyperlinks += 1
+                    if target == resolved_identity:
+                        reject("direct_self_reference", observed, cycle="self_reference")
+                        continue
+                    if target in ancestors:
+                        reject("graph_cycle", observed, cycle="ancestor_cycle")
+                        continue
+                    if target in queued:
+                        reject("already_queued", observed, cycle="duplicate_identity")
+                        continue
+                    if target in proposed:
+                        reject("already_proposed", observed, cycle="duplicate_identity")
+                        continue
+                    if target in visited:
+                        reject("already_visited", observed, cycle="duplicate_identity")
+                        continue
+                    eligible, is_candidate = classify_link(label, target)
+                    if not eligible:
+                        reject("ineligible_transcript_evidence", observed)
+                        continue
+                    if depth >= self.policy.max_depth and not is_candidate:
+                        reject("depth_limit", observed)
+                        exhausted = True
+                        exhausted_budget = exhausted_budget or "max_depth"
+                        continue
+                    rank, reasons = ranking(target, label, is_candidate, depth + 1, response.url)
+                    links.append((rank, observed, target, label, is_candidate, reasons))
+                links.sort(key=lambda item: item[0])
                 eligible_hyperlinks += len(links)
                 if len(links) > self.policy.max_links_per_page:
                     exhausted = True
-                    exhausted_budget = "max_links_per_page"
+                    exhausted_budget = exhausted_budget or "max_links_per_page"
                 admitted = links[: self.policy.max_links_per_page]
                 traversed_hyperlinks += len(admitted)
-                for target, label, is_candidate in admitted:
+                for rank, observed, target, label, is_candidate, reasons in admitted:
+                    if len(ranking_samples) < self.RANKING_SAMPLE_LIMIT:
+                        ranking_samples.append({
+                            "url": redact_diagnostic_url(observed), "reasons": reasons,
+                            "candidate": is_candidate, "depth": depth + 1,
+                        })
                     if is_candidate:
-                        candidates.append({"url": target, "label": label or target})
-                    elif depth < self.policy.max_depth:
-                        queue.append((target, depth + 1))
+                        candidate_records.append((
+                            phase_priority[phase], rank, serial, observed,
+                            label or observed, target, reasons, depth + 1,
+                        ))
+                        proposed.add(target)
+                        candidate_admitted += 1
+                        queue_admitted += 1
+                        serial += 1
                     else:
-                        exhausted = True
-                        exhausted_budget = "max_depth"
-                        break
-                if exhausted:
-                    break
+                        queued.add(target)
+                        heapq.heappush(queue, (rank, serial, observed, target, response.url,
+                                               depth + 1, ancestors | {target}))
+                        serial += 1
+                        queue_admitted += 1
                 if self.transport.exhausted:
                     exhausted = True
                     exhausted_budget = self.transport.exhausted_budget
@@ -388,9 +598,12 @@ class BoundedTranscriptDiscovery:
                     retained_urls.append(url)
                     anchor_labels[url] = (position, form)
         traverse(tuple(retained_urls), "retained_anchor", anchor_labels)
-        traverse(hint_urls, "configured_hint")
+        anchor_fallthrough = not exhausted and bool(hint_urls)
+        if anchor_fallthrough:
+            traverse(hint_urls, "configured_hint")
+        hint_fallthrough = not exhausted and not candidate_records
         search_urls: list[str] = []
-        for query in (() if exhausted or candidates else planned_queries):
+        for query in (() if exhausted or not hint_fallthrough else planned_queries):
             if queries_submitted >= self.policy.max_search_queries:
                 exhausted = True
                 exhausted_budget = "max_search_queries"
@@ -412,7 +625,7 @@ class BoundedTranscriptDiscovery:
                     exhausted_budget = self.transport.exhausted_budget
                     exhausted = True
                     break
-                failures.append(("search_failed", error.__class__.__name__))
+                failure("search_transport_failure", search_endpoint, error)
                 continue
             if self.transport.monotonic() - self.transport.started >= (
                 self.policy.max_elapsed_seconds
@@ -426,11 +639,18 @@ class BoundedTranscriptDiscovery:
             search_urls.extend(response.urls[: self.policy.max_results_per_query])
             if exhausted:
                 break
-        if not exhausted:
+        if not exhausted and hint_fallthrough:
             traverse(tuple(dict.fromkeys(search_urls)), "bounded_traversal")
         unique_candidates = tuple(
-            dict((item["url"], item) for item in candidates).values()
+            {"url": observed, "label": label}
+            for _, _, _, observed, label, _, _, _ in sorted(candidate_records)
         )
+        top_candidates = [
+            {"url": redact_diagnostic_url(observed), "reasons": reasons,
+             "depth": depth}
+            for _, _, _, observed, _, _, reasons, depth
+            in sorted(candidate_records)[: self.RANKING_SAMPLE_LIMIT]
+        ]
         if exhausted_budget and exhausted_budget not in DISCOVERY_BUDGET_FIELDS:
             raise RuntimeError("discovery reported an unknown exhausted budget")
         if exhausted != bool(exhausted_budget):
@@ -446,23 +666,44 @@ class BoundedTranscriptDiscovery:
                 "distinct_hosts": len(self.transport.hosts),
                 "bytes": self.transport.bytes,
                 "candidate_urls": len(unique_candidates),
+                "candidate_admitted_count": candidate_admitted,
                 "raw_hyperlinks": raw_hyperlinks,
+                "normalized_unique_hyperlinks": normalized_unique_hyperlinks,
                 "eligible_hyperlinks": eligible_hyperlinks,
                 "traversed_hyperlinks": traversed_hyperlinks,
+                "queue_admitted_count": queue_admitted,
+                "visited_count": len(visited),
+                "rejection_counts": dict(sorted(rejection_counts.items())),
+                "cycle_counts": dict(sorted(cycle_counts.items())),
+                "representative_rejections": rejected_samples,
+                "top_ranked_candidates": top_candidates,
+                "ranked_queue_admissions": ranking_samples,
                 "bounds_exhausted": exhausted,
                 "exhausted_budget": exhausted_budget,
-                "discovery_failures": len(failures),
-                "discovery_failure_codes": ",".join(code for code, _ in failures),
-                "discovery_failure_types": ",".join(kind for _, kind in failures),
+                "discovery_failures": sum(failure_counts.values()),
+                "discovery_failure_codes": ",".join(code for code, _ in legacy_failures),
+                "discovery_failure_types": ",".join(kind for _, kind in legacy_failures),
+                "discovery_failure_counts": dict(sorted(failure_counts.items())),
+                "transport_failures": validation_context,
                 "configured_hint_count": len(hint_urls),
-                "configured_hint_pages": sum(url in visited for url in hint_urls),
+                "configured_hint_pages": sum(
+                    identity in visited for identity in hint_identities
+                ),
                 "configured_hint_status": (
                     "not_supplied" if not hint_urls else
-                    "used" if any(url in visited for url in hint_urls) else "unusable"
+                    "used" if any(
+                        identity in visited for identity in hint_identities
+                    ) else "unusable"
                 ),
                 "anchor_attempts": anchor_attempts,
-                "configured_hint_fallthrough": configured_hint_attempted,
-                "bounded_traversal_fallthrough": bounded_traversal_attempted,
+                "configured_hint_attempt_sequence": configured_hint_attempt_sequence,
+                "anchor_to_hint_fallthrough": anchor_fallthrough and bool(hint_urls),
+                "hint_to_traversal_fallthrough": hint_fallthrough and bool(planned_queries),
+                "configured_hint_fallthrough": anchor_fallthrough and bool(hint_urls),
+                "bounded_traversal_fallthrough": hint_fallthrough and bool(planned_queries),
+                "stage_sequence": stage_sequence,
+                "redirect_count": self.transport.redirects,
+                "final_host": sorted(self.transport.hosts)[-1] if self.transport.hosts else "",
             },
         )
 
@@ -470,13 +711,9 @@ class BoundedTranscriptDiscovery:
     def _anchor_diagnostic(
         position: int, form: str, url: str, status: str
     ) -> dict[str, object]:
-        parsed = urllib.parse.urlsplit(url)
-        safe_url = urllib.parse.urlunsplit(
-            (parsed.scheme.casefold(), (parsed.hostname or "").casefold(), parsed.path, "", "")
-        )
         return {
-            "position": position, "form": form, "url": safe_url,
-            "query_present": bool(parsed.query), "status": status,
+            "position": position, "form": form, "url": redact_diagnostic_url(url),
+            "query_present": bool(urllib.parse.urlsplit(url).query), "status": status,
         }
 
 
@@ -559,18 +796,32 @@ class EarningsTranscriptPullAdapter:
             if not listing_urls and discovered.candidate_proposals:
                 listing_urls = (discovered.candidate_proposals[0]["url"],)
             if not listing_urls:
-                return DiscoveryPage((), None, {
+                early = {
                     "adapter_id": self.adapter_id,
                     "discovery_class": configuration.get("discovery_class"),
                     "coverage": "indeterminate",
                     **discovered.diagnostics,
-                })
+                    "history_key": (
+                        f"{profile.policy.get('firm_id')}:{profile.source_id}:{self.adapter_id}"
+                    ),
+                    "retained_anchor_count": len(history),
+                    "retained_anchor_order": [item["normalized_url"] for item in history],
+                    "candidate_evaluated_count": 0,
+                    "validation_failure_counts": {},
+                    "candidate_retrieval_failure_counts": {},
+                }
+                classification, summary = self._classify_outcome(early, ())
+                early.update({"primary_classification": classification,
+                              "operator_summary": summary,
+                              "final_coverage_classification": "coverage_indeterminate"})
+                return DiscoveryPage((), None, early)
             governed = SourceProfile(
                 profile.source_id, profile.name, profile.enabled, self.mechanism,
                 {
                     "listing_urls": list(listing_urls[:8]),
                     "allowed_hosts": list(discovered.allowed_hosts),
                     "candidate_proposals": list(discovered.candidate_proposals),
+                    "maximum_candidates": policy.max_candidate_evaluations,
                     "discover_listing_links": False,
                     "authoritative_listing": False,
                     "firm_identity_terms": list(identity_terms),
@@ -619,14 +870,161 @@ class EarningsTranscriptPullAdapter:
         failure_code_counts = dict(sorted(Counter(
             failure.code for failure in interval.failures
         ).items()))
+        validation_failure_counts = dict(sorted(Counter(
+            EarningsCallTranscriptAcquisition._candidate_validation_code(
+                ValueError(failure.message)
+            )
+            for failure in interval.failures if failure.code == "candidate_invalid"
+        ).items()))
+        retrieval_failure_counts = dict(sorted(Counter(
+            EarningsCallTranscriptAcquisition._candidate_retrieval_code(
+                ValueError(failure.message)
+            )
+            for failure in interval.failures if failure.code == "candidate_unavailable"
+        ).items()))
+        candidate_failure_samples = []
+        for failure in interval.failures:
+            if failure.code not in {"candidate_unavailable", "candidate_invalid"}:
+                continue
+            if len(candidate_failure_samples) >= BoundedTranscriptDiscovery.DIAGNOSTIC_SAMPLE_LIMIT:
+                break
+            if failure.code == "candidate_unavailable":
+                classification = EarningsCallTranscriptAcquisition._candidate_retrieval_code(
+                    ValueError(failure.message)
+                )
+            else:
+                classification = EarningsCallTranscriptAcquisition._candidate_validation_code(
+                    ValueError(failure.message)
+                )
+            sample: dict[str, object] = {"classification": classification}
+            url = failure.details.get("url")
+            if isinstance(url, str):
+                sample["url"] = redact_diagnostic_url(url)
+            status = re.search(r"\bHTTP (\d{3})\b", failure.message, re.I)
+            if status:
+                sample["http_status"] = int(status.group(1))
+            candidate_failure_samples.append(sample)
+        candidate_limit_reached = failure_code_counts.get("candidate_limit", 0) > 0
+        if candidate_limit_reached and not final_diagnostics["exhausted_budget"]:
+            final_diagnostics["bounds_exhausted"] = True
+            final_diagnostics["exhausted_budget"] = "max_candidate_evaluations"
+            coverage = "indeterminate"
+        final_diagnostics.update({
+            "candidate_evaluated_count": min(
+                len(discovered.candidate_proposals), policy.max_candidate_evaluations
+            ),
+            "validation_failure_counts": validation_failure_counts,
+            "candidate_retrieval_failure_counts": retrieval_failure_counts,
+            "candidate_failure_samples": candidate_failure_samples,
+        })
+        classification, summary = self._classify_outcome(
+            {**final_diagnostics, "coverage": coverage}, interval.failures
+        )
         return DiscoveryPage(tuple(candidates), None, {
             "adapter_id": self.adapter_id,
             "discovery_class": configuration.get("discovery_class"),
             "coverage": coverage,
             "validation_failures": len(interval.failures),
             "failure_code_counts": failure_code_counts,
+            "primary_classification": classification,
+            "operator_summary": summary,
+            "final_coverage_classification": (
+                "coverage_indeterminate" if coverage == "indeterminate" else coverage
+            ),
             **final_diagnostics,
         })
+
+    @staticmethod
+    def _classify_outcome(
+        diagnostics: dict[str, Any], failures: tuple[Any, ...]
+    ) -> tuple[str, str]:
+        if diagnostics.get("bounds_exhausted"):
+            budget = str(diagnostics.get("exhausted_budget") or "")
+            count = diagnostics.get("candidate_evaluated_count", 0)
+            if budget == "max_candidate_evaluations":
+                return (
+                    "discovery_budget_exhausted",
+                    "Discovery exhausted the candidate-evaluation budget after evaluating "
+                    f"{count} ranked unique links.",
+                )
+            return (
+                "discovery_budget_exhausted",
+                f"Discovery exhausted the {budget} budget." if budget
+                else "Discovery exhausted a configured budget.",
+            )
+        discovery_failures = diagnostics.get("discovery_failure_counts", {})
+        if isinstance(discovery_failures, dict):
+            if discovery_failures.get("hint_fetch_timeout"):
+                return "hint_fetch_timeout", "The configured transcript hint timed out."
+            if discovery_failures.get("hint_http_failure"):
+                status = next((
+                    item.get("http_status") for item in diagnostics.get("transport_failures", [])
+                    if item.get("classification") == "hint_http_failure"
+                ), None)
+                suffix = f" {status}" if status else ""
+                return (
+                    "hint_http_failure",
+                    f"The configured transcript hint returned HTTP{suffix}.",
+                )
+            if discovery_failures.get("hint_redirect_rejected"):
+                return (
+                    "hint_redirect_rejected",
+                    "The configured transcript hint redirect was rejected.",
+                )
+            if discovery_failures.get("redirect_cycle"):
+                return "redirect_cycle", "Transcript discovery rejected a redirect cycle."
+        for failure in failures:
+            if failure.code == "candidate_unavailable":
+                code = EarningsCallTranscriptAcquisition._candidate_retrieval_code(
+                    ValueError(failure.message)
+                )
+                messages = {
+                    "candidate_http_not_found": (
+                        "A transcript candidate was found but returned HTTP 404."
+                    ),
+                    "candidate_access_denied": (
+                        "A transcript candidate was found but access was denied."
+                    ),
+                    "candidate_fetch_timeout": (
+                        "A transcript candidate was found but retrieval timed out."
+                    ),
+                    "candidate_retrieval_failure": (
+                        "A transcript candidate was found but retrieval failed."
+                    ),
+                }
+                return code, messages[code]
+            if failure.code == "candidate_invalid":
+                code = EarningsCallTranscriptAcquisition._candidate_validation_code(
+                    ValueError(failure.message)
+                )
+                messages = {
+                    "candidate_unsupported_content_type": (
+                        "A transcript candidate was found but its content type is unsupported."
+                    ),
+                    "candidate_empty": (
+                        "A transcript candidate was found but its content was empty."
+                    ),
+                    "candidate_requires_javascript": (
+                        "A transcript candidate was found but requires JavaScript."
+                    ),
+                    "candidate_validation_mismatch": (
+                        "A transcript candidate was found but did not match transcript validation."
+                    ),
+                }
+                return code, messages[code]
+        if diagnostics.get("raw_hyperlinks", 0) and not diagnostics.get(
+            "eligible_hyperlinks", 0
+        ):
+            return (
+                "no_eligible_links",
+                "No eligible transcript links were identified on the configured page.",
+            )
+        if diagnostics.get("candidate_urls", 0):
+            return "candidate_not_found_within_bounds", "No transcript candidate validated."
+        return (
+            "coverage_indeterminate",
+            "Discovery completed without a candidate, but coverage remains indeterminate.",
+        )
 
     def retrieve(self, profile: SourceProfile, candidate: AdapterCandidate) -> RetrievalResult:
         self._validate_profile(profile)

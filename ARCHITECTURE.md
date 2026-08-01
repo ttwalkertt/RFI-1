@@ -33,6 +33,14 @@ deterministic source-host, date, media, and transcript validation gates the exis
 coverage remains indeterminate unless an authoritative interval-spanning listing is affirmatively
 and completely evaluated.
 
+Transcript discovery is a bounded deterministic graph exploration layer between configured source
+intent and transcript retrieval. Pages are nodes; hyperlinks and observed redirects are edges;
+shared conservative URL normalization supplies graph identity while exact observed URLs remain
+provenance. Retained successful anchors precede configured hints, which precede bounded search and
+graph traversal. Explicit ranking and normalized queued/visited/redirect-chain sets choose which
+unique URLs are proposed. The transcript retriever remains independently responsible for candidate
+HTTP retrieval and validation, so graph exploration does not become an alternate evidence gate.
+
 ---
 
 # Repository-First Philosophy

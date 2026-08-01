@@ -10,7 +10,9 @@
       "max_pages": 10,
       "max_distinct_hosts": 3,
       "max_bytes": 5242880,
-      "max_elapsed_seconds": 20
+      "max_elapsed_seconds": 20,
+      "max_candidate_evaluations": 40,
+      "max_redirects": 10
     },
     "standard": {
       "max_search_queries": 4,
@@ -20,7 +22,9 @@
       "max_pages": 30,
       "max_distinct_hosts": 8,
       "max_bytes": 20971520,
-      "max_elapsed_seconds": 60
+      "max_elapsed_seconds": 60,
+      "max_candidate_evaluations": 40,
+      "max_redirects": 10
     },
     "extended": {
       "max_search_queries": 8,
@@ -30,7 +34,9 @@
       "max_pages": 75,
       "max_distinct_hosts": 15,
       "max_bytes": 52428800,
-      "max_elapsed_seconds": 180
+      "max_elapsed_seconds": 180,
+      "max_candidate_evaluations": 40,
+      "max_redirects": 10
     }
   }
 }

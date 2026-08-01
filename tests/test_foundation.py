@@ -59,6 +59,7 @@ class FoundationTests(unittest.TestCase):
                 "acquisition/sec_form_8k.py",
                 "acquisition/sec_numbered_form.py",
                 "acquisition/sec_provider.py",
+                "acquisition/url_identity.py",
                 "admin/__init__.py",
                 "admin/admin_preferences.js",
                 "admin/artifact_browser.html",

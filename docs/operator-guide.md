@@ -211,6 +211,14 @@ normalized, deduplicated, and filtered, so unrelated directory navigation does n
 traversal allowance. The hint does not guarantee acquisition; normal candidate validation still
 applies. Firm-level `source_hints` remain general operator orientation metadata.
 
+Transcript discovery treats fetched pages as a bounded directed graph. Conservative normalized URL
+identity prevents fragment, default-port, host-case, redirect, and longer navigation cycles while
+the exact requested and resolved URLs remain provenance. Eligible nodes enter a deterministic
+relevance queue; candidate evaluation remains a separate retriever responsibility. Pull Sources
+summarizes the primary outcome (for example, no eligible links, hint timeout or HTTP failure,
+candidate retrieval or validation failure, or an exact named exhausted budget) and keeps bounded,
+query-redacted graph diagnostics under the attempt details.
+
 ### Common problems and recovery
 
 Current firms cannot share a normalized domain or the same identifier kind, market, and value.

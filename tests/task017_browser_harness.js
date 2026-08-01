@@ -95,7 +95,9 @@ async function pageScript(base, path, storage) {
   for (const source of scripts) vm.runInContext(source, context, {filename: path});
   for (let attempt = 0; attempt < 200; attempt += 1) {
     await new Promise(resolve => setTimeout(resolve, 10));
-    const ready = calls.some(call => call.path === '/api/pulls/adapters');
+    const ready = calls.some(call => call.path === '/api/pulls/adapters')
+      && calls.some(call => call.path === '/api/pulls/firms')
+      && document.checkboxes.length > 0;
     if (ready) break;
   }
   return {context, document, calls};

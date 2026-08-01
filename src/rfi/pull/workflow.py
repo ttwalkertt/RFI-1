@@ -443,6 +443,12 @@ class PullWorkflow:
 
     @staticmethod
     def _engine_diagnostic(result: Any, outcome: ArtifactOutcome) -> str:
+        summaries = [
+            str(item.get("operator_summary"))
+            for item in result.diagnostics if item.get("operator_summary")
+        ]
+        if summaries:
+            return "; ".join(dict.fromkeys(summaries))
         if outcome == ArtifactOutcome.INDETERMINATE:
             return (
                 "No new artifact was acquired, but discovery did not conclusively establish "

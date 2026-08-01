@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 VENV_STAMP := .venv/.rfi-installed
 
-.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task014-proof task015-proof task016-proof task017-proof task018-proof task019-proof task022-proof task023-proof task052-proof task053-proof task054-proof task055-proof task054-review task055-review task056-review task021-test task022-test task023-test task031-test task039-test task041-test task052-test task053-test task054-test task055-test task056-test task012-test task013-test task015-test task016-test task017-test task018-test task019-test lint format-check typecheck import-check docs-check baseline-check build validate review-package
+.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task014-proof task015-proof task016-proof task017-proof task018-proof task019-proof task022-proof task023-proof task052-proof task053-proof task054-proof task055-proof task057-proof task054-review task055-review task056-review task057-review task021-test task022-test task023-test task031-test task039-test task041-test task052-test task053-test task054-test task055-test task056-test task057-test task012-test task013-test task015-test task016-test task017-test task018-test task019-test lint format-check typecheck import-check docs-check baseline-check build validate review-package
 
 setup: $(VENV_STAMP)
 
@@ -88,6 +88,9 @@ task054-proof: setup
 task055-proof: setup
 	PYTHONPATH=src $(VENV_PYTHON) scripts/task055_configuration_status.py
 
+task057-proof: setup
+	PYTHONPATH=src $(VENV_PYTHON) scripts/task057_reproduction.py
+
 task054-review: setup
 	PYTHONPATH=src $(VENV_PYTHON) scripts/generate_task054_review.py
 
@@ -97,8 +100,14 @@ task055-review: setup
 task056-review: setup
 	PYTHONPATH=src $(VENV_PYTHON) scripts/generate_task056_review.py
 
+task057-review: setup
+	PYTHONPATH=src $(VENV_PYTHON) scripts/generate_task057_review.py
+
 task056-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task056 -v
+
+task057-test: setup
+	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task057 tests.test_task056 tests.test_task053 tests.test_task052 tests.test_task048 tests.test_task048a tests.test_task015 tests.test_task016 -v
 
 task012-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task012 -v

@@ -340,6 +340,7 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "acquisition/sec_numbered_form.py",
                 "acquisition/sec_api.py",
                 "acquisition/sec_provider.py",
+                "acquisition/url_identity.py",
                 "admin/__init__.py",
                 "admin/field_definitions.py",
                 "admin/help.py",

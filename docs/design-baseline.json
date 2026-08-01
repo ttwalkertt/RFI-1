@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 7499,
+      "destination_size": 7579,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "6f36e1832ac19a8907bf69e45973f4ecb9bca28a64ea90ff03116b9c715066d7",
-      "content_change": "task roadmap reconciled through completed TASK-056 persistent discovery history"
+      "destination_sha256": "ebc271abc3d937012edfb65a3c8453b2177b0cc101f49acabbf35abe24d3cecd",
+      "content_change": "task roadmap reconciled through completed TASK-057 transcript graph traversal"
     },
     {
       "source": "ROADMAP.md",
@@ -71,10 +71,10 @@
       "source": "ARCHITECTURE.md",
       "destination": "ARCHITECTURE.md",
       "source_size": 4889,
-      "destination_size": 11822,
+      "destination_size": 12502,
       "source_sha256": "b1035d87d8f620ace89e3aaae5ca65b0c21cf93c6e1ca91c824c1e623b20aa9f",
-      "destination_sha256": "005ebc1fd232173aa9fa02c11499c2160ca22d68dc12bc9dd8fcb4b2bcc4ca66",
-      "content_change": "repository architecture extended through TASK-048 earnings transcript acquisition"
+      "destination_sha256": "f5cc655e3cea4fb812d819f00142ace56c3776b06f9e5283350d7eb18f22ec8c",
+      "content_change": "repository architecture extended through TASK-057 bounded transcript graph traversal"
     }
   ]
 }

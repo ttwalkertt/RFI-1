@@ -6,6 +6,7 @@ import hashlib
 import re
 import urllib.parse
 import urllib.request
+import urllib.error
 from dataclasses import dataclass
 from datetime import date, datetime
 from html.parser import HTMLParser
@@ -24,6 +25,7 @@ from rfi.acquisition.contracts import (
     SourceProfile,
 )
 from rfi.storage.sqlite import utc_now
+from rfi.acquisition.url_identity import normalize_discovery_url
 
 _TRANSCRIPT = re.compile(r"\btranscript(?:ion)?\b", re.I)
 _EARNINGS_CALL = re.compile(
@@ -61,6 +63,12 @@ class EarningsTranscriptHttpResponse:
     status: int
     media_type: str
     content: bytes
+    redirects: tuple[str, ...] = ()
+
+
+def normalize_transcript_url(url: str) -> str:
+    """Transcript-facing name for the shared repository normalization contract."""
+    return normalize_discovery_url(url)
 
 
 class EarningsTranscriptTransport:
@@ -214,7 +222,9 @@ class EarningsCallTranscriptAcquisition:
                 artifacts.append(self._envelope(proposal, response, artifact_date))
             except Exception as error:
                 failures.append(
-                    self._failure("candidate_invalid", normalized, error, False, source_artifact_id)
+                    self._failure(
+                        "candidate_invalid", normalized, error, False, source_artifact_id
+                    )
                 )
 
         if len(proposals) > self._positive_int("maximum_candidates", 40, 1, 100):
@@ -276,10 +286,14 @@ class EarningsCallTranscriptAcquisition:
     @staticmethod
     def _validate_transcript(response: EarningsTranscriptHttpResponse, label: str) -> None:
         media_type = response.media_type.casefold()
+        if not response.content.strip():
+            raise ValueError("candidate content is empty")
         if media_type in {"text/html", "application/xhtml+xml"}:
             if not response.content.lstrip().lower().startswith((b"<!doctype html", b"<html")):
                 raise ValueError("HTML candidate lacks an HTML document signature")
             text = re.sub(r"<[^>]+>", " ", response.content.decode("utf-8", "replace"))
+            if re.search(r"\b(?:enable|requires?)\s+javascript\b", text, re.I) and len(text) < 500:
+                raise ValueError("candidate requires JavaScript")
             if not (_TRANSCRIPT.search(label + " " + text) and _EARNINGS_CALL.search(text)):
                 raise ValueError("HTML candidate is not identified as an earnings-call transcript")
             if not _SPEAKER_EVIDENCE.search(text):
@@ -293,6 +307,29 @@ class EarningsCallTranscriptAcquisition:
                 raise ValueError("PDF link is not identified as an earnings-call transcript")
             return
         raise ValueError(f"unsupported transcript media type: {response.media_type}")
+
+    @staticmethod
+    def _candidate_retrieval_code(error: Exception) -> str:
+        message = str(error).casefold()
+        status = getattr(error, "code", None)
+        if status == 404 or "http 404" in message:
+            return "candidate_http_not_found"
+        if status in {401, 403} or "http 401" in message or "http 403" in message:
+            return "candidate_access_denied"
+        if isinstance(error, (TimeoutError, urllib.error.URLError)) and "timed out" in message:
+            return "candidate_fetch_timeout"
+        return "candidate_retrieval_failure"
+
+    @staticmethod
+    def _candidate_validation_code(error: Exception) -> str:
+        message = str(error).casefold()
+        if "unsupported transcript media type" in message:
+            return "candidate_unsupported_content_type"
+        if "content is empty" in message:
+            return "candidate_empty"
+        if "requires javascript" in message:
+            return "candidate_requires_javascript"
+        return "candidate_validation_mismatch"
 
     @staticmethod
     def _looks_like_transcript(label: str, url: str) -> bool:
@@ -366,12 +403,7 @@ class EarningsCallTranscriptAcquisition:
 
     @staticmethod
     def _normalize_url(url: str) -> str:
-        parsed = urllib.parse.urlsplit(url)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            raise ValueError("transcript URL must be absolute HTTP(S)")
-        return urllib.parse.urlunsplit(
-            (parsed.scheme, parsed.netloc, parsed.path, parsed.query, "")
-        )
+        return normalize_transcript_url(url)
 
     @staticmethod
     def _identifier(prefix: str, value: str) -> str:

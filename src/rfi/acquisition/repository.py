@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import posixpath
-import urllib.parse
 from contextlib import contextmanager
 from pathlib import Path
 from threading import local
@@ -32,6 +30,7 @@ from rfi.acquisition.contracts import (
     validate_json,
 )
 from rfi.acquisition.persistence import create_immutable, sha256_bytes
+from rfi.acquisition.url_identity import normalize_discovery_url
 from rfi.storage import RepositoryDatabase, StorageError, state_root_for
 from rfi.storage.sqlite import canonical_json, utc_now
 
@@ -336,22 +335,10 @@ class AcquisitionRepository:
     @staticmethod
     def normalize_discovery_url(url: str) -> str:
         """Conservatively normalize URL identity without changing observed provenance."""
-        parsed = urllib.parse.urlsplit(url)
-        scheme = parsed.scheme.casefold()
-        host = (parsed.hostname or "").casefold()
-        if scheme not in {"http", "https"} or not host:
-            raise ContractError("discovery anchor must be an absolute HTTP(S) URL")
-        port = parsed.port
-        netloc = host
-        default_port = (scheme == "http" and port == 80) or (
-            scheme == "https" and port == 443
-        )
-        if port is not None and not default_port:
-            netloc = f"{host}:{port}"
-        path = posixpath.normpath(parsed.path or "/")
-        if parsed.path.endswith("/") and not path.endswith("/"):
-            path += "/"
-        return urllib.parse.urlunsplit((scheme, netloc, path, parsed.query, ""))
+        try:
+            return normalize_discovery_url(url)
+        except ValueError as error:
+            raise ContractError(str(error)) from error
 
     def _record_discovery_anchor(
         self, connection: Any, source: dict[str, Any], candidate: CandidateDocument,
