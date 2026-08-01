@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -69,6 +69,10 @@ CREATE TABLE repository_state (
     repository_id TEXT NOT NULL UNIQUE,
     authority_revision INTEGER NOT NULL CHECK (authority_revision >= 0),
     created_at TEXT NOT NULL
+) STRICT;
+CREATE TABLE IF NOT EXISTS firm_configuration_imports (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    fingerprint TEXT NOT NULL
 ) STRICT;
 CREATE TABLE concepts (
     concept_id TEXT PRIMARY KEY,
@@ -789,6 +793,13 @@ CREATE INDEX IF NOT EXISTS interval_acquisition_history
 ON interval_acquisition_outcomes(firm_id,artifact_type,start_date,end_date,recorded_at);
 """
 
+_MIGRATE_V13_TO_V14 = """
+CREATE TABLE IF NOT EXISTS firm_configuration_imports (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    fingerprint TEXT NOT NULL
+) STRICT;
+"""
+
 
 def _backfill_task045(connection: sqlite3.Connection) -> None:
     """Link source projections and derive bounded claims from retained observations."""
@@ -1161,7 +1172,7 @@ class RepositoryDatabase:
                 version = int(row[0])
                 if version == SCHEMA_VERSION:
                     return False
-                if version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}:
+                if version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}:
                     raise StorageError(
                         "incompatible_schema",
                         f"repository schema version {version} is unsupported; "
@@ -1173,6 +1184,8 @@ class RepositoryDatabase:
                     for item in connection.execute("PRAGMA table_info(mailing_list_runs)")
                 }
                 scripts = []
+                if version <= 13:
+                    scripts.append(_MIGRATE_V13_TO_V14)
                 if version <= 12:
                     scripts.append(_MIGRATE_V12_TO_V13)
                 if version <= 10:

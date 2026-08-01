@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import asdict, dataclass
 from importlib import resources
@@ -43,6 +44,10 @@ class FirmConfigurationError(RuntimeError):
         super().__init__("\n".join(diagnostics))
 
 
+class FirmConfigurationInspectionError(RuntimeError):
+    """The raw external configuration set could not be inspected safely."""
+
+
 @dataclass(frozen=True)
 class LoadedFirmConfiguration:
     source_name: str
@@ -62,9 +67,65 @@ class MaterializationResult:
     authority: str = "external-json"
 
 
+@dataclass(frozen=True)
+class FirmConfigurationStatus:
+    status: str
+    imported_fingerprint: str | None
+    external_fingerprint: str | None
+    diagnostic: str | None = None
+
+
 def configuration_directory(state: Path) -> Path:
     """Return the one documented state-relative external configuration location."""
     return state / CONFIG_DIRECTORY
+
+
+def firm_configuration_fingerprint(state: Path) -> str:
+    """Hash the complete configuration set by filename and raw bytes, without parsing."""
+    directory = configuration_directory(state)
+    try:
+        if directory.exists() and not directory.is_dir():
+            raise FirmConfigurationInspectionError(
+                f"external configuration directory cannot be inspected: {directory}"
+            )
+        paths = () if not directory.exists() else tuple(sorted(
+            path for path in directory.iterdir()
+            if path.name.endswith(".firm-config.json") and path.is_file()
+        ))
+        digest = hashlib.sha256()
+        for path in paths:
+            name = path.name.encode("utf-8")
+            content = path.read_bytes()
+            digest.update(len(name).to_bytes(8, "big"))
+            digest.update(name)
+            digest.update(len(content).to_bytes(8, "big"))
+            digest.update(content)
+        return digest.hexdigest()
+    except FirmConfigurationInspectionError:
+        raise
+    except (OSError, UnicodeError) as error:
+        raise FirmConfigurationInspectionError(
+            f"external configuration cannot be inspected: {error}"
+        ) from error
+
+
+def inspect_firm_configuration_status(state: Path) -> FirmConfigurationStatus:
+    """Compare raw external bytes with the last successful import using read-only state."""
+    database = RepositoryDatabase.open(state)
+    with database.connect(read_only=True) as connection:
+        row = connection.execute(
+            "SELECT fingerprint FROM firm_configuration_imports WHERE singleton=1"
+        ).fetchone()
+    imported = None if row is None else str(row[0])
+    try:
+        external = firm_configuration_fingerprint(state)
+    except FirmConfigurationInspectionError as error:
+        return FirmConfigurationStatus("inspection_failure", imported, None, str(error))
+    return FirmConfigurationStatus(
+        "current" if imported == external else "changes_available",
+        imported,
+        external,
+    )
 
 
 def _schema() -> dict[str, Any]:
@@ -397,9 +458,18 @@ def materialize_firm_configurations(
     configurations: tuple[LoadedFirmConfiguration, ...],
     *,
     fail_after_firms: int | None = None,
+    imported_fingerprint: str | None = None,
 ) -> MaterializationResult:
     """Overwrite current file-owned projections in one all-or-nothing transaction."""
+    if imported_fingerprint is None:
+        imported_fingerprint = firm_configuration_fingerprint(state)
     if not configurations:
+        with database.transaction() as connection:
+            connection.execute(
+                "INSERT INTO firm_configuration_imports VALUES (1,?) "
+                "ON CONFLICT(singleton) DO UPDATE SET fingerprint=excluded.fingerprint",
+                (imported_fingerprint,),
+            )
         return MaterializationResult(0, 0, 0, 0, database.revision())
     firms = FirmRepository(state / "firm-catalog")
     profiles = SourceProfileRepository(
@@ -524,6 +594,11 @@ def materialize_firm_configurations(
             )
             if fail_after_firms is not None and count >= fail_after_firms:
                 raise FirmConfigurationError(("injected materialization failure",))
+        connection.execute(
+            "INSERT INTO firm_configuration_imports VALUES (1,?) "
+            "ON CONFLICT(singleton) DO UPDATE SET fingerprint=excluded.fingerprint",
+            (imported_fingerprint,),
+        )
         repository_authority_revision = database.advance_revision(connection)
     identities = sum(item.identity is not None for item in configurations)
     return MaterializationResult(
@@ -537,9 +612,18 @@ def prepare_firm_configuration(
 ) -> MaterializationResult:
     """Validate and materialize external configuration into initialized current-schema state."""
     database = RepositoryDatabase.open(state)
+    fingerprint = firm_configuration_fingerprint(state)
     configurations = load_firm_configurations(state, database)
+    if firm_configuration_fingerprint(state) != fingerprint:
+        raise FirmConfigurationError((
+            "external firm configuration changed while it was being prepared; retry reload",
+        ))
     return materialize_firm_configurations(
-        state, database, configurations, fail_after_firms=fail_after_firms
+        state,
+        database,
+        configurations,
+        fail_after_firms=fail_after_firms,
+        imported_fingerprint=fingerprint,
     )
 
 

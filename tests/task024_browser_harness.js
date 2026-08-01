@@ -62,12 +62,13 @@ async function main(base) {
   };
   context.renderResults(run);
   const rendered = document.getElementById('results').innerHTML;
-  const links = [...rendered.matchAll(/<a class="badge configuration-action"([^>]*)>/g)];
+  const links = [...rendered.matchAll(/<a class="badge configuration-action [^"]+"([^>]*)>/g)];
   assert.equal(links.length, 1);
   assert(rendered.includes('/firms?firm_id=firm+%26+co&amp;artifact_id=press%2Frelease%3F'));
   assert(!links[0][1].includes('target='));
-  assert(rendered.includes('<span class="badge">success</span>'));
-  assert(rendered.includes('<span class="badge">configuration_problem</span>'));
+  assert(rendered.includes('<span class="badge outcome-success" data-outcome="success">success</span>'));
+  assert(rendered.includes('<span class="badge outcome-configuration_problem" ' +
+    'data-outcome="configuration_problem">configuration_problem</span>'));
   assert(!html.includes('window.open('));
   assert(!html.includes('history.replaceState'));
   assert(!html.includes('role="dialog"'));

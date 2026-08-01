@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 VENV_STAMP := .venv/.rfi-installed
 
-.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task014-proof task015-proof task016-proof task017-proof task018-proof task019-proof task022-proof task023-proof task052-proof task053-proof task054-proof task054-review task021-test task022-test task023-test task031-test task039-test task041-test task052-test task053-test task054-test task012-test task013-test task015-test task016-test task017-test task018-test task019-test lint format-check typecheck import-check docs-check baseline-check build validate review-package
+.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task014-proof task015-proof task016-proof task017-proof task018-proof task019-proof task022-proof task023-proof task052-proof task053-proof task054-proof task055-proof task054-review task055-review task021-test task022-test task023-test task031-test task039-test task041-test task052-test task053-test task054-test task055-test task012-test task013-test task015-test task016-test task017-test task018-test task019-test lint format-check typecheck import-check docs-check baseline-check build validate review-package
 
 setup: $(VENV_STAMP)
 
@@ -85,8 +85,14 @@ task053-proof: setup
 task054-proof: setup
 	PYTHONPATH=src $(VENV_PYTHON) scripts/task054_reload_firm_profiles.py
 
+task055-proof: setup
+	PYTHONPATH=src $(VENV_PYTHON) scripts/task055_configuration_status.py
+
 task054-review: setup
 	PYTHONPATH=src $(VENV_PYTHON) scripts/generate_task054_review.py
+
+task055-review: setup
+	PYTHONPATH=src $(VENV_PYTHON) scripts/generate_task055_review.py
 
 task012-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task012 -v
@@ -135,6 +141,9 @@ task053-test: setup
 
 task054-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task054 tests.test_task041 tests.test_task044 tests.test_task015 tests.test_task016 tests.test_task052 tests.test_task053 -v
+
+task055-test: setup
+	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task055 tests.test_task054 tests.test_task041 tests.test_task044 tests.test_task015 tests.test_task016 tests.test_task021 tests.test_task052 tests.test_task053 -v
 
 lint: setup
 	$(VENV_PYTHON) scripts/quality.py lint

@@ -214,7 +214,7 @@ class DateDelimitedAcquisitionTests(unittest.TestCase):
                 "UPDATE schema_metadata SET schema_version=12 WHERE singleton=1"
             )
         migrated = RepositoryDatabase.open(self.state)
-        self.assertEqual(migrated.validate()["schema_version"], 13)
+        self.assertEqual(migrated.validate()["schema_version"], 14)
         with migrated.connect(read_only=True) as connection:
             tables = {
                 str(row[0])

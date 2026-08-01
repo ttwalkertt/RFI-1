@@ -29,8 +29,9 @@ from rfi.concepts import ConceptError, ConceptRepository, ConceptService
 from rfi.firms import FirmError, FirmRepository, FirmService
 from rfi.firm_configuration import (
     FirmConfigurationError,
+    FirmConfigurationStatus,
+    inspect_firm_configuration_status,
     prepare_firm_configuration,
-    validate_firm_configuration,
 )
 from rfi.mailing_lists import (
     LinuxMailingListWorkflowService,
@@ -316,9 +317,11 @@ class AdminConsole(ThreadingHTTPServer):
         stream_service: StreamService,
         linux_mailing_list_workflow: LinuxMailingListWorkflowService,
         mailing_list_fetch_queue: MailingListFetchQueue,
+        firm_configuration_status: FirmConfigurationStatus,
     ) -> None:
         self.state = state
         self.firm_configuration_reload_lock = threading.Lock()
+        self.firm_configuration_status = firm_configuration_status
         self.service = service
         self.firm_service = firm_service
         self.source_profile_service = source_profile_service
@@ -338,9 +341,16 @@ class AdminConsole(ThreadingHTTPServer):
                 "firm configuration reload is already in progress"
             )
         try:
-            return {"status": "reloaded", **asdict(prepare_firm_configuration(self.state))}
+            result = prepare_firm_configuration(self.state)
+            self.refresh_firm_configuration_status()
+            return {"status": "reloaded", **asdict(result)}
         finally:
             self.firm_configuration_reload_lock.release()
+
+    def refresh_firm_configuration_status(self) -> FirmConfigurationStatus:
+        """Refresh the process-local status using the read-only comparison contract."""
+        self.firm_configuration_status = inspect_firm_configuration_status(self.state)
+        return self.firm_configuration_status
 
     def server_close(self) -> None:
         self.mailing_list_fetch_queue.close()
@@ -518,6 +528,12 @@ class AdminHandler(BaseHTTPRequestHandler):
         mailing_list_workflow = self.server.linux_mailing_list_workflow
         mailing_list_fetch_queue = self.server.mailing_list_fetch_queue
         streams = self.server.stream_service
+        if method == "GET" and parts == ["api", "firm-configurations", "status"]:
+            self._send_json(
+                HTTPStatus.OK,
+                asdict(self.server.refresh_firm_configuration_status()),
+            )
+            return
         if method == "POST" and parts == ["api", "firm-configurations", "reload"]:
             body = self._body()
             if body or query:
@@ -1164,7 +1180,7 @@ def create_admin_server(
     """Create a local-default server backed by repository-controlled catalog state."""
     if not 0 <= port <= 65535:
         raise ConceptError("port must be between 0 and 65535")
-    validate_firm_configuration(state)
+    firm_configuration_status = inspect_firm_configuration_status(state)
     repository = ConceptRepository.open(state)
     firm_repository = FirmRepository.open(state / "firm-catalog")
     template = load_canonical_template()
@@ -1199,4 +1215,5 @@ def create_admin_server(
         stream_service,
         mailing_list_workflow,
         mailing_list_fetch_queue,
+        firm_configuration_status,
     )

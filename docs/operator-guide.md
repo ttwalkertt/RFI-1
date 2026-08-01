@@ -182,6 +182,17 @@ files are unchanged. It does not modify acquisitions, retained artifacts, observ
 historical evidence. A second reload is rejected while one is active; pulls already running retain
 their captured profile revision, and later pulls use the newly current revision.
 
+Target Firms compares the authoritative filenames and raw file bytes with the fingerprint from the
+last successful import whenever the page opens. `Current` means they match. `External changes
+available` is a persistent reminder to use `Reload Firm Profiles`; repository projections remain
+active until that explicit action succeeds. `Unable to inspect external configuration` means the
+comparison could not be completed and must not be interpreted as current. Detection does not parse,
+validate, or materialize JSON and does not write repository state. File timestamps are ignored.
+
+Status badges use color for convenient scanning while retaining explicit text: green denotes
+success/current, blue denotes duplicate/informational, amber denotes indeterminate or attention
+needed, and red denotes failure or inspection failure. Text remains the authoritative signal.
+
 ### What changes repository state
 
 `Save new revision` creates a complete immutable revision and advances the current selector.
