@@ -6,8 +6,10 @@ import hashlib
 import json
 import posixpath
 import urllib.parse
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from threading import local
+from typing import Any, Iterator
 
 from rfi.acquisition.contracts import (
     AcquisitionReceipt,
@@ -48,6 +50,29 @@ class AcquisitionRepository:
             raise IntegrityError(str(error)) from error
         self._content_root = self._state_root / "content" / "sha256"
         self._content_root.mkdir(parents=True, exist_ok=True)
+        self._transaction_state = local()
+
+    @contextmanager
+    def acquisition_transaction(self) -> Iterator[None]:
+        """Join one engine run's structured mutations to one commit boundary."""
+        if getattr(self._transaction_state, "connection", None) is not None:
+            yield
+            return
+        with self._database.transaction() as connection:
+            self._transaction_state.connection = connection
+            try:
+                yield
+            finally:
+                self._transaction_state.connection = None
+
+    @contextmanager
+    def _transaction(self) -> Iterator[Any]:
+        active = getattr(self._transaction_state, "connection", None)
+        if active is not None:
+            yield active
+        else:
+            with self._database.transaction() as connection:
+                yield connection
 
     @property
     def root(self) -> Path:
@@ -189,7 +214,7 @@ class AcquisitionRepository:
         if fail_at == FailurePoint.AFTER_ARTIFACT:
             self._fail(fail_at)
         try:
-            with self._database.transaction() as connection:
+            with self._transaction() as connection:
                 prior = connection.execute(
                     "SELECT canonical_json FROM acquisition_attempts WHERE attempt_id = ?",
                     (attempt_id,),
@@ -342,37 +367,87 @@ class AcquisitionRepository:
             return
         if resolved is not None and not isinstance(resolved, str):
             return
+        self._record_discovery_anchor_values(
+            connection, source, candidate.source_id, requested, resolved,
+            attempt_id, artifact_id, result.retrieved_at, "retained_artifact",
+        )
+
+    def _record_discovery_anchor_values(
+        self, connection: Any, source: dict[str, Any], source_id: str,
+        requested: str, resolved: str | None, attempt_id: str, artifact_id: str,
+        succeeded_at: str, qualification: str,
+    ) -> None:
+        policy = source.get("policy", {})
+        firm_id = str(policy["firm_id"])
+        adapter_id = str(policy["retrieval_adapter_id"])
         normalized = self.normalize_discovery_url(resolved or requested)
         rows = connection.execute(
             "SELECT canonical_json FROM discovery_anchor_history WHERE firm_id=? AND source_id=? "
             "AND adapter_id=? ORDER BY stack_position",
-            (firm_id, candidate.source_id, adapter_id),
+            (firm_id, source_id, adapter_id),
         ).fetchall()
         prior = [self._decode(row[0], "discovery anchor") for row in rows]
         entry = {
             "schema_version": 1, "record_type": "discovery_anchor",
-            "firm_id": firm_id, "source_id": candidate.source_id, "adapter_id": adapter_id,
+            "firm_id": firm_id, "source_id": source_id, "adapter_id": adapter_id,
             "normalized_url": normalized, "requested_url": requested,
             "resolved_url": resolved if resolved != requested else None,
             "attempt_id": attempt_id, "artifact_id": artifact_id,
-            "succeeded_at": result.retrieved_at,
+            "succeeded_at": succeeded_at,
             "source_profile_revision_id": policy.get("source_profile_revision_id"),
-            "qualification": "retained_artifact",
+            "qualification": qualification,
         }
         retained = [entry] + [item for item in prior if item["normalized_url"] != normalized]
         connection.execute(
             "DELETE FROM discovery_anchor_history WHERE firm_id=? AND source_id=? AND adapter_id=?",
-            (firm_id, candidate.source_id, adapter_id),
+            (firm_id, source_id, adapter_id),
         )
         for position, item in enumerate(retained[:3]):
             connection.execute(
                 "INSERT INTO discovery_anchor_history VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (firm_id, candidate.source_id, adapter_id, position, item["normalized_url"],
+                (firm_id, source_id, adapter_id, position, item["normalized_url"],
                  item["requested_url"], item.get("resolved_url"), item["attempt_id"],
                  item.get("artifact_id"), item["succeeded_at"],
                  item.get("source_profile_revision_id"), item["qualification"],
                  canonical_json(item)),
             )
+
+    def record_no_change(self, source_id: str, checkpoint: Checkpoint) -> bool:
+        """Refresh history from a conclusive checkpoint tied to retained valid evidence."""
+        require_identifier(source_id, "source_id")
+        source = self.source(source_id)
+        with self._transaction() as connection:
+            current = connection.execute(
+                "SELECT event_id,position,cursor FROM current_checkpoints WHERE source_id=?",
+                (source_id,),
+            ).fetchone()
+            if current is None or (int(current[1]), str(current[2])) != (
+                checkpoint.position, checkpoint.cursor
+            ):
+                raise ContractError("no-change confirmation requires the current checkpoint")
+            event = connection.execute(
+                "SELECT attempt_id FROM checkpoint_events WHERE event_id=?", (current[0],)
+            ).fetchone()
+            attempt = connection.execute(
+                "SELECT artifact_id,canonical_json FROM acquisition_attempts WHERE attempt_id=?",
+                (event[0],),
+            ).fetchone()
+            if attempt is None or attempt[0] is None:
+                raise ContractError("no-change checkpoint lacks a retained valid artifact")
+            record = self._decode(attempt[1], "successful checkpoint attempt")
+            provenance = record["candidate"]["provenance"]
+            requested = provenance.get("metadata", {}).get("requested_url")
+            resolved = record.get("diagnostics", {}).get("final_url")
+            if not isinstance(requested, str) or not requested:
+                return False
+            self._record_discovery_anchor_values(
+                connection, source, source_id, requested,
+                resolved if isinstance(resolved, str) else None,
+                str(event[0]), str(attempt[0]), utc_now(), "no_change",
+            )
+            self._database.advance_revision(connection)
+            return True
+
     def record_outcome(
         self,
         attempt_id: str,
@@ -408,7 +483,7 @@ class AcquisitionRepository:
         }
         payload = canonical_json(record)
         try:
-            with self._database.transaction() as connection:
+            with self._transaction() as connection:
                 prior = connection.execute(
                     "SELECT canonical_json FROM acquisition_attempts WHERE attempt_id = ?",
                     (attempt_id,),
@@ -699,11 +774,18 @@ class AcquisitionRepository:
         return {"schema_version": _SCHEMA, "documents": dict(sorted(documents.items()))}
 
     def checkpoints(self) -> dict[str, Any]:
-        with self._database.connect(read_only=True) as connection:
-            rows = connection.execute(
+        active = getattr(self._transaction_state, "connection", None)
+        if active is not None:
+            rows = active.execute(
                 "SELECT source_id,position,cursor,event_id "
                 "FROM current_checkpoints ORDER BY source_id"
             ).fetchall()
+        else:
+            with self._database.connect(read_only=True) as connection:
+                rows = connection.execute(
+                    "SELECT source_id,position,cursor,event_id "
+                    "FROM current_checkpoints ORDER BY source_id"
+                ).fetchall()
         return {
             "schema_version": _SCHEMA,
             "sources": {
@@ -723,7 +805,7 @@ class AcquisitionRepository:
         require_identifier(successful_attempt_id, "attempt_id")
         self._validate_checkpoint(source_id, checkpoint)
         try:
-            with self._database.transaction() as connection:
+            with self._transaction() as connection:
                 attempt = connection.execute(
                     "SELECT source_id,outcome FROM acquisition_attempts WHERE attempt_id = ?",
                     (successful_attempt_id,),

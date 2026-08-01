@@ -231,6 +231,13 @@ class AcquisitionEngine:
         fail_at: EngineFailurePoint | None = None,
     ) -> AcquisitionRunResult:
         """Execute one bounded source run and return only observed outcomes."""
+        with self._repository.acquisition_transaction():
+            return self._run_source(source_id, run_key, fail_at)
+
+    def _run_source(
+        self, source_id: str, run_key: str,
+        fail_at: EngineFailurePoint | None = None,
+    ) -> AcquisitionRunResult:
         require_identifier(run_key, "run_key")
         started = self._clock()
         run_id = f"run-{source_id}-{run_key}"
@@ -283,6 +290,7 @@ class AcquisitionEngine:
         maximum_position = checkpoint_before.position if checkpoint_before else 0
         previous_page_position = 0
         status = RunStatus.COMPLETE
+        checkpoint_confirmed = False
 
         while True:
             try:
@@ -365,6 +373,7 @@ class AcquisitionEngine:
                     continue
                 seen_candidates[candidate.candidate_id] = candidate.canonical()
                 if checkpoint_before and candidate.position <= checkpoint_before.position:
+                    checkpoint_confirmed = True
                     outcomes.append(
                         CandidateRunOutcome(
                             candidate.candidate_id,
@@ -541,6 +550,9 @@ class AcquisitionEngine:
                     )
                 else:
                     self._repository.advance_checkpoint(source_id, last_success, target)
+            elif checkpoint_confirmed and checkpoint_before is not None and retrievals == 0:
+                if self._repository.record_no_change(source_id, checkpoint_before):
+                    unchanged += 1
 
         return AcquisitionRunResult(
             run_id=run_id,

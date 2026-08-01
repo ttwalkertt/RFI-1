@@ -18,6 +18,13 @@ the attempt, observation, document, artifact metadata, and any ingress checkpoin
 all structured progress together; failed and skipped attempts use a separate path that cannot teach
 history.
 
+The independent review found two deficiencies: engine checkpoint finalization remained in a second
+transaction, and artifact reuse had been presented as no-change evidence. The repair gives one
+engine run a repository-owned transaction boundary and adds an explicit checkpoint-backed
+`record_no_change` operation. Only the current checkpoint's successful attempt and retained valid
+artifact qualify. Duplicate reuse remains `retained_artifact`; non-success and idempotent paths do
+not qualify.
+
 Transcript discovery reads the three-entry stack through the acquisition repository and prepends
 resolved-then-requested fallback URLs for each entry to configured hints. All URLs continue through
 the existing host, page, byte, time, link, validation, and traversal bounds. A stale anchor is
@@ -32,6 +39,29 @@ failed-attempt non-learning; transaction rollback; firm/source isolation; profil
 v14 populated migration; retained-anchor ordering; stale-anchor fallback; and preservation of the
 prior acquisition-attempt count during migration. TASK-048, TASK-052, and TASK-053 regressions prove
 the transcript validation, configured-hint, and bounded traversal contracts remain intact.
+
+Bounded diagnostics now record the history key, normalized retained order, at most six anchor
+attempts with stack position, resolved/requested form, query-redacted URL, and actual status, plus
+actual configured-hint and broad-traversal fallthrough.
+
+## Acceptance Mapping
+
+- LIFO creation, deduplication, eviction, normalization, and exact provenance:
+  `test_empty_lifo_move_to_front_dedup_eviction_and_exact_provenance`.
+- Genuine no-change and failed, validation-failed, blocked, partial, cancelled, policy-rejected,
+  bound-exhausted, unsupported, skipped, and duplicate separation:
+  `test_checkpoint_backed_no_change_is_explicit_and_non_successes_never_teach`.
+- Complete direct rollback proof: `test_atomic_rollback_restores_every_structured_success_projection`.
+- Normal engine checkpoint rollback proof:
+  `test_engine_checkpoint_failure_rolls_back_success_and_anchor_together`.
+- Actual two-revision publication and identity isolation:
+  `test_revision_changes_and_key_isolation_preserve_history`.
+- Three anchors, URL-form fallback, configured hints, bounded traversal, and actual diagnostics:
+  `test_three_anchor_forms_hints_and_bounded_traversal_have_exact_diagnostics`.
+- Failed-anchor retention: `test_retained_anchor_precedes_hint_and_failure_falls_through_without_search`.
+- Empty/populated migration: `test_v14_populated_migration_adds_empty_history_without_changing_evidence`.
+- Existing validation, hint, traversal, evidence, and startup behavior: captured TASK-048/052/053
+  regressions and full `make validate`.
 
 ## Limitations
 

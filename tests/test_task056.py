@@ -5,9 +5,11 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from rfi.acquisition import (
-    AcquisitionRepository, CandidateDocument, DiscoveryProvenance,
+    AcquisitionEngine, AcquisitionRepository, AdapterCandidate, AdapterRegistry,
+    CandidateDocument, Checkpoint, DiscoveryPage, DiscoveryProvenance,
     EarningsTranscriptHttpResponse, FailurePoint,
     RetrievalOutcome, RetrievalResult, SourceProfile,
 )
@@ -18,6 +20,10 @@ from rfi.discovery import (
 from rfi.firms import FirmRepository
 from rfi.firms.contracts import FirmDraft, FirmStatus
 from rfi.storage import RepositoryDatabase
+from rfi.source_profiles import SourceProfileRepository, load_canonical_template
+from rfi.source_profiles.contracts import (
+    RetrievalCandidate, SourceProfileDraft, SourceProfileItem,
+)
 
 
 class DiscoveryAnchorHistoryCase(unittest.TestCase):
@@ -45,7 +51,7 @@ class DiscoveryAnchorHistoryCase(unittest.TestCase):
 
     def success(self, key: str, requested: str, resolved: str | None = None,
                 source: str = "source-a", fail_at: FailurePoint | None = None,
-                content: bytes | None = None):
+                content: bytes | None = None, checkpoint: Checkpoint | None = None):
         candidate = CandidateDocument(
             f"candidate-{key}", source, f"document-{key}",
             DiscoveryProvenance(
@@ -59,7 +65,7 @@ class DiscoveryAnchorHistoryCase(unittest.TestCase):
                 content or f"artifact-{key}".encode(), "text/html",
                 "2026-08-01T00:00:00Z",
                 "earnings_transcript", diagnostics={"final_url": resolved or requested},
-            ), fail_at=fail_at,
+            ), checkpoint=checkpoint, fail_at=fail_at,
         )
 
     def test_empty_lifo_move_to_front_dedup_eviction_and_exact_provenance(self) -> None:
@@ -87,6 +93,48 @@ class DiscoveryAnchorHistoryCase(unittest.TestCase):
         self.assertFalse(receipt.artifact_created)
         self.assertEqual(self.anchors()[0]["attempt_id"], "attempt-no-change")
 
+    def test_checkpoint_backed_no_change_is_explicit_and_non_successes_never_teach(self) -> None:
+        checkpoint = Checkpoint(1, "confirmed")
+        self.success("b", "https://ir.example.com/b", checkpoint=checkpoint)
+        self.success("a", "https://ir.example.com/a")
+        self.success("c", "https://ir.example.com/c")
+        self.assertEqual([x["requested_url"] for x in self.anchors()], [
+            "https://ir.example.com/c", "https://ir.example.com/a",
+            "https://ir.example.com/b",
+        ])
+        self.assertTrue(self.repository.record_no_change("source-a", checkpoint))
+        refreshed = self.anchors()
+        self.assertEqual(refreshed[0]["requested_url"], "https://ir.example.com/b")
+        self.assertEqual(refreshed[0]["qualification"], "no_change")
+        duplicate = self.success(
+            "duplicate-artifact", "https://ir.example.com/duplicate", content=b"artifact-b"
+        )
+        self.assertFalse(duplicate.artifact_created)
+        self.assertEqual(self.anchors()[0]["qualification"], "retained_artifact")
+        before = self.anchors()
+        candidate = CandidateDocument(
+            "candidate-nonlearning", "source-a", "document-nonlearning",
+            DiscoveryProvenance("2026-08-01T00:00:00Z", "earnings_transcript",
+                                metadata={"requested_url": "https://ir.example.com/rejected"}),
+        )
+        matrix = {
+            "retrieval_failure": RetrievalOutcome.FAILED,
+            "validation_failure": RetrievalOutcome.FAILED,
+            "blocked": RetrievalOutcome.SKIPPED,
+            "partial": RetrievalOutcome.FAILED,
+            "cancelled": RetrievalOutcome.SKIPPED,
+            "policy_rejection": RetrievalOutcome.SKIPPED,
+            "bounds_exhaustion": RetrievalOutcome.FAILED,
+            "unsupported": RetrievalOutcome.SKIPPED,
+        }
+        for index, (reason, outcome) in enumerate(matrix.items()):
+            with self.subTest(reason=reason):
+                self.repository.record_outcome(
+                    f"attempt-nonlearning-{index}", candidate, outcome,
+                    "2026-08-01T00:00:00Z", "earnings_transcript", {"reason": reason},
+                )
+                self.assertEqual(self.anchors(), before)
+
     def test_failures_and_transaction_rollback_do_not_teach(self) -> None:
         requested = "https://ir.example.com/call"
         candidate = CandidateDocument(
@@ -107,6 +155,73 @@ class DiscoveryAnchorHistoryCase(unittest.TestCase):
                 "SELECT count(*) FROM acquisition_attempts WHERE attempt_id='attempt-rollback'"
             ).fetchone()[0], 0)
 
+    def test_atomic_rollback_restores_every_structured_success_projection(self) -> None:
+        self.success("prior", "https://ir.example.com/prior", checkpoint=Checkpoint(1, "prior"))
+        tables = (
+            "artifacts", "acquisition_attempts", "artifact_observations", "documents",
+            "checkpoint_events", "current_checkpoints", "discovery_anchor_history",
+            "repository_state",
+        )
+        with self.repository._database.connect(read_only=True) as connection:
+            before = {table: tuple(tuple(row) for row in connection.execute(
+                f'SELECT * FROM "{table}" ORDER BY 1'
+            )) for table in tables}
+        with self.assertRaises(RuntimeError):
+            self.success(
+                "rollback-all", "https://ir.example.com/rollback-all",
+                checkpoint=Checkpoint(2, "next"), fail_at=FailurePoint.BEFORE_CHECKPOINT,
+            )
+        with self.repository._database.connect(read_only=True) as connection:
+            after = {table: tuple(tuple(row) for row in connection.execute(
+                f'SELECT * FROM "{table}" ORDER BY 1'
+            )) for table in tables}
+        self.assertEqual(after, before)
+
+    def test_engine_checkpoint_failure_rolls_back_success_and_anchor_together(self) -> None:
+        class Adapter:
+            mechanism = "earnings_transcript"
+
+            def discover(inner, profile: SourceProfile, continuation: str | None):
+                del profile, continuation
+                return DiscoveryPage((AdapterCandidate(
+                    "candidate-engine", "document-engine", 1, "r1",
+                    DiscoveryProvenance(
+                        "2026-08-01T00:00:00Z", "earnings_transcript",
+                        metadata={"requested_url": "https://ir.example.com/engine"},
+                    ),
+                ),), None, {})
+
+            def retrieve(inner, profile: SourceProfile, candidate: AdapterCandidate):
+                del profile, candidate
+                return RetrievalResult(
+                    b"engine", "text/html", "2026-08-01T00:00:00Z",
+                    "earnings_transcript",
+                    diagnostics={"final_url": "https://ir.example.com/engine"},
+                )
+
+        tables = (
+            "artifacts", "acquisition_attempts", "artifact_observations", "documents",
+            "checkpoint_events", "current_checkpoints", "discovery_anchor_history",
+            "repository_state",
+        )
+        with self.repository._database.connect(read_only=True) as connection:
+            before = {table: tuple(tuple(row) for row in connection.execute(
+                f'SELECT * FROM "{table}" ORDER BY 1'
+            )) for table in tables}
+        engine = AcquisitionEngine(
+            self.repository, AdapterRegistry((Adapter(),)),
+            lambda: "2026-08-01T00:00:00Z",
+        )
+        with patch.object(
+            self.repository, "advance_checkpoint", side_effect=RuntimeError("checkpoint failure")
+        ), self.assertRaisesRegex(RuntimeError, "checkpoint failure"):
+            engine.run_source("source-a", "atomic")
+        with self.repository._database.connect(read_only=True) as connection:
+            after = {table: tuple(tuple(row) for row in connection.execute(
+                f'SELECT * FROM "{table}" ORDER BY 1'
+            )) for table in tables}
+        self.assertEqual(after, before)
+
     def test_revision_changes_and_key_isolation_preserve_history(self) -> None:
         url = "https://ir.example.com/call"
         self.success("a", url)
@@ -116,6 +231,24 @@ class DiscoveryAnchorHistoryCase(unittest.TestCase):
         self.assertEqual(len(self.anchors("firm-a", "source-b")), 1)
         self.assertEqual(len(self.anchors("firm-b", "source-c")), 1)
         self.assertEqual(self.anchors()[0]["source_profile_revision_id"], "profile-r1")
+
+        profiles = SourceProfileRepository.open(
+            self.root / "source-profiles", load_canonical_template()
+        )
+        draft = SourceProfileDraft("firm-a", (SourceProfileItem(
+            "earnings_transcript", True,
+            (RetrievalCandidate("discovery", 1, discovery_hints=("first",)),),
+        ),))
+        first = profiles.publish(draft, None)
+        second = profiles.publish(SourceProfileDraft(
+            "firm-a", (SourceProfileItem(
+                "earnings_transcript", True,
+                (RetrievalCandidate("discovery", 1, discovery_hints=("second",)),),
+            ),),
+        ), first.source_profile_revision_id)
+        self.assertNotEqual(first.source_profile_revision_id, second.source_profile_revision_id)
+        self.assertEqual(len(self.anchors()), 1)
+        self.assertEqual(self.anchors()[0]["source_id"], "source-a")
 
     def test_v14_populated_migration_adds_empty_history_without_changing_evidence(self) -> None:
         self.success("existing", "https://ir.example.com/existing")
@@ -191,6 +324,59 @@ class DiscoveryAnchorHistoryCase(unittest.TestCase):
         self.assertEqual(page.diagnostics["retained_anchor_order"],
                          ["https://ir.example.com/old-call"])
         self.assertEqual(len(self.anchors()), 1, "failed anchor must not be removed")
+
+    def test_three_anchor_forms_hints_and_bounded_traversal_have_exact_diagnostics(self) -> None:
+        broad = "https://broad.example/earnings-call-transcript-2026-02-01.html"
+        hint = "https://hint.example/transcripts"
+        requested = [f"https://ir.example.com/requested-{n}" for n in (3, 2, 1)]
+        resolved = ["https://ir.example.com/resolved-3", None,
+                    "https://ir.example.com/resolved-1"]
+        for index in (2, 1, 0):
+            self.success(f"order-{index}", requested[index], resolved[index])
+
+        class Transport:
+            def __init__(inner):
+                inner.requests: list[str] = []
+
+            def get(inner, url: str):
+                inner.requests.append(url)
+                raise TimeoutError("stale")
+
+        class Search:
+            endpoint = "https://search.example/"
+
+            def search(inner, query: str, limit: int):
+                return DiscoverySearchResponse((broad,), 1)
+
+        transport = Transport()
+        adapter = EarningsTranscriptPullAdapter(
+            DiscoveryPolicyCatalog(
+                {"standard": DiscoveryPolicy(2, 5, 10, 2, 20, 8, 1_000_000, 60)},
+                "standard",
+            ), Search(), transport, lambda: "2026-08-01T00:00:00Z",
+            repository=self.repository,
+        )
+        profile = SourceProfile(
+            "source-a", "source-a", True, "earnings_transcript",
+            {"mode": "discovery", "discovery_class": "standard",
+             "discovery_hints": [hint, "identity:Firm A"]},
+            {"firm_id": "firm-a", "artifact_id": "earnings_transcript",
+             "retrieval_adapter_id": "earnings-call-transcript"},
+        )
+        page = adapter.discover(profile, None)
+        self.assertEqual(transport.requests[:6], [
+            resolved[0], requested[0], requested[1], resolved[2], requested[2], hint,
+        ])
+        self.assertTrue(transport.requests[6:])
+        self.assertEqual(set(transport.requests[6:]), {broad})
+        attempts = page.diagnostics["anchor_attempts"]
+        self.assertEqual([(x["position"], x["form"], x["status"]) for x in attempts], [
+            (1, "resolved", "failed"), (1, "requested", "failed"),
+            (2, "requested", "failed"), (3, "resolved", "failed"),
+            (3, "requested", "failed"),
+        ])
+        self.assertTrue(page.diagnostics["configured_hint_fallthrough"])
+        self.assertTrue(page.diagnostics["bounded_traversal_fallthrough"])
 
 
 if __name__ == "__main__":

@@ -237,7 +237,8 @@ class BoundedTranscriptDiscovery:
         self.policy = policy
 
     def discover(
-        self, identity_terms: tuple[str, ...], source_hints: tuple[str, ...]
+        self, identity_terms: tuple[str, ...], source_hints: tuple[str, ...],
+        retained_anchors: tuple[dict[str, object], ...] = (),
     ) -> TranscriptDiscoveryResult:
         hint_urls = tuple(
             dict.fromkeys(
@@ -259,6 +260,9 @@ class BoundedTranscriptDiscovery:
         raw_hyperlinks = 0
         eligible_hyperlinks = 0
         traversed_hyperlinks = 0
+        anchor_attempts: list[dict[str, object]] = []
+        configured_hint_attempted = False
+        bounded_traversal_attempted = False
 
         def normalized_links(
             base_url: str, links: list[tuple[str, str]]
@@ -290,25 +294,46 @@ class BoundedTranscriptDiscovery:
                     normalized[target] = (target, label, is_candidate)
             return tuple(normalized.values())
 
-        def traverse(urls: tuple[str, ...]) -> None:
+        def traverse(
+            urls: tuple[str, ...], phase: str,
+            anchor_labels: dict[str, tuple[int, str]] | None = None,
+        ) -> None:
             nonlocal exhausted, exhausted_budget
             nonlocal raw_hyperlinks, eligible_hyperlinks, traversed_hyperlinks
+            nonlocal configured_hint_attempted, bounded_traversal_attempted
             queue = deque((url, 0) for url in urls)
             while queue:
                 url, depth = queue.popleft()
                 if url in visited:
+                    if anchor_labels and url in anchor_labels:
+                        position, form = anchor_labels[url]
+                        anchor_attempts.append(self._anchor_diagnostic(
+                            position, form, url, "skipped"
+                        ))
                     continue
+                configured_hint_attempted |= phase == "configured_hint"
+                bounded_traversal_attempted |= phase == "bounded_traversal"
                 if EarningsCallTranscriptAcquisition._looks_like_transcript(url, url):
                     candidates.append({"url": url, "label": url})
                 try:
                     response = self.transport.get(url)
                 except Exception as error:
+                    if anchor_labels and url in anchor_labels:
+                        position, form = anchor_labels[url]
+                        anchor_attempts.append(self._anchor_diagnostic(
+                            position, form, url, "failed"
+                        ))
                     if self.transport.exhausted:
                         exhausted = True
                         exhausted_budget = self.transport.exhausted_budget
                         break
                     failures.append(("page_fetch_failed", error.__class__.__name__))
                     continue
+                if anchor_labels and url in anchor_labels:
+                    position, form = anchor_labels[url]
+                    anchor_attempts.append(self._anchor_diagnostic(
+                        position, form, url, "succeeded"
+                    ))
                 visited.add(url)
                 if response.media_type not in {"text/html", "application/xhtml+xml"}:
                     if EarningsCallTranscriptAcquisition._looks_like_transcript(
@@ -354,9 +379,16 @@ class BoundedTranscriptDiscovery:
                     exhausted_budget = self.transport.exhausted_budget
                     break
 
-        # Configuration-owned URL hints consume the same bounded transport as search,
-        # but are traversed first. A usable hint avoids spending general search breadth.
-        traverse(hint_urls)
+        retained_urls: list[str] = []
+        anchor_labels: dict[str, tuple[int, str]] = {}
+        for position, anchor in enumerate(retained_anchors, 1):
+            for form in ("resolved", "requested"):
+                url = anchor.get(f"{form}_url")
+                if isinstance(url, str) and url and url not in retained_urls:
+                    retained_urls.append(url)
+                    anchor_labels[url] = (position, form)
+        traverse(tuple(retained_urls), "retained_anchor", anchor_labels)
+        traverse(hint_urls, "configured_hint")
         search_urls: list[str] = []
         for query in (() if exhausted or candidates else planned_queries):
             if queries_submitted >= self.policy.max_search_queries:
@@ -371,6 +403,7 @@ class BoundedTranscriptDiscovery:
                 break
             try:
                 self.transport.begin_request(search_endpoint)
+                bounded_traversal_attempted = True
                 queries_submitted += 1
                 response = self.search.search(query, self.policy.max_results_per_query)
                 self.transport.accept_response(response.received_bytes)
@@ -394,7 +427,7 @@ class BoundedTranscriptDiscovery:
             if exhausted:
                 break
         if not exhausted:
-            traverse(tuple(dict.fromkeys(search_urls)))
+            traverse(tuple(dict.fromkeys(search_urls)), "bounded_traversal")
         unique_candidates = tuple(
             dict((item["url"], item) for item in candidates).values()
         )
@@ -427,8 +460,24 @@ class BoundedTranscriptDiscovery:
                     "not_supplied" if not hint_urls else
                     "used" if any(url in visited for url in hint_urls) else "unusable"
                 ),
+                "anchor_attempts": anchor_attempts,
+                "configured_hint_fallthrough": configured_hint_attempted,
+                "bounded_traversal_fallthrough": bounded_traversal_attempted,
             },
         )
+
+    @staticmethod
+    def _anchor_diagnostic(
+        position: int, form: str, url: str, status: str
+    ) -> dict[str, object]:
+        parsed = urllib.parse.urlsplit(url)
+        safe_url = urllib.parse.urlunsplit(
+            (parsed.scheme.casefold(), (parsed.hostname or "").casefold(), parsed.path, "", "")
+        )
+        return {
+            "position": position, "form": form, "url": safe_url,
+            "query_present": bool(parsed.query), "status": status,
+        }
 
 
 class EarningsTranscriptPullAdapter:
@@ -489,16 +538,10 @@ class EarningsTranscriptPullAdapter:
                 history = self._repository.discovery_anchors(
                     firm_id, profile.source_id, self.adapter_id
                 )
-            retained_hints = tuple(dict.fromkeys(
-                url
-                for item in history
-                for url in (item.get("resolved_url"), item["requested_url"])
-                if isinstance(url, str) and url
-            ))
             if mode == "discovery":
                 discovered = BoundedTranscriptDiscovery(
                     self._search, budgeted, policy
-                ).discover(identity_terms, retained_hints + source_hints)
+                ).discover(identity_terms, source_hints, tuple(history))
             else:
                 url = configuration.get("url")
                 if not isinstance(url, str) or not url:
@@ -564,7 +607,6 @@ class EarningsTranscriptPullAdapter:
             "history_key": f"{profile.policy.get('firm_id')}:{profile.source_id}:{self.adapter_id}",
             "retained_anchor_count": len(history),
             "retained_anchor_order": [item["normalized_url"] for item in history],
-            "configured_hint_fallthrough": bool(history and source_hints),
             "pages": budgeted.pages,
             "distinct_hosts": len(budgeted.hosts),
             "bytes": budgeted.bytes,
