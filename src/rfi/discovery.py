@@ -22,11 +22,14 @@ from jsonschema import Draft202012Validator
 
 from rfi.acquisition.earnings_transcripts import (
     CandidateFailureCode,
+    CandidateDispositionCode,
     EarningsCallTranscriptAcquisition,
     EarningsTranscriptHttpResponse,
     EarningsTranscriptTransport,
+    ReportingPeriod,
     UrllibEarningsTranscriptTransport,
     normalize_transcript_url,
+    reporting_period_from_evidence,
     transcript_request_headers,
 )
 from rfi.acquisition.contracts import (
@@ -53,7 +56,7 @@ class DiscoveryPolicyError(RuntimeError):
 class DiscoveryPolicy:
     max_search_queries: int
     max_results_per_query: int
-    max_links_per_page: int
+    max_unique_eligible_links_per_page: int
     max_depth: int
     max_pages: int
     max_distinct_hosts: int
@@ -61,6 +64,11 @@ class DiscoveryPolicy:
     max_elapsed_seconds: int
     max_candidate_evaluations: int = 40
     max_redirects: int = 10
+
+    @property
+    def max_links_per_page(self) -> int:
+        """Read compatibility for callers migrating from the obsolete policy name."""
+        return self.max_unique_eligible_links_per_page
 
 
 DISCOVERY_BUDGET_FIELDS = frozenset(DiscoveryPolicy.__dataclass_fields__)
@@ -103,6 +111,18 @@ def load_discovery_policies(
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise DiscoveryPolicyError(f"discovery policy configuration is unreadable: {error}")
+    classes = value.get("classes") if isinstance(value, dict) else None
+    if isinstance(classes, dict):
+        for policy in classes.values():
+            if not isinstance(policy, dict):
+                continue
+            legacy = policy.pop("max_links_per_page", None)
+            if legacy is not None:
+                if "max_unique_eligible_links_per_page" in policy:
+                    raise DiscoveryPolicyError(
+                        "discovery policy contains both legacy and current per-page ceilings"
+                    )
+                policy["max_unique_eligible_links_per_page"] = legacy
     errors = sorted(Draft202012Validator(schema).iter_errors(value), key=str)
     if errors:
         raise DiscoveryPolicyError(
@@ -387,6 +407,8 @@ class BoundedTranscriptDiscovery:
     def discover(
         self, identity_terms: tuple[str, ...], source_hints: tuple[str, ...],
         retained_anchors: tuple[dict[str, object], ...] = (),
+        checkpoint_period: ReportingPeriod | None = None,
+        expected_period: ReportingPeriod | None = None,
     ) -> TranscriptDiscoveryResult:
         hint_urls = tuple(dict.fromkeys(
             hint for hint in source_hints if hint.startswith(("http://", "https://"))
@@ -435,7 +457,10 @@ class BoundedTranscriptDiscovery:
             terminology = int("transcript" in evidence) + int(any(
                 term in evidence for term in ("earnings", "quarter", "results", "conference call")
             ))
-            period = int(bool(re.search(r"\bq[1-4]\b|20\d{2}", evidence)))
+            reporting_period = reporting_period_from_evidence(label, target)
+            period_rank, period_reason = self._period_rank(
+                reporting_period, checkpoint_period, expected_period
+            )
             document = int(parsed.path.casefold().endswith((".html", ".htm", ".pdf")))
             if hint_relation:
                 reasons.append("configured_hint_relation")
@@ -443,14 +468,14 @@ class BoundedTranscriptDiscovery:
                 reasons.append("same_authoritative_host")
             if terminology:
                 reasons.append("transcript_earnings_terminology")
-            if period:
-                reasons.append("reporting_period")
+            if period_reason:
+                reasons.extend((period_reason, f"reporting_period_{reporting_period.code}"))
             if document:
                 reasons.append("document_like_path")
             reasons.append(f"depth_{depth}")
             return (
-                not is_candidate, not hint_relation, not same_host, -terminology,
-                -period, -document, depth, target, label,
+                not is_candidate, period_rank, not hint_relation, not same_host, -terminology,
+                -document, depth, target, label,
             ), reasons
 
         def classify_link(label: str, target: str) -> tuple[bool, bool]:
@@ -624,10 +649,12 @@ class BoundedTranscriptDiscovery:
                     links.append((rank, observed, target, label, is_candidate, reasons))
                 links.sort(key=lambda item: item[0])
                 state.eligible_hyperlinks += len(links)
-                if len(links) > self.policy.max_links_per_page:
+                if len(links) > self.policy.max_unique_eligible_links_per_page:
                     exhausted = True
-                    exhausted_budget = exhausted_budget or "max_links_per_page"
-                admitted = links[: self.policy.max_links_per_page]
+                    exhausted_budget = (
+                        exhausted_budget or "max_unique_eligible_links_per_page"
+                    )
+                admitted = links[: self.policy.max_unique_eligible_links_per_page]
                 state.traversed_hyperlinks += len(admitted)
                 for rank, observed, target, label, is_candidate, reasons in admitted:
                     if len(state.ranking_samples) < self.RANKING_SAMPLE_LIMIT:
@@ -747,6 +774,9 @@ class BoundedTranscriptDiscovery:
                 "normalized_unique_hyperlinks": state.normalized_unique_hyperlinks,
                 "eligible_hyperlinks": state.eligible_hyperlinks,
                 "traversed_hyperlinks": state.traversed_hyperlinks,
+                "unique_eligible_link_emergency_ceiling": (
+                    self.policy.max_unique_eligible_links_per_page
+                ),
                 "queue_admitted_count": state.queue_admitted,
                 "visited_count": len(state.visited),
                 "rejection_counts": dict(sorted(state.rejection_counts.items())),
@@ -802,6 +832,22 @@ class BoundedTranscriptDiscovery:
             "position": position, "form": form, "url": redact_diagnostic_url(url),
             "query_present": bool(urllib.parse.urlsplit(url).query), "status": status,
         }
+
+    @staticmethod
+    def _period_rank(
+        period: ReportingPeriod | None,
+        checkpoint: ReportingPeriod | None,
+        expected: ReportingPeriod | None,
+    ) -> tuple[tuple[int, int], str]:
+        if period is None:
+            return (4, 0), ""
+        if expected is not None and period == expected:
+            return (0, -period.ordinal), "reporting_period_expected"
+        if checkpoint is not None and period > checkpoint:
+            return (1, -period.ordinal), "reporting_period_newer_than_checkpoint"
+        if checkpoint is not None and period == checkpoint:
+            return (2, -period.ordinal), "reporting_period_checkpoint"
+        return (3, -period.ordinal), "reporting_period_historical"
 
 
 class EarningsTranscriptPullAdapter:
@@ -862,10 +908,17 @@ class EarningsTranscriptPullAdapter:
                 history = self._repository.discovery_anchors(
                     firm_id, profile.source_id, self.adapter_id
                 )
+            today = date.fromisoformat(self._clock()[:10])
+            checkpoint_period, expected_period, period_basis = (
+                self._reporting_period_context(profile, tuple(history), today)
+            )
             if mode == "discovery":
                 discovered = BoundedTranscriptDiscovery(
                     self._search, budgeted, policy
-                ).discover(identity_terms, source_hints, tuple(history))
+                ).discover(
+                    identity_terms, source_hints, tuple(history),
+                    checkpoint_period, expected_period,
+                )
             else:
                 url = configuration.get("url")
                 if not isinstance(url, str) or not url:
@@ -894,8 +947,15 @@ class EarningsTranscriptPullAdapter:
                     "retained_anchor_count": len(history),
                     "retained_anchor_order": [item["normalized_url"] for item in history],
                     "candidate_evaluated_count": 0,
+                    "candidate_disposition_counts": {},
+                    "candidate_disposition_samples": [],
                     "validation_failure_counts": {},
                     "candidate_retrieval_failure_counts": {},
+                    "checkpoint_reporting_period": (
+                        checkpoint_period.code if checkpoint_period else ""
+                    ),
+                    "expected_reporting_period": expected_period.code,
+                    "reporting_period_basis": period_basis,
                 }
                 classification, summary = self._classify_outcome(early, ())
                 early.update({"primary_classification": classification,
@@ -912,13 +972,15 @@ class EarningsTranscriptPullAdapter:
                     "discover_listing_links": False,
                     "authoritative_listing": False,
                     "firm_identity_terms": list(identity_terms),
+                    "checkpoint_reporting_period": (
+                        checkpoint_period.code if checkpoint_period else None
+                    ),
+                    "expected_reporting_period": expected_period.code,
                 },
                 profile.policy,
             )
-            today = date.fromisoformat(self._clock()[:10])
-            interval = EarningsCallTranscriptAcquisition(
-                governed, budgeted, self._clock
-            ).acquire(IntervalAcquisitionRequest(
+            retriever = EarningsCallTranscriptAcquisition(governed, budgeted, self._clock)
+            interval = retriever.acquire(IntervalAcquisitionRequest(
                 str(profile.policy["firm_id"]), "earnings_transcript",
                 date(2000, 1, 1), today + timedelta(days=1),
             ))
@@ -934,7 +996,8 @@ class EarningsTranscriptPullAdapter:
         for envelope in interval.artifacts:
             candidate = AdapterCandidate(
                 envelope.candidate.candidate_id, envelope.candidate.document_id,
-                len(candidates) + 1, f"published-{envelope.artifact_date.isoformat()}",
+                ReportingPeriod.from_date(envelope.artifact_date).ordinal,
+                f"published-{envelope.artifact_date.isoformat()}",
                 envelope.candidate.provenance,
             )
             self._retrievals[candidate.candidate_id] = envelope.retrieval
@@ -951,6 +1014,11 @@ class EarningsTranscriptPullAdapter:
             "bounds_exhausted": discovered.exhausted or budgeted.exhausted,
             "exhausted_budget": budgeted.exhausted_budget
             or str(discovered.diagnostics.get("exhausted_budget", "")),
+            "checkpoint_reporting_period": (
+                checkpoint_period.code if checkpoint_period else ""
+            ),
+            "expected_reporting_period": expected_period.code,
+            "reporting_period_basis": period_basis,
         })
         if budgeted.exhausted:
             coverage = "indeterminate"
@@ -985,10 +1053,27 @@ class EarningsTranscriptPullAdapter:
             final_diagnostics["bounds_exhausted"] = True
             final_diagnostics["exhausted_budget"] = "max_candidate_evaluations"
             coverage = "indeterminate"
+        disposition_counts = dict(sorted(Counter(
+            item.code for item in retriever.candidate_dispositions
+        ).items()))
+        disposition_samples = [
+            {
+                "disposition": item.code,
+                "url": redact_diagnostic_url(item.url),
+                **({"reporting_period": item.reporting_period}
+                   if item.reporting_period else {}),
+            }
+            for item in retriever.candidate_dispositions[
+                :BoundedTranscriptDiscovery.DIAGNOSTIC_SAMPLE_LIMIT
+            ]
+        ]
+        evaluated_count = len(retriever.candidate_dispositions)
+        if sum(disposition_counts.values()) != evaluated_count:
+            raise RuntimeError("candidate dispositions must account for every evaluation")
         final_diagnostics.update({
-            "candidate_evaluated_count": min(
-                len(discovered.candidate_proposals), policy.max_candidate_evaluations
-            ),
+            "candidate_evaluated_count": evaluated_count,
+            "candidate_disposition_counts": disposition_counts,
+            "candidate_disposition_samples": disposition_samples,
             "validation_failure_counts": validation_failure_counts,
             "candidate_retrieval_failure_counts": retrieval_failure_counts,
             "candidate_failure_samples": candidate_failure_samples,
@@ -1018,10 +1103,47 @@ class EarningsTranscriptPullAdapter:
             budget = str(diagnostics.get("exhausted_budget") or "")
             count = diagnostics.get("candidate_evaluated_count", 0)
             if budget == "max_candidate_evaluations":
+                dispositions = diagnostics.get("candidate_disposition_counts")
+                stale = retrieval = validation = 0
+                if isinstance(dispositions, dict):
+                    stale = sum(int(dispositions.get(code, 0)) for code in (
+                        CandidateDispositionCode.CURRENT_CHECKPOINT_PERIOD.value,
+                        CandidateDispositionCode.OLDER_THAN_CHECKPOINT.value,
+                        CandidateDispositionCode.HISTORICAL_PERIOD.value,
+                    ))
+                    retrieval = sum(int(dispositions.get(code, 0)) for code in (
+                        CandidateFailureCode.HTTP_NOT_FOUND.value,
+                        CandidateFailureCode.ACCESS_DENIED.value,
+                        CandidateFailureCode.FETCH_TIMEOUT.value,
+                        CandidateFailureCode.RETRIEVAL_FAILURE.value,
+                    ))
+                    validation = sum(int(dispositions.get(code, 0)) for code in (
+                        CandidateFailureCode.UNSUPPORTED_CONTENT_TYPE.value,
+                        CandidateFailureCode.EMPTY_CONTENT.value,
+                        CandidateFailureCode.JAVASCRIPT_REQUIRED.value,
+                        CandidateFailureCode.VALIDATION_MISMATCH.value,
+                        CandidateDispositionCode.WRONG_FIRM.value,
+                        CandidateDispositionCode.CANDIDATE_URL_INVALID.value,
+                    ))
+                details = []
+                if stale:
+                    details.append(f"{stale} historical or checkpoint-period")
+                if retrieval:
+                    details.append(f"{retrieval} retrieval failures")
+                if validation:
+                    details.append(f"{validation} validation failures")
                 return (
                     "discovery_budget_exhausted",
                     "Discovery exhausted the candidate-evaluation budget after evaluating "
-                    f"{count} ranked unique links.",
+                    f"{count} ranked unique links"
+                    + (f" ({', '.join(details)})." if details else "."),
+                )
+            if budget == "max_unique_eligible_links_per_page":
+                ceiling = diagnostics.get("unique_eligible_link_emergency_ceiling", 1000)
+                return (
+                    "discovery_emergency_ceiling_exhausted",
+                    f"Discovery reached the {ceiling} unique-eligible-link emergency ceiling "
+                    "on one page; current-period coverage remains indeterminate.",
                 )
             return (
                 "discovery_budget_exhausted",
@@ -1084,6 +1206,19 @@ class EarningsTranscriptPullAdapter:
                     ),
                 }
                 return code, messages[code]
+        dispositions = diagnostics.get("candidate_disposition_counts", {})
+        if isinstance(dispositions, dict) and dispositions:
+            stale = sum(int(dispositions.get(code, 0)) for code in (
+                CandidateDispositionCode.CURRENT_CHECKPOINT_PERIOD.value,
+                CandidateDispositionCode.OLDER_THAN_CHECKPOINT.value,
+                CandidateDispositionCode.HISTORICAL_PERIOD.value,
+            ))
+            if stale == sum(int(value) for value in dispositions.values()):
+                return (
+                    "historical_candidates_only",
+                    f"Discovery evaluated {stale} historical or checkpoint-period transcript "
+                    "candidates; current-period coverage remains indeterminate.",
+                )
         if diagnostics.get("raw_hyperlinks", 0) and not diagnostics.get(
             "eligible_hyperlinks", 0
         ):
@@ -1107,6 +1242,41 @@ class EarningsTranscriptPullAdapter:
             if failure.code == "candidate_invalid":
                 return CandidateFailureCode.VALIDATION_MISMATCH.value
             return CandidateFailureCode.RETRIEVAL_FAILURE.value
+
+    def _reporting_period_context(
+        self, profile: SourceProfile, retained_anchors: tuple[dict[str, object], ...],
+        today: date,
+    ) -> tuple[ReportingPeriod | None, ReportingPeriod, str]:
+        checkpoint: ReportingPeriod | None = None
+        if self._repository is not None:
+            current = self._repository.checkpoints()["sources"].get(profile.source_id)
+            attempt_id = current.get("attempt_id") if isinstance(current, dict) else None
+            if isinstance(attempt_id, str):
+                for record in self._repository.history():
+                    if record.get("attempt_id") != attempt_id:
+                        continue
+                    candidate = record.get("candidate")
+                    provenance = candidate.get("provenance") if isinstance(candidate, dict) else {}
+                    metadata = provenance.get("metadata") if isinstance(provenance, dict) else {}
+                    if isinstance(metadata, dict):
+                        checkpoint = reporting_period_from_evidence(*(
+                            value for value in (
+                                metadata.get("link_label"), metadata.get("requested_url"),
+                                metadata.get("resolved_url"),
+                            ) if isinstance(value, str)
+                        ))
+                    if checkpoint is not None:
+                        return checkpoint, checkpoint.next(), "acquisition_checkpoint"
+        for anchor in retained_anchors:
+            checkpoint = reporting_period_from_evidence(*(
+                value for value in (
+                    anchor.get("resolved_url"), anchor.get("requested_url")
+                ) if isinstance(value, str)
+            ))
+            if checkpoint is not None:
+                return checkpoint, checkpoint.next(), "retained_anchor"
+        expected = ReportingPeriod.from_date(today).previous()
+        return None, expected, "latest_completed_calendar_quarter"
 
     def retrieve(self, profile: SourceProfile, candidate: AdapterCandidate) -> RetrievalResult:
         self._validate_profile(profile)

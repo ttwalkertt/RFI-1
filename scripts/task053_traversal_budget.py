@@ -80,7 +80,7 @@ def live_proof() -> int:
                     transport.requests and transport.requests[0] == configured_hint
                 ),
                 "eligible_traversal_within_limit": (
-                    traversed <= selected_policy.max_links_per_page
+                    traversed <= selected_policy.max_unique_eligible_links_per_page
                 ),
                 "diagnostics": page.diagnostics,
             })

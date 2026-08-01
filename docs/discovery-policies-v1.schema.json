@@ -19,14 +19,16 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "max_search_queries", "max_results_per_query", "max_links_per_page",
+        "max_search_queries", "max_results_per_query", "max_unique_eligible_links_per_page",
         "max_depth", "max_pages", "max_distinct_hosts", "max_bytes",
         "max_elapsed_seconds", "max_candidate_evaluations", "max_redirects"
       ],
       "properties": {
         "max_search_queries": {"type": "integer", "minimum": 1, "maximum": 100},
         "max_results_per_query": {"type": "integer", "minimum": 1, "maximum": 100},
-        "max_links_per_page": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "max_unique_eligible_links_per_page": {
+          "type": "integer", "minimum": 1, "maximum": 1000
+        },
         "max_depth": {"type": "integer", "minimum": 0, "maximum": 10},
         "max_pages": {"type": "integer", "minimum": 1, "maximum": 1000},
         "max_distinct_hosts": {"type": "integer", "minimum": 1, "maximum": 100},

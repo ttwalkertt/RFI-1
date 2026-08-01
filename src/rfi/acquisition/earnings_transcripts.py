@@ -46,6 +46,8 @@ _DAY_MONTH_DATE = re.compile(
     r"\b(\d{1,2})[- ](January|February|March|April|May|June|July|August|September|"
     r"October|November|December)[- ](20\d{2})\b", re.I
 )
+_QUARTER_YEAR = re.compile(r"\bq([1-4])\D{0,12}(20\d{2})\b", re.I)
+_YEAR_QUARTER = re.compile(r"\b(20\d{2})\D{0,12}q([1-4])\b", re.I)
 
 TRANSCRIPT_ACCEPT = (
     "text/html, application/xhtml+xml, application/pdf;q=0.9, */*;q=0.1"
@@ -88,6 +90,96 @@ class CandidateFailure:
     code: CandidateFailureCode
     message: str
     http_status: int | None = None
+
+
+@dataclass(frozen=True, order=True)
+class ReportingPeriod:
+    """Recognizable calendar reporting quarter used only for deterministic ordering."""
+
+    year: int
+    quarter: int
+
+    def __post_init__(self) -> None:
+        if self.year < 2000 or self.year > 2100 or self.quarter not in {1, 2, 3, 4}:
+            raise ValueError("reporting period is outside the supported range")
+
+    @property
+    def ordinal(self) -> int:
+        return self.year * 4 + self.quarter
+
+    @property
+    def code(self) -> str:
+        return f"{self.year}-Q{self.quarter}"
+
+    def next(self) -> ReportingPeriod:
+        return (
+            ReportingPeriod(self.year + 1, 1)
+            if self.quarter == 4 else ReportingPeriod(self.year, self.quarter + 1)
+        )
+
+    def previous(self) -> ReportingPeriod:
+        return (
+            ReportingPeriod(self.year - 1, 4)
+            if self.quarter == 1 else ReportingPeriod(self.year, self.quarter - 1)
+        )
+
+    @classmethod
+    def from_date(cls, value: date) -> ReportingPeriod:
+        return cls(value.year, ((value.month - 1) // 3) + 1)
+
+    @classmethod
+    def parse(cls, value: str) -> ReportingPeriod:
+        match = re.fullmatch(r"(20\d{2})-Q([1-4])", value, re.I)
+        if match is None:
+            raise ValueError("reporting period must use YYYY-QN")
+        return cls(int(match.group(1)), int(match.group(2)))
+
+
+def reporting_period_from_evidence(*values: str | bytes) -> ReportingPeriod | None:
+    """Extract an explicit quarter/year or calendar date without validating a candidate."""
+    for value in values:
+        text = value.decode("utf-8", "replace") if isinstance(value, bytes) else value
+        match = _QUARTER_YEAR.search(text)
+        if match:
+            return ReportingPeriod(int(match.group(2)), int(match.group(1)))
+        match = _YEAR_QUARTER.search(text)
+        if match:
+            return ReportingPeriod(int(match.group(1)), int(match.group(2)))
+        for pattern, date_format in (
+            (_ISO_DATE, None), (_MONTH_DATE, "%B %d %Y"),
+            (_DAY_MONTH_DATE, "%d %B %Y"),
+        ):
+            match = pattern.search(text)
+            if match is None:
+                continue
+            try:
+                parsed = (
+                    date(*(int(part) for part in match.groups()))
+                    if date_format is None
+                    else datetime.strptime(" ".join(match.groups()), date_format).date()
+                )
+            except ValueError:
+                continue
+            return ReportingPeriod.from_date(parsed)
+    return None
+
+
+class CandidateDispositionCode(str, Enum):
+    VALID_NEW_ARTIFACT = "valid_new_artifact"
+    CURRENT_CHECKPOINT_PERIOD = "current_checkpoint_period"
+    OLDER_THAN_CHECKPOINT = "older_than_checkpoint"
+    HISTORICAL_PERIOD = "historical_period"
+    DUPLICATE_CANDIDATE = "duplicate_candidate"
+    WRONG_REPORTING_PERIOD = "wrong_reporting_period"
+    WRONG_FIRM = "wrong_firm"
+    CANDIDATE_URL_INVALID = "candidate_url_invalid"
+
+
+@dataclass(frozen=True)
+class CandidateDisposition:
+    code: str
+    url: str
+    reporting_period: str | None = None
 
 
 def normalize_transcript_url(url: str) -> str:
@@ -172,6 +264,7 @@ class EarningsCallTranscriptAcquisition:
         self.source = source
         self.transport = transport or UrllibEarningsTranscriptTransport()
         self.clock = clock
+        self.candidate_dispositions: tuple[CandidateDisposition, ...] = ()
 
     def acquire(self, request: IntervalAcquisitionRequest) -> IntervalAcquisitionResult:
         """Return validated successes and conservative coverage for one interval."""
@@ -210,6 +303,11 @@ class EarningsCallTranscriptAcquisition:
                 proposals.append(_Proposal(item["url"], label, "invocation-candidate-proposal"))
 
         artifacts: list[IntervalArtifactEnvelope] = []
+        historical_artifacts: list[IntervalArtifactEnvelope] = []
+        dispositions: list[CandidateDisposition] = []
+        checkpoint_period = self._configured_reporting_period("checkpoint_reporting_period")
+        expected_period = self._configured_reporting_period("expected_reporting_period")
+        expected_period_evaluated = False
         seen: set[str] = set()
         for proposal in proposals[: self._positive_int("maximum_candidates", 40, 1, 100)]:
             try:
@@ -226,10 +324,20 @@ class EarningsCallTranscriptAcquisition:
                         candidate_failure,
                     )
                 )
+                dispositions.append(CandidateDisposition(
+                    CandidateDispositionCode.CANDIDATE_URL_INVALID.value, proposal.url
+                ))
                 continue
             if normalized in seen:
+                dispositions.append(CandidateDisposition(
+                    CandidateDispositionCode.DUPLICATE_CANDIDATE.value, normalized
+                ))
                 continue
             seen.add(normalized)
+            proposal_period = reporting_period_from_evidence(proposal.label, normalized)
+            expected_period_evaluated = expected_period_evaluated or (
+                proposal_period == expected_period
+            )
             source_artifact_id = self._identifier("candidate", normalized)
             try:
                 response = self._fetch(normalized, allowed_hosts)
@@ -241,13 +349,24 @@ class EarningsCallTranscriptAcquisition:
                         candidate_failure,
                     )
                 )
+                dispositions.append(CandidateDisposition(
+                    candidate_failure.code.value, normalized,
+                    proposal_period.code if proposal_period else None,
+                ))
                 continue
             try:
                 artifact_date = self._artifact_date(proposal.label, response.url, response.content)
                 if artifact_date is None:
                     raise ValueError("candidate publication/event date could not be established")
                 if not request.contains(artifact_date):
+                    dispositions.append(CandidateDisposition(
+                        CandidateDispositionCode.WRONG_REPORTING_PERIOD.value, normalized
+                    ))
                     continue
+                period = ReportingPeriod.from_date(artifact_date)
+                expected_period_evaluated = (
+                    expected_period_evaluated or period == expected_period
+                )
                 validation_failure = self._transcript_validation_failure(
                     response, proposal.label
                 )
@@ -257,9 +376,52 @@ class EarningsCallTranscriptAcquisition:
                         ValueError(validation_failure.message), False,
                         source_artifact_id, validation_failure,
                     ))
+                    dispositions.append(CandidateDisposition(
+                        validation_failure.code.value, normalized,
+                        period.code,
+                    ))
                     continue
-                self._validate_firm_identity(response, proposal.label)
-                artifacts.append(self._envelope(proposal, response, artifact_date))
+                try:
+                    self._validate_firm_identity(response, proposal.label)
+                except ValueError as error:
+                    candidate_failure = CandidateFailure(
+                        CandidateFailureCode.VALIDATION_MISMATCH, str(error)
+                    )
+                    failures.append(self._failure(
+                        "candidate_invalid", normalized, error, False,
+                        source_artifact_id, candidate_failure,
+                    ))
+                    dispositions.append(CandidateDisposition(
+                        CandidateDispositionCode.WRONG_FIRM.value, normalized,
+                        period.code,
+                    ))
+                    continue
+                if checkpoint_period is not None and period <= checkpoint_period:
+                    disposition = (
+                        CandidateDispositionCode.CURRENT_CHECKPOINT_PERIOD
+                        if period == checkpoint_period
+                        else CandidateDispositionCode.OLDER_THAN_CHECKPOINT
+                    )
+                    dispositions.append(CandidateDisposition(
+                        disposition.value, normalized, period.code
+                    ))
+                    continue
+                if checkpoint_period is None and expected_period is not None and (
+                    period < expected_period
+                ):
+                    dispositions.append(CandidateDisposition(
+                        CandidateDispositionCode.HISTORICAL_PERIOD.value,
+                        normalized, period.code,
+                    ))
+                    historical_artifacts.append(
+                        self._envelope(proposal, response, artifact_date)
+                    )
+                else:
+                    artifacts.append(self._envelope(proposal, response, artifact_date))
+                    dispositions.append(CandidateDisposition(
+                        CandidateDispositionCode.VALID_NEW_ARTIFACT.value,
+                        normalized, period.code,
+                    ))
             except Exception as error:
                 candidate_failure = CandidateFailure(
                     CandidateFailureCode.VALIDATION_MISMATCH,
@@ -271,6 +433,12 @@ class EarningsCallTranscriptAcquisition:
                         candidate_failure,
                     )
                 )
+                dispositions.append(CandidateDisposition(
+                    CandidateFailureCode.VALIDATION_MISMATCH.value, normalized
+                ))
+
+        if not expected_period_evaluated:
+            artifacts.extend(historical_artifacts)
 
         if len(proposals) > self._positive_int("maximum_candidates", 40, 1, 100):
             failures.append(IntervalAcquisitionFailure(
@@ -283,6 +451,7 @@ class EarningsCallTranscriptAcquisition:
             coverage = IntervalCoverage.COMPLETE
         else:
             coverage = IntervalCoverage.INDETERMINATE
+        self.candidate_dispositions = tuple(dispositions)
         return IntervalAcquisitionResult(tuple(artifacts), tuple(failures), coverage)
 
     def _envelope(
@@ -466,6 +635,17 @@ class EarningsCallTranscriptAcquisition:
         ):
             raise ContractError(f"earnings transcript {name} is outside its bound")
         return value
+
+    def _configured_reporting_period(self, name: str) -> ReportingPeriod | None:
+        value = self.source.configuration.get(name)
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ContractError(f"earnings transcript {name} must be a string")
+        try:
+            return ReportingPeriod.parse(value)
+        except ValueError as error:
+            raise ContractError(f"earnings transcript {name} is invalid") from error
 
     @staticmethod
     def _normalize_url(url: str) -> str:

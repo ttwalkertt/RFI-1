@@ -71,6 +71,42 @@ cycle/duplicate rules, all governed limits, operator messages, and retriever val
 identical. The regenerated eight-case reproduction JSON is byte-for-byte equal to the prior
 evidence, and TASK-056 retained-anchor compatibility remains green.
 
+## Amazon Live-Run Repair
+
+An Amazon production-style run exposed two remaining behavioral defects after the original graph
+repair: the extended policy's 30-link per-page limit still acted as an ordinary cutoff, and all
+recognizable reporting periods shared one Boolean rank. Historical candidates therefore fell to
+lexical URL ordering, consumed the 40-candidate evaluation budget, and could prevent the current
+quarter from establishing coverage.
+
+The governed field is now `max_unique_eligible_links_per_page`, with a value of 1000 in every
+policy class. It is applied only after URL extraction, normalization, duplicate/cycle rejection,
+eligibility, and deterministic ranking. It counts unique eligible admissions from one page and is
+reported as an emergency ceiling, distinct from `max_candidate_evaluations`. The loader accepts
+the old field name as an explicit migration input, while current configuration, schema,
+diagnostics, and operator messages use only the corrected name.
+
+Transcript-specific `ReportingPeriod` ordering now recognizes explicit quarter/year and calendar
+date evidence. Within each discovery stage, exact expected period ranks first, then periods newer
+than the acquisition checkpoint newest-first, the checkpoint period, older periods newest-first,
+and unknown periods. Normalized lexical URL remains the final tie-breaker. The expected period is
+the quarter after a recognizable durable acquisition checkpoint or retained successful anchor;
+without one, ranking uses the latest completed calendar quarter. Candidate positions use stable
+period ordinals so a new quarter advances beyond legacy list-position checkpoints.
+
+The graph still proposes URLs only. The retriever remains the sole owner of date, firm, media,
+document, and transcript validation. Once the expected period is evaluated, historical artifacts
+remain represented in dispositions but are not admitted to the engine ahead of that period. A
+valid expected artifact is admitted; an expected-period retrieval or validation failure remains an
+actual failure rather than being masked by historical success. Historical-only runs retain
+compatibility and are explicitly summarized as historical/current-coverage-indeterminate rather
+than universal retrieval failure.
+
+Every retriever evaluation now produces exactly one typed disposition. Counts and bounded samples
+cover valid current artifacts, checkpoint and historical periods, duplicates, reporting-period
+exclusions, firm mismatch, stable retrieval failures, and stable validation failures. A runtime
+invariant and focused tests prove the disposition sum equals `candidate_evaluated_count`.
+
 ## URL Identity, Cycle Control, and Determinism
 
 The retained-anchor normalizer was extracted into one shared acquisition URL-identity module and
@@ -84,16 +120,18 @@ same reordered HTML yields byte-equivalent proposal ordering and ranking diagnos
 fixture proves globally stronger candidates discovered under a later parent precede weaker
 candidates from an earlier parent.
 
-Ranking uses inspectable Boolean/ordinal signals only: stage relationship, configured-hint
-relationship, same authoritative host, transcript/earnings terms, period evidence, document-like
+Ranking uses inspectable ordinal signals only: stage relationship, ordered reporting period,
+configured-hint relationship, same authoritative host, transcript/earnings terms, document-like
 path, depth, normalized URL, and label. There are no learned, adaptive, probabilistic, or hidden
-weights. TASK-056 retained-anchor history is the only adaptive input.
+weights. TASK-056 retained-anchor history and the durable acquisition checkpoint are the only
+repository-state inputs.
 
 ## Budgets and Accounting
 
-Existing page, byte, host, depth, link-admission, query, search-result, and elapsed limits remain.
+Existing page, byte, host, depth, query, search-result, and elapsed limits remain.
 The existing retriever maximum of 40 candidate evaluations and urllib redirect maximum of 10 are
-now explicit named policy fields for every discovery class. Their numeric behavior did not expand.
+explicit named policy fields for every discovery class. The per-page unique-eligible-link control
+is now a 1000-link pathological-page safety ceiling rather than normal useful-work throttling.
 
 Diagnostics name `max_candidate_evaluations`, `max_redirects`, or another actual policy field only
 when that limit is reached. A fixture with two ranked proposals and an evaluation limit of one
@@ -124,7 +162,7 @@ Pull Sources now presents messages such as:
 ## Reproduction Evidence
 
 `make task057-proof` deterministically writes
-`.artifacts/task057-validation/reproduction.json`. Its eight cases are:
+`.artifacts/task057-validation/reproduction.json`. Its nine cases are:
 
 1. 50 raw links, 50 normalized unique links, zero eligible links, and `no_eligible_links`;
 2. configured hint timeout and `hint_fetch_timeout`;
@@ -134,6 +172,9 @@ Pull Sources now presents messages such as:
 6. a relevant transcript after 25 generic transcript-navigation links, ranked first;
 7. genuine `max_candidate_evaluations` exhaustion after one evaluation;
 8. indeterminate coverage with no exhausted budget.
+9. an Amazon-style page with 75 historical numeric-path transcripts and a lexically later Q2 2026
+   candidate; Q2 2026 is evaluated first, all 40 evaluations have dispositions, and the per-page
+   emergency ceiling is not reached.
 
 Each record contains its operator summary and bounded structured diagnostics.
 
@@ -152,10 +193,10 @@ behavior or durable state.
 
 ## Verification Results
 
-- `make task057-test`: PASS, 84 focused and compatibility tests.
-- `make task057-proof`: PASS, eight deterministic reproduction cases.
+- `make task057-test`: PASS, 90 focused and compatibility tests.
+- `make task057-proof`: PASS, nine deterministic reproduction cases.
 - `git diff --check`: PASS.
-- `make validate`: PASS. All 533 unit tests passed, followed by every repository demonstration,
+- `make validate`: PASS. All 539 unit tests passed, followed by every repository demonstration,
   offline provider proof, lint, format, type, import, documentation, design-baseline, and build gate.
 
 ## Changed-File Inventory
@@ -175,6 +216,8 @@ behavior or durable state.
 
 The corrective repair itself changes `src/rfi/acquisition/earnings_transcripts.py`,
 `src/rfi/discovery.py`, `tests/test_task057.py`, `scripts/task057_reproduction.py`, and this report.
+The Amazon live-run repair additionally changes the governed discovery policy/schema,
+`src/rfi/pull/workflow.py`, TASK-015/048A/053 compatibility tests, and the TASK-053 proof script.
 
 ## Limitations
 
@@ -185,6 +228,8 @@ The corrective repair itself changes `src/rfi/acquisition/earnings_transcripts.p
 - Coverage remains indeterminate unless existing authoritative-listing semantics establish
   completeness.
 - Press-release discovery is not implemented by this task.
+- Calendar-quarter fallback is an ordering expectation when no recognizable durable checkpoint or
+  retained anchor exists; the retriever still validates the artifact's actual date and identity.
 
 ## Architectural Status Summary
 

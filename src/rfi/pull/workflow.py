@@ -255,7 +255,7 @@ class PullWorkflow:
             )
         attempts = []
         terminal = ArtifactOutcome.RETRIEVAL_FAILURE
-        terminal_diagnostic = "Every runnable retrieval candidate failed."
+        terminal_diagnostic = "No runnable retrieval candidate established an artifact outcome."
         for candidate in artifact.runnable_candidates:
             attempt, outcome = self._execute_candidate(run_id, firm, artifact, candidate)
             attempts.append(attempt)
@@ -268,6 +268,7 @@ class PullWorkflow:
                 terminal = outcome
                 terminal_diagnostic = attempt.diagnostic
                 break
+            terminal_diagnostic = attempt.diagnostic
         return ArtifactPullResult(
             firm.firm.firm_id,
             artifact.artifact_id,

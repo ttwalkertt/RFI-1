@@ -58,7 +58,7 @@ class Search:
 
 
 def policy(**changes: int) -> DiscoveryPolicy:
-    return replace(DiscoveryPolicy(4, 10, 20, 2, 30, 8, 20_971_520, 60), **changes)
+    return replace(DiscoveryPolicy(4, 10, 1000, 2, 30, 8, 20_971_520, 60), **changes)
 
 
 def profile(*, hints: list[str], discovery_class: str = "standard") -> SourceProfile:
@@ -139,13 +139,27 @@ class TranscriptPullIntegrationTests(unittest.TestCase):
         self.assertEqual(tuple(catalog.classes), ("extended", "shallow", "standard"))
         self.assertEqual(
             catalog.resolve("shallow"),
-            DiscoveryPolicy(2, 5, 10, 1, 10, 3, 5_242_880, 20),
+            DiscoveryPolicy(2, 5, 1000, 1, 10, 3, 5_242_880, 20),
         )
         self.assertEqual(catalog.resolve("standard"), policy())
         self.assertEqual(
             catalog.resolve("extended"),
-            DiscoveryPolicy(8, 15, 30, 3, 75, 15, 52_428_800, 180),
+            DiscoveryPolicy(8, 15, 1000, 3, 75, 15, 52_428_800, 180),
         )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            legacy = json.loads(Path("config/discovery-policies.json").read_text())
+            value = legacy["classes"]["standard"].pop(
+                "max_unique_eligible_links_per_page"
+            )
+            legacy["classes"]["standard"]["max_links_per_page"] = value
+            target = root / "legacy.json"
+            target.write_text(json.dumps(legacy))
+            self.assertEqual(
+                load_discovery_policies(target).resolve("standard")
+                .max_unique_eligible_links_per_page,
+                1000,
+            )
         with self.assertRaisesRegex(DiscoveryPolicyError, "unknown discovery_class"):
             catalog.resolve("unbounded")
 
@@ -247,10 +261,13 @@ class TranscriptPullIntegrationTests(unittest.TestCase):
             TranscriptTransport({
                 seed: EarningsTranscriptHttpResponse(seed, 200, "text/html", body)
             }),
-            policy(max_links_per_page=1, max_bytes=len(body) + 1))
+            policy(max_unique_eligible_links_per_page=1, max_bytes=len(body) + 1))
         result = BoundedTranscriptDiscovery(Search(()), budget, budget.policy).discover((), (seed,))
         self.assertTrue(result.exhausted)
-        self.assertEqual(result.diagnostics["exhausted_budget"], "max_links_per_page")
+        self.assertEqual(
+            result.diagnostics["exhausted_budget"],
+            "max_unique_eligible_links_per_page",
+        )
         self.assertEqual(result.diagnostics["pages"], 1)
         self.assertEqual(result.diagnostics["bytes"], len(body))
         self.assertEqual(result.diagnostics["distinct_hosts"], 1)

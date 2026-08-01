@@ -38,7 +38,7 @@ class Transport:
 
 
 def policy(**changes: int) -> DiscoveryPolicy:
-    return replace(DiscoveryPolicy(2, 8, 20, 3, 30, 8, 2_000_000, 60, 40, 10), **changes)
+    return replace(DiscoveryPolicy(2, 8, 1000, 3, 30, 8, 2_000_000, 60, 40, 10), **changes)
 
 
 def html(url: str, body: str, status: int = 200) -> EarningsTranscriptHttpResponse:
@@ -70,6 +70,8 @@ def run(
         "validation_failure_counts", "bounds_exhausted", "exhausted_budget",
         "anchor_to_hint_fallthrough", "hint_to_traversal_fallthrough",
         "representative_rejections", "top_ranked_candidates",
+        "expected_reporting_period", "reporting_period_basis",
+        "candidate_disposition_counts", "candidate_disposition_samples",
     )
     return {key: page.diagnostics.get(key) for key in keys}
 
@@ -81,6 +83,30 @@ def reproduction_cases() -> dict[str, dict[str, object]]:
     generic = "".join(
         f"<a href='/transcripts/archive-{index}'>Transcript archive</a>" for index in range(25)
     )
+    amazon_responses: dict[str, EarningsTranscriptHttpResponse | Exception] = {}
+    amazon_links = []
+    for index in range(75):
+        year = 2007 + index // 4
+        quarter = index % 4 + 1
+        month = quarter * 3
+        url = f"https://ir.example.com/{index:06d}/earnings-call-transcript.html"
+        label = f"Q{quarter} {year} earnings call transcript {year}-{month:02d}-01"
+        amazon_links.append(f"<a href='{url}'>{label}</a>")
+        amazon_responses[url] = html(
+            url,
+            f"Firm A quarterly earnings call transcript {year}-{month:02d}-01. "
+            "Operator. Chief Executive Officer. Prepared remarks.",
+        )
+    current = "https://ir.example.com/999999/earnings-call-transcript.html"
+    amazon_links.append(
+        f"<a href='{current}'>Q2 2026 earnings call transcript 2026-04-30</a>"
+    )
+    amazon_responses[current] = html(
+        current,
+        "Firm A quarterly earnings call transcript 2026-04-30. Operator. "
+        "Chief Executive Officer. Prepared remarks.",
+    )
+    amazon_responses[HINT] = html(HINT, "".join(amazon_links))
     return {
         "many_raw_zero_eligible": run({
             HINT: html(HINT, "".join(f"<a href='/legal/{i}'>Legal</a>" for i in range(50)))
@@ -109,7 +135,7 @@ def reproduction_cases() -> dict[str, dict[str, object]]:
                 candidate, "Firm A quarterly earnings call transcript April 30, 2026. "
                 "Operator. Chief Executive Officer. Prepared remarks.",
             ),
-        }, policy(max_links_per_page=1)),
+        }, policy(max_unique_eligible_links_per_page=1000)),
         "named_budget_exhausted": run({
             HINT: html(HINT, f"<a href='{candidate}'>Q1 earnings call transcript</a>"
                                   f"<a href='{second}'>Q2 earnings call transcript</a>"),
@@ -119,6 +145,9 @@ def reproduction_cases() -> dict[str, dict[str, object]]:
             ),
         }, policy(max_candidate_evaluations=1)),
         "indeterminate_without_exhaustion": run({HINT: html(HINT, "")}),
+        "amazon_historical_links_current_period_late_numeric_id": run(
+            amazon_responses, policy(max_pages=75)
+        ),
     }
 
 

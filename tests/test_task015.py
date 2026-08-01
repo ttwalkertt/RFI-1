@@ -319,7 +319,7 @@ class PullWorkflowCase(unittest.TestCase):
             self.acquisition,
             retrieval_registry(EmptyDiscoveryAdapter({
                 "bounds_exhausted": True,
-                "exhausted_budget": "max_links_per_page",
+                "exhausted_budget": "max_unique_eligible_links_per_page",
                 "coverage": "indeterminate",
             })),
             PullRunRepository(self.root / "bounded-pull-workflows"),

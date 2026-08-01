@@ -136,7 +136,10 @@ class TraversalBudgetSemanticsTests(unittest.TestCase):
         result, _ = self.discover(f"<html>{irrelevant}{links}</html>".encode())
 
         self.assertTrue(result.exhausted)
-        self.assertEqual(result.diagnostics["exhausted_budget"], "max_links_per_page")
+        self.assertEqual(
+            result.diagnostics["exhausted_budget"],
+            "max_unique_eligible_links_per_page",
+        )
         self.assertEqual(result.diagnostics["raw_hyperlinks"], 7)
         self.assertEqual(result.diagnostics["eligible_hyperlinks"], 3)
         self.assertEqual(result.diagnostics["traversed_hyperlinks"], 2)
@@ -148,12 +151,17 @@ class TraversalBudgetSemanticsTests(unittest.TestCase):
             "<html><a href='/aaa-transcripts/'>Transcript archive</a>"
             f"<a href='{candidate}'>Amazon earnings call transcript</a></html>"
         ).encode()
-        result, transport = self.discover(body, selected=policy(max_links_per_page=1))
+        result, transport = self.discover(
+            body, selected=policy(max_unique_eligible_links_per_page=1)
+        )
 
         self.assertEqual([item["url"] for item in result.candidate_proposals], [candidate])
         self.assertEqual(transport.requests, [HINT])
         self.assertEqual(result.diagnostics["traversed_hyperlinks"], 1)
-        self.assertEqual(result.diagnostics["exhausted_budget"], "max_links_per_page")
+        self.assertEqual(
+            result.diagnostics["exhausted_budget"],
+            "max_unique_eligible_links_per_page",
+        )
 
     def test_plural_transcript_path_uses_existing_candidate_evidence(self) -> None:
         candidate = "https://directory.example/transcripts/123-q1-2026/"
@@ -265,15 +273,15 @@ class TraversalBudgetSemanticsTests(unittest.TestCase):
              f"<a href='{second}'>Q2 earnings call transcript</a></html>").encode(),
         )
         transcript = response(
-            first,
+            second,
             b"<!doctype html><html>Amazon.com, Inc. quarterly earnings call transcript "
-            b"April 30, 2026. Operator: Welcome. Chief Executive Officer: Remarks.</html>",
+            b"June 30, 2026. Operator: Welcome. Chief Executive Officer: Remarks.</html>",
         )
         adapter = EarningsTranscriptPullAdapter(
             DiscoveryPolicyCatalog(
-                {"standard": policy(max_links_per_page=1)}, "standard"
+                {"standard": policy(max_unique_eligible_links_per_page=1)}, "standard"
             ),
-            RecordingSearch(), RecordingTransport({HINT: listing, first: transcript}),
+            RecordingSearch(), RecordingTransport({HINT: listing, second: transcript}),
             lambda: "2026-07-30T12:00:00+00:00",
         )
 
@@ -281,7 +289,10 @@ class TraversalBudgetSemanticsTests(unittest.TestCase):
 
         self.assertEqual(page.diagnostics["coverage"], "indeterminate")
         self.assertTrue(page.diagnostics["bounds_exhausted"])
-        self.assertEqual(page.diagnostics["exhausted_budget"], "max_links_per_page")
+        self.assertEqual(
+            page.diagnostics["exhausted_budget"],
+            "max_unique_eligible_links_per_page",
+        )
         self.assertEqual(page.diagnostics["traversed_hyperlinks"], 1)
         self.assertEqual(len(page.candidates), 1)
 

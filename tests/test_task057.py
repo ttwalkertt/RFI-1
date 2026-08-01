@@ -10,7 +10,7 @@ from rfi.acquisition import (
     EarningsTranscriptHttpResponse, IntervalAcquisitionFailure, SourceProfile,
 )
 from rfi.acquisition.earnings_transcripts import (
-    CandidateFailureCode, normalize_transcript_url,
+    CandidateFailureCode, ReportingPeriod, normalize_transcript_url,
 )
 from rfi.discovery import (
     BoundedTranscriptDiscovery,
@@ -27,7 +27,7 @@ from scripts.task057_reproduction import reproduction_cases
 
 def policy(**changes: int) -> DiscoveryPolicy:
     return replace(
-        DiscoveryPolicy(2, 8, 20, 3, 30, 8, 2_000_000, 60, 40, 10), **changes
+        DiscoveryPolicy(2, 8, 1000, 3, 30, 8, 2_000_000, 60, 40, 10), **changes
     )
 
 
@@ -66,10 +66,14 @@ class Transport:
 def discover(
     hint: str, responses: dict[str, EarningsTranscriptHttpResponse | Exception],
     selected: DiscoveryPolicy | None = None,
+    checkpoint: ReportingPeriod | None = None,
+    expected: ReportingPeriod | None = None,
 ):
     transport = Transport(responses)
     bounded = BudgetedTranscriptTransport(transport, selected or policy())
-    result = BoundedTranscriptDiscovery(Search(), bounded, bounded.policy).discover((), (hint,))
+    result = BoundedTranscriptDiscovery(Search(), bounded, bounded.policy).discover(
+        (), (hint,), (), checkpoint, expected
+    )
     return result, transport
 
 
@@ -120,6 +124,88 @@ class UrlIdentityTests(unittest.TestCase):
 
 
 class GraphCycleAndRankingTests(unittest.TestCase):
+    def test_emergency_ceiling_counts_only_unique_eligible_links(self) -> None:
+        root = "https://ir.example.com/transcripts/"
+        candidates = [
+            f"https://ir.example.com/{2000 + index // 4}-q{index % 4 + 1}-"
+            "earnings-call-transcript.html"
+            for index in range(76)
+        ]
+        body = "".join(
+            f"<a href='{url}'>Q{index % 4 + 1} {2000 + index // 4} earnings call transcript</a>"
+            for index, url in enumerate(candidates)
+        )
+        result, _ = discover(root, {root: html(root, body)})
+        self.assertFalse(result.exhausted)
+        self.assertEqual(len(result.candidate_proposals), 76)
+
+        duplicate_body = (
+            "<a href='#self'>Transcript archive</a>"
+            f"<a href='{candidates[0]}'>Q1 2000 earnings call transcript</a>"
+            f"<a href='{candidates[0]}#again'>Q1 2000 earnings call transcript</a>"
+            f"<a href='{candidates[1]}'>Q2 2000 earnings call transcript</a>"
+        )
+        duplicates, _ = discover(
+            root, {root: html(root, duplicate_body)},
+            policy(max_unique_eligible_links_per_page=2),
+        )
+        self.assertFalse(duplicates.exhausted)
+        self.assertEqual(len(duplicates.candidate_proposals), 2)
+        self.assertEqual(duplicates.diagnostics["cycle_counts"], {
+            "duplicate_edge": 1, "self_reference": 1,
+        })
+
+    def test_pathological_page_triggers_renamed_emergency_ceiling(self) -> None:
+        root = "https://ir.example.com/transcripts/"
+        body = "".join(
+            f"<a href='/calls/{index}-q1-2025-earnings-call-transcript.html'>"
+            f"Q1 2025 earnings call transcript {index}</a>"
+            for index in range(1001)
+        )
+        result, _ = discover(root, {root: html(root, body)})
+        self.assertTrue(result.exhausted)
+        self.assertEqual(len(result.candidate_proposals), 1000)
+        self.assertEqual(
+            result.diagnostics["exhausted_budget"],
+            "max_unique_eligible_links_per_page",
+        )
+
+    def test_checkpoint_aware_period_ranking_is_total_and_input_stable(self) -> None:
+        root = "https://ir.example.com/transcripts/"
+        def link(path: str, label: str) -> tuple[str, str]:
+            return f"https://ir.example.com/{path}-earnings-call-transcript", label
+
+        links = (
+            link("90-unknown", "Earnings call transcript"),
+            link("80-q1-2025", "Q1 2025 earnings call transcript"),
+            link("70-q2-2025", "Q2 2025 earnings call transcript"),
+            link("60-q3-2025", "Q3 2025 earnings call transcript"),
+            link("50-q4-2025", "Q4 2025 earnings call transcript"),
+            link("40-q4-2024", "Q4 2024 earnings call transcript"),
+            link("30-q3-2024", "Q3 2024 earnings call transcript"),
+            link("a-q1-2024", "Q1 2024 earnings call transcript"),
+            link("b-q1-2024", "Q1 2024 earnings call transcript"),
+        )
+        render = lambda values: "".join(
+            f"<a href='{url}'>{label}</a>" for url, label in values
+        )
+        context = (ReportingPeriod(2025, 2), ReportingPeriod(2025, 3))
+        first, _ = discover(
+            root, {root: html(root, render(links))},
+            checkpoint=context[0], expected=context[1],
+        )
+        second, _ = discover(
+            root, {root: html(root, render(reversed(links)))},
+            checkpoint=context[0], expected=context[1],
+        )
+        ordered = [item["url"] for item in first.candidate_proposals]
+        self.assertEqual(first.candidate_proposals, second.candidate_proposals)
+        self.assertEqual(ordered[:7], [
+            links[3][0], links[4][0], links[2][0], links[1][0],
+            links[5][0], links[6][0], links[7][0],
+        ])
+        self.assertEqual(ordered[7:], [links[8][0], links[0][0]])
+
     def test_two_and_three_node_cycles_fetch_each_normalized_page_once(self) -> None:
         a = "https://ir.example.com/transcripts/a"
         b = "https://ir.example.com/transcripts/b"
@@ -159,9 +245,9 @@ class GraphCycleAndRankingTests(unittest.TestCase):
         anchors = [*(f"<a href='{url}'>Transcript archive</a>" for url in generic),
                    f"<a href='{winner}'>Q2 2026 earnings call transcript</a>"]
         first, _ = discover(root, {root: html(root, "".join(anchors))},
-                            policy(max_links_per_page=1))
+                            policy(max_unique_eligible_links_per_page=1))
         second, _ = discover(root, {root: html(root, "".join(reversed(anchors)))},
-                             policy(max_links_per_page=1))
+                             policy(max_unique_eligible_links_per_page=1))
         self.assertEqual(first.candidate_proposals, second.candidate_proposals)
         self.assertEqual(first.candidate_proposals[0]["url"], winner)
         self.assertEqual(first.diagnostics["top_ranked_candidates"],
@@ -328,6 +414,178 @@ class ClassificationAndBoundaryTests(unittest.TestCase):
         self.assertEqual(sum(diagnostics["rejection_counts"].values()), 3)
         self.assertEqual(sum(diagnostics["cycle_counts"].values()), 2)
 
+    def test_amazon_style_current_period_is_evaluated_before_numeric_history(self) -> None:
+        hint = "https://ir.example.com/transcripts/"
+        historical = []
+        responses: dict[str, EarningsTranscriptHttpResponse | Exception] = {}
+        for index in range(75):
+            year = 2007 + index // 4
+            quarter = index % 4 + 1
+            month = quarter * 3
+            url = (
+                f"https://ir.example.com/{index:06d}/"
+                "earnings-call-transcript.html"
+            )
+            label = f"Q{quarter} {year} earnings call transcript {year}-{month:02d}-01"
+            historical.append((url, label))
+            responses[url] = html(
+                url,
+                f"Firm A quarterly earnings call transcript {year}-{month:02d}-01. "
+                "Operator. Chief Executive Officer. Prepared remarks.",
+            )
+        current = (
+            "https://ir.example.com/999999/earnings-call-transcript.html",
+            "Q2 2026 earnings call transcript 2026-04-30",
+        )
+        responses[current[0]] = html(
+            current[0],
+            "Firm A quarterly earnings call transcript 2026-04-30. Operator. "
+            "Chief Executive Officer. Prepared remarks.",
+        )
+        links = "".join(
+            f"<a href='{url}'>{label}</a>" for url, label in (*historical, current)
+        )
+        responses[hint] = html(hint, links)
+        transport = Transport(responses)
+        page = EarningsTranscriptPullAdapter(
+            DiscoveryPolicyCatalog({"standard": policy(max_pages=75)}, "standard"),
+            Search(), transport, lambda: "2026-08-01T00:00:00Z",
+        ).discover(profile(hint), None)
+        self.assertEqual(transport.requests[2], current[0])
+        self.assertEqual(page.diagnostics["expected_reporting_period"], "2026-Q2")
+        self.assertEqual(page.diagnostics["candidate_evaluated_count"], 40)
+        self.assertEqual(
+            sum(page.diagnostics["candidate_disposition_counts"].values()), 40
+        )
+        self.assertEqual(
+            page.diagnostics["candidate_disposition_samples"][0]["reporting_period"],
+            "2026-Q2",
+        )
+        self.assertEqual(len(page.candidates), 1)
+        self.assertEqual(page.candidates[0].position, ReportingPeriod(2026, 2).ordinal)
+
+    def test_acquisition_checkpoint_orders_and_filters_reporting_periods(self) -> None:
+        hint = "https://ir.example.com/transcripts/"
+        checkpoint = "https://ir.example.com/q1-2026-earnings-call-transcript.html"
+        expected = "https://ir.example.com/q2-2026-earnings-call-transcript.html"
+        listing = html(
+            hint,
+            f"<a href='{checkpoint}'>Q1 2026 earnings call transcript 2026-03-31</a>"
+            f"<a href='{expected}'>Q2 2026 earnings call transcript 2026-06-30</a>",
+        )
+        responses = {
+            hint: listing,
+            checkpoint: html(
+                checkpoint,
+                "Firm A quarterly earnings call transcript 2026-03-31. Operator. "
+                "Chief Executive Officer. Prepared remarks.",
+            ),
+            expected: html(
+                expected,
+                "Firm A quarterly earnings call transcript 2026-06-30. Operator. "
+                "Chief Executive Officer. Prepared remarks.",
+            ),
+        }
+
+        class Repository:
+            def discovery_anchors(self, *_args):
+                return ()
+
+            def checkpoints(self):
+                return {"sources": {"source-a": {"attempt_id": "attempt-prior"}}}
+
+            def history(self):
+                return [{
+                    "attempt_id": "attempt-prior",
+                    "candidate": {"provenance": {"metadata": {
+                        "link_label": "Q1 2026 earnings call transcript",
+                        "resolved_url": checkpoint,
+                    }}},
+                }]
+
+        transport = Transport(responses)
+        page = EarningsTranscriptPullAdapter(
+            DiscoveryPolicyCatalog({"standard": policy()}, "standard"),
+            Search(), transport, lambda: "2026-08-01T00:00:00Z",
+            repository=Repository(),
+        ).discover(profile(hint), None)
+        self.assertEqual(transport.requests[2:], [expected, checkpoint])
+        self.assertEqual(page.diagnostics["reporting_period_basis"],
+                         "acquisition_checkpoint")
+        self.assertEqual(page.diagnostics["candidate_disposition_counts"], {
+            "current_checkpoint_period": 1, "valid_new_artifact": 1,
+        })
+        self.assertEqual(len(page.candidates), 1)
+        self.assertEqual(page.candidates[0].position, ReportingPeriod(2026, 2).ordinal)
+
+    def test_historical_only_and_emergency_ceiling_outcomes_are_truthful(self) -> None:
+        historical = {
+            "candidate_evaluated_count": 3,
+            "candidate_disposition_counts": {"older_than_checkpoint": 3},
+        }
+        classification, summary = EarningsTranscriptPullAdapter._classify_outcome(
+            historical, ()
+        )
+        self.assertEqual(classification, "historical_candidates_only")
+        self.assertIn("historical", summary)
+        self.assertNotIn("Every runnable retrieval candidate failed", summary)
+
+        ceiling, ceiling_summary = EarningsTranscriptPullAdapter._classify_outcome({
+            "bounds_exhausted": True,
+            "exhausted_budget": "max_unique_eligible_links_per_page",
+            "candidate_evaluated_count": 40,
+        }, ())
+        candidate, candidate_summary = EarningsTranscriptPullAdapter._classify_outcome({
+            "bounds_exhausted": True,
+            "exhausted_budget": "max_candidate_evaluations",
+            "candidate_evaluated_count": 40,
+        }, ())
+        self.assertEqual(ceiling, "discovery_emergency_ceiling_exhausted")
+        self.assertEqual(candidate, "discovery_budget_exhausted")
+        self.assertIn("emergency ceiling", ceiling_summary)
+        self.assertIn("candidate-evaluation", candidate_summary)
+
+        hint = "https://ir.example.com/transcripts/"
+        old = "https://ir.example.com/q4-2025-earnings-call-transcript.html"
+        page = self.adapter(hint, {
+            hint: html(
+                hint,
+                f"<a href='{old}'>Q4 2025 earnings call transcript 2025-12-31</a>",
+            ),
+            old: html(
+                old,
+                "Firm A quarterly earnings call transcript 2025-12-31. Operator. "
+                "Chief Executive Officer. Prepared remarks.",
+            ),
+        })
+        self.assertEqual(len(page.candidates), 1)
+        self.assertEqual(page.diagnostics["primary_classification"],
+                         "historical_candidates_only")
+        self.assertEqual(page.diagnostics["candidate_disposition_counts"],
+                         {"historical_period": 1})
+
+        current = "https://ir.example.com/q2-2026-earnings-call-transcript.html"
+        failed_current = self.adapter(hint, {
+            hint: html(
+                hint,
+                f"<a href='{old}'>Q4 2025 earnings call transcript 2025-12-31</a>"
+                f"<a href='{current}'>Q2 2026 earnings call transcript 2026-06-30</a>",
+            ),
+            old: html(
+                old,
+                "Firm A quarterly earnings call transcript 2025-12-31. Operator. "
+                "Chief Executive Officer. Prepared remarks.",
+            ),
+            current: html(current, "", status=404),
+        })
+        self.assertEqual(failed_current.candidates, ())
+        self.assertEqual(failed_current.diagnostics["primary_classification"],
+                         "candidate_http_not_found")
+        self.assertEqual(
+            sum(failed_current.diagnostics["candidate_disposition_counts"].values()),
+            failed_current.diagnostics["candidate_evaluated_count"],
+        )
+
     def test_all_reproduction_cases_retain_semantic_outcomes(self) -> None:
         cases = reproduction_cases()
         expected = {
@@ -336,9 +594,12 @@ class ClassificationAndBoundaryTests(unittest.TestCase):
             "configured_hint_http_failure": "hint_http_failure",
             "discovered_candidate_unavailable": "candidate_http_not_found",
             "cyclic_navigation_graph": "coverage_indeterminate",
-            "relevant_after_generic_links": "discovery_budget_exhausted",
+            "relevant_after_generic_links": "candidate_not_found_within_bounds",
             "named_budget_exhausted": "discovery_budget_exhausted",
             "indeterminate_without_exhaustion": "coverage_indeterminate",
+            "amazon_historical_links_current_period_late_numeric_id": (
+                "discovery_budget_exhausted"
+            ),
         }
         self.assertEqual(
             {name: item["primary_classification"] for name, item in cases.items()},
