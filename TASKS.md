@@ -56,6 +56,7 @@
 | TASK-055 | Detect unimported external firm configuration | Complete |
 | TASK-056 | Persistent discovery anchor history | Complete |
 | TASK-057 | Harden transcript discovery traversal and diagnostics | Complete |
+| TASK-058 | Pull Workflow progress feedback | Complete |
 
 ## Architectural Progression
 
