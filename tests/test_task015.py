@@ -9,6 +9,7 @@ import unittest
 import urllib.request
 from email.message import Message
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from rfi.acquisition import (
@@ -19,6 +20,7 @@ from rfi.acquisition import (
     DiscoveryPage,
     FailureClass,
     RetrievalResult,
+    RunStatus,
 )
 from rfi.acquisition.contracts import DiscoveryProvenance, SourceProfile
 from rfi.admin import create_admin_server
@@ -110,6 +112,26 @@ class ScriptedDirectAdapter:
             fixed_clock(),
             self.mechanism,
         )
+
+
+class EmptyDiscoveryAdapter:
+    """Failure-free empty discovery with explicit coverage diagnostics."""
+
+    mechanism = "direct_url"
+
+    def __init__(self, diagnostics: dict[str, object]) -> None:
+        self.diagnostics = diagnostics
+
+    def discover(
+        self, profile: SourceProfile, continuation: str | None
+    ) -> DiscoveryPage:
+        del profile, continuation
+        return DiscoveryPage((), None, self.diagnostics)  # type: ignore[arg-type]
+
+    def retrieve(
+        self, profile: SourceProfile, candidate: AdapterCandidate
+    ) -> RetrievalResult:
+        raise AssertionError("empty discovery must not retrieve")
 
 
 class FakeHttpResponse:
@@ -264,6 +286,10 @@ class PullWorkflowCase(unittest.TestCase):
         unchanged = self.workflow.run(PullRequest(("seagate",)))
         self.assertEqual(unchanged.status, PullStatus.COMPLETED)
         self.assertEqual(unchanged.summary.no_change, 1)
+        self.assertEqual(
+            unchanged.firms[0].artifacts[0].diagnostic,
+            "Source checkpoint indicates no new artifact.",
+        )
 
         failed_url = "https://fixture.test/broken"
         self.adapter.failures.add(failed_url)
@@ -277,6 +303,104 @@ class PullWorkflowCase(unittest.TestCase):
         failed = self.workflow.run(PullRequest(("seagate",)))
         self.assertEqual(failed.status, PullStatus.FAILED)
         self.assertEqual(failed.summary.retrieval_failure, 1)
+
+    def test_indeterminate_and_complete_empty_discovery_cross_layer_contract(self) -> None:
+        self.profiles.publish(
+            self.draft(
+                "seagate",
+                {"annual_report": (True, self.direct("https://fixture.test/empty"))},
+            ),
+            None,
+        )
+        bounded = PullWorkflow(
+            self.firms,
+            self.profiles,
+            self.template,
+            self.acquisition,
+            retrieval_registry(EmptyDiscoveryAdapter({
+                "bounds_exhausted": True,
+                "exhausted_budget": "max_links_per_page",
+                "coverage": "indeterminate",
+            })),
+            PullRunRepository(self.root / "bounded-pull-workflows"),
+            fixed_clock,
+            lambda: "bounded",
+        )
+        result = bounded.run(PullRequest(("seagate",)))
+        artifact = result.firms[0].artifacts[0]
+        self.assertEqual(artifact.outcome, ArtifactOutcome.INDETERMINATE)
+        self.assertEqual(result.summary.indeterminate, 1)
+        self.assertEqual(result.summary.no_change, 0)
+        self.assertNotIn("Source checkpoint", artifact.diagnostic)
+        self.assertIn("did not conclusively establish", artifact.diagnostic)
+
+        persisted = bounded.results(result.run_id)
+        api_payload = json.loads(json.dumps(persisted))
+        self.assertEqual(
+            persisted["firms"][0]["artifacts"][0]["outcome"], "indeterminate"
+        )
+        self.assertEqual(api_payload["summary"]["indeterminate"], 1)
+        self.assertEqual(
+            api_payload["firms"][0]["artifacts"][0]["diagnostic"],
+            artifact.diagnostic,
+        )
+        html = (Path(__file__).parents[1] / "src/rfi/admin/pull_sources.html").read_text()
+        self.assertIn("run.summary.indeterminate", html)
+
+        complete = PullWorkflow(
+            self.firms,
+            self.profiles,
+            self.template,
+            self.acquisition,
+            retrieval_registry(EmptyDiscoveryAdapter({"coverage": "complete"})),
+            PullRunRepository(self.root / "complete-pull-workflows"),
+            fixed_clock,
+            lambda: "complete",
+        ).run(PullRequest(("seagate",)))
+        complete_artifact = complete.firms[0].artifacts[0]
+        self.assertEqual(complete_artifact.outcome, ArtifactOutcome.NO_CHANGE)
+        self.assertEqual(
+            complete_artifact.diagnostic,
+            "Discovery completed conclusively and found no new artifact.",
+        )
+        self.assertNotIn("Source checkpoint", complete_artifact.diagnostic)
+
+    def test_engine_outcome_mixed_signal_precedence(self) -> None:
+        def engine_result(**overrides: object) -> SimpleNamespace:
+            values = {
+                "status": RunStatus.COMPLETE,
+                "failures": 0,
+                "durable_acquisitions": 0,
+                "duplicates": 0,
+                "unchanged": 0,
+                "checkpoint_before": None,
+                "outcomes": (),
+                "diagnostics": ({"coverage": "complete"},),
+            }
+            values.update(overrides)
+            return SimpleNamespace(**values)
+
+        self.assertEqual(
+            PullWorkflow._engine_outcome(engine_result(
+                failures=1, durable_acquisitions=1,
+                diagnostics=({"coverage": "indeterminate"},),
+            )),
+            ArtifactOutcome.RETRIEVAL_FAILURE,
+        )
+        self.assertEqual(
+            PullWorkflow._engine_outcome(engine_result(durable_acquisitions=1)),
+            ArtifactOutcome.SUCCESS,
+        )
+        self.assertEqual(
+            PullWorkflow._engine_outcome(engine_result(
+                diagnostics=({"coverage": "complete"}, {
+                    "bounds_exhausted": True,
+                    "exhausted_budget": "max_pages",
+                    "coverage": "indeterminate",
+                }),
+            )),
+            ArtifactOutcome.INDETERMINATE,
+        )
 
     def test_configured_readiness_counts_and_all_configured_selection(self) -> None:
         self.profiles.publish(

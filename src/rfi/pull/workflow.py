@@ -263,6 +263,7 @@ class PullWorkflow:
                 ArtifactOutcome.SUCCESS,
                 ArtifactOutcome.DUPLICATE,
                 ArtifactOutcome.NO_CHANGE,
+                ArtifactOutcome.INDETERMINATE,
             }:
                 terminal = outcome
                 terminal_diagnostic = attempt.diagnostic
@@ -404,18 +405,56 @@ class PullWorkflow:
 
     @staticmethod
     def _engine_outcome(result: Any) -> ArtifactOutcome:
+        if result.failures or result.status != RunStatus.COMPLETE:
+            return ArtifactOutcome.RETRIEVAL_FAILURE
         if result.durable_acquisitions:
             return ArtifactOutcome.SUCCESS
         if result.duplicates:
             return ArtifactOutcome.DUPLICATE
-        if result.unchanged or (
-            result.status == RunStatus.COMPLETE and not result.failures
-        ):
+        if PullWorkflow._has_checkpoint_decision(result) or result.unchanged:
             return ArtifactOutcome.NO_CHANGE
-        return ArtifactOutcome.RETRIEVAL_FAILURE
+        coverage = PullWorkflow._engine_coverage(result)
+        if coverage == "complete":
+            return ArtifactOutcome.NO_CHANGE
+        return ArtifactOutcome.INDETERMINATE
+
+    @staticmethod
+    def _engine_coverage(result: Any) -> str | None:
+        """Aggregate page diagnostics without inventing adapter-specific semantics."""
+        coverage = None
+        for diagnostic in result.diagnostics:
+            if (
+                diagnostic.get("bounds_exhausted") is True
+                or bool(diagnostic.get("exhausted_budget"))
+                or diagnostic.get("coverage") == "indeterminate"
+            ):
+                return "indeterminate"
+            if diagnostic.get("coverage") == "incomplete":
+                coverage = "incomplete"
+            elif diagnostic.get("coverage") == "complete" and coverage is None:
+                coverage = "complete"
+        return coverage
+
+    @staticmethod
+    def _has_checkpoint_decision(result: Any) -> bool:
+        return result.checkpoint_before is not None and any(
+            outcome.outcome == "checkpoint_filtered" for outcome in result.outcomes
+        )
 
     @staticmethod
     def _engine_diagnostic(result: Any, outcome: ArtifactOutcome) -> str:
+        if outcome == ArtifactOutcome.INDETERMINATE:
+            return (
+                "No new artifact was acquired, but discovery did not conclusively establish "
+                "that none exists because configured bounds were exhausted or coverage "
+                "remained indeterminate."
+            )
+        if outcome == ArtifactOutcome.NO_CHANGE:
+            if PullWorkflow._has_checkpoint_decision(result):
+                return "Source checkpoint indicates no new artifact."
+            if result.unchanged:
+                return "Artifact ingress was unchanged; no new artifact was recorded."
+            return "Discovery completed conclusively and found no new artifact."
         messages = [
             str(item.get("message"))
             for item in result.diagnostics
@@ -426,7 +465,6 @@ class PullWorkflow:
         return {
             ArtifactOutcome.SUCCESS: "Retrieved and ingested through repository ingress.",
             ArtifactOutcome.DUPLICATE: "Exact artifact bytes already exist in immutable storage.",
-            ArtifactOutcome.NO_CHANGE: "Source checkpoint indicates no new artifact.",
             ArtifactOutcome.RETRIEVAL_FAILURE: "Retrieval did not complete.",
         }[outcome]
 
@@ -542,6 +580,7 @@ class PullWorkflow:
             counts[ArtifactOutcome.SUCCESS],
             counts[ArtifactOutcome.DUPLICATE],
             counts[ArtifactOutcome.NO_CHANGE],
+            counts[ArtifactOutcome.INDETERMINATE],
             counts[ArtifactOutcome.SKIPPED],
             counts[ArtifactOutcome.CONFIGURATION_PROBLEM],
             counts[ArtifactOutcome.RETRIEVAL_FAILURE],
@@ -593,6 +632,8 @@ class PullWorkflow:
             record["completed_at"],
             tuple(PullStage(item) for item in record["completed_stages"]),
             tuple(firms),
-            PullSummary(**record["summary"]),
+            PullSummary(indeterminate=0, **record["summary"])
+            if "indeterminate" not in record["summary"]
+            else PullSummary(**record["summary"]),
             tuple(record["diagnostics"]),
         )

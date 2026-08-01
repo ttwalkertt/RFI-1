@@ -49,6 +49,7 @@
 | TASK-048 | Acquire official earnings-call transcripts | Done |
 | TASK-048B | Restore source-profile digest and startup compatibility | Complete |
 | TASK-050 | Commit-aware review-package generation and verification | Complete |
+| TASK-051 | Preserve indeterminate coverage in Pull Workflow outcomes | Done |
 
 ## Architectural Progression
 

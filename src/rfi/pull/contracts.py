@@ -41,6 +41,7 @@ class ArtifactOutcome(StrEnum):
     SUCCESS = "success"
     DUPLICATE = "duplicate"
     NO_CHANGE = "no_change"
+    INDETERMINATE = "indeterminate"
     SKIPPED = "skipped"
     CONFIGURATION_PROBLEM = "configuration_problem"
     RETRIEVAL_FAILURE = "retrieval_failure"
@@ -122,6 +123,7 @@ class PullSummary:
     success: int
     duplicate: int
     no_change: int
+    indeterminate: int
     skipped: int
     configuration_problem: int
     retrieval_failure: int

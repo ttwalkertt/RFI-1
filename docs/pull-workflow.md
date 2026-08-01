@@ -33,7 +33,7 @@ without candidates. `--all-configured` selects only firms with a saved profile r
 
 The source profile remains authoritative. Every enabled artifact participates. Retrieval
 candidates retain profile priority order, and the workflow attempts runnable candidates until one
-produces success, duplicate, or no change. A failed candidate does not prevent a later candidate,
+produces success, duplicate, no change, or an indeterminate coverage result. A failed candidate does not prevent a later candidate,
 artifact, or firm from executing.
 
 Executable adapter coverage is selected through explicit artifact-semantic capability
@@ -78,9 +78,14 @@ stored bytes, and successful retrieval ledger contract.
 
 ## Aggregation semantics
 
-Artifact outcomes are `success`, `duplicate`, `no_change`, `skipped`,
+Artifact outcomes are `success`, `duplicate`, `no_change`, `indeterminate`, `skipped`,
 `configuration_problem`, and `retrieval_failure`. Configuration and retrieval failures are the
-failure-bearing outcomes. A firm or run is:
+failure-bearing outcomes. `no_change` requires a checkpoint decision or affirmative complete
+coverage. A failure-free zero-result run with exhausted bounds, incomplete coverage, or no
+affirmative completeness evidence is `indeterminate`; policy exhaustion is not a retrieval
+failure. Operational failure takes precedence over acquisition signals, followed by successful
+acquisition, duplicate, checkpoint-based no change, complete-discovery no change, and finally
+indeterminate coverage. A firm or run is:
 
 - `completed` when it has no failure-bearing artifact or all selected firms completed;
 - `failed` when every artifact (or every selected firm) failed; and
