@@ -50,6 +50,7 @@
 | TASK-048B | Restore source-profile digest and startup compatibility | Complete |
 | TASK-050 | Commit-aware review-package generation and verification | Complete |
 | TASK-051 | Preserve indeterminate coverage in Pull Workflow outcomes | Done |
+| TASK-052 | Restore configured discovery hints for transcript retrieval | Done |
 
 ## Architectural Progression
 

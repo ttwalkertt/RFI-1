@@ -20,6 +20,13 @@ schema, and then checked for repository semantics. The entire lexical filename-o
 valid before configuration changes. Diagnostics identify the filename and JSON Pointer. A malformed,
 invalid, duplicate, conflicting, or missing previously managed file refuses startup.
 
+An optional `sources.earnings_transcript.discovery_hints` array accepts at most eight unique
+credential-free HTTP(S) listing or candidate URLs. These source-scoped values project unchanged to
+the canonical retrieval candidate's `discovery_hints`; they are attempted under the selected named
+discovery policy before general search. A hint only proposes bounded discovery and never bypasses
+host, date, media, transcript, or firm-identity validation. Missing hints preserve identity-based
+search. See `docs/amazon.firm-config.example.json` for a bounded example.
+
 ## Ownership and projection
 
 An accepted file owns the current configuration projection for its `firm.id`:
@@ -37,6 +44,11 @@ The transaction does **not** write `sec_sources`. That table remains mutable SEC
 owned and refreshed by the authoritative SEC retrieval workflow. It also does not write governed
 sources, acquisition runs, attempts, observations, artifacts, hashes, provenance, resolved URLs or
 accessions, discussions, streams, reports, source objects, or derived knowledge.
+
+Configured discovery hints remain intent. They do not become artifact/document identity and are not
+recorded as provenance merely because they were configured. If a hinted URL is fetched and produces
+a candidate, ordinary discovery and retrieval locations are recorded by the existing acquisition
+contracts.
 
 The SEC file identity populates `firm_external_identities`. Existing source-profile synthesis then
 provides CIK candidates for enabled SEC artifacts; endpoints, filing metadata, accessions, archive

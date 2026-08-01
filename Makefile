@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 VENV_STAMP := .venv/.rfi-installed
 
-.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task014-proof task015-proof task016-proof task017-proof task018-proof task019-proof task022-proof task023-proof task021-test task022-test task023-test task031-test task039-test task041-test task012-test task013-test task015-test task016-test task017-test task018-test task019-test lint format-check typecheck import-check docs-check baseline-check build validate review-package
+.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task014-proof task015-proof task016-proof task017-proof task018-proof task019-proof task022-proof task023-proof task052-proof task021-test task022-test task023-test task031-test task039-test task041-test task052-test task012-test task013-test task015-test task016-test task017-test task018-test task019-test lint format-check typecheck import-check docs-check baseline-check build validate review-package
 
 setup: $(VENV_STAMP)
 
@@ -76,6 +76,9 @@ task022-proof: setup
 task023-proof: setup
 	PYTHONPATH=src $(VENV_PYTHON) scripts/task023_mailing_lists.py fixture-proof
 
+task052-proof: setup
+	PYTHONPATH=src $(VENV_PYTHON) scripts/task052_transcript_hints.py
+
 task012-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task012 -v
 
@@ -114,6 +117,9 @@ task039-test: setup
 
 task041-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task041 -v
+
+task052-test: setup
+	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task052 tests.test_task048a tests.test_task015 -v
 
 lint: setup
 	$(VENV_PYTHON) scripts/quality.py lint

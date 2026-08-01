@@ -94,7 +94,7 @@
       "properties": {
         "sec": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sec_source"}]},
         "earnings_transcript": {
-          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/discovery_source"}]
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/transcript_discovery_source"}]
         },
         "press_release": {
           "oneOf": [{"type": "null"}, {"$ref": "#/$defs/discovery_source"}]
@@ -107,6 +107,21 @@
       "required": ["discovery_class"],
       "properties": {
         "discovery_class": {"enum": ["shallow", "standard", "extended"]}
+      }
+    },
+    "transcript_discovery_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["discovery_class"],
+      "properties": {
+        "discovery_class": {"enum": ["shallow", "standard", "extended"]},
+        "discovery_hints": {
+          "type": "array", "uniqueItems": true, "maxItems": 8,
+          "items": {
+            "type": "string", "format": "uri",
+            "pattern": "^https?://[^/?#@]+(?:[/?#].*)?$"
+          }
+        }
       }
     },
     "sec_source": {

@@ -237,7 +237,12 @@ class BoundedTranscriptDiscovery:
     def discover(
         self, identity_terms: tuple[str, ...], source_hints: tuple[str, ...]
     ) -> TranscriptDiscoveryResult:
-        urls = [hint for hint in source_hints if hint.startswith(("http://", "https://"))]
+        hint_urls = tuple(
+            dict.fromkeys(
+                hint for hint in source_hints
+                if hint.startswith(("http://", "https://"))
+            )
+        )
         planned_queries = tuple(
             f'"{term}" earnings call transcript' for term in identity_terms[:2] if term.strip()
         )
@@ -246,7 +251,79 @@ class BoundedTranscriptDiscovery:
         exhausted_budget = ""
         failures: list[tuple[str, str]] = []
         search_endpoint = getattr(self.search, "endpoint", "https://search.invalid/")
-        for query in planned_queries:
+        visited: set[str] = set()
+        listings: list[str] = []
+        candidates: list[dict[str, str]] = []
+
+        def traverse(urls: tuple[str, ...]) -> None:
+            nonlocal exhausted, exhausted_budget
+            queue = deque((url, 0) for url in urls)
+            while queue:
+                url, depth = queue.popleft()
+                if url in visited:
+                    continue
+                if EarningsCallTranscriptAcquisition._looks_like_transcript(url, url):
+                    candidates.append({"url": url, "label": url})
+                try:
+                    response = self.transport.get(url)
+                except Exception as error:
+                    if self.transport.exhausted:
+                        exhausted = True
+                        exhausted_budget = self.transport.exhausted_budget
+                        break
+                    failures.append(("page_fetch_failed", error.__class__.__name__))
+                    continue
+                visited.add(url)
+                if response.media_type not in {"text/html", "application/xhtml+xml"}:
+                    if EarningsCallTranscriptAcquisition._looks_like_transcript(
+                        "", response.url
+                    ):
+                        candidates.append({"url": response.url, "label": response.url})
+                    continue
+                listings.append(response.url)
+                parser = _PageParser()
+                try:
+                    parser.feed(response.content.decode("utf-8", "replace"))
+                except Exception as error:
+                    failures.append(("page_parse_failed", error.__class__.__name__))
+                    continue
+                links = sorted(
+                    parser.links,
+                    key=lambda item: (
+                        not EarningsCallTranscriptAcquisition._looks_like_transcript(
+                            item[1], urllib.parse.urljoin(response.url, item[0])
+                        ),
+                        item[0],
+                        item[1],
+                    ),
+                )
+                if len(links) > self.policy.max_links_per_page:
+                    exhausted = True
+                    exhausted_budget = "max_links_per_page"
+                for href, label in links[: self.policy.max_links_per_page]:
+                    target = urllib.parse.urljoin(response.url, href)
+                    if EarningsCallTranscriptAcquisition._looks_like_transcript(label, target):
+                        candidates.append({"url": target, "label": label or target})
+                    elif depth < self.policy.max_depth and target.startswith(
+                        ("http://", "https://")
+                    ):
+                        queue.append((target, depth + 1))
+                    elif target.startswith(("http://", "https://")):
+                        exhausted = True
+                        exhausted_budget = "max_depth"
+                        break
+                if exhausted:
+                    break
+                if self.transport.exhausted:
+                    exhausted = True
+                    exhausted_budget = self.transport.exhausted_budget
+                    break
+
+        # Configuration-owned URL hints consume the same bounded transport as search,
+        # but are traversed first. A usable hint avoids spending general search breadth.
+        traverse(hint_urls)
+        search_urls: list[str] = []
+        for query in (() if exhausted or candidates else planned_queries):
             if queries_submitted >= self.policy.max_search_queries:
                 exhausted = True
                 exhausted_budget = "max_search_queries"
@@ -278,71 +355,11 @@ class BoundedTranscriptDiscovery:
             if len(response.urls) > self.policy.max_results_per_query:
                 exhausted = True
                 exhausted_budget = "max_results_per_query"
-            urls.extend(response.urls[: self.policy.max_results_per_query])
+            search_urls.extend(response.urls[: self.policy.max_results_per_query])
             if exhausted:
                 break
-        queue = deque() if exhausted else deque(
-            (url, 0) for url in dict.fromkeys(urls)
-        )
-        visited: set[str] = set()
-        listings: list[str] = []
-        candidates: list[dict[str, str]] = []
-        while queue:
-            url, depth = queue.popleft()
-            if url in visited:
-                continue
-            if EarningsCallTranscriptAcquisition._looks_like_transcript(url, url):
-                candidates.append({"url": url, "label": url})
-            try:
-                response = self.transport.get(url)
-            except Exception as error:
-                if self.transport.exhausted:
-                    exhausted = True
-                    exhausted_budget = self.transport.exhausted_budget
-                    break
-                failures.append(("page_fetch_failed", error.__class__.__name__))
-                continue
-            visited.add(url)
-            if response.media_type not in {"text/html", "application/xhtml+xml"}:
-                if EarningsCallTranscriptAcquisition._looks_like_transcript("", response.url):
-                    candidates.append({"url": response.url, "label": response.url})
-                continue
-            listings.append(response.url)
-            parser = _PageParser()
-            try:
-                parser.feed(response.content.decode("utf-8", "replace"))
-            except Exception as error:
-                failures.append(("page_parse_failed", error.__class__.__name__))
-                continue
-            links = sorted(
-                parser.links,
-                key=lambda item: (
-                    not EarningsCallTranscriptAcquisition._looks_like_transcript(
-                        item[1], urllib.parse.urljoin(response.url, item[0])
-                    ),
-                    item[0],
-                    item[1],
-                ),
-            )
-            if len(links) > self.policy.max_links_per_page:
-                exhausted = True
-                exhausted_budget = "max_links_per_page"
-            for href, label in links[: self.policy.max_links_per_page]:
-                target = urllib.parse.urljoin(response.url, href)
-                if EarningsCallTranscriptAcquisition._looks_like_transcript(label, target):
-                    candidates.append({"url": target, "label": label or target})
-                elif depth < self.policy.max_depth and target.startswith(("http://", "https://")):
-                    queue.append((target, depth + 1))
-                elif target.startswith(("http://", "https://")):
-                    exhausted = True
-                    exhausted_budget = "max_depth"
-                    break
-            if exhausted:
-                break
-            if self.transport.exhausted:
-                exhausted = True
-                exhausted_budget = self.transport.exhausted_budget
-                break
+        if not exhausted:
+            traverse(tuple(dict.fromkeys(search_urls)))
         unique_candidates = tuple(
             dict((item["url"], item) for item in candidates).values()
         )
@@ -366,6 +383,12 @@ class BoundedTranscriptDiscovery:
                 "discovery_failures": len(failures),
                 "discovery_failure_codes": ",".join(code for code, _ in failures),
                 "discovery_failure_types": ",".join(kind for _, kind in failures),
+                "configured_hint_count": len(hint_urls),
+                "configured_hint_pages": sum(url in visited for url in hint_urls),
+                "configured_hint_status": (
+                    "not_supplied" if not hint_urls else
+                    "used" if any(url in visited for url in hint_urls) else "unusable"
+                ),
             },
         )
 

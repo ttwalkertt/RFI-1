@@ -181,6 +181,12 @@ configuration loaders rather than this browser. A stable `firm_id` remains the d
 search, filter, and historical inspection do not persist. Source-discovery hints are operator
 guidance and never become evidence.
 
+For externally managed firms, an optional source-scoped transcript URL belongs under
+`sources.earnings_transcript.discovery_hints` in the firm configuration JSON. Pull Sources tries
+that URL within the selected discovery policy before general search and reports whether the hint
+was used or unusable. The hint does not guarantee acquisition; normal candidate validation still
+applies. Firm-level `source_hints` remain general operator orientation metadata.
+
 ### Common problems and recovery
 
 Current firms cannot share a normalized domain or the same identifier kind, market, and value.

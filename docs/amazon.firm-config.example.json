@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "config_id": "amazon",
+  "status": "active",
+  "comments": "Amazon bounded transcript-discovery example for TASK-052.",
+  "firm": {
+    "id": "amazon",
+    "display_name": "Amazon",
+    "legal_name": "Amazon.com, Inc.",
+    "subtitle": "Commerce, cloud, and technology operator",
+    "priority": 90,
+    "valid_from": "2020-01-01",
+    "jurisdiction": "Delaware, United States",
+    "headquarters": "Seattle, Washington, United States",
+    "sector": "Consumer Discretionary",
+    "industry": "Broadline Retail",
+    "aliases": ["AMZN"],
+    "identifiers": [
+      {"kind": "ticker", "value": "AMZN", "market": "NASDAQ"},
+      {"kind": "cik", "value": "0001018724", "market": "SEC"}
+    ],
+    "domains": ["amazon.com"],
+    "comments": "Discovery hints remain configuration, not retrieved provenance."
+  },
+  "sources": {
+    "sec": {
+      "enabled": true,
+      "cik": "0001018724",
+      "registrant_name": "AMAZON COM INC",
+      "filing_regime": "domestic",
+      "verification": {
+        "status": "verified",
+        "verified_at": "2026-07-27T00:00:00+00:00",
+        "source": "SEC EDGAR submissions identity"
+      },
+      "artifacts": ["sec_10k", "sec_10q", "sec_8k"]
+    },
+    "earnings_transcript": {
+      "discovery_class": "extended",
+      "discovery_hints": ["https://stockanalysis.com/stocks/amzn/transcripts/"]
+    }
+  }
+}

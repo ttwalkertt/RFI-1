@@ -199,7 +199,9 @@ def _profile(value: dict[str, Any]) -> SourceProfileDraft:
         return (RetrievalCandidate(
             "discovery", 1,
             preferred_domains=tuple(firm["domains"]),
-            discovery_hints=hints,
+            discovery_hints=tuple(dict.fromkeys((
+                *source.get("discovery_hints", ()), *hints,
+            ))),
             discovery_class=source.get("discovery_class", "standard"),
         ),)
 
