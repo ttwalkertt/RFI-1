@@ -245,6 +245,8 @@ class EarningsCallTranscriptAcquisition:
                         "firm_id": self.source.policy["firm_id"],
                         "canonical_artifact_id": "earnings_transcript",
                         "link_label": proposal.label,
+                        "requested_url": proposal.url,
+                        "resolved_url": response.url,
                     },
                 ),
             ),

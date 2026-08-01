@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -206,6 +206,23 @@ CREATE TABLE artifact_observations (
     source_id TEXT NOT NULL REFERENCES governed_sources(source_id),
     observed_at TEXT NOT NULL,
     canonical_json TEXT NOT NULL
+) STRICT;
+CREATE TABLE discovery_anchor_history (
+    firm_id TEXT NOT NULL REFERENCES firms(firm_id),
+    source_id TEXT NOT NULL REFERENCES governed_sources(source_id),
+    adapter_id TEXT NOT NULL,
+    stack_position INTEGER NOT NULL CHECK (stack_position BETWEEN 0 AND 2),
+    normalized_url TEXT NOT NULL,
+    requested_url TEXT NOT NULL,
+    resolved_url TEXT,
+    attempt_id TEXT NOT NULL REFERENCES acquisition_attempts(attempt_id),
+    artifact_id TEXT REFERENCES artifacts(artifact_id),
+    succeeded_at TEXT NOT NULL,
+    source_profile_revision_id TEXT,
+    qualification TEXT NOT NULL CHECK (qualification IN ('retained_artifact','no_change')),
+    canonical_json TEXT NOT NULL,
+    PRIMARY KEY (firm_id, source_id, adapter_id, stack_position),
+    UNIQUE (firm_id, source_id, adapter_id, normalized_url)
 ) STRICT;
 CREATE TABLE checkpoint_events (
     event_id TEXT PRIMARY KEY,
@@ -800,6 +817,26 @@ CREATE TABLE IF NOT EXISTS firm_configuration_imports (
 ) STRICT;
 """
 
+_MIGRATE_V14_TO_V15 = """
+CREATE TABLE IF NOT EXISTS discovery_anchor_history (
+    firm_id TEXT NOT NULL REFERENCES firms(firm_id),
+    source_id TEXT NOT NULL REFERENCES governed_sources(source_id),
+    adapter_id TEXT NOT NULL,
+    stack_position INTEGER NOT NULL CHECK (stack_position BETWEEN 0 AND 2),
+    normalized_url TEXT NOT NULL,
+    requested_url TEXT NOT NULL,
+    resolved_url TEXT,
+    attempt_id TEXT NOT NULL REFERENCES acquisition_attempts(attempt_id),
+    artifact_id TEXT REFERENCES artifacts(artifact_id),
+    succeeded_at TEXT NOT NULL,
+    source_profile_revision_id TEXT,
+    qualification TEXT NOT NULL CHECK (qualification IN ('retained_artifact','no_change')),
+    canonical_json TEXT NOT NULL,
+    PRIMARY KEY (firm_id, source_id, adapter_id, stack_position),
+    UNIQUE (firm_id, source_id, adapter_id, normalized_url)
+) STRICT;
+"""
+
 
 def _backfill_task045(connection: sqlite3.Connection) -> None:
     """Link source projections and derive bounded claims from retained observations."""
@@ -1172,7 +1209,7 @@ class RepositoryDatabase:
                 version = int(row[0])
                 if version == SCHEMA_VERSION:
                     return False
-                if version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}:
+                if version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}:
                     raise StorageError(
                         "incompatible_schema",
                         f"repository schema version {version} is unsupported; "
@@ -1184,6 +1221,8 @@ class RepositoryDatabase:
                     for item in connection.execute("PRAGMA table_info(mailing_list_runs)")
                 }
                 scripts = []
+                if version <= 14:
+                    scripts.append(_MIGRATE_V14_TO_V15)
                 if version <= 13:
                     scripts.append(_MIGRATE_V13_TO_V14)
                 if version <= 12:

@@ -54,6 +54,7 @@
 | TASK-053 | Apply link traversal budget after eligibility filtering | Done |
 | TASK-054 | Reload externally managed firm profiles from the Target Firms console | Complete |
 | TASK-055 | Detect unimported external firm configuration | Complete |
+| TASK-056 | Persistent discovery anchor history | Complete |
 
 ## Architectural Progression
 

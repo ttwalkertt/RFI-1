@@ -214,7 +214,7 @@ class CanonicalMessageCase(unittest.TestCase):
             connection.execute("DROP TABLE canonical_mailing_list_messages")
             connection.execute("UPDATE schema_metadata SET schema_version=6")
         upgraded = RepositoryDatabase.open(self.state)
-        self.assertEqual(upgraded.validate()["schema_version"], 14)
+        self.assertEqual(upgraded.validate()["schema_version"], 15)
         observations = MailingListRepository(self.state).rows(
             "SELECT run_id,canonical_message_id,observation_type "
             "FROM mailing_list_run_items"

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import posixpath
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
@@ -268,6 +270,9 @@ class AcquisitionRepository:
                     self._insert_checkpoint(
                         connection, candidate.source_id, attempt_id, checkpoint
                     )
+                self._record_discovery_anchor(
+                    connection, source, candidate, result, attempt_id, artifact_id
+                )
                 if fail_at in {FailurePoint.BEFORE_INDEX, FailurePoint.BEFORE_CHECKPOINT}:
                     self._fail(fail_at)
                 self._database.advance_revision(connection)
@@ -288,6 +293,86 @@ class AcquisitionRepository:
                 pass
             raise
 
+    def discovery_anchors(
+        self, firm_id: str, source_id: str, adapter_id: str
+    ) -> tuple[dict[str, Any], ...]:
+        """Return the bounded, inspectable anchor stack in strict LIFO order."""
+        require_identifier(firm_id, "firm_id")
+        require_identifier(source_id, "source_id")
+        require_identifier(adapter_id, "adapter_id")
+        with self._database.connect(read_only=True) as connection:
+            rows = connection.execute(
+                "SELECT canonical_json FROM discovery_anchor_history "
+                "WHERE firm_id=? AND source_id=? AND adapter_id=? ORDER BY stack_position",
+                (firm_id, source_id, adapter_id),
+            ).fetchall()
+        return tuple(self._decode(row[0], "discovery anchor") for row in rows)
+
+    @staticmethod
+    def normalize_discovery_url(url: str) -> str:
+        """Conservatively normalize URL identity without changing observed provenance."""
+        parsed = urllib.parse.urlsplit(url)
+        scheme = parsed.scheme.casefold()
+        host = (parsed.hostname or "").casefold()
+        if scheme not in {"http", "https"} or not host:
+            raise ContractError("discovery anchor must be an absolute HTTP(S) URL")
+        port = parsed.port
+        netloc = host
+        default_port = (scheme == "http" and port == 80) or (
+            scheme == "https" and port == 443
+        )
+        if port is not None and not default_port:
+            netloc = f"{host}:{port}"
+        path = posixpath.normpath(parsed.path or "/")
+        if parsed.path.endswith("/") and not path.endswith("/"):
+            path += "/"
+        return urllib.parse.urlunsplit((scheme, netloc, path, parsed.query, ""))
+
+    def _record_discovery_anchor(
+        self, connection: Any, source: dict[str, Any], candidate: CandidateDocument,
+        result: RetrievalResult, attempt_id: str, artifact_id: str,
+    ) -> None:
+        policy = source.get("policy", {})
+        firm_id = policy.get("firm_id")
+        adapter_id = policy.get("retrieval_adapter_id")
+        metadata = candidate.provenance.metadata
+        requested = metadata.get("requested_url")
+        resolved = result.diagnostics.get("final_url")
+        if not all(isinstance(value, str) and value for value in (firm_id, adapter_id, requested)):
+            return
+        if resolved is not None and not isinstance(resolved, str):
+            return
+        normalized = self.normalize_discovery_url(resolved or requested)
+        rows = connection.execute(
+            "SELECT canonical_json FROM discovery_anchor_history WHERE firm_id=? AND source_id=? "
+            "AND adapter_id=? ORDER BY stack_position",
+            (firm_id, candidate.source_id, adapter_id),
+        ).fetchall()
+        prior = [self._decode(row[0], "discovery anchor") for row in rows]
+        entry = {
+            "schema_version": 1, "record_type": "discovery_anchor",
+            "firm_id": firm_id, "source_id": candidate.source_id, "adapter_id": adapter_id,
+            "normalized_url": normalized, "requested_url": requested,
+            "resolved_url": resolved if resolved != requested else None,
+            "attempt_id": attempt_id, "artifact_id": artifact_id,
+            "succeeded_at": result.retrieved_at,
+            "source_profile_revision_id": policy.get("source_profile_revision_id"),
+            "qualification": "retained_artifact",
+        }
+        retained = [entry] + [item for item in prior if item["normalized_url"] != normalized]
+        connection.execute(
+            "DELETE FROM discovery_anchor_history WHERE firm_id=? AND source_id=? AND adapter_id=?",
+            (firm_id, candidate.source_id, adapter_id),
+        )
+        for position, item in enumerate(retained[:3]):
+            connection.execute(
+                "INSERT INTO discovery_anchor_history VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (firm_id, candidate.source_id, adapter_id, position, item["normalized_url"],
+                 item["requested_url"], item.get("resolved_url"), item["attempt_id"],
+                 item.get("artifact_id"), item["succeeded_at"],
+                 item.get("source_profile_revision_id"), item["qualification"],
+                 canonical_json(item)),
+            )
     def record_outcome(
         self,
         attempt_id: str,

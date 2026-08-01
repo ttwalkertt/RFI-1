@@ -65,7 +65,9 @@ def create_pull_workflow(state: Path) -> PullWorkflow:
         SecForm20FAdapter(provider, utc_now),
         SecForm6KAdapter(provider, utc_now),
     )
-    transcripts = EarningsTranscriptPullAdapter(load_discovery_policies(), clock=utc_now)
+    transcripts = EarningsTranscriptPullAdapter(
+        load_discovery_policies(), clock=utc_now, repository=acquisition
+    )
     adapters = RetrievalAdapterRegistry(
         (
             RetrievalAdapterRegistration(

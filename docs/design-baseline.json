@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 7437,
+      "destination_size": 7499,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "25865a882332c7014e5ef58d0bdcfc43e42cacf2e5f8da20ea8b9ae9dbeb2759",
-      "content_change": "task roadmap reconciled through completed TASK-055 configuration detection"
+      "destination_sha256": "6f36e1832ac19a8907bf69e45973f4ecb9bca28a64ea90ff03116b9c715066d7",
+      "content_change": "task roadmap reconciled through completed TASK-056 persistent discovery history"
     },
     {
       "source": "ROADMAP.md",

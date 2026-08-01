@@ -28,6 +28,7 @@ from rfi.acquisition.contracts import (
     RetrievalResult,
     SourceProfile,
 )
+from rfi.acquisition.repository import AcquisitionRepository
 from rfi.acquisition.engine import (
     AdapterCandidate,
     AdapterFailure,
@@ -445,6 +446,7 @@ class EarningsTranscriptPullAdapter:
         transport: EarningsTranscriptTransport | None = None,
         clock: Callable[[], str] = utc_now,
         monotonic: Callable[[], float] = time.monotonic,
+        repository: AcquisitionRepository | None = None,
     ) -> None:
         self._policies = policies
         self._search = search or DuckDuckGoHtmlSearch()
@@ -452,6 +454,7 @@ class EarningsTranscriptPullAdapter:
         self._clock = clock
         self._monotonic = monotonic
         self._retrievals: dict[str, RetrievalResult] = {}
+        self._repository = repository
 
     def discover(self, profile: SourceProfile, continuation: str | None) -> DiscoveryPage:
         if continuation is not None:
@@ -480,10 +483,22 @@ class EarningsTranscriptPullAdapter:
                 value for value in configuration.get("discovery_hints", ())
                 if isinstance(value, str) and value.startswith(("http://", "https://"))
             )
+            history = ()
+            firm_id = profile.policy.get("firm_id")
+            if self._repository is not None and isinstance(firm_id, str):
+                history = self._repository.discovery_anchors(
+                    firm_id, profile.source_id, self.adapter_id
+                )
+            retained_hints = tuple(dict.fromkeys(
+                url
+                for item in history
+                for url in (item.get("resolved_url"), item["requested_url"])
+                if isinstance(url, str) and url
+            ))
             if mode == "discovery":
                 discovered = BoundedTranscriptDiscovery(
                     self._search, budgeted, policy
-                ).discover(identity_terms, source_hints)
+                ).discover(identity_terms, retained_hints + source_hints)
             else:
                 url = configuration.get("url")
                 if not isinstance(url, str) or not url:
@@ -546,6 +561,10 @@ class EarningsTranscriptPullAdapter:
         coverage = "indeterminate" if discovered.exhausted else interval.coverage.value
         final_diagnostics = dict(discovered.diagnostics)
         final_diagnostics.update({
+            "history_key": f"{profile.policy.get('firm_id')}:{profile.source_id}:{self.adapter_id}",
+            "retained_anchor_count": len(history),
+            "retained_anchor_order": [item["normalized_url"] for item in history],
+            "configured_hint_fallthrough": bool(history and source_hints),
             "pages": budgeted.pages,
             "distinct_hosts": len(budgeted.hosts),
             "bytes": budgeted.bytes,
