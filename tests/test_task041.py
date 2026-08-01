@@ -159,6 +159,127 @@ class FirmConfigurationTests(unittest.TestCase):
         path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
         return path
 
+    def transcript_hints(self, value: dict[str, object]) -> tuple[str, ...]:
+        self.write(value)
+        initialize(self.state)
+        profiles = SourceProfileRepository.open(
+            self.state / "source-profiles", load_canonical_template()
+        )
+        profile = profiles.get(str(value["config_id"]))
+        transcript = next(
+            item for item in profile.items if item.artifact_id == "earnings_transcript"
+        )  # type: ignore[union-attr]
+        return transcript.retrieval_candidates[0].discovery_hints
+
+    def test_profile_alias_duplicate_of_display_name_is_removed(self) -> None:
+        value = self.value()
+        value["firm"]["aliases"] = ["Microsoft", "Distinct Alias"]  # type: ignore[index]
+
+        hints = self.transcript_hints(value)
+
+        self.assertEqual(hints.count("Microsoft"), 1)
+        self.assertIn("Distinct Alias", hints)
+
+    def test_profile_alias_duplicate_of_display_name_ignores_case(self) -> None:
+        value = self.value()
+        value["firm"]["aliases"] = ["mIcRoSoFt", "Distinct Alias"]  # type: ignore[index]
+
+        hints = self.transcript_hints(value)
+
+        self.assertNotIn("mIcRoSoFt", hints)
+        self.assertEqual(sum(item.casefold() == "microsoft" for item in hints), 1)
+
+    def test_profile_alias_duplicate_of_ticker_ignores_case(self) -> None:
+        value = self.value()
+        value["firm"]["aliases"] = ["msft", "Distinct Alias"]  # type: ignore[index]
+
+        hints = self.transcript_hints(value)
+
+        self.assertNotIn("msft", hints)
+        self.assertIn("MSFT", hints)
+
+    def test_profile_duplicate_aliases_collapse_in_first_seen_order(self) -> None:
+        value = self.value()
+        value["firm"]["aliases"] = [  # type: ignore[index]
+            "First Alias", "first alias", "Second Alias", "FIRST ALIAS", "Third Alias"
+        ]
+
+        hints = self.transcript_hints(value)
+        projected = tuple(item for item in hints if item.endswith("Alias"))
+
+        self.assertEqual(projected, ("First Alias", "Second Alias", "Third Alias"))
+
+    def test_profile_distinct_aliases_remain_intact(self) -> None:
+        value = self.value()
+        value["firm"]["aliases"] = [  # type: ignore[index]
+            "First Alias", "Second Alias", "Third Alias"
+        ]
+
+        hints = self.transcript_hints(value)
+
+        positions = tuple(
+            hints.index(alias) for alias in value["firm"]["aliases"]  # type: ignore[index]
+        )
+        self.assertEqual(positions, tuple(sorted(positions)))
+
+    def test_dell_and_meta_identity_aliases_materialize_runnable_transcripts(self) -> None:
+        cases = (
+            (
+                "dell", "Dell Technologies", "Dell Technologies Inc.",
+                ["Dell Technologies", "Dell Inc."], "DELL", "0001571996", "dell.com",
+            ),
+            (
+                "meta", "Meta", "Meta Platforms, Inc.",
+                ["meta platforms", "META", "Facebook"], "META", "0001326801", "meta.com",
+            ),
+        )
+        for firm_id, display, legal, aliases, ticker, cik, domain in cases:
+            value = self.value()
+            value["config_id"] = firm_id
+            firm = value["firm"]  # type: ignore[assignment]
+            firm.update({  # type: ignore[union-attr]
+                "id": firm_id,
+                "display_name": display,
+                "legal_name": legal,
+                "aliases": aliases,
+                "identifiers": [
+                    {"kind": "ticker", "value": ticker, "market": "NYSE"},
+                    {"kind": "cik", "value": cik, "market": "SEC"},
+                ],
+                "domains": [domain],
+            })
+            sec = value["sources"]["sec"]  # type: ignore[index]
+            sec["cik"] = cik  # type: ignore[index]
+            sec["registrant_name"] = legal  # type: ignore[index]
+            self.write(value, f"{firm_id}.firm-config.json")
+
+        initialize(self.state)
+        profiles = SourceProfileRepository.open(
+            self.state / "source-profiles", load_canonical_template()
+        )
+        for firm_id in ("dell", "meta"):
+            profile = profiles.get(firm_id)
+            transcript = next(
+                item for item in profile.items if item.artifact_id == "earnings_transcript"
+            )  # type: ignore[union-attr]
+            self.assertTrue(transcript.enabled)
+            self.assertEqual(transcript.retrieval_candidates[0].mode, "discovery")
+
+    def test_unrelated_firm_projection_and_authoritative_config_remain_unchanged(self) -> None:
+        value = self.value()
+        expected = (
+            "Microsoft", "Microsoft Corporation", "MSFT", "0000789019",
+            "https://www.microsoft.com/en-us/Investor/",
+        )
+
+        hints = self.transcript_hints(value)
+        authority = FirmRepository.open(
+            self.state / "firm-catalog"
+        ).configuration_authority("microsoft")
+
+        self.assertEqual(hints, expected)
+        self.assertEqual(authority["configuration"], value)  # type: ignore[index]
+
     def test_valid_microsoft_loads_comments_identity_profile_and_read_projection(self) -> None:
         self.write(self.value())
         initialize(self.state)

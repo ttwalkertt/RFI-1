@@ -145,7 +145,7 @@ def _draft(value: dict[str, Any]) -> FirmDraft:
         valid_from=firm["valid_from"],
         legal_name=firm["legal_name"],
         subtitle=firm["subtitle"],
-        aliases=tuple(firm["aliases"]),
+        aliases=_unique_identity_terms(tuple(firm["aliases"])),
         identifiers=tuple(FirmIdentifier(**item) for item in firm["identifiers"]),
         domains=tuple(firm["domains"]),
         headquarters=firm.get("headquarters", ""),
@@ -180,6 +180,39 @@ def _identity(value: dict[str, Any]) -> FirmExternalIdentity | None:
     )
 
 
+def _projected_aliases(firm: dict[str, Any]) -> tuple[str, ...]:
+    """Project aliases after authoritative display-name and ticker identities."""
+    seen = {
+        firm["display_name"].strip().casefold(),
+        *(
+            item["value"].strip().casefold()
+            for item in firm["identifiers"]
+            if item["kind"].casefold() == "ticker"
+        ),
+    }
+    aliases: list[str] = []
+    for alias in firm["aliases"]:
+        key = alias.strip().casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        aliases.append(alias)
+    return tuple(aliases)
+
+
+def _unique_identity_terms(values: tuple[str, ...]) -> tuple[str, ...]:
+    """Retain the first identity term under canonical case-insensitive comparison."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        key = value.strip().casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(value)
+    return tuple(result)
+
+
 def _profile(value: dict[str, Any]) -> SourceProfileDraft:
     sec = value["sources"]["sec"]
     enabled = set(sec["artifacts"]) if sec is not None and sec["enabled"] else set()
@@ -187,11 +220,12 @@ def _profile(value: dict[str, Any]) -> SourceProfileDraft:
     releases = value["sources"].get("press_release")
     template = load_canonical_template()
     firm = value["firm"]
-    hints = tuple(dict.fromkeys((
-        firm["display_name"], firm["legal_name"], *firm["aliases"],
+    aliases = _projected_aliases(firm)
+    hints = _unique_identity_terms((
+        firm["display_name"], firm["legal_name"], *aliases,
         *(item["value"] for item in firm["identifiers"]),
         *(item["value"] for item in firm.get("source_hints", ())),
-    )))
+    ))
 
     def discovery_candidate(source: dict[str, Any] | None) -> tuple[RetrievalCandidate, ...]:
         if source is None:
