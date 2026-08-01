@@ -117,6 +117,13 @@ class PullWorkflow:
                 "stage_events": [
                     {"stage": PullStage.RECEIVED.value, "completed_at": requested_at}
                 ],
+                "progress": {
+                    "percent": 5,
+                    "message": "Pull request received.",
+                    "completed_artifacts": 0,
+                    "total_artifacts": 0,
+                    "updated_at": requested_at,
+                },
                 "resolved_firm_ids": [],
                 "profile_snapshots": [],
                 "plan": [],
@@ -155,10 +162,45 @@ class PullWorkflow:
                 self._complete_stage(record, PullStage.ATTEMPTABILITY_DETERMINED)
 
                 record["current_stage"] = PullStage.RETRIEVAL_EXECUTED.value
-                self._runs.save(run_id, record)
+                total_artifacts = sum(len(plan.artifacts) for plan in plans)
+                completed_artifacts = 0
+
+                def artifact_started(plan: PlannedFirm, artifact: PlannedArtifact) -> None:
+                    self._set_progress(
+                        record,
+                        self._retrieval_percent(completed_artifacts, total_artifacts),
+                        (
+                            f"Retrieving source {completed_artifacts + 1} of "
+                            f"{total_artifacts}: {artifact.label} for "
+                            f"{plan.firm.canonical_name}."
+                        ),
+                        completed_artifacts,
+                        total_artifacts,
+                    )
+
+                def artifact_completed(
+                    plan: PlannedFirm, artifact: PlannedArtifact
+                ) -> None:
+                    nonlocal completed_artifacts
+                    del plan, artifact
+                    completed_artifacts += 1
+                    self._set_progress(
+                        record,
+                        self._retrieval_percent(completed_artifacts, total_artifacts),
+                        f"Processed {completed_artifacts} of {total_artifacts} sources.",
+                        completed_artifacts,
+                        total_artifacts,
+                    )
+
+                if total_artifacts == 0:
+                    self._set_progress(
+                        record, 90, "No enabled sources require retrieval.", 0, 0
+                    )
                 firm_results = []
                 for plan in plans:
-                    result = self._execute_firm(run_id, plan)
+                    result = self._execute_firm(
+                        run_id, plan, artifact_started, artifact_completed
+                    )
                     firm_results.append(result)
                     record["firms"] = [asdict(item) for item in firm_results]
                     self._runs.save(run_id, record)
@@ -178,6 +220,14 @@ class PullWorkflow:
                 record["completed_at"] = self._clock()
                 record["diagnostics"].append(f"workflow execution failed: {error}")
                 record["summary"] = asdict(self._summary(()))
+                current = record.get("progress", {})
+                self._set_progress(
+                    record,
+                    int(current.get("percent", 0)),
+                    "Pull failed before the current step could finish.",
+                    int(current.get("completed_artifacts", 0)),
+                    int(current.get("total_artifacts", 0)),
+                )
                 self._runs.save(run_id, record)
             return self._typed_result(self._runs.get(run_id))
 
@@ -201,7 +251,9 @@ class PullWorkflow:
                 "resolved_firm_ids",
                 "summary",
                 "diagnostics",
+                "progress",
             )
+            if key in record
         }
 
     def results(self, run_id: str) -> dict[str, Any]:
@@ -220,17 +272,28 @@ class PullWorkflow:
     def _planner(self) -> PullPlanner:
         return PullPlanner(self._template, self._adapters, self._firms)
 
-    def _execute_firm(self, run_id: str, plan: PlannedFirm) -> FirmPullResult:
-        artifacts = tuple(
-            self._execute_artifact(run_id, plan, artifact) for artifact in plan.artifacts
-        )
+    def _execute_firm(
+        self,
+        run_id: str,
+        plan: PlannedFirm,
+        artifact_started: Callable[[PlannedFirm, PlannedArtifact], None] | None = None,
+        artifact_completed: Callable[[PlannedFirm, PlannedArtifact], None] | None = None,
+    ) -> FirmPullResult:
+        artifacts = []
+        for artifact in plan.artifacts:
+            if artifact_started is not None:
+                artifact_started(plan, artifact)
+            artifacts.append(self._execute_artifact(run_id, plan, artifact))
+            if artifact_completed is not None:
+                artifact_completed(plan, artifact)
+        artifact_results = tuple(artifacts)
         return FirmPullResult(
             plan.firm.firm_id,
             plan.firm.canonical_name,
             plan.profile.source_profile_revision_id if plan.profile else None,
             plan.profile.revision_number if plan.profile else 0,
-            self._artifact_status(artifacts),
-            artifacts,
+            self._artifact_status(artifact_results),
+            artifact_results,
         )
 
     def _execute_artifact(
@@ -482,7 +545,54 @@ class PullWorkflow:
             record["stage_events"].append(
                 {"stage": stage.value, "completed_at": self._clock()}
             )
+        percent, message = {
+            PullStage.RECEIVED: (5, "Pull request received."),
+            PullStage.FIRMS_RESOLVED: (10, "Resolved the selected firms."),
+            PullStage.REVISIONS_SNAPSHOTTED: (15, "Saved the source-profile revisions."),
+            PullStage.ARTIFACTS_EXPANDED: (20, "Expanded the enabled sources."),
+            PullStage.ATTEMPTABILITY_DETERMINED: (25, "Checked which sources can run."),
+            PullStage.RETRIEVAL_EXECUTED: (90, "Finished retrieving enabled sources."),
+            PullStage.ARTIFACTS_INGESTED: (93, "Confirmed repository ingestion."),
+            PullStage.RESULTS_RECORDED: (97, "Recorded source results."),
+            PullStage.SUMMARIZED: (100, "Pull workflow complete."),
+        }[stage]
+        current = record.get("progress", {})
+        self._set_progress(
+            record,
+            percent,
+            message,
+            int(current.get("completed_artifacts", 0)),
+            int(current.get("total_artifacts", 0)),
+            save=False,
+        )
         self._runs.save(record["run_id"], record)
+
+    @staticmethod
+    def _retrieval_percent(completed: int, total: int) -> int:
+        """Allocate the long-running retrieval stage across 25–90 percent."""
+        if total <= 0:
+            return 90
+        return 25 + round(65 * completed / total)
+
+    def _set_progress(
+        self,
+        record: dict[str, Any],
+        percent: int,
+        message: str,
+        completed_artifacts: int,
+        total_artifacts: int,
+        *,
+        save: bool = True,
+    ) -> None:
+        record["progress"] = {
+            "percent": max(0, min(100, percent)),
+            "message": message,
+            "completed_artifacts": completed_artifacts,
+            "total_artifacts": total_artifacts,
+            "updated_at": self._clock(),
+        }
+        if save:
+            self._runs.save(record["run_id"], record)
 
     def _snapshot(self, firm_id: str, profile: Any) -> dict[str, Any]:
         if profile is not None:
