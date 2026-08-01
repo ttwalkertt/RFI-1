@@ -27,7 +27,11 @@ from rfi.artifacts import (
 )
 from rfi.concepts import ConceptError, ConceptRepository, ConceptService
 from rfi.firms import FirmError, FirmRepository, FirmService
-from rfi.firm_configuration import validate_firm_configuration
+from rfi.firm_configuration import (
+    FirmConfigurationError,
+    prepare_firm_configuration,
+    validate_firm_configuration,
+)
 from rfi.mailing_lists import (
     LinuxMailingListWorkflowService,
     LoreArchive,
@@ -57,6 +61,10 @@ OPERATOR_NAVIGATION = (
     ("/artifacts", "Artifacts"),
 )
 _OPERATOR_NAVIGATION_SLOT = "<!-- operator-navigation -->"
+
+
+class FirmConfigurationReloadInProgress(RuntimeError):
+    """A second explicit reload arrived before the active reload completed."""
 
 
 def _json(value: Any) -> bytes:
@@ -297,6 +305,7 @@ class AdminConsole(ThreadingHTTPServer):
     def __init__(
         self,
         address: tuple[str, int],
+        state: Path,
         service: ConceptService,
         firm_service: FirmService,
         source_profile_service: SourceProfileService,
@@ -308,6 +317,8 @@ class AdminConsole(ThreadingHTTPServer):
         linux_mailing_list_workflow: LinuxMailingListWorkflowService,
         mailing_list_fetch_queue: MailingListFetchQueue,
     ) -> None:
+        self.state = state
+        self.firm_configuration_reload_lock = threading.Lock()
         self.service = service
         self.firm_service = firm_service
         self.source_profile_service = source_profile_service
@@ -319,6 +330,17 @@ class AdminConsole(ThreadingHTTPServer):
         self.linux_mailing_list_workflow = linux_mailing_list_workflow
         self.mailing_list_fetch_queue = mailing_list_fetch_queue
         super().__init__(address, AdminHandler)
+
+    def reload_firm_configurations(self) -> dict[str, Any]:
+        """Run the single governed complete-set materialization without overlapping reloads."""
+        if not self.firm_configuration_reload_lock.acquire(blocking=False):
+            raise FirmConfigurationReloadInProgress(
+                "firm configuration reload is already in progress"
+            )
+        try:
+            return {"status": "reloaded", **asdict(prepare_firm_configuration(self.state))}
+        finally:
+            self.firm_configuration_reload_lock.release()
 
     def server_close(self) -> None:
         self.mailing_list_fetch_queue.close()
@@ -421,6 +443,22 @@ class AdminHandler(BaseHTTPRequestHandler):
                 self._error(HTTPStatus.NOT_FOUND, "unknown browser request")
                 return
             self._api(method, path, parse_qs(split.query))
+        except FirmConfigurationReloadInProgress as error:
+            self._error(
+                HTTPStatus.CONFLICT,
+                str(error),
+                "firm_configuration_reload_in_progress",
+            )
+        except FirmConfigurationError as error:
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {
+                    "error": str(error),
+                    "error_code": "firm_configuration_invalid",
+                    "status": int(HTTPStatus.BAD_REQUEST),
+                    "diagnostics": list(error.diagnostics),
+                },
+            )
         except (
             ConceptError,
             FirmError,
@@ -480,6 +518,17 @@ class AdminHandler(BaseHTTPRequestHandler):
         mailing_list_workflow = self.server.linux_mailing_list_workflow
         mailing_list_fetch_queue = self.server.mailing_list_fetch_queue
         streams = self.server.stream_service
+        if method == "POST" and parts == ["api", "firm-configurations", "reload"]:
+            body = self._body()
+            if body or query:
+                raise ConceptError(
+                    "firm configuration reload request must not contain scope controls"
+                )
+            self._send_json(
+                HTTPStatus.OK,
+                self.server.reload_firm_configurations(),
+            )
+            return
         if method == "GET" and parts == ["api", "linux-mailing-lists"]:
             self._send_json(HTTPStatus.OK, {
                 "catalog": [asdict(item) for item in mailing_list_workflow.catalog()],
@@ -1139,6 +1188,7 @@ def create_admin_server(
     )
     return AdminConsole(
         (host, port),
+        state,
         ConceptService(repository),
         firm_service,
         SourceProfileService(source_profile_repository, firm_repository, template),

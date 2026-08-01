@@ -58,6 +58,7 @@ class MaterializationResult:
     firms: int
     profiles: int
     external_identities: int
+    repository_authority_revision: int
     authority: str = "external-json"
 
 
@@ -399,7 +400,7 @@ def materialize_firm_configurations(
 ) -> MaterializationResult:
     """Overwrite current file-owned projections in one all-or-nothing transaction."""
     if not configurations:
-        return MaterializationResult(0, 0, 0, 0)
+        return MaterializationResult(0, 0, 0, 0, database.revision())
     firms = FirmRepository(state / "firm-catalog")
     profiles = SourceProfileRepository(
         state / "source-profiles", load_canonical_template()
@@ -523,10 +524,11 @@ def materialize_firm_configurations(
             )
             if fail_after_firms is not None and count >= fail_after_firms:
                 raise FirmConfigurationError(("injected materialization failure",))
-        database.advance_revision(connection)
+        repository_authority_revision = database.advance_revision(connection)
     identities = sum(item.identity is not None for item in configurations)
     return MaterializationResult(
-        len(configurations), len(configurations), len(configurations), identities
+        len(configurations), len(configurations), len(configurations), identities,
+        repository_authority_revision,
     )
 
 

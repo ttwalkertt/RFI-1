@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Complete
 
 ## Objective
 
@@ -243,3 +243,17 @@ The completed review shall report the status and responsibility of:
 - retained limitations and the next architectural milestone, explicitly identifying change-aware
   or content-addressed no-op materialization as a likely future task while preserving
   init-equivalent revision creation in TASK-054.
+
+## Completion Record
+
+The Target Firms console now exposes the confirmed complete-set reload action. The fixed API route
+accepts only an empty JSON object, delegates to `prepare_firm_configuration(state)`, and returns the
+materialization counts plus the exact authority revision advanced inside the atomic transaction.
+A server-local non-blocking guard rejects overlapping reload requests without locking pulls or
+other application work.
+
+Focused verification proves structured validation failures with zero writes, injected rollback
+and retry equivalence, repeated init-equivalent revision creation, validation-only admin startup,
+read-only externally managed records, unchanged acquisition evidence, hint projection without
+restart, and pull snapshot isolation across a reload. Reproducible commands and the complete
+Architectural Status Summary are recorded in `docs/TASK-054-review.md`.

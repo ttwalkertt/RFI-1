@@ -52,7 +52,7 @@
 | TASK-051 | Preserve indeterminate coverage in Pull Workflow outcomes | Done |
 | TASK-052 | Restore configured discovery hints for transcript retrieval | Done |
 | TASK-053 | Apply link traversal budget after eligibility filtering | Done |
-| TASK-054 | Reload externally managed firm profiles from the Target Firms console | Ready |
+| TASK-054 | Reload externally managed firm profiles from the Target Firms console | Complete |
 
 ## Architectural Progression
 

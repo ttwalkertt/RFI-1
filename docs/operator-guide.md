@@ -156,7 +156,8 @@ intelligence.
 ### When to use this page
 
 Use Target Firms to search and filter existing firms, inspect recognition metadata and firm-owned
-acquisition profiles and history, or revise an existing non-externally-managed target identity.
+acquisition profiles and history, revise an existing non-externally-managed target identity, or
+explicitly reload the complete externally managed firm-configuration set.
 
 ### Prerequisites
 
@@ -174,12 +175,22 @@ configuration loaders rather than this browser. A stable `firm_id` remains the d
 6. Inspect the independently collapsible identity, names, classification, discovery, acquisition
    profile, and revision-history sections. Acquisition configuration is read-only in this browser.
 
+For externally maintained JSON, choose `Reload Firm Profiles` and confirm the complete-set reload.
+The action validates every `firm-config/*.firm-config.json` file before one atomic materialization
+transaction. A successful reload may append immutable firm and source-profile revisions even when
+files are unchanged. It does not modify acquisitions, retained artifacts, observations, or
+historical evidence. A second reload is rejected while one is active; pulls already running retain
+their captured profile revision, and later pulls use the newly current revision.
+
 ### What changes repository state
 
 `Save new revision` creates a complete immutable revision and advances the current selector.
 `Retire` also appends a revision; it does not delete the firm. Validation, preview, list/detail,
-search, filter, and historical inspection do not persist. Source-discovery hints are operator
-guidance and never become evidence.
+search, filter, cancellation, and historical inspection do not persist. `Reload Firm Profiles`
+is an explicit complete-set write through
+the same external-configuration materialization path as `rfi init`; it accepts no browser-supplied
+file path, configuration document, or firm selection.
+Source-discovery hints are operator guidance and never become evidence.
 
 For externally managed firms, an optional source-scoped transcript URL belongs under
 `sources.earnings_transcript.discovery_hints` in the firm configuration JSON. Pull Sources tries
