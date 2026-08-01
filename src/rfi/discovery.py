@@ -254,9 +254,43 @@ class BoundedTranscriptDiscovery:
         visited: set[str] = set()
         listings: list[str] = []
         candidates: list[dict[str, str]] = []
+        raw_hyperlinks = 0
+        eligible_hyperlinks = 0
+        traversed_hyperlinks = 0
+
+        def normalized_links(
+            base_url: str, links: list[tuple[str, str]]
+        ) -> tuple[tuple[str, str, bool], ...]:
+            normalized: dict[str, tuple[str, str, bool]] = {}
+            for href, label in links:
+                target = urllib.parse.urljoin(base_url, href)
+                parsed = urllib.parse.urlsplit(target)
+                if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                    continue
+                target = urllib.parse.urlunsplit(
+                    (parsed.scheme, parsed.netloc, parsed.path, parsed.query, "")
+                )
+                is_candidate = EarningsCallTranscriptAcquisition._looks_like_transcript(
+                    label, target
+                )
+                evidence = urllib.parse.unquote(f"{label} {target}").casefold()
+                # Natural link evidence commonly uses the plural path component
+                # "transcripts". Treat it as the same discovery token while leaving
+                # ordinary transcript validation unchanged.
+                if not is_candidate and "transcripts" in evidence:
+                    is_candidate = EarningsCallTranscriptAcquisition._looks_like_transcript(
+                        label, target.replace("transcripts", "transcript")
+                    )
+                if not is_candidate and "transcript" not in evidence:
+                    continue
+                previous = normalized.get(target)
+                if previous is None or (is_candidate and not previous[2]):
+                    normalized[target] = (target, label, is_candidate)
+            return tuple(normalized.values())
 
         def traverse(urls: tuple[str, ...]) -> None:
             nonlocal exhausted, exhausted_budget
+            nonlocal raw_hyperlinks, eligible_hyperlinks, traversed_hyperlinks
             queue = deque((url, 0) for url in urls)
             while queue:
                 url, depth = queue.popleft()
@@ -287,28 +321,27 @@ class BoundedTranscriptDiscovery:
                 except Exception as error:
                     failures.append(("page_parse_failed", error.__class__.__name__))
                     continue
+                raw_hyperlinks += len(parser.links)
                 links = sorted(
-                    parser.links,
+                    normalized_links(response.url, parser.links),
                     key=lambda item: (
-                        not EarningsCallTranscriptAcquisition._looks_like_transcript(
-                            item[1], urllib.parse.urljoin(response.url, item[0])
-                        ),
+                        not item[2],
                         item[0],
                         item[1],
                     ),
                 )
+                eligible_hyperlinks += len(links)
                 if len(links) > self.policy.max_links_per_page:
                     exhausted = True
                     exhausted_budget = "max_links_per_page"
-                for href, label in links[: self.policy.max_links_per_page]:
-                    target = urllib.parse.urljoin(response.url, href)
-                    if EarningsCallTranscriptAcquisition._looks_like_transcript(label, target):
+                admitted = links[: self.policy.max_links_per_page]
+                traversed_hyperlinks += len(admitted)
+                for target, label, is_candidate in admitted:
+                    if is_candidate:
                         candidates.append({"url": target, "label": label or target})
-                    elif depth < self.policy.max_depth and target.startswith(
-                        ("http://", "https://")
-                    ):
+                    elif depth < self.policy.max_depth:
                         queue.append((target, depth + 1))
-                    elif target.startswith(("http://", "https://")):
+                    else:
                         exhausted = True
                         exhausted_budget = "max_depth"
                         break
@@ -378,6 +411,9 @@ class BoundedTranscriptDiscovery:
                 "distinct_hosts": len(self.transport.hosts),
                 "bytes": self.transport.bytes,
                 "candidate_urls": len(unique_candidates),
+                "raw_hyperlinks": raw_hyperlinks,
+                "eligible_hyperlinks": eligible_hyperlinks,
+                "traversed_hyperlinks": traversed_hyperlinks,
                 "bounds_exhausted": exhausted,
                 "exhausted_budget": exhausted_budget,
                 "discovery_failures": len(failures),

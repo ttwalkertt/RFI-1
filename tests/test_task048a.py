@@ -113,7 +113,7 @@ class TranscriptPullIntegrationTests(unittest.TestCase):
         results = []
         for maximum in (0, 1):
             seed = "https://ir.example/page"
-            content = b"<a href='next'>ordinary page</a>"
+            content = b"<a href='transcripts'>transcript archive</a>"
             bounded = BudgetedTranscriptTransport(
                 TranscriptTransport({
                     seed: EarningsTranscriptHttpResponse(
@@ -239,7 +239,10 @@ class TranscriptPullIntegrationTests(unittest.TestCase):
 
     def test_page_host_byte_and_link_limits_count_requests_and_stop(self) -> None:
         seed = "https://ir.example/events"
-        body = b"<a href='one'>one</a><a href='two'>two</a>"
+        body = (
+            b"<a href='one-earnings-call-transcript'>earnings call transcript</a>"
+            b"<a href='two-earnings-call-transcript'>earnings call transcript</a>"
+        )
         budget = BudgetedTranscriptTransport(
             TranscriptTransport({
                 seed: EarningsTranscriptHttpResponse(seed, 200, "text/html", body)
@@ -255,7 +258,7 @@ class TranscriptPullIntegrationTests(unittest.TestCase):
     def test_search_page_host_byte_depth_and_elapsed_bounds_are_named(self) -> None:
         seed = "https://one.example/start"
         next_url = "https://two.example/next"
-        html = f"<a href='{next_url}'>ordinary page</a>".encode()
+        html = f"<a href='{next_url}/transcripts'>transcript archive</a>".encode()
 
         # Seed pages are depth zero, so an admitted traversal from a depth-zero seed
         # exhausts max_depth=0 before a second fetch.

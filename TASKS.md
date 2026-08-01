@@ -51,6 +51,7 @@
 | TASK-050 | Commit-aware review-package generation and verification | Complete |
 | TASK-051 | Preserve indeterminate coverage in Pull Workflow outcomes | Done |
 | TASK-052 | Restore configured discovery hints for transcript retrieval | Done |
+| TASK-053 | Apply link traversal budget after eligibility filtering | Done |
 
 ## Architectural Progression
 
