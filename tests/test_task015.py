@@ -267,11 +267,54 @@ class PullWorkflowCase(unittest.TestCase):
             skipped.diagnostic,
         )
         durable = self.workflow.results(result.run_id)
+        self.assertEqual(durable["progress"]["percent"], 100)
+        self.assertEqual(durable["progress"]["message"], "Pull workflow complete.")
+        self.assertEqual(durable["progress"]["completed_artifacts"], 5)
+        self.assertEqual(durable["progress"]["total_artifacts"], 5)
         self.assertEqual(
             durable["profile_snapshots"][0]["source_profile_revision_id"],
             first.source_profile_revision_id,
         )
         self.assertEqual(self.acquisition.verify_integrity()["artifacts"], 1)
+
+    def test_status_reports_current_source_while_retrieval_is_running(self) -> None:
+        url = "https://fixture.test/slow"
+        self.adapter.contents[url] = b"slow artifact"
+        self.profiles.publish(
+            self.draft("seagate", {"annual_report": (True, self.direct(url))}),
+            None,
+        )
+        retrieval_started = threading.Event()
+        release_retrieval = threading.Event()
+        retrieve = self.adapter.retrieve
+
+        def blocking_retrieve(
+            profile: SourceProfile, candidate: AdapterCandidate
+        ) -> RetrievalResult:
+            retrieval_started.set()
+            release_retrieval.wait(2)
+            return retrieve(profile, candidate)
+
+        self.adapter.retrieve = blocking_retrieve  # type: ignore[method-assign]
+        run_id = self.workflow.initiate(PullRequest(("seagate",)))
+        worker = threading.Thread(target=self.workflow.execute, args=(run_id,))
+        worker.start()
+        try:
+            self.assertTrue(retrieval_started.wait(1))
+            status = self.workflow.status(run_id)
+            self.assertEqual(status["status"], "running")
+            self.assertEqual(status["progress"]["percent"], 25)
+            self.assertEqual(status["progress"]["completed_artifacts"], 0)
+            self.assertEqual(status["progress"]["total_artifacts"], 1)
+            self.assertEqual(
+                status["progress"]["message"],
+                "Retrieving source 1 of 1: Published annual report for Seagate.",
+            )
+        finally:
+            release_retrieval.set()
+            worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(self.workflow.status(run_id)["progress"]["percent"], 100)
 
     def test_no_change_successful_and_failed_workflow_aggregation(self) -> None:
         url = "https://fixture.test/one"
@@ -502,6 +545,9 @@ class PullInterfaceTests(unittest.TestCase):
             "runnable_artifacts",
             "incomplete_artifacts",
             "progress-bar",
+            "progress-percent",
+            "status.progress?.message",
+            "aria-valuenow",
         ):
             self.assertIn(marker, html)
         self.assertIn("pull_workflow.initiate", server)
