@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import heapq
 import re
 import socket
@@ -11,7 +12,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from enum import Enum
 from html.parser import HTMLParser
@@ -34,6 +35,7 @@ from rfi.acquisition.earnings_transcripts import (
 )
 from rfi.acquisition.contracts import (
     ContractError,
+    DiscoveryProvenance,
     IntervalAcquisitionRequest,
     RetrievalResult,
     SourceProfile,
@@ -210,7 +212,7 @@ class _PageParser(HTMLParser):
 @dataclass(frozen=True)
 class TranscriptDiscoveryResult:
     listing_urls: tuple[str, ...]
-    candidate_proposals: tuple[dict[str, str], ...]
+    candidate_proposals: tuple[dict[str, Any], ...]
     allowed_hosts: tuple[str, ...]
     exhausted: bool
     diagnostics: dict[str, Any]
@@ -239,13 +241,14 @@ class RankedCandidateProposal:
     observed_url: str
     label: str
     normalized_url: str
+    observed_aliases: tuple[str, ...]
     reasons: tuple[str, ...]
     depth: int
 
     def sort_key(self) -> tuple[object, ...]:
         return (
             self.phase_priority, self.rank, self.serial, self.observed_url, self.label,
-            self.normalized_url, self.reasons, self.depth,
+            self.normalized_url, self.observed_aliases, self.reasons, self.depth,
         )
 
 
@@ -323,6 +326,45 @@ class GraphTraversalState:
         self.proposed.add(proposal.normalized_url)
         if queue_admission:
             self.queue_admitted += 1
+
+    def reconcile_candidate_redirect(
+        self, requested_identity: str, resolved_url: str
+    ) -> None:
+        """Collapse an observed candidate redirect while retaining every exact alias."""
+        resolved_identity = normalize_transcript_url(resolved_url)
+        current = next((
+            item for item in self.candidate_proposals
+            if item.normalized_url == requested_identity
+        ), None)
+        if current is None:
+            return
+        aliases = tuple(dict.fromkeys((*current.observed_aliases, resolved_url)))
+        existing = next((
+            item for item in self.candidate_proposals
+            if item is not current and item.normalized_url == resolved_identity
+        ), None)
+        if existing is not None:
+            merged = replace(
+                existing,
+                observed_aliases=tuple(dict.fromkeys((*existing.observed_aliases, *aliases))),
+            )
+            self.candidate_proposals = [
+                merged if item is existing else item
+                for item in self.candidate_proposals if item is not current
+            ]
+            self.proposed.discard(requested_identity)
+            return
+        replacement = replace(
+            current,
+            observed_url=resolved_url,
+            normalized_url=resolved_identity,
+            observed_aliases=aliases,
+        )
+        self.candidate_proposals = [
+            replacement if item is current else item for item in self.candidate_proposals
+        ]
+        self.proposed.discard(requested_identity)
+        self.proposed.add(resolved_identity)
 
 
 class BudgetedTranscriptTransport(EarningsTranscriptTransport):
@@ -531,7 +573,7 @@ class BoundedTranscriptDiscovery:
                         seed_rank, seed_reasons = ranking(url, url, True, 0, url)
                         state.admit_candidate(RankedCandidateProposal(
                             phase_priority[phase], seed_rank, serial, url, url, identity,
-                            tuple(seed_reasons), 0,
+                            (url,), tuple(seed_reasons), 0,
                         ), queue_admission=False)
                 hint_attempt: dict[str, str] | None = None
                 if phase == "configured_hint":
@@ -587,17 +629,22 @@ class BoundedTranscriptDiscovery:
                 if hint_attempt is not None:
                     hint_attempt["status"] = "fetched"
                 if resolved_identity != identity:
+                    if is_seed_candidate and resolved_identity in state.visited:
+                        state.reconcile_candidate_redirect(identity, response.url)
+                        reject(
+                            "redirect_alias_duplicate", response.url,
+                            cycle="duplicate_identity",
+                        )
+                        continue
                     if resolved_identity in ancestors or resolved_identity in state.visited:
                         reject("redirect_cycle", response.url, cycle="redirect_cycle")
                         failure("hint_redirect_rejected" if phase == "configured_hint"
                                 else "redirect_cycle", response.url, status=response.status)
                         continue
                     state.visited.add(resolved_identity)
+                if is_seed_candidate:
+                    state.reconcile_candidate_redirect(identity, response.url)
                 if response.media_type not in {"text/html", "application/xhtml+xml"}:
-                    if EarningsCallTranscriptAcquisition._looks_like_transcript(
-                        "", response.url
-                    ):
-                        candidates.append({"url": response.url, "label": response.url})
                     continue
                 state.listings.append(response.url)
                 parser = _PageParser()
@@ -665,7 +712,7 @@ class BoundedTranscriptDiscovery:
                     if is_candidate:
                         state.admit_candidate(RankedCandidateProposal(
                             phase_priority[phase], rank, serial, observed,
-                            label or observed, target, tuple(reasons), depth + 1,
+                            label or observed, target, (observed,), tuple(reasons), depth + 1,
                         ))
                         serial += 1
                     else:
@@ -735,7 +782,11 @@ class BoundedTranscriptDiscovery:
             state.candidate_proposals, key=RankedCandidateProposal.sort_key
         )
         unique_candidates = tuple(
-            {"url": item.observed_url, "label": item.label}
+            {
+                "url": item.observed_url,
+                "label": item.label,
+                "observed_aliases": list(item.observed_aliases),
+            }
             for item in ordered_candidates
         )
         top_candidates = [
@@ -872,7 +923,8 @@ class EarningsTranscriptPullAdapter:
         self._transport = transport or UrllibEarningsTranscriptTransport()
         self._clock = clock
         self._monotonic = monotonic
-        self._retrievals: dict[str, RetrievalResult] = {}
+        self._budgets: dict[str, BudgetedTranscriptTransport] = {}
+        self._validated_expected: set[str] = set()
         self._repository = repository
 
     def discover(self, profile: SourceProfile, continuation: str | None) -> DiscoveryPage:
@@ -932,10 +984,7 @@ class EarningsTranscriptPullAdapter:
                      "bytes": 0, "candidate_urls": int(mode == "direct_url"),
                      "bounds_exhausted": False, "exhausted_budget": ""},
                 )
-            listing_urls = discovered.listing_urls
-            if not listing_urls and discovered.candidate_proposals:
-                listing_urls = (discovered.candidate_proposals[0]["url"],)
-            if not listing_urls:
+            if not discovered.listing_urls and not discovered.candidate_proposals:
                 early = {
                     "adapter_id": self.adapter_id,
                     "discovery_class": configuration.get("discovery_class"),
@@ -962,47 +1011,49 @@ class EarningsTranscriptPullAdapter:
                               "operator_summary": summary,
                               "final_coverage_classification": "coverage_indeterminate"})
                 return DiscoveryPage((), None, early)
-            governed = SourceProfile(
-                profile.source_id, profile.name, profile.enabled, self.mechanism,
-                {
-                    "listing_urls": list(listing_urls[:8]),
-                    "allowed_hosts": list(discovered.allowed_hosts),
-                    "candidate_proposals": list(discovered.candidate_proposals),
-                    "maximum_candidates": policy.max_candidate_evaluations,
-                    "discover_listing_links": False,
-                    "authoritative_listing": False,
-                    "firm_identity_terms": list(identity_terms),
-                    "checkpoint_reporting_period": (
-                        checkpoint_period.code if checkpoint_period else None
-                    ),
-                    "expected_reporting_period": expected_period.code,
-                },
-                profile.policy,
-            )
-            retriever = EarningsCallTranscriptAcquisition(governed, budgeted, self._clock)
-            interval = retriever.acquire(IntervalAcquisitionRequest(
-                str(profile.policy["firm_id"]), "earnings_transcript",
-                date(2000, 1, 1), today + timedelta(days=1),
-            ))
         except DiscoveryPolicyError as error:
             raise ContractError(str(error)) from error
-        except Exception as error:
-            raise AdapterFailure(
-                FailureClass.TRANSIENT_ADAPTER,
-                str(error) or error.__class__.__name__, True,
-                "transcript_discovery_failed",
-            ) from error
+        selected = discovered.candidate_proposals[:policy.max_candidate_evaluations]
         candidates = []
-        for envelope in interval.artifacts:
-            candidate = AdapterCandidate(
-                envelope.candidate.candidate_id, envelope.candidate.document_id,
-                ReportingPeriod.from_date(envelope.artifact_date).ordinal,
-                f"published-{envelope.artifact_date.isoformat()}",
-                envelope.candidate.provenance,
-            )
-            self._retrievals[candidate.candidate_id] = envelope.retrieval
-            candidates.append(candidate)
-        coverage = "indeterminate" if discovered.exhausted else interval.coverage.value
+        discovered_at = self._clock()
+        for proposal_rank, proposal in enumerate(selected):
+            url = str(proposal["url"])
+            label = str(proposal.get("label") or url)
+            normalized = normalize_transcript_url(url)
+            aliases = tuple(
+                value for value in proposal.get("observed_aliases", ())
+                if isinstance(value, str) and value
+            ) or (url,)
+            period = reporting_period_from_evidence(label, normalized) or expected_period
+            digest = hashlib.sha256(normalized.encode()).hexdigest()
+            candidates.append(AdapterCandidate(
+                f"candidate-{digest}", f"document-{digest}", period.ordinal,
+                f"proposal-{period.code.casefold()}",
+                DiscoveryProvenance(
+                    discovered_at, self.mechanism,
+                    locations=tuple(dict.fromkeys((*aliases, normalized))),
+                    metadata={
+                        "firm_id": profile.policy["firm_id"],
+                        "canonical_artifact_id": "earnings_transcript",
+                        "link_label": label,
+                        "requested_url": aliases[0],
+                        "resolved_url": url,
+                        "observed_aliases": list(aliases),
+                        "allowed_hosts": list(discovered.allowed_hosts),
+                        "firm_identity_terms": list(identity_terms),
+                        "checkpoint_reporting_period": (
+                            checkpoint_period.code if checkpoint_period else ""
+                        ),
+                        "expected_reporting_period": expected_period.code,
+                        "deferred_candidate_evaluation": True,
+                        "proposal_rank": proposal_rank,
+                    },
+                ),
+            ))
+        self._budgets[profile.source_id] = budgeted
+        self._validated_expected.discard(profile.source_id)
+        candidate_limit_reached = len(discovered.candidate_proposals) > len(selected)
+        coverage = "indeterminate"
         final_diagnostics = dict(discovered.diagnostics)
         final_diagnostics.update({
             "history_key": f"{profile.policy.get('firm_id')}:{profile.source_id}:{self.adapter_id}",
@@ -1019,74 +1070,29 @@ class EarningsTranscriptPullAdapter:
             ),
             "expected_reporting_period": expected_period.code,
             "reporting_period_basis": period_basis,
+            "candidate_selected_count": len(candidates),
+            "candidate_evaluated_count": 0,
+            "candidate_disposition_counts": {},
+            "candidate_disposition_samples": [],
+            "validation_failure_counts": {},
+            "candidate_retrieval_failure_counts": {},
+            "candidate_failure_samples": [],
         })
         if budgeted.exhausted:
             coverage = "indeterminate"
-        failure_code_counts = dict(sorted(Counter(
-            failure.code for failure in interval.failures
-        ).items()))
-        validation_failure_counts = dict(sorted(Counter(
-            self._candidate_failure_code(failure)
-            for failure in interval.failures if failure.code == "candidate_invalid"
-        ).items()))
-        retrieval_failure_counts = dict(sorted(Counter(
-            self._candidate_failure_code(failure)
-            for failure in interval.failures if failure.code == "candidate_unavailable"
-        ).items()))
-        candidate_failure_samples = []
-        for failure in interval.failures:
-            if failure.code not in {"candidate_unavailable", "candidate_invalid"}:
-                continue
-            if len(candidate_failure_samples) >= BoundedTranscriptDiscovery.DIAGNOSTIC_SAMPLE_LIMIT:
-                break
-            classification = self._candidate_failure_code(failure)
-            sample: dict[str, object] = {"classification": classification}
-            url = failure.details.get("url")
-            if isinstance(url, str):
-                sample["url"] = redact_diagnostic_url(url)
-            status = failure.details.get("http_status")
-            if isinstance(status, int):
-                sample["http_status"] = status
-            candidate_failure_samples.append(sample)
-        candidate_limit_reached = failure_code_counts.get("candidate_limit", 0) > 0
         if candidate_limit_reached and not final_diagnostics["exhausted_budget"]:
             final_diagnostics["bounds_exhausted"] = True
             final_diagnostics["exhausted_budget"] = "max_candidate_evaluations"
             coverage = "indeterminate"
-        disposition_counts = dict(sorted(Counter(
-            item.code for item in retriever.candidate_dispositions
-        ).items()))
-        disposition_samples = [
-            {
-                "disposition": item.code,
-                "url": redact_diagnostic_url(item.url),
-                **({"reporting_period": item.reporting_period}
-                   if item.reporting_period else {}),
-            }
-            for item in retriever.candidate_dispositions[
-                :BoundedTranscriptDiscovery.DIAGNOSTIC_SAMPLE_LIMIT
-            ]
-        ]
-        evaluated_count = len(retriever.candidate_dispositions)
-        if sum(disposition_counts.values()) != evaluated_count:
-            raise RuntimeError("candidate dispositions must account for every evaluation")
-        final_diagnostics.update({
-            "candidate_evaluated_count": evaluated_count,
-            "candidate_disposition_counts": disposition_counts,
-            "candidate_disposition_samples": disposition_samples,
-            "validation_failure_counts": validation_failure_counts,
-            "candidate_retrieval_failure_counts": retrieval_failure_counts,
-            "candidate_failure_samples": candidate_failure_samples,
-        })
         classification, summary = self._classify_outcome(
-            {**final_diagnostics, "coverage": coverage}, interval.failures
+            {**final_diagnostics, "coverage": coverage}, ()
         )
         return DiscoveryPage(tuple(candidates), None, {
             "adapter_id": self.adapter_id,
             "discovery_class": configuration.get("discovery_class"),
             "coverage": coverage,
-            "validation_failures": len(interval.failures),
-            "failure_code_counts": failure_code_counts,
+            "validation_failures": 0,
+            "failure_code_counts": {},
             "primary_classification": classification,
             "operator_summary": summary,
             "final_coverage_classification": (
@@ -1101,7 +1107,12 @@ class EarningsTranscriptPullAdapter:
     ) -> tuple[str, str]:
         if diagnostics.get("bounds_exhausted"):
             budget = str(diagnostics.get("exhausted_budget") or "")
-            count = diagnostics.get("candidate_evaluated_count", 0)
+            count = diagnostics.get(
+                "candidate_evaluated_count",
+                diagnostics.get("candidate_selected_count", 0),
+            )
+            if not count:
+                count = diagnostics.get("candidate_selected_count", 0)
             if budget == "max_candidate_evaluations":
                 dispositions = diagnostics.get("candidate_disposition_counts")
                 stale = retrieval = validation = 0
@@ -1134,7 +1145,7 @@ class EarningsTranscriptPullAdapter:
                     details.append(f"{validation} validation failures")
                 return (
                     "discovery_budget_exhausted",
-                    "Discovery exhausted the candidate-evaluation budget after evaluating "
+                    "Discovery exhausted the candidate-evaluation budget after selecting "
                     f"{count} ranked unique links"
                     + (f" ({', '.join(details)})." if details else "."),
                 )
@@ -1227,7 +1238,12 @@ class EarningsTranscriptPullAdapter:
                 "No eligible transcript links were identified on the configured page.",
             )
         if diagnostics.get("candidate_urls", 0):
-            return "candidate_not_found_within_bounds", "No transcript candidate validated."
+            count = diagnostics.get("candidate_selected_count", 0)
+            return (
+                "candidate_proposals_ready",
+                f"Discovery selected {count} ranked transcript candidate"
+                f"{'s' if count != 1 else ''} for retrieval.",
+            )
         return (
             "coverage_indeterminate",
             "Discovery completed without a candidate, but coverage remains indeterminate.",
@@ -1280,14 +1296,123 @@ class EarningsTranscriptPullAdapter:
 
     def retrieve(self, profile: SourceProfile, candidate: AdapterCandidate) -> RetrievalResult:
         self._validate_profile(profile)
-        try:
-            return self._retrievals.pop(candidate.candidate_id)
-        except KeyError as error:
+        metadata = candidate.provenance.metadata
+        url = metadata.get("resolved_url")
+        label = metadata.get("link_label")
+        allowed_hosts = metadata.get("allowed_hosts")
+        identity_terms = metadata.get("firm_identity_terms")
+        if not isinstance(url, str) or not isinstance(label, str):
             raise AdapterFailure(
                 FailureClass.MALFORMED_ADAPTER,
-                "earnings transcript candidate was not produced by this discovery",
+                "earnings transcript proposal lacks retrieval metadata",
                 False, "missing_transcript_candidate",
-            ) from error
+            )
+        budgeted = self._budgets.get(profile.source_id)
+        if budgeted is None:
+            raise AdapterFailure(
+                FailureClass.MALFORMED_ADAPTER,
+                "earnings transcript retrieval requires a preceding discovery",
+                False, "missing_transcript_discovery_context",
+            )
+        governed = SourceProfile(
+            profile.source_id, profile.name, profile.enabled, self.mechanism,
+            {
+                "listing_urls": [],
+                "allowed_hosts": list(allowed_hosts) if isinstance(allowed_hosts, list) else [],
+                "candidate_proposals": [{"url": url, "label": label}],
+                "maximum_candidates": 1,
+                "discover_listing_links": False,
+                "authoritative_listing": False,
+                "firm_identity_terms": (
+                    list(identity_terms) if isinstance(identity_terms, list) else []
+                ),
+                "checkpoint_reporting_period": (
+                    metadata.get("checkpoint_reporting_period") or None
+                ),
+                "expected_reporting_period": metadata.get("expected_reporting_period"),
+            },
+            profile.policy,
+        )
+        retriever = EarningsCallTranscriptAcquisition(governed, budgeted, self._clock)
+        proposal_period = reporting_period_from_evidence(label, url)
+        expected_value = metadata.get("expected_reporting_period")
+        expected = (
+            ReportingPeriod.parse(expected_value)
+            if isinstance(expected_value, str) and expected_value else None
+        )
+        if (
+            profile.source_id in self._validated_expected
+            and expected is not None and proposal_period is not None
+            and proposal_period < expected
+        ):
+            raise AdapterFailure(
+                FailureClass.POLICY_REJECTION,
+                "A validated expected-period transcript already takes precedence.",
+                False, "historical_candidate_superseded",
+            )
+        interval = retriever.acquire(IntervalAcquisitionRequest(
+            str(profile.policy["firm_id"]), "earnings_transcript",
+            date(2000, 1, 1), date.fromisoformat(self._clock()[:10]) + timedelta(days=1),
+        ))
+        if len(interval.artifacts) == 1:
+            envelope = interval.artifacts[0]
+            if ReportingPeriod.from_date(envelope.artifact_date) == expected:
+                self._validated_expected.add(profile.source_id)
+            return replace(envelope.retrieval, diagnostics={
+                **envelope.retrieval.diagnostics,
+                "candidate_disposition": (
+                    retriever.candidate_dispositions[0].code
+                    if retriever.candidate_dispositions else "valid_new_artifact"
+                ),
+                "requested_aliases": list(metadata.get("observed_aliases", [])),
+                "validated_position": ReportingPeriod.from_date(
+                    envelope.artifact_date
+                ).ordinal,
+                "validated_revision": f"published-{envelope.artifact_date.isoformat()}",
+            })
+        if len(interval.artifacts) > 1:
+            raise ContractError("single transcript proposal produced multiple artifacts")
+        if interval.failures:
+            failure = interval.failures[0]
+            code = self._candidate_failure_code(failure)
+            retrieval_failure = failure.code == "candidate_unavailable"
+            raise AdapterFailure(
+                FailureClass.TRANSIENT_ADAPTER if retrieval_failure
+                else FailureClass.POLICY_REJECTION,
+                self._candidate_operator_message(code),
+                retrieval_failure,
+                code,
+            )
+        disposition = (
+            retriever.candidate_dispositions[0].code
+            if retriever.candidate_dispositions else "candidate_validation_mismatch"
+        )
+        raise AdapterFailure(
+            FailureClass.POLICY_REJECTION,
+            "Transcript candidate did not establish a new validated artifact.",
+            False, disposition,
+        )
+
+    @staticmethod
+    def _candidate_operator_message(code: str) -> str:
+        return {
+            CandidateFailureCode.HTTP_NOT_FOUND.value:
+                "A transcript candidate was found but returned HTTP 404.",
+            CandidateFailureCode.ACCESS_DENIED.value:
+                "A transcript candidate was found but access was denied.",
+            CandidateFailureCode.FETCH_TIMEOUT.value:
+                "A transcript candidate was found but retrieval timed out.",
+            CandidateFailureCode.RETRIEVAL_FAILURE.value:
+                "A transcript candidate was found but retrieval failed.",
+            CandidateFailureCode.UNSUPPORTED_CONTENT_TYPE.value:
+                "A transcript candidate was found but its content type is unsupported.",
+            CandidateFailureCode.EMPTY_CONTENT.value:
+                "A transcript candidate was found but its content was empty.",
+            CandidateFailureCode.JAVASCRIPT_REQUIRED.value:
+                "A transcript candidate was found but requires JavaScript.",
+            CandidateFailureCode.VALIDATION_MISMATCH.value:
+                "A transcript candidate was found but did not match transcript validation.",
+        }.get(code, "Transcript candidate retrieval failed.")
 
     def _validate_profile(self, profile: SourceProfile) -> None:
         if profile.mechanism != self.mechanism:

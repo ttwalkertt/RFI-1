@@ -230,7 +230,7 @@ class TraversalBudgetSemanticsTests(unittest.TestCase):
         self.assertEqual(diagnostics["traversed_hyperlinks"], 1)
         self.assertEqual(diagnostics["candidate_urls"], 1)
         self.assertEqual(diagnostics["search_queries"], 0)
-        self.assertEqual(requests, [STOCK_ANALYSIS_HINT, STOCK_ANALYSIS_HINT, candidate])
+        self.assertEqual(requests, [STOCK_ANALYSIS_HINT, candidate])
 
     def test_hint_first_acceptance_avoids_search_and_preserves_coverage_semantics(self) -> None:
         candidate = transcript_url(1)

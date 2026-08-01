@@ -6,6 +6,8 @@ TASK-057 is Complete. Transcript discovery now explores a bounded deterministic 
 uses the repository's conservative normalized URL identity for cycle and duplicate control, ranks
 unique nodes with explicit stable signals, and reports actionable structured and Pull Sources
 diagnostics. Candidate retrieval and validation remain owned by the TASK-048 retriever.
+The final robustness repair also removes eager candidate validation and cached bodies from
+discovery: the engine now receives bounded proposals and invokes validation during retrieval.
 
 ## Before and After
 
@@ -23,8 +25,8 @@ After:
 4. eligible nodes enter a deterministic priority queue;
 5. candidate proposals are globally ordered across parent pages with retained-anchor, configured-
    hint, and bounded-traversal stage precedence;
-6. the existing transcript retriever independently evaluates at most the governed number of
-   ranked unique proposals;
+6. the adapter emits at most the governed number of ranked unique proposals and the engine invokes
+   the existing transcript retriever for each selected proposal;
 7. structured diagnostics and Pull Sources expose the primary actual outcome.
 
 Exact requested and resolved URLs still flow into provenance. Normalized identity is never used as
@@ -37,8 +39,9 @@ a substitute for observed provenance.
   deterministic ranking, queue admission, search fallthrough, and bounded graph diagnostics.
 - `EarningsCallTranscriptAcquisition` continues to own candidate HTTP retrieval, date, content
   type, transcript structure, speaker evidence, firm identity, and artifact-envelope validation.
-- `EarningsTranscriptPullAdapter` composes graph proposals with retriever evaluation and maps the
-  two layers into one bounded diagnostic result.
+- `EarningsTranscriptPullAdapter` converts graph proposals into engine candidates, retains only
+  small run-scoped transport accounting, and invokes the retriever from `retrieve()` without
+  caching candidate bodies.
 - `PullWorkflow` selects the adapter's primary operator summary without interpreting graph JSON.
 
 This preserves the acquisition/evidence boundary and avoids a second validation path in traversal.
@@ -66,10 +69,46 @@ duplicated counters and ad hoc tuples. This is a minimum internal extraction: tr
 fetch and resource accounting, graph exploration still owns normalized-node ordering, and the
 retriever still exclusively decides whether a proposal is a valid transcript.
 
-Behavior is unchanged. URL normalization, retained-anchor and hint precedence, ranking keys,
+Traversal behavior is unchanged. URL normalization, retained-anchor and hint precedence, ranking keys,
 cycle/duplicate rules, all governed limits, operator messages, and retriever validation rules are
-identical. The regenerated eight-case reproduction JSON is byte-for-byte equal to the prior
-evidence, and TASK-056 retained-anchor compatibility remains green.
+identical. Reproduction evidence remains deterministic, and TASK-056 retained-anchor compatibility
+remains green.
+
+## Corrective Robustness Hardening
+
+The architectural review confirmed four defects and one lifecycle weakness after the original
+TASK-057 repair.
+
+First, a transcript-like non-HTML graph response attempted to append to an undefined local
+candidate collection. Non-HTML responses now remain typed graph proposals; PDF regression
+evidence proves one admission, consistent counters, and subsequent validation by
+`EarningsCallTranscriptAcquisition`.
+
+Second, two requested aliases could resolve to one normalized transcript URL and later collide as
+ambiguous engine candidates. `RankedCandidateProposal` now retains exact observed aliases while
+`GraphTraversalState` reconciles graph-observed redirect targets by normalized resolved identity.
+The engine receives one canonical candidate for converged aliases, while requested aliases and the
+exact resolved URL remain attributable. Query-distinct resolved identities remain distinct.
+
+Third, expected-period evidence from a URL or label could mark coverage before retrieval and
+validation. Proposal period evidence is now ranking-only. The retriever marks expected-period
+precedence only after date, media, transcript structure, and firm identity validation succeeds.
+Focused 404 and invalid-content cases retain a valid historical fallback; a validated expected-
+period artifact still suppresses that fallback.
+
+Fourth, broad exception handlers could turn `NameError` and invariant defects into retryable
+provider failures. Discovery now catches only policy conversion at its outer boundary, and the
+retriever catches explicit transport, parsing, normalization, and validation errors. Injected
+unexpected exceptions propagate without a transient-provider classification.
+
+Finally, the adapter previously retrieved and validated every candidate inside `discover()`,
+cached exact bodies, and made `retrieve()` a dictionary pop. It also fetched the configured listing
+a second time solely to satisfy the interval retriever's listing input. Discovery now emits
+bounded proposal metadata for normal listing paths. `retrieve()` makes a proposal-only retriever
+invocation and returns exact bytes immediately. There is no body cache, early termination leaves no
+cached retrieval result, sequential discovery replaces its small accounting context, and the
+configured listing is fetched once. A deferred-candidate marker keeps checkpoint position
+advancement tied to a validated date rather than a failed proposal signal.
 
 ## Amazon Live-Run Repair
 
@@ -95,12 +134,10 @@ without one, ranking uses the latest completed calendar quarter. Candidate posit
 period ordinals so a new quarter advances beyond legacy list-position checkpoints.
 
 The graph still proposes URLs only. The retriever remains the sole owner of date, firm, media,
-document, and transcript validation. Once the expected period is evaluated, historical artifacts
-remain represented in dispositions but are not admitted to the engine ahead of that period. A
-valid expected artifact is admitted; an expected-period retrieval or validation failure remains an
-actual failure rather than being masked by historical success. Historical-only runs retain
-compatibility and are explicitly summarized as historical/current-coverage-indeterminate rather
-than universal retrieval failure.
+document, and transcript validation. Once the expected period validates, later historical
+proposals are explicitly superseded. If the expected-period proposal fails retrieval or
+validation, valid historical fallbacks remain eligible and the expected failure remains
+independently observable.
 
 Every retriever evaluation now produces exactly one typed disposition. Counts and bounded samples
 cover valid current artifacts, checkpoint and historical periods, duplicates, reporting-period
@@ -135,16 +172,19 @@ is now a 1000-link pathological-page safety ceiling rather than normal useful-wo
 
 Diagnostics name `max_candidate_evaluations`, `max_redirects`, or another actual policy field only
 when that limit is reached. A fixture with two ranked proposals and an evaluation limit of one
-fetches/evaluates one candidate and reports exactly that count. Indeterminate-without-exhaustion
-reports no exhausted budget.
+selects exactly one candidate; the engine performs its evaluation during retrieval.
+Indeterminate-without-exhaustion reports no exhausted budget. The shared transport continues
+accounting across graph discovery and retrieval, while removal of the redundant listing request
+releases one page and its bytes from every normal configured-hint run.
 
 ## Diagnostics and Operator Messages
 
-Every result includes adapter/history identity, retained-anchor and configured-hint attempt order,
-stage fallthrough, raw/normalized/eligible counts, queue and visited counts, proposal/evaluation
-counts, rejection and cycle counters, bounded redacted representative URLs, bounded ranking
-reasons, transport class/status, redirect count/final host, candidate retrieval and validation
-classes, exact exhausted budget, and final coverage classification.
+Discovery diagnostics include adapter/history identity, retained-anchor and configured-hint
+attempt order, stage fallthrough, raw/normalized/eligible counts, queue and visited counts,
+proposal/selection counts, rejection and cycle counters, bounded redacted representative URLs,
+ranking reasons, transport class/status, redirect count/final host, exact exhausted budget, and
+final coverage classification. Candidate retrieval and validation classes are emitted from the
+engine retrieval phase, where those failures now occur.
 
 Representative URL collections are capped at eight and ranking collections at ten. Query values
 are replaced with `REDACTED`; credentials, cookies, tokens, bodies, and unbounded URL logs are never
@@ -155,8 +195,9 @@ Pull Sources now presents messages such as:
 - `No eligible transcript links were identified on the configured page.`
 - `The configured transcript hint timed out.`
 - `The configured transcript hint returned HTTP 403.`
+- `Discovery selected 1 ranked transcript candidate for retrieval.`
 - `A transcript candidate was found but its content type is unsupported.`
-- `Discovery exhausted the candidate-evaluation budget after evaluating 1 ranked unique links.`
+- `Discovery exhausted the candidate-evaluation budget after selecting 1 ranked unique links.`
 - `Discovery completed without a candidate, but coverage remains indeterminate.`
 
 ## Reproduction Evidence
@@ -167,20 +208,20 @@ Pull Sources now presents messages such as:
 1. 50 raw links, 50 normalized unique links, zero eligible links, and `no_eligible_links`;
 2. configured hint timeout and `hint_fetch_timeout`;
 3. configured hint HTTP 403 and `hint_http_failure`;
-4. discovered candidate HTTP 404 and `candidate_http_not_found`;
+4. a discovered proposal followed by retrieval-phase `candidate_http_not_found`;
 5. a three-node cyclic graph, three visited nodes, and one ancestor-cycle rejection;
-6. a relevant transcript after 25 generic transcript-navigation links, ranked first;
-7. genuine `max_candidate_evaluations` exhaustion after one evaluation;
+6. a relevant transcript after 25 generic transcript-navigation links, ranked first and validated
+   during retrieval;
+7. genuine `max_candidate_evaluations` exhaustion after one selected proposal;
 8. indeterminate coverage with no exhausted budget.
 9. an Amazon-style page with 75 historical numeric-path transcripts and a lexically later Q2 2026
-   candidate; Q2 2026 is evaluated first, all 40 evaluations have dispositions, and the per-page
-   emergency ceiling is not reached.
+   candidate; Q2 2026 is selected first and the per-page emergency ceiling is not reached.
 
 Each record contains its operator summary and bounded structured diagnostics.
 
 ## Compatibility and Durable-State Evidence
 
-The 80-test focused target includes TASK-048, TASK-048A, TASK-052, TASK-053, TASK-056, Pull
+The 96-test focused target includes TASK-048, TASK-048A, TASK-052, TASK-053, TASK-056, Pull
 Workflow, and SEC adapter regressions. TASK-056 tests prove anchor LIFO ordering, exact requested/
 resolved provenance, atomic history updates, failed-attempt non-learning, profile-revision survival,
 checkpoint behavior, and rollback. TASK-048 tests prove validation, immutable bytes, provenance,
@@ -193,10 +234,10 @@ behavior or durable state.
 
 ## Verification Results
 
-- `make task057-test`: PASS, 90 focused and compatibility tests.
+- `make task057-test`: PASS, 96 focused and compatibility tests.
 - `make task057-proof`: PASS, nine deterministic reproduction cases.
 - `git diff --check`: PASS.
-- `make validate`: PASS. All 539 unit tests passed, followed by every repository demonstration,
+- `make validate`: PASS. All 545 unit tests passed, followed by every repository demonstration,
   offline provider proof, lint, format, type, import, documentation, design-baseline, and build gate.
 
 ## Changed-File Inventory
@@ -214,8 +255,9 @@ behavior or durable state.
   `scripts/check_baseline.py`.
 - Review packaging: `scripts/generate_task057_review.py`.
 
-The corrective repair itself changes `src/rfi/acquisition/earnings_transcripts.py`,
-`src/rfi/discovery.py`, `tests/test_task057.py`, `scripts/task057_reproduction.py`, and this report.
+The final robustness repair changes `src/rfi/acquisition/earnings_transcripts.py`,
+`src/rfi/acquisition/engine.py`, `src/rfi/discovery.py`, TASK-048A/052/053/057 tests,
+`scripts/task057_reproduction.py`, and this report.
 The Amazon live-run repair additionally changes the governed discovery policy/schema,
 `src/rfi/pull/workflow.py`, TASK-015/048A/053 compatibility tests, and the TASK-053 proof script.
 
@@ -230,6 +272,12 @@ The Amazon live-run repair additionally changes the governed discovery policy/sc
 - Press-release discovery is not implemented by this task.
 - Calendar-quarter fallback is an ordering expectation when no recognizable durable checkpoint or
   retained anchor exists; the retriever still validates the artifact's actual date and identity.
+- Non-calendar fiscal-period support remains deferred.
+- Reporting-period context still reads the existing repository history/checkpoint projections; a
+  typed repository query remains deferred.
+- Further decomposition of the large graph traversal method remains deferred.
+- Redirect-policy exceptions retain their existing partial typing beyond the narrowed outer
+  exception boundary.
 
 ## Architectural Status Summary
 

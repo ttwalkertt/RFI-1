@@ -275,7 +275,11 @@ class EarningsCallTranscriptAcquisition:
         if request.start_date == request.end_date:
             return IntervalAcquisitionResult((), (), IntervalCoverage.COMPLETE)
 
-        listing_urls = self._string_list("listing_urls", minimum=1, maximum=8)
+        configured_proposals = self.source.configuration.get("candidate_proposals", [])
+        proposal_only = isinstance(configured_proposals, list) and bool(configured_proposals)
+        listing_urls = self._string_list(
+            "listing_urls", minimum=0 if proposal_only else 1, maximum=8
+        )
         allowed_hosts = set(self._string_list("allowed_hosts", minimum=0, maximum=16))
         allowed_hosts.update(urllib.parse.urlsplit(url).hostname or "" for url in listing_urls)
         failures: list[IntervalAcquisitionFailure] = []
@@ -292,12 +296,12 @@ class EarningsCallTranscriptAcquisition:
                         url = urllib.parse.urljoin(response.url, href)
                         if self._looks_like_transcript(label, url):
                             proposals.append(_Proposal(url, label, response.url))
-            except Exception as error:  # transport/parser failures become structured evidence
+            except (OSError, TimeoutError, ValueError, UnicodeError) as error:
                 failures.append(self._failure("listing_unavailable", listing_url, error, True))
 
         # Explicit proposals are an implementation seam: all still pass the same deterministic
         # host, date, media, and transcript validation as listing-derived candidates.
-        for item in self.source.configuration.get("candidate_proposals", []):
+        for item in configured_proposals:
             if isinstance(item, dict) and isinstance(item.get("url"), str):
                 label = item.get("label") if isinstance(item.get("label"), str) else ""
                 proposals.append(_Proposal(item["url"], label, "invocation-candidate-proposal"))
@@ -312,7 +316,7 @@ class EarningsCallTranscriptAcquisition:
         for proposal in proposals[: self._positive_int("maximum_candidates", 40, 1, 100)]:
             try:
                 normalized = self._normalize_url(proposal.url)
-            except Exception as error:
+            except (ValueError, UnicodeError) as error:
                 candidate_failure = CandidateFailure(
                     CandidateFailureCode.VALIDATION_MISMATCH,
                     str(error) or error.__class__.__name__,
@@ -335,13 +339,10 @@ class EarningsCallTranscriptAcquisition:
                 continue
             seen.add(normalized)
             proposal_period = reporting_period_from_evidence(proposal.label, normalized)
-            expected_period_evaluated = expected_period_evaluated or (
-                proposal_period == expected_period
-            )
             source_artifact_id = self._identifier("candidate", normalized)
             try:
                 response = self._fetch(normalized, allowed_hosts)
-            except Exception as error:
+            except (OSError, TimeoutError, ValueError) as error:
                 candidate_failure = self._candidate_retrieval_failure(error)
                 failures.append(
                     self._failure(
@@ -364,9 +365,6 @@ class EarningsCallTranscriptAcquisition:
                     ))
                     continue
                 period = ReportingPeriod.from_date(artifact_date)
-                expected_period_evaluated = (
-                    expected_period_evaluated or period == expected_period
-                )
                 validation_failure = self._transcript_validation_failure(
                     response, proposal.label
                 )
@@ -396,6 +394,9 @@ class EarningsCallTranscriptAcquisition:
                         period.code,
                     ))
                     continue
+                expected_period_evaluated = (
+                    expected_period_evaluated or period == expected_period
+                )
                 if checkpoint_period is not None and period <= checkpoint_period:
                     disposition = (
                         CandidateDispositionCode.CURRENT_CHECKPOINT_PERIOD
@@ -422,7 +423,7 @@ class EarningsCallTranscriptAcquisition:
                         CandidateDispositionCode.VALID_NEW_ARTIFACT.value,
                         normalized, period.code,
                     ))
-            except Exception as error:
+            except (ValueError, UnicodeError) as error:
                 candidate_failure = CandidateFailure(
                     CandidateFailureCode.VALIDATION_MISMATCH,
                     str(error) or error.__class__.__name__,

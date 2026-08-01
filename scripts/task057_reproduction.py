@@ -7,7 +7,7 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
-from rfi.acquisition import EarningsTranscriptHttpResponse, SourceProfile
+from rfi.acquisition import AdapterFailure, EarningsTranscriptHttpResponse, SourceProfile
 from rfi.discovery import (
     DiscoveryPolicy, DiscoveryPolicyCatalog, DiscoverySearchResponse,
     EarningsTranscriptPullAdapter,
@@ -29,8 +29,10 @@ class Search:
 class Transport:
     def __init__(self, responses: dict[str, EarningsTranscriptHttpResponse | Exception]) -> None:
         self.responses = responses
+        self.requests: list[str] = []
 
     def get(self, url: str) -> EarningsTranscriptHttpResponse:
+        self.requests.append(url)
         value = self.responses[url]
         if isinstance(value, Exception):
             raise value
@@ -51,16 +53,18 @@ def run(
     responses: dict[str, EarningsTranscriptHttpResponse | Exception],
     selected: DiscoveryPolicy | None = None,
 ) -> dict[str, object]:
+    transport = Transport(responses)
     adapter = EarningsTranscriptPullAdapter(
         DiscoveryPolicyCatalog({"standard": selected or policy()}, "standard"),
-        Search(), Transport(responses), lambda: "2026-08-01T00:00:00Z",
+        Search(), transport, lambda: "2026-08-01T00:00:00Z",
     )
-    page = adapter.discover(SourceProfile(
+    profile = SourceProfile(
         "source-a", "Firm A transcripts", True, "earnings_transcript",
         {"mode": "discovery", "discovery_hints": [HINT],
          "discovery_class": "standard"},
         {"firm_id": "firm-a", "artifact_id": "earnings_transcript"},
-    ), None)
+    )
+    page = adapter.discover(profile, None)
     keys = (
         "primary_classification", "operator_summary", "final_coverage_classification",
         "raw_hyperlinks", "normalized_unique_hyperlinks", "eligible_hyperlinks",
@@ -73,7 +77,18 @@ def run(
         "expected_reporting_period", "reporting_period_basis",
         "candidate_disposition_counts", "candidate_disposition_samples",
     )
-    return {key: page.diagnostics.get(key) for key in keys}
+    result = {key: page.diagnostics.get(key) for key in keys}
+    retrieval_outcomes = []
+    if not page.diagnostics.get("bounds_exhausted"):
+        for candidate in page.candidates:
+            try:
+                adapter.retrieve(profile, candidate)
+                retrieval_outcomes.append("validated")
+            except AdapterFailure as error:
+                retrieval_outcomes.append(error.code)
+    result["retrieval_outcomes"] = retrieval_outcomes
+    result["transport_request_count"] = len(transport.requests)
+    return result
 
 
 def reproduction_cases() -> dict[str, dict[str, object]]:

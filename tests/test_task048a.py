@@ -229,7 +229,7 @@ class TranscriptPullIntegrationTests(unittest.TestCase):
         result = adapter.retrieve(profile(hints=["Example Corporation"]), page.candidates[0])
         self.assertEqual(result.content, transport.responses[transcript].content)
         self.assertEqual(page.diagnostics["search_queries"], 1)
-        self.assertEqual(page.diagnostics["pages"], 4)  # search, discovery, listing, validation
+        self.assertEqual(page.diagnostics["pages"], 2)  # search plus graph observation
 
     def test_exhausted_bound_is_indeterminate_and_not_system_failure(self) -> None:
         search = Search((DiscoverySearchResponse(

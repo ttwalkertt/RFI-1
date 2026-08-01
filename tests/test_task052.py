@@ -8,7 +8,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from rfi.acquisition import EarningsTranscriptHttpResponse, SourceProfile
+from rfi.acquisition import AdapterFailure, EarningsTranscriptHttpResponse, SourceProfile
 from rfi.discovery import (
     DiscoveryPolicy,
     DiscoveryPolicyCatalog,
@@ -147,13 +147,13 @@ class ConfiguredTranscriptHintTests(unittest.TestCase):
         self.assertEqual(transport.requests[0], HINT)
         self.assertEqual(page.diagnostics["configured_hint_count"], 1)
         self.assertEqual(page.diagnostics["configured_hint_status"], "used")
-        self.assertGreater(page.diagnostics["validation_failures"], 0)
-        self.assertEqual(page.diagnostics["validation_failures"], 1)
-        self.assertEqual(
-            page.diagnostics["failure_code_counts"], {"candidate_invalid": 1}
-        )
-        self.assertEqual(page.candidates, ())
-        self.assertEqual(page.diagnostics["coverage"], "incomplete")
+        self.assertEqual(page.diagnostics["validation_failures"], 0)
+        self.assertEqual(len(page.candidates), 1)
+        self.assertEqual(transport.requests, [HINT])
+        with self.assertRaises(AdapterFailure) as raised:
+            adapter.retrieve(source([HINT, "Amazon.com, Inc."]), page.candidates[0])
+        self.assertEqual(raised.exception.code, "candidate_validation_mismatch")
+        self.assertEqual(transport.requests, [HINT, candidate])
 
     def test_hinted_candidate_identity_uses_retrieved_url_not_configuration_hint(self) -> None:
         candidate = (

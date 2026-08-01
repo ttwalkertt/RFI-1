@@ -313,7 +313,11 @@ class AcquisitionEngine:
             ordered = sorted(
                 page.candidates,
                 key=lambda item: (
-                    item.position,
+                    (
+                        item.provenance.metadata.get("proposal_rank", item.position)
+                        if item.provenance.metadata.get("deferred_candidate_evaluation") is True
+                        else item.position
+                    ),
                     item.document_id,
                     item.revision,
                     item.candidate_id,
@@ -333,7 +337,11 @@ class AcquisitionEngine:
                 break
             for candidate in ordered:
                 discovered += 1
-                maximum_position = max(maximum_position, candidate.position)
+                deferred_evaluation = (
+                    candidate.provenance.metadata.get("deferred_candidate_evaluation") is True
+                )
+                if not deferred_evaluation:
+                    maximum_position = max(maximum_position, candidate.position)
                 prior = seen_candidates.get(candidate.candidate_id)
                 if prior is not None:
                     if prior != candidate.canonical():
@@ -421,6 +429,13 @@ class AcquisitionEngine:
                     receipt = self._repository.record_success(
                         attempt_id, repository_candidate, result
                     )
+                    if deferred_evaluation:
+                        validated_position = result.diagnostics.get("validated_position")
+                        if not isinstance(validated_position, int) or validated_position < 1:
+                            raise ContractError(
+                                "deferred candidate retrieval lacks validated position"
+                            )
+                        maximum_position = max(maximum_position, validated_position)
                     last_success = attempt_id
                     if receipt.idempotent:
                         unchanged += 1
@@ -444,6 +459,28 @@ class AcquisitionEngine:
                         )
                     )
                 except AdapterFailure as error:
+                    if error.code == "historical_candidate_superseded":
+                        skips += 1
+                        skipped_id = self._attempt_id(run_id, candidate, "skip")
+                        created = self._repository.record_outcome(
+                            skipped_id,
+                            repository_candidate,
+                            RetrievalOutcome.SKIPPED,
+                            candidate.provenance.discovered_at,
+                            profile.mechanism,
+                            {"reason": str(error)},
+                        )
+                        outcomes.append(CandidateRunOutcome(
+                            candidate.candidate_id,
+                            candidate.document_id,
+                            candidate.position,
+                            candidate.revision,
+                            "skipped",
+                            skipped_id,
+                            created,
+                            str(error),
+                        ))
+                        continue
                     failures += 1
                     failed_id = self._attempt_id(
                         run_id, candidate, error.classification.value
