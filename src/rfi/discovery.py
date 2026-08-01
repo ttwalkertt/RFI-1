@@ -6,7 +6,7 @@ import json
 import time
 import urllib.parse
 import urllib.request
-from collections import deque
+from collections import Counter, deque
 from dataclasses import dataclass
 from datetime import date, timedelta
 from html.parser import HTMLParser
@@ -554,11 +554,15 @@ class EarningsTranscriptPullAdapter:
         })
         if budgeted.exhausted:
             coverage = "indeterminate"
+        failure_code_counts = dict(sorted(Counter(
+            failure.code for failure in interval.failures
+        ).items()))
         return DiscoveryPage(tuple(candidates), None, {
             "adapter_id": self.adapter_id,
             "discovery_class": configuration.get("discovery_class"),
             "coverage": coverage,
             "validation_failures": len(interval.failures),
+            "failure_code_counts": failure_code_counts,
             **final_diagnostics,
         })
 

@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from rfi.acquisition import (
     AcquisitionRepository,
@@ -16,6 +17,7 @@ from rfi.acquisition import (
     IntervalAcquisitionService,
     IntervalCoverage,
     SourceProfile,
+    UrllibEarningsTranscriptTransport,
 )
 from rfi.firms import FirmRepository
 from rfi.firms.contracts import FirmDraft, FirmStatus
@@ -92,6 +94,27 @@ class EarningsTranscriptTests(unittest.TestCase):
         no_result, _ = self.acquire("<html><a href='release.pdf'>Earnings release</a></html>")
         self.assertEqual(no_result.artifacts, ())
         self.assertEqual(no_result.coverage, IntervalCoverage.COMPLETE)
+
+    def test_live_transport_negotiates_only_supported_transcript_representations(self) -> None:
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = b"<!doctype html><html></html>"
+        response.geturl.return_value = self.listing
+        response.status = 200
+        response.headers.get_content_type.return_value = "text/html"
+        with patch(
+            "rfi.acquisition.earnings_transcripts.urllib.request.urlopen",
+            return_value=response,
+        ) as urlopen:
+            result = UrllibEarningsTranscriptTransport().get(self.listing)
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(
+            request.get_header("Accept"),
+            "text/html, application/xhtml+xml, application/pdf;q=0.9, */*;q=0.1",
+        )
+        self.assertEqual(request.get_header("User-agent"), "RFI-1 transcript acquisition")
+        self.assertEqual(result.media_type, "text/html")
 
     def test_one_multiple_html_pdf_and_closed_open_boundaries(self) -> None:
         urls = {

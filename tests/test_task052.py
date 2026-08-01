@@ -148,6 +148,10 @@ class ConfiguredTranscriptHintTests(unittest.TestCase):
         self.assertEqual(page.diagnostics["configured_hint_count"], 1)
         self.assertEqual(page.diagnostics["configured_hint_status"], "used")
         self.assertGreater(page.diagnostics["validation_failures"], 0)
+        self.assertEqual(page.diagnostics["validation_failures"], 1)
+        self.assertEqual(
+            page.diagnostics["failure_code_counts"], {"candidate_invalid": 1}
+        )
         self.assertEqual(page.candidates, ())
         self.assertEqual(page.diagnostics["coverage"], "incomplete")
 

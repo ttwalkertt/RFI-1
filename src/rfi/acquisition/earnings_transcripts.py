@@ -70,7 +70,14 @@ class UrllibEarningsTranscriptTransport(EarningsTranscriptTransport):
 
     def get(self, url: str) -> EarningsTranscriptHttpResponse:
         request = urllib.request.Request(
-            url, headers={"User-Agent": "RFI-1 transcript acquisition"}
+            url,
+            headers={
+                "User-Agent": "RFI-1 transcript acquisition",
+                "Accept": (
+                    "text/html, application/xhtml+xml, application/pdf;q=0.9, "
+                    "*/*;q=0.1"
+                ),
+            },
         )
         with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
             content = response.read(self.maximum_bytes + 1)
