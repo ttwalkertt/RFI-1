@@ -32,7 +32,8 @@ revision, validation, and transaction contracts.
 - Add one narrow admin API action for reloading the complete external firm-configuration set.
 - Reuse `prepare_firm_configuration(state)` as the authoritative implementation path.
 - Return a structured summary of configurations, firm revisions, source-profile revisions, and
-  external identities materialized.
+  external identities materialized, plus the newly current repository authority revision.
+- Reject a second reload request while one is active with a clear structured conflict response.
 - Refresh the firm list and the selected firm's current identity and source profile after success.
 - Present actionable validation and persistence failures in the Target Firms page.
 - Add focused API, UI, transaction, and workflow regression coverage.
@@ -53,8 +54,10 @@ revision, validation, and transaction contracts.
 ## Required Operator Workflow
 
 1. The Target Firms heading exposes a **Reload Firm Profiles** button.
-2. Activating it presents a confirmation that reload is a repository write and may create new
-   immutable firm and source-profile revisions, including for unchanged files.
+2. Activating it presents a confirmation that reload is a repository write; a successful reload
+   may create new immutable firm and source-profile revisions even for unchanged files; and
+   existing acquisitions, retained artifacts, observations, and historical evidence will not be
+   modified.
 3. After confirmation, the button is disabled and communicates that reload is in progress.
 4. The server validates the complete external configuration set before mutation.
 5. If validation succeeds, the server materializes the complete set in one transaction.
@@ -65,6 +68,18 @@ revision, validation, and transaction contracts.
 
 The operator must not need to restart the admin server after a successful reload. Pulls initiated
 after reload shall snapshot the newly current source-profile revision.
+
+## Concurrent Reload Semantics
+
+At most one reload may be active in an admin-server process. If a second reload request arrives
+while another reload is active, the server shall reject it without entering validation or
+materialization and return an HTTP conflict response with a stable structured code equivalent to
+`firm_configuration_reload_in_progress`.
+
+Reload requests shall not overlap materialization transactions. The in-process reload guard must
+be released after both success and failure so that a later operator retry can proceed. The guard
+coordinates only this explicit reload action; it must not become an acquisition-wide or
+application-wide lock.
 
 ## API Contract
 
@@ -86,13 +101,16 @@ A successful response shall identify the action and expose the existing
   "firms": 23,
   "profiles": 23,
   "external_identities": 21,
-  "authority": "external-json"
+  "authority": "external-json",
+  "repository_authority_revision": 146
 }
 ```
 
 Exact field names may follow established repository naming, but the response must remain explicit
-and testable. Configuration validation errors shall be structured client errors rather than
-generic internal-server failures. Unexpected persistence failures shall remain server errors.
+and testable. The authority revision or equivalent newly current repository revision identifier
+must deterministically identify the post-reload state. Configuration validation errors shall be
+structured client errors rather than generic internal-server failures. A concurrent reload shall
+return a structured conflict response. Unexpected persistence failures shall remain server errors.
 
 ## Required Invariants
 
@@ -103,11 +121,18 @@ generic internal-server failures. Unexpected persistence failures shall remain s
 - Firm revisions, source-profile revisions, external SEC identities, configuration authorities,
   current pointers, and the repository authority revision advance atomically.
 - Any failure rolls back the complete materialization transaction.
+- After any failed reload, a later successful retry behaves exactly as though the failed attempt
+  never occurred: no partial revisions, current pointers, external identities, configuration
+  authorities, or repository-authority advancement from the failed attempt may remain.
 - Historical revision JSON, identifiers, chains, and pointers are never rewritten.
 - Existing artifact bytes, acquisition attempts, observations, knowledge, and stream state are not
   modified by reload.
 - Ordinary admin startup continues to call validation without materialization.
 - An already-running pull retains its captured profile snapshot; only later pulls see the reload.
+- Reload introduces no broad acquisition or application lock. New pull scheduling is affected only
+  by the repository's existing atomic transaction boundary; it must not be held behind the reload
+  guard used to reject overlapping reload requests.
+- No two reload materialization transactions overlap.
 - The endpoint cannot select arbitrary filesystem paths or accept configuration content.
 - Existing local-default server binding and security headers remain unchanged.
 
@@ -125,13 +150,20 @@ separate architectural decision and is not required here.
 - The button is present at the top of Target Firms with the exact operator-facing label.
 - Cancellation performs no request and no write.
 - Confirmation disables the action while the request is active.
+- Confirmation discloses both unchanged-file revision creation and preservation of acquisitions,
+  retained artifacts, observations, and historical evidence.
 - Success refreshes the list and selected current firm/profile and displays materialization counts.
+- Success exposes and displays or retains the deterministic post-reload repository authority
+  revision for operator verification.
 - Failure restores the action and presents an actionable message.
 
 ### API and materialization
 
 - The endpoint accepts only `POST` at the fixed route.
 - The endpoint invokes the established complete-set materialization path.
+- A second reload request received during an active reload is rejected with the stable structured
+  conflict response and does not enter validation or materialization.
+- The reload guard is released after success and every failure path.
 - A changed source-scoped discovery hint appears in the current projected source profile after
   reload without restarting the server.
 - A subsequent Pull Sources run snapshots that new source-profile revision and hint.
@@ -143,6 +175,8 @@ separate architectural decision and is not required here.
   domains produce useful client-visible diagnostics and zero writes.
 - An injected mid-materialization failure rolls back firms, profiles, identities, authorities,
   current pointers, and repository revision advancement.
+- A successful retry after an injected failure produces the same durable state and authority
+  revision progression as a successful reload with no preceding failed attempt.
 - Existing artifacts, acquisition history, and observations are unchanged after success and
   failure cases.
 
@@ -163,8 +197,14 @@ Provide:
 - API request and structured response examples;
 - proof that the implementation delegates to `prepare_firm_configuration`;
 - proof that an edited discovery hint becomes current without server restart;
+- the post-reload repository authority revision and evidence that it identifies the newly current
+  state;
+- concurrent-request evidence proving that materialization transactions cannot overlap;
 - proof that a later pull snapshots the new revision while an in-flight pull remains unchanged;
+- proof that reload adds no broad acquisition or application lock and affects new pull scheduling
+  only through the existing atomic repository transaction;
 - transaction rollback evidence;
+- failed-attempt-then-successful-retry equivalence evidence;
 - proof that reload does not alter acquisition evidence or other durable subsystems;
 - focused test commands and results;
 - full `make validate` result;
@@ -181,6 +221,9 @@ TASK-054 is complete when:
 - successful reload is immediately visible to Target Firms and subsequent pulls without an admin
   restart;
 - failures are actionable and cannot partially update repository state;
+- concurrent reload requests cannot overlap and receive a stable structured conflict response;
+- a success response includes a deterministic post-reload repository authority revision or
+  equivalent newly current revision identifier;
 - ordinary admin startup remains read-only;
 - configuration authority, immutable history, pull snapshots, acquisition evidence, and unrelated
   subsystem boundaries remain intact;
@@ -197,4 +240,6 @@ The completed review shall report the status and responsibility of:
 - immutable firm and source-profile projections;
 - Target Firms operator workflow;
 - Pull Sources profile snapshot boundary;
-- retained limitations and the next architectural milestone.
+- retained limitations and the next architectural milestone, explicitly identifying change-aware
+  or content-addressed no-op materialization as a likely future task while preserving
+  init-equivalent revision creation in TASK-054.
