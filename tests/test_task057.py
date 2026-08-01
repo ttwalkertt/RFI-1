@@ -131,6 +131,74 @@ class UrlIdentityTests(unittest.TestCase):
 
 
 class GraphCycleAndRankingTests(unittest.TestCase):
+    def test_multiple_retained_anchors_share_one_total_order_queue_key(self) -> None:
+        first = "https://ir.example.com/current-earnings-call-transcript.html"
+        second = "https://ir.example.com/prior-earnings-call-transcript.html"
+        archive = "https://ir.example.com/transcripts/archive"
+        candidate = "https://ir.example.com/q4-2025-earnings-call-transcript.html"
+        anchors = (
+            {"requested_url": first, "resolved_url": first,
+             "normalized_url": first},
+            {"requested_url": second, "resolved_url": second,
+             "normalized_url": second},
+        )
+        transcript_text = (
+            "Firm A quarterly earnings call transcript. Operator. "
+            "Chief Executive Officer. Prepared remarks."
+        )
+        responses = {
+            first: html(
+                first, f"{transcript_text} 2026-04-30. "
+                f"<a href='{archive}'>Transcript archive</a>",
+            ),
+            second: html(second, f"{transcript_text} 2026-01-30."),
+            archive: html(
+                archive,
+                f"<a href='{candidate}'>Q4 2025 earnings call transcript</a>",
+            ),
+            candidate: html(candidate, f"{transcript_text} 2025-10-30."),
+        }
+
+        def run():
+            transport = Transport(responses)
+            bounded = BudgetedTranscriptTransport(transport, policy())
+            result = BoundedTranscriptDiscovery(
+                Search(), bounded, bounded.policy
+            ).discover((), (), anchors)
+            return result, transport.requests
+
+        first_result, first_requests = run()
+        second_result, second_requests = run()
+        self.assertEqual(first_requests, [first, second, archive])
+        self.assertEqual(first_requests, second_requests)
+        self.assertEqual(
+            first_result.candidate_proposals, second_result.candidate_proposals
+        )
+        self.assertEqual(first_result.diagnostics["stage_sequence"], ["retained_anchor"])
+        self.assertEqual(first_result.diagnostics["visited_count"], 3)
+        self.assertEqual(first_result.diagnostics["queue_admitted_count"], 4)
+        self.assertEqual(len(first_result.candidate_proposals), 3)
+
+        configured = profile("Firm A")
+        with tempfile.TemporaryDirectory() as directory:
+            repository = AcquisitionRepository(Path(directory) / "acquisition")
+            repository.register_source(configured)
+            transport = Transport(responses)
+            adapter = EarningsTranscriptPullAdapter(
+                DiscoveryPolicyCatalog({"standard": policy()}, "standard"), Search(),
+                transport, lambda: "2026-08-01T00:00:00Z", repository=repository,
+            )
+            with patch.object(repository, "discovery_anchors", return_value=anchors):
+                engine_result = AcquisitionEngine(
+                    repository, AdapterRegistry((adapter,)),
+                    lambda: "2026-08-01T00:00:00Z",
+                ).run_source(configured.source_id, "multi-anchor-queue")
+        self.assertEqual(
+            engine_result.status, RunStatus.COMPLETE,
+            json.dumps(engine_result.to_dict(), indent=2),
+        )
+        self.assertNotIn("malformed_adapter", json.dumps(engine_result.to_dict()))
+
     def test_emergency_ceiling_counts_only_unique_eligible_links(self) -> None:
         root = "https://ir.example.com/transcripts/"
         candidates = [

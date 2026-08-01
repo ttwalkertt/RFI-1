@@ -14,7 +14,7 @@ import urllib.request
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
-from enum import Enum
+from enum import Enum, IntEnum
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Callable, Protocol
@@ -231,12 +231,62 @@ class DiscoveryFailureCode(str, Enum):
     REDIRECT_CYCLE = "redirect_cycle"
 
 
+class GraphStagePriority(IntEnum):
+    RETAINED_ANCHOR = 0
+    CONFIGURED_HINT = 1
+    BOUNDED_TRAVERSAL = 2
+
+
+class GraphNodePriority(IntEnum):
+    SEED = 0
+    DISCOVERED = 1
+
+
+@dataclass(frozen=True, order=True)
+class LinkRank:
+    """Homogeneous deterministic ordering fields for one eligible graph edge."""
+
+    candidate_priority: int
+    period_priority: int
+    period_ordinal_priority: int
+    hint_relation_priority: int
+    same_host_priority: int
+    terminology_priority: int
+    document_priority: int
+    depth: int
+    normalized_url: str
+    label: str
+
+
+@dataclass(frozen=True, order=True)
+class GraphQueuePriority:
+    """One total-order key shared by seed and discovered graph nodes."""
+
+    stage_priority: GraphStagePriority
+    node_priority: GraphNodePriority
+    seed_position: int
+    link_rank: LinkRank
+    normalized_url: str
+    insertion_sequence: int
+
+
+@dataclass(frozen=True, order=True)
+class GraphQueueEntry:
+    """Typed heap entry whose payload never participates in ordering."""
+
+    priority: GraphQueuePriority
+    observed_url: str = field(compare=False)
+    normalized_url: str = field(compare=False)
+    depth: int = field(compare=False)
+    ancestors: frozenset[str] = field(compare=False)
+
+
 @dataclass(frozen=True)
 class RankedCandidateProposal:
     """One graph proposal with its complete deterministic ordering contract."""
 
     phase_priority: int
-    rank: tuple[object, ...]
+    rank: LinkRank
     serial: int
     observed_url: str
     label: str
@@ -465,8 +515,11 @@ class BoundedTranscriptDiscovery:
         state = GraphTraversalState()
         hint_identities = {normalize_transcript_url(url) for url in hint_urls}
         hint_hosts = {urllib.parse.urlsplit(url).hostname or "" for url in hint_urls}
-        phase_priority = {"retained_anchor": 0, "configured_hint": 1,
-                          "bounded_traversal": 2}
+        phase_priority = {
+            "retained_anchor": GraphStagePriority.RETAINED_ANCHOR,
+            "configured_hint": GraphStagePriority.CONFIGURED_HINT,
+            "bounded_traversal": GraphStagePriority.BOUNDED_TRAVERSAL,
+        }
 
         def reject(reason: str, url: str, *, cycle: str = "") -> None:
             state.reject(reason, url, cycle, self.DIAGNOSTIC_SAMPLE_LIMIT)
@@ -486,7 +539,7 @@ class BoundedTranscriptDiscovery:
 
         def ranking(
             target: str, label: str, is_candidate: bool, depth: int, parent: str
-        ) -> tuple[tuple[object, ...], list[str]]:
+        ) -> tuple[LinkRank, list[str]]:
             parsed = urllib.parse.urlsplit(target)
             parent_host = (urllib.parse.urlsplit(parent).hostname or "").casefold()
             host = (parsed.hostname or "").casefold()
@@ -515,9 +568,17 @@ class BoundedTranscriptDiscovery:
             if document:
                 reasons.append("document_like_path")
             reasons.append(f"depth_{depth}")
-            return (
-                not is_candidate, period_rank, not hint_relation, not same_host, -terminology,
-                -document, depth, target, label,
+            return LinkRank(
+                0 if is_candidate else 1,
+                period_rank[0],
+                period_rank[1],
+                0 if hint_relation else 1,
+                0 if same_host else 1,
+                -terminology,
+                -document,
+                depth,
+                target,
+                label,
             ), reasons
 
         def classify_link(label: str, target: str) -> tuple[bool, bool]:
@@ -537,7 +598,7 @@ class BoundedTranscriptDiscovery:
             if not urls:
                 return
             state.stage_sequence.append(phase)
-            queue: list[tuple[tuple[object, ...], int, str, str, str, int, frozenset[str]]] = []
+            queue: list[GraphQueueEntry] = []
             serial = 0
             for position, observed in enumerate(urls):
                 try:
@@ -555,12 +616,28 @@ class BoundedTranscriptDiscovery:
                         ))
                     continue
                 state.queued.add(identity)
-                heapq.heappush(queue, ((position, identity), serial, observed, identity,
-                                       observed, 0, frozenset({identity})))
+                seed_rank, _ = ranking(
+                    observed, observed,
+                    EarningsCallTranscriptAcquisition._looks_like_transcript(
+                        observed, observed
+                    ),
+                    0, observed,
+                )
+                heapq.heappush(queue, GraphQueueEntry(
+                    GraphQueuePriority(
+                        phase_priority[phase], GraphNodePriority.SEED, position,
+                        seed_rank, identity, serial,
+                    ),
+                    observed, identity, 0, frozenset({identity}),
+                ))
                 serial += 1
                 state.queue_admitted += 1
             while queue:
-                _, _, url, identity, parent, depth, ancestors = heapq.heappop(queue)
+                entry = heapq.heappop(queue)
+                url = entry.observed_url
+                identity = entry.normalized_url
+                depth = entry.depth
+                ancestors = entry.ancestors
                 state.queued.discard(identity)
                 if identity in state.visited:
                     reject("already_visited", url, cycle="duplicate_identity")
@@ -655,7 +732,7 @@ class BoundedTranscriptDiscovery:
                     continue
                 state.raw_hyperlinks += len(parser.links)
                 page_unique: set[str] = set()
-                links: list[tuple[tuple[object, ...], str, str, str, bool, list[str]]] = []
+                links: list[tuple[LinkRank, str, str, str, bool, list[str]]] = []
                 for href, label in parser.links:
                     observed = urllib.parse.urljoin(response.url, href)
                     try:
@@ -717,8 +794,13 @@ class BoundedTranscriptDiscovery:
                         serial += 1
                     else:
                         state.queued.add(target)
-                        heapq.heappush(queue, (rank, serial, observed, target, response.url,
-                                               depth + 1, ancestors | {target}))
+                        heapq.heappush(queue, GraphQueueEntry(
+                            GraphQueuePriority(
+                                phase_priority[phase], GraphNodePriority.DISCOVERED,
+                                0, rank, target, serial,
+                            ),
+                            observed, target, depth + 1, ancestors | {target},
+                        ))
                         serial += 1
                         state.queue_admitted += 1
                 if self.transport.exhausted:

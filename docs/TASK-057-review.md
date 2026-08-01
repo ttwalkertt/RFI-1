@@ -139,6 +139,25 @@ proposals are explicitly superseded. If the expected-period proposal fails retri
 validation, valid historical fallbacks remain eligible and the expected failure remains
 independently observable.
 
+## Graph Queue Priority Repair
+
+A subsequent Amazon run with multiple retained anchors exposed an internal heap invariant that
+single-seed fixtures could not reach. Seed entries used `(position, normalized URL)` priorities,
+while discovered nodes used the transcript relevance tuple. With the second seed at position one,
+Python treated `1` and the discovered-node Boolean as equal and then compared a URL string with a
+reporting-period tuple, producing a nonretryable `malformed_adapter` failure.
+
+All heap entries now use one ordered `GraphQueueEntry` and `GraphQueuePriority`. Named integer
+enums make retained-anchor, configured-hint, bounded-traversal, seed, and discovered-node
+precedence explicit. `LinkRank` flattens period and relevance fields into a homogeneous total order;
+normalized URL and insertion sequence provide deterministic final tie-breaking. The existing
+semantic ranking reasons and candidate ordering remain unchanged.
+
+The focused regression keeps two retained anchors queued while the first admits a traversable
+archive child. Repeated runs fetch both seeds before the child in identical order, preserve graph
+metrics and proposal order, and complete through the acquisition engine without a
+`malformed_adapter` diagnostic.
+
 Every retriever evaluation now produces exactly one typed disposition. Counts and bounded samples
 cover valid current artifacts, checkpoint and historical periods, duplicates, reporting-period
 exclusions, firm mismatch, stable retrieval failures, and stable validation failures. A runtime
@@ -221,7 +240,7 @@ Each record contains its operator summary and bounded structured diagnostics.
 
 ## Compatibility and Durable-State Evidence
 
-The 96-test focused target includes TASK-048, TASK-048A, TASK-052, TASK-053, TASK-056, Pull
+The 97-test focused target includes TASK-048, TASK-048A, TASK-052, TASK-053, TASK-056, Pull
 Workflow, and SEC adapter regressions. TASK-056 tests prove anchor LIFO ordering, exact requested/
 resolved provenance, atomic history updates, failed-attempt non-learning, profile-revision survival,
 checkpoint behavior, and rollback. TASK-048 tests prove validation, immutable bytes, provenance,
@@ -234,10 +253,10 @@ behavior or durable state.
 
 ## Verification Results
 
-- `make task057-test`: PASS, 96 focused and compatibility tests.
+- `make task057-test`: PASS, 97 focused and compatibility tests.
 - `make task057-proof`: PASS, nine deterministic reproduction cases.
 - `git diff --check`: PASS.
-- `make validate`: PASS. All 545 unit tests passed, followed by every repository demonstration,
+- `make validate`: PASS. All 546 unit tests passed, followed by every repository demonstration,
   offline provider proof, lint, format, type, import, documentation, design-baseline, and build gate.
 
 ## Changed-File Inventory
@@ -260,6 +279,8 @@ The final robustness repair changes `src/rfi/acquisition/earnings_transcripts.py
 `scripts/task057_reproduction.py`, and this report.
 The Amazon live-run repair additionally changes the governed discovery policy/schema,
 `src/rfi/pull/workflow.py`, TASK-015/048A/053 compatibility tests, and the TASK-053 proof script.
+The graph-queue priority repair changes only `src/rfi/discovery.py`, `tests/test_task057.py`, and
+this report.
 
 ## Limitations
 
