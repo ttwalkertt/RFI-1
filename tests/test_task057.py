@@ -6,8 +6,12 @@ import json
 import unittest
 from dataclasses import replace
 
-from rfi.acquisition import EarningsTranscriptHttpResponse, SourceProfile
-from rfi.acquisition.earnings_transcripts import normalize_transcript_url
+from rfi.acquisition import (
+    EarningsTranscriptHttpResponse, IntervalAcquisitionFailure, SourceProfile,
+)
+from rfi.acquisition.earnings_transcripts import (
+    CandidateFailureCode, normalize_transcript_url,
+)
 from rfi.discovery import (
     BoundedTranscriptDiscovery,
     BudgetedTranscriptTransport,
@@ -18,6 +22,7 @@ from rfi.discovery import (
 )
 from rfi.pull import ArtifactOutcome
 from rfi.pull.workflow import PullWorkflow
+from scripts.task057_reproduction import reproduction_cases
 
 
 def policy(**changes: int) -> DiscoveryPolicy:
@@ -237,6 +242,112 @@ class ClassificationAndBoundaryTests(unittest.TestCase):
         self.assertEqual(bounded.diagnostics["exhausted_budget"],
                          "max_candidate_evaluations")
         self.assertIn("evaluating 1 ranked unique links", bounded.diagnostics["operator_summary"])
+
+    def test_candidate_failure_classification_is_independent_of_message_text(self) -> None:
+        details = {
+            "candidate_failure_code": CandidateFailureCode.HTTP_NOT_FOUND.value,
+            "url": "https://ir.example.com/transcript",
+            "http_status": 404,
+        }
+        failures = tuple(
+            IntervalAcquisitionFailure(
+                "candidate_unavailable", message, True, details=details
+            )
+            for message in (
+                "HTTP Error 404: HTTP 404",
+                "the presentation wording can change without changing the code",
+            )
+        )
+        outcomes = [
+            EarningsTranscriptPullAdapter._classify_outcome({}, (failure,))
+            for failure in failures
+        ]
+        codes = [
+            EarningsTranscriptPullAdapter._candidate_failure_code(failure)
+            for failure in failures
+        ]
+        self.assertEqual(outcomes[0], outcomes[1])
+        self.assertEqual(codes[0], codes[1])
+        self.assertEqual(outcomes[0][0], CandidateFailureCode.HTTP_NOT_FOUND.value)
+
+    def test_retriever_emits_all_stable_candidate_failure_codes(self) -> None:
+        hint = "https://ir.example.com/transcripts/"
+        candidate = "https://ir.example.com/2026-04-30-earnings-call-transcript.html"
+        listing = html(hint, f"<a href='{candidate}'>Q1 earnings call transcript</a>")
+        cases = (
+            (html(candidate, "", status=403), CandidateFailureCode.ACCESS_DENIED),
+            (TimeoutError("new timeout wording"), CandidateFailureCode.FETCH_TIMEOUT),
+            (OSError("new retrieval wording"), CandidateFailureCode.RETRIEVAL_FAILURE),
+            (
+                EarningsTranscriptHttpResponse(candidate, 200, "text/html", b""),
+                CandidateFailureCode.EMPTY_CONTENT,
+            ),
+            (
+                html(candidate, "This page requires JavaScript."),
+                CandidateFailureCode.JAVASCRIPT_REQUIRED,
+            ),
+            (
+                html(candidate, "Quarterly earnings update without speaker evidence."),
+                CandidateFailureCode.VALIDATION_MISMATCH,
+            ),
+        )
+        for response, expected in cases:
+            with self.subTest(expected=expected.value):
+                page = self.adapter(hint, {hint: listing, candidate: response})
+                counts = {
+                    **page.diagnostics["candidate_retrieval_failure_counts"],
+                    **page.diagnostics["validation_failure_counts"],
+                }
+                self.assertEqual(counts, {expected.value: 1})
+                self.assertEqual(
+                    page.diagnostics["candidate_failure_samples"][0]["classification"],
+                    expected.value,
+                )
+
+    def test_typed_graph_state_metrics_match_actual_transitions(self) -> None:
+        root = "https://ir.example.com/transcripts/root"
+        archive = "https://ir.example.com/transcripts/archive"
+        candidate = "https://ir.example.com/q1-2026-earnings-call-transcript.html"
+        result, transport = discover(root, {
+            root: html(
+                root,
+                f"<a href='{archive}'>Transcript archive</a>"
+                f"<a href='{candidate}'>Q1 earnings call transcript</a>"
+                f"<a href='{candidate}#repeat'>Duplicate transcript</a>"
+                "<a href='/legal'>Legal</a>",
+            ),
+            archive: html(archive, f"<a href='{root}'>Transcript archive root</a>"),
+        })
+        diagnostics = result.diagnostics
+        self.assertEqual(diagnostics["raw_hyperlinks"], 5)
+        self.assertEqual(diagnostics["normalized_unique_hyperlinks"], 4)
+        self.assertEqual(diagnostics["queue_admitted_count"], 3)
+        self.assertEqual(diagnostics["visited_count"], len(transport.requests))
+        self.assertEqual(diagnostics["candidate_admitted_count"],
+                         len(result.candidate_proposals))
+        self.assertEqual(sum(diagnostics["rejection_counts"].values()), 3)
+        self.assertEqual(sum(diagnostics["cycle_counts"].values()), 2)
+
+    def test_all_reproduction_cases_retain_semantic_outcomes(self) -> None:
+        cases = reproduction_cases()
+        expected = {
+            "many_raw_zero_eligible": "no_eligible_links",
+            "configured_hint_timeout": "hint_fetch_timeout",
+            "configured_hint_http_failure": "hint_http_failure",
+            "discovered_candidate_unavailable": "candidate_http_not_found",
+            "cyclic_navigation_graph": "coverage_indeterminate",
+            "relevant_after_generic_links": "discovery_budget_exhausted",
+            "named_budget_exhausted": "discovery_budget_exhausted",
+            "indeterminate_without_exhaustion": "coverage_indeterminate",
+        }
+        self.assertEqual(
+            {name: item["primary_classification"] for name, item in cases.items()},
+            expected,
+        )
+        self.assertEqual(
+            json.dumps(cases, sort_keys=True),
+            json.dumps(reproduction_cases(), sort_keys=True),
+        )
 
     def test_diagnostics_are_bounded_redacted_and_pull_summary_uses_primary_message(self) -> None:
         hint = "https://ir.example.com/transcripts/?token=secret"

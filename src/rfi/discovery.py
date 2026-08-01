@@ -11,8 +11,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
+from enum import Enum
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Callable, Protocol
@@ -20,6 +21,7 @@ from typing import Any, Callable, Protocol
 from jsonschema import Draft202012Validator
 
 from rfi.acquisition.earnings_transcripts import (
+    CandidateFailureCode,
     EarningsCallTranscriptAcquisition,
     EarningsTranscriptHttpResponse,
     EarningsTranscriptTransport,
@@ -194,6 +196,115 @@ class TranscriptDiscoveryResult:
     diagnostics: dict[str, Any]
 
 
+class DiscoveryFailureCode(str, Enum):
+    SEARCH_TRANSPORT = "search_transport_failure"
+    PAGE_PARSE = "page_parse_failure"
+    HINT_FETCH_TIMEOUT = "hint_fetch_timeout"
+    HINT_HTTP = "hint_http_failure"
+    HINT_REDIRECT = "hint_redirect_rejected"
+    HINT_TRANSPORT = "hint_transport_failure"
+    CANDIDATE_FETCH_TIMEOUT = "candidate_fetch_timeout"
+    CANDIDATE_HTTP = "candidate_http_failure"
+    CANDIDATE_TRANSPORT = "candidate_transport_failure"
+    REDIRECT_CYCLE = "redirect_cycle"
+
+
+@dataclass(frozen=True)
+class RankedCandidateProposal:
+    """One graph proposal with its complete deterministic ordering contract."""
+
+    phase_priority: int
+    rank: tuple[object, ...]
+    serial: int
+    observed_url: str
+    label: str
+    normalized_url: str
+    reasons: tuple[str, ...]
+    depth: int
+
+    def sort_key(self) -> tuple[object, ...]:
+        return (
+            self.phase_priority, self.rank, self.serial, self.observed_url, self.label,
+            self.normalized_url, self.reasons, self.depth,
+        )
+
+
+@dataclass(frozen=True)
+class DiscoveryFailureRecord:
+    code: DiscoveryFailureCode
+    legacy_code: str
+    error_type: str
+    url: str
+    http_status: int | None = None
+
+
+@dataclass(frozen=True)
+class RejectedLinkRecord:
+    reason: str
+    url: str
+
+
+@dataclass(frozen=True)
+class RankingAdmissionRecord:
+    url: str
+    reasons: tuple[str, ...]
+    candidate: bool
+    depth: int
+
+
+@dataclass
+class GraphTraversalState:
+    """Mutable graph state; diagnostics are projections of its transitions."""
+
+    queued: set[str] = field(default_factory=set)
+    visited: set[str] = field(default_factory=set)
+    proposed: set[str] = field(default_factory=set)
+    listings: list[str] = field(default_factory=list)
+    candidate_proposals: list[RankedCandidateProposal] = field(default_factory=list)
+    raw_hyperlinks: int = 0
+    normalized_unique_hyperlinks: int = 0
+    eligible_hyperlinks: int = 0
+    traversed_hyperlinks: int = 0
+    queue_admitted: int = 0
+    rejection_counts: Counter[str] = field(default_factory=Counter)
+    cycle_counts: Counter[str] = field(default_factory=Counter)
+    failures: list[DiscoveryFailureRecord] = field(default_factory=list)
+    rejected_samples: list[RejectedLinkRecord] = field(default_factory=list)
+    ranking_samples: list[RankingAdmissionRecord] = field(default_factory=list)
+    anchor_attempts: list[dict[str, object]] = field(default_factory=list)
+    configured_hint_attempt_sequence: list[dict[str, str]] = field(default_factory=list)
+    stage_sequence: list[str] = field(default_factory=list)
+
+    def reject(self, reason: str, url: str, cycle: str, sample_limit: int) -> None:
+        self.rejection_counts[reason] += 1
+        if cycle:
+            self.cycle_counts[cycle] += 1
+        if len(self.rejected_samples) < sample_limit:
+            self.rejected_samples.append(RejectedLinkRecord(reason, redact_diagnostic_url(url)))
+
+    def record_failure(
+        self, code: DiscoveryFailureCode, url: str, error: Exception | None,
+        status: int,
+    ) -> None:
+        legacy_code = (
+            "search_failed" if code is DiscoveryFailureCode.SEARCH_TRANSPORT
+            else "page_parse_failed" if code is DiscoveryFailureCode.PAGE_PARSE
+            else "page_fetch_failed"
+        )
+        self.failures.append(DiscoveryFailureRecord(
+            code, legacy_code, error.__class__.__name__ if error else code.value,
+            redact_diagnostic_url(url), status or None,
+        ))
+
+    def admit_candidate(
+        self, proposal: RankedCandidateProposal, *, queue_admission: bool = True
+    ) -> None:
+        self.candidate_proposals.append(proposal)
+        self.proposed.add(proposal.normalized_url)
+        if queue_admission:
+            self.queue_admitted += 1
+
+
 class BudgetedTranscriptTransport(EarningsTranscriptTransport):
     """Enforce shared page, host, byte, and elapsed limits across discovery and validation."""
 
@@ -287,57 +398,17 @@ class BoundedTranscriptDiscovery:
         exhausted = False
         exhausted_budget = ""
         search_endpoint = getattr(self.search, "endpoint", "https://search.invalid/")
-        queued: set[str] = set()
-        visited: set[str] = set()
-        proposed: set[str] = set()
-        listings: list[str] = []
-        candidate_records: list[
-            tuple[int, tuple[object, ...], int, str, str, str, list[str], int]
-        ] = []
-        raw_hyperlinks = 0
-        normalized_unique_hyperlinks = 0
-        eligible_hyperlinks = 0
-        traversed_hyperlinks = 0
-        queue_admitted = 0
-        candidate_admitted = 0
-        rejection_counts: Counter[str] = Counter()
-        cycle_counts: Counter[str] = Counter()
-        failure_counts: Counter[str] = Counter()
-        legacy_failures: list[tuple[str, str]] = []
-        validation_context: list[dict[str, object]] = []
-        rejected_samples: list[dict[str, str]] = []
-        ranking_samples: list[dict[str, object]] = []
-        anchor_attempts: list[dict[str, object]] = []
+        state = GraphTraversalState()
         hint_identities = {normalize_transcript_url(url) for url in hint_urls}
         hint_hosts = {urllib.parse.urlsplit(url).hostname or "" for url in hint_urls}
-        configured_hint_attempt_sequence: list[dict[str, str]] = []
-        stage_sequence: list[str] = []
         phase_priority = {"retained_anchor": 0, "configured_hint": 1,
                           "bounded_traversal": 2}
 
         def reject(reason: str, url: str, *, cycle: str = "") -> None:
-            rejection_counts[reason] += 1
-            if cycle:
-                cycle_counts[cycle] += 1
-            if len(rejected_samples) < self.DIAGNOSTIC_SAMPLE_LIMIT:
-                rejected_samples.append({"reason": reason, "url": redact_diagnostic_url(url)})
+            state.reject(reason, url, cycle, self.DIAGNOSTIC_SAMPLE_LIMIT)
 
         def failure(code: str, url: str, error: Exception | None = None, status: int = 0) -> None:
-            failure_counts[code] += 1
-            legacy_code = (
-                "search_failed" if code == "search_transport_failure"
-                else "page_parse_failed" if code == "page_parse_failure"
-                else "page_fetch_failed"
-            )
-            legacy_failures.append((legacy_code, error.__class__.__name__ if error else code))
-            if len(validation_context) < self.DIAGNOSTIC_SAMPLE_LIMIT:
-                item: dict[str, object] = {"classification": code,
-                                           "url": redact_diagnostic_url(url)}
-                if status:
-                    item["http_status"] = status
-                if error is not None:
-                    item["error_type"] = error.__class__.__name__
-                validation_context.append(item)
+            state.record_failure(DiscoveryFailureCode(code), url, error, status)
 
         def transport_class(error: Exception, phase: str) -> str:
             prefix = "hint_" if phase == "configured_hint" else "candidate_"
@@ -396,12 +467,9 @@ class BoundedTranscriptDiscovery:
             anchor_labels: dict[str, tuple[int, str]] | None = None,
         ) -> None:
             nonlocal exhausted, exhausted_budget
-            nonlocal raw_hyperlinks, normalized_unique_hyperlinks
-            nonlocal eligible_hyperlinks, traversed_hyperlinks, queue_admitted
-            nonlocal candidate_admitted
             if not urls:
                 return
-            stage_sequence.append(phase)
+            state.stage_sequence.append(phase)
             queue: list[tuple[tuple[object, ...], int, str, str, str, int, frozenset[str]]] = []
             serial = 0
             for position, observed in enumerate(urls):
@@ -410,48 +478,46 @@ class BoundedTranscriptDiscovery:
                 except ValueError:
                     reject("invalid_url", observed)
                     continue
-                if identity in queued or identity in visited:
-                    reject("already_queued" if identity in queued else "already_visited", observed,
-                           cycle="duplicate_identity")
+                if identity in state.queued or identity in state.visited:
+                    reason = "already_queued" if identity in state.queued else "already_visited"
+                    reject(reason, observed, cycle="duplicate_identity")
                     if anchor_labels and observed in anchor_labels:
                         anchor_position, form = anchor_labels[observed]
-                        anchor_attempts.append(self._anchor_diagnostic(
+                        state.anchor_attempts.append(self._anchor_diagnostic(
                             anchor_position, form, observed, "skipped"
                         ))
                     continue
-                queued.add(identity)
+                state.queued.add(identity)
                 heapq.heappush(queue, ((position, identity), serial, observed, identity,
                                        observed, 0, frozenset({identity})))
                 serial += 1
-                queue_admitted += 1
+                state.queue_admitted += 1
             while queue:
                 _, _, url, identity, parent, depth, ancestors = heapq.heappop(queue)
-                queued.discard(identity)
-                if identity in visited:
+                state.queued.discard(identity)
+                if identity in state.visited:
                     reject("already_visited", url, cycle="duplicate_identity")
                     continue
                 is_seed_candidate = (
                     EarningsCallTranscriptAcquisition._looks_like_transcript(url, url)
                 )
                 if is_seed_candidate:
-                    if identity not in proposed:
+                    if identity not in state.proposed:
                         seed_rank, seed_reasons = ranking(url, url, True, 0, url)
-                        candidate_records.append((
+                        state.admit_candidate(RankedCandidateProposal(
                             phase_priority[phase], seed_rank, serial, url, url, identity,
-                            seed_reasons, 0,
-                        ))
-                        proposed.add(identity)
-                        candidate_admitted += 1
+                            tuple(seed_reasons), 0,
+                        ), queue_admission=False)
                 hint_attempt: dict[str, str] | None = None
                 if phase == "configured_hint":
                     hint_attempt = {"url": redact_diagnostic_url(url), "status": "attempted"}
-                    configured_hint_attempt_sequence.append(hint_attempt)
+                    state.configured_hint_attempt_sequence.append(hint_attempt)
                 try:
                     response = self.transport.get(url)
                 except Exception as error:
                     if anchor_labels and url in anchor_labels:
                         position, form = anchor_labels[url]
-                        anchor_attempts.append(self._anchor_diagnostic(
+                        state.anchor_attempts.append(self._anchor_diagnostic(
                             position, form, url, "failed"
                         ))
                     if self.transport.exhausted:
@@ -464,7 +530,7 @@ class BoundedTranscriptDiscovery:
                         hint_attempt["status"] = "failed"
                     failure(transport_class(error, phase), url, error)
                     continue
-                visited.add(identity)
+                state.visited.add(identity)
                 resolved_identity = normalize_transcript_url(response.url)
                 redirect_chain = tuple(getattr(response, "redirects", ()))
                 chain_identities: list[str] = []
@@ -490,32 +556,32 @@ class BoundedTranscriptDiscovery:
                     continue
                 if anchor_labels and url in anchor_labels:
                     position, form = anchor_labels[url]
-                    anchor_attempts.append(self._anchor_diagnostic(
+                    state.anchor_attempts.append(self._anchor_diagnostic(
                         position, form, url, "succeeded"
                     ))
                 if hint_attempt is not None:
                     hint_attempt["status"] = "fetched"
                 if resolved_identity != identity:
-                    if resolved_identity in ancestors or resolved_identity in visited:
+                    if resolved_identity in ancestors or resolved_identity in state.visited:
                         reject("redirect_cycle", response.url, cycle="redirect_cycle")
                         failure("hint_redirect_rejected" if phase == "configured_hint"
                                 else "redirect_cycle", response.url, status=response.status)
                         continue
-                    visited.add(resolved_identity)
+                    state.visited.add(resolved_identity)
                 if response.media_type not in {"text/html", "application/xhtml+xml"}:
                     if EarningsCallTranscriptAcquisition._looks_like_transcript(
                         "", response.url
                     ):
                         candidates.append({"url": response.url, "label": response.url})
                     continue
-                listings.append(response.url)
+                state.listings.append(response.url)
                 parser = _PageParser()
                 try:
                     parser.feed(response.content.decode("utf-8", "replace"))
                 except Exception as error:
                     failure("page_parse_failure", response.url, error)
                     continue
-                raw_hyperlinks += len(parser.links)
+                state.raw_hyperlinks += len(parser.links)
                 page_unique: set[str] = set()
                 links: list[tuple[tuple[object, ...], str, str, str, bool, list[str]]] = []
                 for href, label in parser.links:
@@ -529,20 +595,20 @@ class BoundedTranscriptDiscovery:
                         reject("duplicate_edge", observed, cycle="duplicate_edge")
                         continue
                     page_unique.add(target)
-                    normalized_unique_hyperlinks += 1
+                    state.normalized_unique_hyperlinks += 1
                     if target == resolved_identity:
                         reject("direct_self_reference", observed, cycle="self_reference")
                         continue
                     if target in ancestors:
                         reject("graph_cycle", observed, cycle="ancestor_cycle")
                         continue
-                    if target in queued:
+                    if target in state.queued:
                         reject("already_queued", observed, cycle="duplicate_identity")
                         continue
-                    if target in proposed:
+                    if target in state.proposed:
                         reject("already_proposed", observed, cycle="duplicate_identity")
                         continue
-                    if target in visited:
+                    if target in state.visited:
                         reject("already_visited", observed, cycle="duplicate_identity")
                         continue
                     eligible, is_candidate = classify_link(label, target)
@@ -557,33 +623,30 @@ class BoundedTranscriptDiscovery:
                     rank, reasons = ranking(target, label, is_candidate, depth + 1, response.url)
                     links.append((rank, observed, target, label, is_candidate, reasons))
                 links.sort(key=lambda item: item[0])
-                eligible_hyperlinks += len(links)
+                state.eligible_hyperlinks += len(links)
                 if len(links) > self.policy.max_links_per_page:
                     exhausted = True
                     exhausted_budget = exhausted_budget or "max_links_per_page"
                 admitted = links[: self.policy.max_links_per_page]
-                traversed_hyperlinks += len(admitted)
+                state.traversed_hyperlinks += len(admitted)
                 for rank, observed, target, label, is_candidate, reasons in admitted:
-                    if len(ranking_samples) < self.RANKING_SAMPLE_LIMIT:
-                        ranking_samples.append({
-                            "url": redact_diagnostic_url(observed), "reasons": reasons,
-                            "candidate": is_candidate, "depth": depth + 1,
-                        })
-                    if is_candidate:
-                        candidate_records.append((
-                            phase_priority[phase], rank, serial, observed,
-                            label or observed, target, reasons, depth + 1,
+                    if len(state.ranking_samples) < self.RANKING_SAMPLE_LIMIT:
+                        state.ranking_samples.append(RankingAdmissionRecord(
+                            redact_diagnostic_url(observed), tuple(reasons),
+                            is_candidate, depth + 1,
                         ))
-                        proposed.add(target)
-                        candidate_admitted += 1
-                        queue_admitted += 1
+                    if is_candidate:
+                        state.admit_candidate(RankedCandidateProposal(
+                            phase_priority[phase], rank, serial, observed,
+                            label or observed, target, tuple(reasons), depth + 1,
+                        ))
                         serial += 1
                     else:
-                        queued.add(target)
+                        state.queued.add(target)
                         heapq.heappush(queue, (rank, serial, observed, target, response.url,
                                                depth + 1, ancestors | {target}))
                         serial += 1
-                        queue_admitted += 1
+                        state.queue_admitted += 1
                 if self.transport.exhausted:
                     exhausted = True
                     exhausted_budget = self.transport.exhausted_budget
@@ -601,7 +664,7 @@ class BoundedTranscriptDiscovery:
         anchor_fallthrough = not exhausted and bool(hint_urls)
         if anchor_fallthrough:
             traverse(hint_urls, "configured_hint")
-        hint_fallthrough = not exhausted and not candidate_records
+        hint_fallthrough = not exhausted and not state.candidate_proposals
         search_urls: list[str] = []
         for query in (() if exhausted or not hint_fallthrough else planned_queries):
             if queries_submitted >= self.policy.max_search_queries:
@@ -641,22 +704,35 @@ class BoundedTranscriptDiscovery:
                 break
         if not exhausted and hint_fallthrough:
             traverse(tuple(dict.fromkeys(search_urls)), "bounded_traversal")
+        ordered_candidates = sorted(
+            state.candidate_proposals, key=RankedCandidateProposal.sort_key
+        )
         unique_candidates = tuple(
-            {"url": observed, "label": label}
-            for _, _, _, observed, label, _, _, _ in sorted(candidate_records)
+            {"url": item.observed_url, "label": item.label}
+            for item in ordered_candidates
         )
         top_candidates = [
-            {"url": redact_diagnostic_url(observed), "reasons": reasons,
-             "depth": depth}
-            for _, _, _, observed, _, _, reasons, depth
-            in sorted(candidate_records)[: self.RANKING_SAMPLE_LIMIT]
+            {"url": redact_diagnostic_url(item.observed_url),
+             "reasons": list(item.reasons), "depth": item.depth}
+            for item in ordered_candidates[: self.RANKING_SAMPLE_LIMIT]
         ]
+        failure_counts = Counter(item.code.value for item in state.failures)
+        transport_failures: list[dict[str, object]] = []
+        for item in state.failures[: self.DIAGNOSTIC_SAMPLE_LIMIT]:
+            sample: dict[str, object] = {
+                "classification": item.code.value, "url": item.url,
+            }
+            if item.http_status is not None:
+                sample["http_status"] = item.http_status
+            if item.error_type != item.code.value:
+                sample["error_type"] = item.error_type
+            transport_failures.append(sample)
         if exhausted_budget and exhausted_budget not in DISCOVERY_BUDGET_FIELDS:
             raise RuntimeError("discovery reported an unknown exhausted budget")
         if exhausted != bool(exhausted_budget):
             raise RuntimeError("discovery exhaustion requires one named policy budget")
         return TranscriptDiscoveryResult(
-            tuple(dict.fromkeys(listings)),
+            tuple(dict.fromkeys(state.listings)),
             unique_candidates,
             tuple(sorted(self.transport.hosts)),
             exhausted,
@@ -666,42 +742,53 @@ class BoundedTranscriptDiscovery:
                 "distinct_hosts": len(self.transport.hosts),
                 "bytes": self.transport.bytes,
                 "candidate_urls": len(unique_candidates),
-                "candidate_admitted_count": candidate_admitted,
-                "raw_hyperlinks": raw_hyperlinks,
-                "normalized_unique_hyperlinks": normalized_unique_hyperlinks,
-                "eligible_hyperlinks": eligible_hyperlinks,
-                "traversed_hyperlinks": traversed_hyperlinks,
-                "queue_admitted_count": queue_admitted,
-                "visited_count": len(visited),
-                "rejection_counts": dict(sorted(rejection_counts.items())),
-                "cycle_counts": dict(sorted(cycle_counts.items())),
-                "representative_rejections": rejected_samples,
+                "candidate_admitted_count": len(state.candidate_proposals),
+                "raw_hyperlinks": state.raw_hyperlinks,
+                "normalized_unique_hyperlinks": state.normalized_unique_hyperlinks,
+                "eligible_hyperlinks": state.eligible_hyperlinks,
+                "traversed_hyperlinks": state.traversed_hyperlinks,
+                "queue_admitted_count": state.queue_admitted,
+                "visited_count": len(state.visited),
+                "rejection_counts": dict(sorted(state.rejection_counts.items())),
+                "cycle_counts": dict(sorted(state.cycle_counts.items())),
+                "representative_rejections": [
+                    {"reason": item.reason, "url": item.url}
+                    for item in state.rejected_samples
+                ],
                 "top_ranked_candidates": top_candidates,
-                "ranked_queue_admissions": ranking_samples,
+                "ranked_queue_admissions": [
+                    {"url": item.url, "reasons": list(item.reasons),
+                     "candidate": item.candidate, "depth": item.depth}
+                    for item in state.ranking_samples
+                ],
                 "bounds_exhausted": exhausted,
                 "exhausted_budget": exhausted_budget,
                 "discovery_failures": sum(failure_counts.values()),
-                "discovery_failure_codes": ",".join(code for code, _ in legacy_failures),
-                "discovery_failure_types": ",".join(kind for _, kind in legacy_failures),
+                "discovery_failure_codes": ",".join(
+                    item.legacy_code for item in state.failures
+                ),
+                "discovery_failure_types": ",".join(
+                    item.error_type for item in state.failures
+                ),
                 "discovery_failure_counts": dict(sorted(failure_counts.items())),
-                "transport_failures": validation_context,
+                "transport_failures": transport_failures,
                 "configured_hint_count": len(hint_urls),
                 "configured_hint_pages": sum(
-                    identity in visited for identity in hint_identities
+                    identity in state.visited for identity in hint_identities
                 ),
                 "configured_hint_status": (
                     "not_supplied" if not hint_urls else
                     "used" if any(
-                        identity in visited for identity in hint_identities
+                        identity in state.visited for identity in hint_identities
                     ) else "unusable"
                 ),
-                "anchor_attempts": anchor_attempts,
-                "configured_hint_attempt_sequence": configured_hint_attempt_sequence,
+                "anchor_attempts": state.anchor_attempts,
+                "configured_hint_attempt_sequence": state.configured_hint_attempt_sequence,
                 "anchor_to_hint_fallthrough": anchor_fallthrough and bool(hint_urls),
                 "hint_to_traversal_fallthrough": hint_fallthrough and bool(planned_queries),
                 "configured_hint_fallthrough": anchor_fallthrough and bool(hint_urls),
                 "bounded_traversal_fallthrough": hint_fallthrough and bool(planned_queries),
-                "stage_sequence": stage_sequence,
+                "stage_sequence": state.stage_sequence,
                 "redirect_count": self.transport.redirects,
                 "final_host": sorted(self.transport.hosts)[-1] if self.transport.hosts else "",
             },
@@ -871,15 +958,11 @@ class EarningsTranscriptPullAdapter:
             failure.code for failure in interval.failures
         ).items()))
         validation_failure_counts = dict(sorted(Counter(
-            EarningsCallTranscriptAcquisition._candidate_validation_code(
-                ValueError(failure.message)
-            )
+            self._candidate_failure_code(failure)
             for failure in interval.failures if failure.code == "candidate_invalid"
         ).items()))
         retrieval_failure_counts = dict(sorted(Counter(
-            EarningsCallTranscriptAcquisition._candidate_retrieval_code(
-                ValueError(failure.message)
-            )
+            self._candidate_failure_code(failure)
             for failure in interval.failures if failure.code == "candidate_unavailable"
         ).items()))
         candidate_failure_samples = []
@@ -888,21 +971,14 @@ class EarningsTranscriptPullAdapter:
                 continue
             if len(candidate_failure_samples) >= BoundedTranscriptDiscovery.DIAGNOSTIC_SAMPLE_LIMIT:
                 break
-            if failure.code == "candidate_unavailable":
-                classification = EarningsCallTranscriptAcquisition._candidate_retrieval_code(
-                    ValueError(failure.message)
-                )
-            else:
-                classification = EarningsCallTranscriptAcquisition._candidate_validation_code(
-                    ValueError(failure.message)
-                )
+            classification = self._candidate_failure_code(failure)
             sample: dict[str, object] = {"classification": classification}
             url = failure.details.get("url")
             if isinstance(url, str):
                 sample["url"] = redact_diagnostic_url(url)
-            status = re.search(r"\bHTTP (\d{3})\b", failure.message, re.I)
-            if status:
-                sample["http_status"] = int(status.group(1))
+            status = failure.details.get("http_status")
+            if isinstance(status, int):
+                sample["http_status"] = status
             candidate_failure_samples.append(sample)
         candidate_limit_reached = failure_code_counts.get("candidate_limit", 0) > 0
         if candidate_limit_reached and not final_diagnostics["exhausted_budget"]:
@@ -975,9 +1051,7 @@ class EarningsTranscriptPullAdapter:
                 return "redirect_cycle", "Transcript discovery rejected a redirect cycle."
         for failure in failures:
             if failure.code == "candidate_unavailable":
-                code = EarningsCallTranscriptAcquisition._candidate_retrieval_code(
-                    ValueError(failure.message)
-                )
+                code = EarningsTranscriptPullAdapter._candidate_failure_code(failure)
                 messages = {
                     "candidate_http_not_found": (
                         "A transcript candidate was found but returned HTTP 404."
@@ -994,9 +1068,7 @@ class EarningsTranscriptPullAdapter:
                 }
                 return code, messages[code]
             if failure.code == "candidate_invalid":
-                code = EarningsCallTranscriptAcquisition._candidate_validation_code(
-                    ValueError(failure.message)
-                )
+                code = EarningsTranscriptPullAdapter._candidate_failure_code(failure)
                 messages = {
                     "candidate_unsupported_content_type": (
                         "A transcript candidate was found but its content type is unsupported."
@@ -1025,6 +1097,16 @@ class EarningsTranscriptPullAdapter:
             "coverage_indeterminate",
             "Discovery completed without a candidate, but coverage remains indeterminate.",
         )
+
+    @staticmethod
+    def _candidate_failure_code(failure: Any) -> str:
+        value = failure.details.get("candidate_failure_code")
+        try:
+            return CandidateFailureCode(value).value
+        except (TypeError, ValueError):
+            if failure.code == "candidate_invalid":
+                return CandidateFailureCode.VALIDATION_MISMATCH.value
+            return CandidateFailureCode.RETRIEVAL_FAILURE.value
 
     def retrieve(self, profile: SourceProfile, candidate: AdapterCandidate) -> RetrievalResult:
         self._validate_profile(profile)

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import re
+import socket
 import urllib.parse
 import urllib.request
 import urllib.error
 from dataclasses import dataclass
 from datetime import date, datetime
+from enum import Enum
 from html.parser import HTMLParser
 from typing import Callable
 
@@ -64,6 +66,28 @@ class EarningsTranscriptHttpResponse:
     media_type: str
     content: bytes
     redirects: tuple[str, ...] = ()
+
+
+class CandidateFailureCode(str, Enum):
+    """Stable machine classification for candidate retrieval and validation failures."""
+
+    HTTP_NOT_FOUND = "candidate_http_not_found"
+    ACCESS_DENIED = "candidate_access_denied"
+    FETCH_TIMEOUT = "candidate_fetch_timeout"
+    UNSUPPORTED_CONTENT_TYPE = "candidate_unsupported_content_type"
+    EMPTY_CONTENT = "candidate_empty"
+    JAVASCRIPT_REQUIRED = "candidate_requires_javascript"
+    VALIDATION_MISMATCH = "candidate_validation_mismatch"
+    RETRIEVAL_FAILURE = "candidate_retrieval_failure"
+
+
+@dataclass(frozen=True)
+class CandidateFailure:
+    """Typed candidate failure; its message is presentation, not classification."""
+
+    code: CandidateFailureCode
+    message: str
+    http_status: int | None = None
 
 
 def normalize_transcript_url(url: str) -> str:
@@ -191,10 +215,15 @@ class EarningsCallTranscriptAcquisition:
             try:
                 normalized = self._normalize_url(proposal.url)
             except Exception as error:
+                candidate_failure = CandidateFailure(
+                    CandidateFailureCode.VALIDATION_MISMATCH,
+                    str(error) or error.__class__.__name__,
+                )
                 failures.append(
                     self._failure(
                         "candidate_invalid", proposal.url, error, False,
                         self._identifier("candidate", proposal.url),
+                        candidate_failure,
                     )
                 )
                 continue
@@ -205,9 +234,11 @@ class EarningsCallTranscriptAcquisition:
             try:
                 response = self._fetch(normalized, allowed_hosts)
             except Exception as error:
+                candidate_failure = self._candidate_retrieval_failure(error)
                 failures.append(
                     self._failure(
-                        "candidate_unavailable", normalized, error, True, source_artifact_id
+                        "candidate_unavailable", normalized, error, True, source_artifact_id,
+                        candidate_failure,
                     )
                 )
                 continue
@@ -217,13 +248,27 @@ class EarningsCallTranscriptAcquisition:
                     raise ValueError("candidate publication/event date could not be established")
                 if not request.contains(artifact_date):
                     continue
-                self._validate_transcript(response, proposal.label)
+                validation_failure = self._transcript_validation_failure(
+                    response, proposal.label
+                )
+                if validation_failure is not None:
+                    failures.append(self._failure(
+                        "candidate_invalid", normalized,
+                        ValueError(validation_failure.message), False,
+                        source_artifact_id, validation_failure,
+                    ))
+                    continue
                 self._validate_firm_identity(response, proposal.label)
                 artifacts.append(self._envelope(proposal, response, artifact_date))
             except Exception as error:
+                candidate_failure = CandidateFailure(
+                    CandidateFailureCode.VALIDATION_MISMATCH,
+                    str(error) or error.__class__.__name__,
+                )
                 failures.append(
                     self._failure(
-                        "candidate_invalid", normalized, error, False, source_artifact_id
+                        "candidate_invalid", normalized, error, False, source_artifact_id,
+                        candidate_failure,
                     )
                 )
 
@@ -274,7 +319,9 @@ class EarningsCallTranscriptAcquisition:
             raise ValueError("candidate host is outside the governed official-source policy")
         response = self.transport.get(normalized)
         if response.status < 200 or response.status >= 300:
-            raise ValueError(f"HTTP {response.status}")
+            raise urllib.error.HTTPError(
+                normalized, response.status, f"HTTP {response.status}", None, None
+            )
         final_host = urllib.parse.urlsplit(response.url).hostname or ""
         if not any(
             final_host == allowed or final_host.endswith(f".{allowed}")
@@ -284,52 +331,71 @@ class EarningsCallTranscriptAcquisition:
         return response
 
     @staticmethod
-    def _validate_transcript(response: EarningsTranscriptHttpResponse, label: str) -> None:
+    def _transcript_validation_failure(
+        response: EarningsTranscriptHttpResponse, label: str
+    ) -> CandidateFailure | None:
         media_type = response.media_type.casefold()
         if not response.content.strip():
-            raise ValueError("candidate content is empty")
+            return CandidateFailure(
+                CandidateFailureCode.EMPTY_CONTENT, "candidate content is empty"
+            )
         if media_type in {"text/html", "application/xhtml+xml"}:
             if not response.content.lstrip().lower().startswith((b"<!doctype html", b"<html")):
-                raise ValueError("HTML candidate lacks an HTML document signature")
+                return CandidateFailure(
+                    CandidateFailureCode.VALIDATION_MISMATCH,
+                    "HTML candidate lacks an HTML document signature",
+                )
             text = re.sub(r"<[^>]+>", " ", response.content.decode("utf-8", "replace"))
             if re.search(r"\b(?:enable|requires?)\s+javascript\b", text, re.I) and len(text) < 500:
-                raise ValueError("candidate requires JavaScript")
+                return CandidateFailure(
+                    CandidateFailureCode.JAVASCRIPT_REQUIRED,
+                    "candidate requires JavaScript",
+                )
             if not (_TRANSCRIPT.search(label + " " + text) and _EARNINGS_CALL.search(text)):
-                raise ValueError("HTML candidate is not identified as an earnings-call transcript")
+                return CandidateFailure(
+                    CandidateFailureCode.VALIDATION_MISMATCH,
+                    "HTML candidate is not identified as an earnings-call transcript",
+                )
             if not _SPEAKER_EVIDENCE.search(text):
-                raise ValueError("HTML candidate lacks transcript speaker/section evidence")
-            return
+                return CandidateFailure(
+                    CandidateFailureCode.VALIDATION_MISMATCH,
+                    "HTML candidate lacks transcript speaker/section evidence",
+                )
+            return None
         if media_type == "application/pdf":
             if not response.content.startswith(b"%PDF-"):
-                raise ValueError("PDF candidate lacks a PDF signature")
+                return CandidateFailure(
+                    CandidateFailureCode.VALIDATION_MISMATCH,
+                    "PDF candidate lacks a PDF signature",
+                )
             evidence = urllib.parse.unquote(label + " " + response.url)
             if not (_TRANSCRIPT.search(evidence) and _EARNINGS_CALL.search(evidence)):
-                raise ValueError("PDF link is not identified as an earnings-call transcript")
-            return
-        raise ValueError(f"unsupported transcript media type: {response.media_type}")
+                return CandidateFailure(
+                    CandidateFailureCode.VALIDATION_MISMATCH,
+                    "PDF link is not identified as an earnings-call transcript",
+                )
+            return None
+        return CandidateFailure(
+            CandidateFailureCode.UNSUPPORTED_CONTENT_TYPE,
+            f"unsupported transcript media type: {response.media_type}",
+        )
 
     @staticmethod
-    def _candidate_retrieval_code(error: Exception) -> str:
-        message = str(error).casefold()
+    def _candidate_retrieval_failure(error: Exception) -> CandidateFailure:
         status = getattr(error, "code", None)
-        if status == 404 or "http 404" in message:
-            return "candidate_http_not_found"
-        if status in {401, 403} or "http 401" in message or "http 403" in message:
-            return "candidate_access_denied"
-        if isinstance(error, (TimeoutError, urllib.error.URLError)) and "timed out" in message:
-            return "candidate_fetch_timeout"
-        return "candidate_retrieval_failure"
-
-    @staticmethod
-    def _candidate_validation_code(error: Exception) -> str:
-        message = str(error).casefold()
-        if "unsupported transcript media type" in message:
-            return "candidate_unsupported_content_type"
-        if "content is empty" in message:
-            return "candidate_empty"
-        if "requires javascript" in message:
-            return "candidate_requires_javascript"
-        return "candidate_validation_mismatch"
+        message = str(error) or error.__class__.__name__
+        if isinstance(error, urllib.error.HTTPError):
+            error.close()
+        if status == 404:
+            return CandidateFailure(CandidateFailureCode.HTTP_NOT_FOUND, message, status)
+        if status in {401, 403}:
+            return CandidateFailure(CandidateFailureCode.ACCESS_DENIED, message, status)
+        reason = error.reason if isinstance(error, urllib.error.URLError) else None
+        if isinstance(error, (TimeoutError, socket.timeout)) or isinstance(
+            reason, (TimeoutError, socket.timeout)
+        ):
+            return CandidateFailure(CandidateFailureCode.FETCH_TIMEOUT, message)
+        return CandidateFailure(CandidateFailureCode.RETRIEVAL_FAILURE, message, status)
 
     @staticmethod
     def _looks_like_transcript(label: str, url: str) -> bool:
@@ -413,8 +479,16 @@ class EarningsCallTranscriptAcquisition:
     def _failure(
         code: str, url: str, error: Exception, retryable: bool,
         source_artifact_id: str | None = None,
+        candidate_failure: CandidateFailure | None = None,
     ) -> IntervalAcquisitionFailure:
+        details: dict[str, object] = {
+            "url": url, "error_type": error.__class__.__name__
+        }
+        if candidate_failure is not None:
+            details["candidate_failure_code"] = candidate_failure.code.value
+            if candidate_failure.http_status is not None:
+                details["http_status"] = candidate_failure.http_status
         return IntervalAcquisitionFailure(
             code, str(error) or error.__class__.__name__, retryable, source_artifact_id,
-            {"url": url, "error_type": error.__class__.__name__},
+            details,
         )

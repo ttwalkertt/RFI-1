@@ -74,13 +74,14 @@ def run(
     return {key: page.diagnostics.get(key) for key in keys}
 
 
-def main() -> int:
+def reproduction_cases() -> dict[str, dict[str, object]]:
+    """Build the eight stable cases without writing evidence as a side effect."""
     candidate = "https://ir.example.com/2026-04-30-earnings-call-transcript.html"
     second = "https://ir.example.com/2026-07-30-earnings-call-transcript.html"
     generic = "".join(
         f"<a href='/transcripts/archive-{index}'>Transcript archive</a>" for index in range(25)
     )
-    cases = {
+    return {
         "many_raw_zero_eligible": run({
             HINT: html(HINT, "".join(f"<a href='/legal/{i}'>Legal</a>" for i in range(50)))
         }),
@@ -119,6 +120,10 @@ def main() -> int:
         }, policy(max_candidate_evaluations=1)),
         "indeterminate_without_exhaustion": run({HINT: html(HINT, "")}),
     }
+
+
+def main() -> int:
+    cases = reproduction_cases()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(cases, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"cases": len(cases), "output": str(OUTPUT)}, indent=2))

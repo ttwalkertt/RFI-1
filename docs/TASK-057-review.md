@@ -43,6 +43,34 @@ a substitute for observed provenance.
 
 This preserves the acquisition/evidence boundary and avoids a second validation path in traversal.
 
+## Corrective Maintainability Hardening
+
+The original implementation had two brittle internal seams even though its observable discovery
+behavior was correct. First, the Pull Sources adapter reconstructed candidate failure subtypes by
+searching human-readable exception text. Second, the traversal function represented proposals,
+failures, samples, counters, and graph identity sets as unrelated locals and tuple/dictionary
+shapes whose consistency depended on coordinated mutation.
+
+The repair keeps the compatible `candidate_unavailable` and `candidate_invalid` acquisition
+categories, while the retriever now assigns one explicit `CandidateFailureCode` where retrieval or
+validation fails. The stable code and typed HTTP status travel in structured failure details;
+messages are presentation only. Counters, bounded samples, primary classifications, and Pull
+Sources summaries all consume that code. Focused tests exercise HTTP not found, access denied,
+timeout, unsupported content, empty content, JavaScript-required content, validation mismatch, and
+other retrieval failure, and prove that changing message wording cannot change classification.
+
+`GraphTraversalState`, `RankedCandidateProposal`, `DiscoveryFailureRecord`, and bounded typed sample
+records now make graph transitions and ordering contracts explicit. Queue admission, proposal
+admission, rejection, cycle, visit, and failure metrics are projected from this state instead of
+duplicated counters and ad hoc tuples. This is a minimum internal extraction: transport still owns
+fetch and resource accounting, graph exploration still owns normalized-node ordering, and the
+retriever still exclusively decides whether a proposal is a valid transcript.
+
+Behavior is unchanged. URL normalization, retained-anchor and hint precedence, ranking keys,
+cycle/duplicate rules, all governed limits, operator messages, and retriever validation rules are
+identical. The regenerated eight-case reproduction JSON is byte-for-byte equal to the prior
+evidence, and TASK-056 retained-anchor compatibility remains green.
+
 ## URL Identity, Cycle Control, and Determinism
 
 The retained-anchor normalizer was extracted into one shared acquisition URL-identity module and
@@ -124,10 +152,10 @@ behavior or durable state.
 
 ## Verification Results
 
-- `make task057-test`: PASS, 80 focused and compatibility tests.
+- `make task057-test`: PASS, 84 focused and compatibility tests.
 - `make task057-proof`: PASS, eight deterministic reproduction cases.
 - `git diff --check`: PASS.
-- `make validate`: PASS. All 529 unit tests passed, followed by every repository demonstration,
+- `make validate`: PASS. All 533 unit tests passed, followed by every repository demonstration,
   offline provider proof, lint, format, type, import, documentation, design-baseline, and build gate.
 
 ## Changed-File Inventory
@@ -144,6 +172,9 @@ behavior or durable state.
   `docs/operator-guide.md`, `docs/design-baseline.json`, this report, and
   `scripts/check_baseline.py`.
 - Review packaging: `scripts/generate_task057_review.py`.
+
+The corrective repair itself changes `src/rfi/acquisition/earnings_transcripts.py`,
+`src/rfi/discovery.py`, `tests/test_task057.py`, `scripts/task057_reproduction.py`, and this report.
 
 ## Limitations
 
