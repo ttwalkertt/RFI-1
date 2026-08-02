@@ -9,6 +9,13 @@ diagnostics. Candidate retrieval and validation remain owned by the TASK-048 ret
 The final robustness repair also removes eager candidate validation and cached bodies from
 discovery: the engine now receives bounded proposals and invokes validation during retrieval.
 
+The partial-success corrective hardening adds a distinct `success_with_warnings` Pull outcome.
+Durably retained transcript artifacts now take precedence over candidate-level failures, while the
+complete warning evidence remains in engine diagnostics. A partial mixed-result run advances its
+checkpoint from the highest successfully validated retained candidate and anchors that advancement
+to a successful attempt. Discovery, transport, ranking, candidate ordering, validation, and
+checkpoint qualification rules are unchanged.
+
 ## Before and After
 
 Before, `BoundedTranscriptDiscovery` used a FIFO of exact URL strings. A per-page eligible-link
@@ -240,23 +247,35 @@ Each record contains its operator summary and bounded structured diagnostics.
 
 ## Compatibility and Durable-State Evidence
 
-The 97-test focused target includes TASK-048, TASK-048A, TASK-052, TASK-053, TASK-056, Pull
+### Partial-success corrective evidence
+
+The corrective regression reproduces a configured-hint timeout followed by successful downstream
+discovery, one validated Q2 2026 transcript retention, and a later candidate timeout. The engine
+retains one artifact, preserves both timeout classifications, advances the checkpoint to the
+validated Q2 2026 position, and teaches one TASK-056 retained anchor. Pull Workflow reports
+`success_with_warnings` with an acquisition-first summary. A companion all-candidates-failed case
+retains no artifact, advances no checkpoint, and remains `retrieval_failure`; checkpoint-backed
+no-change retains its established summary.
+
+The 102-test focused target includes TASK-048, TASK-048A, TASK-052, TASK-053, TASK-056, Pull
 Workflow, and SEC adapter regressions. TASK-056 tests prove anchor LIFO ordering, exact requested/
 resolved provenance, atomic history updates, failed-attempt non-learning, profile-revision survival,
 checkpoint behavior, and rollback. TASK-048 tests prove validation, immutable bytes, provenance,
 and repository ingress remain unchanged. TASK-015/016 tests prove Pull Sources and SEC behavior.
 
-No storage schema, acquisition checkpoint, transaction, artifact, observation, immutable-content,
-or discovery-history persistence contract changed. The browser proof wait condition now waits for
+No storage schema, checkpoint qualification, transaction, artifact, observation, immutable-content,
+or discovery-history persistence contract changed. Checkpoint finalization now publishes already
+qualified retained progress after mixed candidate results instead of withholding that progress.
+The browser proof wait condition now waits for
 both API responses and rendered checkboxes, removing a validation race without changing production
 behavior or durable state.
 
 ## Verification Results
 
-- `make task057-test`: PASS, 97 focused and compatibility tests.
+- `make task057-test`: PASS, 102 focused and compatibility tests.
 - `make task057-proof`: PASS, nine deterministic reproduction cases.
 - `git diff --check`: PASS.
-- `make validate`: PASS. All 546 unit tests passed, followed by every repository demonstration,
+- `make validate`: PASS. All 551 unit tests passed, followed by every repository demonstration,
   offline provider proof, lint, format, type, import, documentation, design-baseline, and build gate.
 
 ## Changed-File Inventory
@@ -281,6 +300,10 @@ The Amazon live-run repair additionally changes the governed discovery policy/sc
 `src/rfi/pull/workflow.py`, TASK-015/048A/053 compatibility tests, and the TASK-053 proof script.
 The graph-queue priority repair changes only `src/rfi/discovery.py`, `tests/test_task057.py`, and
 this report.
+The partial-success corrective repair changes `src/rfi/acquisition/engine.py`, the Pull Workflow
+contracts, orchestration, and browser presentation, TASK-015/057 and engine regressions, the Pull
+Workflow documentation, TASK-057 governance and review records, and the governed design-baseline
+checksum for `TASKS.md`.
 
 ## Limitations
 
@@ -312,6 +335,9 @@ this report.
   eligibility, candidate, exhaustion, and coverage outcomes are actionable and testable.
 - **Retained-anchor history — Complete.** TASK-056 ordering, persistence, and atomic learning
   semantics are unchanged.
+- **Mixed-result finalization — Complete.** Durable acquisitions produce success with warnings,
+  warning evidence remains inspectable, and successfully validated progress advances checkpoints
+  without allowing failed candidates to qualify progress.
 - **Acquisition evidence and SEC verticals — Complete and unaffected.** Checkpoints, transactions,
   immutable bytes, provenance, observations, and SEC adapters pass compatibility validation.
 - **Live provider variability — Usable with limitations.** External pages may still require

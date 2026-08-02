@@ -27,6 +27,8 @@ from rfi.discovery import (
     DiscoverySearchResponse,
     EarningsTranscriptPullAdapter,
 )
+from rfi.firms import FirmRepository
+from rfi.firms.contracts import FirmDraft, FirmStatus
 from rfi.pull import ArtifactOutcome
 from rfi.pull.workflow import PullWorkflow
 from scripts.task057_reproduction import reproduction_cases
@@ -727,6 +729,166 @@ class ClassificationAndBoundaryTests(unittest.TestCase):
 
 
 class CorrectiveRobustnessTests(unittest.TestCase):
+    def test_hint_timeout_with_downstream_success_is_success_with_warnings(self) -> None:
+        timed_out_hint = "https://ir-timeout.example.com/transcripts/"
+        retained = "https://ir.example.com/2026-04-30-earnings-call-transcript.html"
+        configured = SourceProfile(
+            "source-a", "Firm A transcripts", True, "earnings_transcript",
+            {"mode": "discovery", "discovery_hints": [timed_out_hint, retained],
+             "discovery_class": "standard"},
+            {"firm_id": "firm-a", "artifact_id": "earnings_transcript"},
+        )
+        transport = Transport({
+            timed_out_hint: TimeoutError("configured hint timed out"),
+            retained: html(
+                retained,
+                "Firm A quarterly earnings call transcript April 30, 2026. "
+                "Operator. Chief Executive Officer. Prepared remarks.",
+            ),
+        })
+        with tempfile.TemporaryDirectory() as directory:
+            repository = AcquisitionRepository(Path(directory) / "acquisition")
+            repository.register_source(configured)
+            adapter = EarningsTranscriptPullAdapter(
+                DiscoveryPolicyCatalog({"standard": policy()}, "standard"), Search(),
+                transport, lambda: "2026-08-01T00:00:00Z", repository=repository,
+            )
+            result = AcquisitionEngine(
+                repository, AdapterRegistry((adapter,)),
+                lambda: "2026-08-01T00:00:00Z",
+            ).run_source(configured.source_id, "hint-warning")
+
+        self.assertEqual(result.status, RunStatus.COMPLETE)
+        self.assertEqual(result.durable_acquisitions, 1)
+        self.assertEqual(result.failures, 0)
+        self.assertEqual(PullWorkflow._engine_outcome(result),
+                         ArtifactOutcome.SUCCESS_WITH_WARNINGS)
+        self.assertIn("hint_fetch_timeout", json.dumps(result.to_dict()))
+        self.assertNotIn(
+            "hint timed out",
+            PullWorkflow._engine_diagnostic(
+                result, ArtifactOutcome.SUCCESS_WITH_WARNINGS
+            ),
+        )
+
+    def test_mixed_success_advances_checkpoint_and_reports_warnings(self) -> None:
+        timed_out_hint = "https://ir-timeout.example.com/transcripts/"
+        listing = "https://ir.example.com/transcripts/"
+        retained = "https://ir.example.com/2026-04-30-earnings-call-transcript.html"
+        failed = "https://ir.example.com/2026-07-30-earnings-call-transcript.html"
+        configured = SourceProfile(
+            "source-a", "Firm A transcripts", True, "earnings_transcript",
+            {"mode": "discovery", "discovery_hints": [timed_out_hint, listing],
+             "discovery_class": "standard"},
+            {"firm_id": "firm-a", "artifact_id": "earnings_transcript",
+             "retrieval_adapter_id": "earnings-call-transcript",
+             "source_profile_revision_id": "profile-r1"},
+        )
+        transport = Transport({
+            timed_out_hint: TimeoutError("configured hint timed out"),
+            listing: html(
+                listing,
+                f"<a href='{retained}'>Q2 2026 earnings call transcript</a>"
+                f"<a href='{failed}'>Q3 2026 earnings call transcript</a>",
+            ),
+            retained: html(
+                retained,
+                "Firm A quarterly earnings call transcript April 30, 2026. "
+                "Operator. Chief Executive Officer. Prepared remarks.",
+            ),
+            failed: TimeoutError("candidate timed out"),
+        })
+        with tempfile.TemporaryDirectory() as directory:
+            firms = FirmRepository.initialize(Path(directory) / "firms")
+            firms.create(FirmDraft(
+                "firm-a", "Firm A", "2026-01-01", status=FirmStatus.ACTIVE
+            ))
+            repository = AcquisitionRepository(Path(directory) / "acquisition")
+            repository.register_source(configured)
+            adapter = EarningsTranscriptPullAdapter(
+                DiscoveryPolicyCatalog({"standard": policy()}, "standard"), Search(),
+                transport, lambda: "2026-08-01T00:00:00Z", repository=repository,
+            )
+            result = AcquisitionEngine(
+                repository, AdapterRegistry((adapter,)),
+                lambda: "2026-08-01T00:00:00Z",
+            ).run_source(configured.source_id, "mixed-success")
+            anchors = repository.discovery_anchors(
+                "firm-a", configured.source_id, "earnings-call-transcript"
+            )
+
+        self.assertEqual(result.status, RunStatus.PARTIAL)
+        self.assertEqual(result.durable_acquisitions, 1)
+        self.assertEqual(result.failures, 1)
+        self.assertEqual(
+            result.checkpoint_after.position, ReportingPeriod.parse("2026-Q2").ordinal
+        )
+        self.assertEqual(PullWorkflow._engine_outcome(result),
+                         ArtifactOutcome.SUCCESS_WITH_WARNINGS)
+        summary = PullWorkflow._engine_diagnostic(
+            result, ArtifactOutcome.SUCCESS_WITH_WARNINGS
+        )
+        self.assertIn("Retrieved and ingested 1 artifact with warnings", summary)
+        self.assertNotIn("hint timed out", summary)
+        evidence = json.dumps(result.to_dict())
+        self.assertIn("hint_fetch_timeout", evidence)
+        self.assertIn("candidate_fetch_timeout", evidence)
+        self.assertEqual(len(anchors), 1)
+        self.assertEqual(anchors[0]["requested_url"], retained)
+
+    def test_all_candidates_failed_remains_retrieval_failure(self) -> None:
+        listing = "https://ir.example.com/transcripts/"
+        failed = "https://ir.example.com/2026-04-30-earnings-call-transcript.html"
+        configured = profile(listing)
+        transport = Transport({
+            listing: html(
+                listing,
+                f"<a href='{failed}'>Q2 2026 earnings call transcript</a>",
+            ),
+            failed: TimeoutError("candidate timed out"),
+        })
+        with tempfile.TemporaryDirectory() as directory:
+            repository = AcquisitionRepository(Path(directory) / "acquisition")
+            repository.register_source(configured)
+            adapter = EarningsTranscriptPullAdapter(
+                DiscoveryPolicyCatalog({"standard": policy()}, "standard"), Search(),
+                transport, lambda: "2026-08-01T00:00:00Z", repository=repository,
+            )
+            result = AcquisitionEngine(
+                repository, AdapterRegistry((adapter,)),
+                lambda: "2026-08-01T00:00:00Z",
+            ).run_source(configured.source_id, "all-failed")
+
+        self.assertEqual(result.durable_acquisitions, 0)
+        self.assertEqual(result.failures, 1)
+        self.assertIsNone(result.checkpoint_after)
+        self.assertEqual(PullWorkflow._engine_outcome(result),
+                         ArtifactOutcome.RETRIEVAL_FAILURE)
+        self.assertIn(
+            "retrieval timed out",
+            PullWorkflow._engine_diagnostic(
+                result, ArtifactOutcome.RETRIEVAL_FAILURE
+            ),
+        )
+
+    def test_checkpoint_no_change_summary_is_unchanged(self) -> None:
+        class Result:
+            failures = 0
+            status = RunStatus.COMPLETE
+            durable_acquisitions = 0
+            duplicates = 0
+            unchanged = 0
+            diagnostics = ()
+            checkpoint_before = object()
+            outcomes = (type("Outcome", (), {"outcome": "checkpoint_filtered"})(),)
+
+        result = Result()
+        self.assertEqual(PullWorkflow._engine_outcome(result), ArtifactOutcome.NO_CHANGE)
+        self.assertEqual(
+            PullWorkflow._engine_diagnostic(result, ArtifactOutcome.NO_CHANGE),
+            "Source checkpoint indicates no new artifact.",
+        )
+
     def test_pdf_hint_admits_typed_proposal_and_validation_remains_lazy(self) -> None:
         url = "https://ir.example.com/2026-04-30-earnings-call-transcript.pdf"
         response = EarningsTranscriptHttpResponse(url, 200, "application/pdf", b"%PDF-1.7")

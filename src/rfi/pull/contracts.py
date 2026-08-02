@@ -39,6 +39,7 @@ class ArtifactOutcome(StrEnum):
     """Terminal operator-facing result for one enabled configured artifact."""
 
     SUCCESS = "success"
+    SUCCESS_WITH_WARNINGS = "success_with_warnings"
     DUPLICATE = "duplicate"
     NO_CHANGE = "no_change"
     INDETERMINATE = "indeterminate"
@@ -121,6 +122,7 @@ class PullSummary:
     firms: int
     artifacts: int
     success: int
+    success_with_warnings: int
     duplicate: int
     no_change: int
     indeterminate: int

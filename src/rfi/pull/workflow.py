@@ -324,6 +324,7 @@ class PullWorkflow:
             attempts.append(attempt)
             if outcome in {
                 ArtifactOutcome.SUCCESS,
+                ArtifactOutcome.SUCCESS_WITH_WARNINGS,
                 ArtifactOutcome.DUPLICATE,
                 ArtifactOutcome.NO_CHANGE,
                 ArtifactOutcome.INDETERMINATE,
@@ -469,10 +470,14 @@ class PullWorkflow:
 
     @staticmethod
     def _engine_outcome(result: Any) -> ArtifactOutcome:
+        if result.durable_acquisitions:
+            return (
+                ArtifactOutcome.SUCCESS_WITH_WARNINGS
+                if PullWorkflow._engine_has_warnings(result)
+                else ArtifactOutcome.SUCCESS
+            )
         if result.failures or result.status != RunStatus.COMPLETE:
             return ArtifactOutcome.RETRIEVAL_FAILURE
-        if result.durable_acquisitions:
-            return ArtifactOutcome.SUCCESS
         if result.duplicates:
             return ArtifactOutcome.DUPLICATE
         if PullWorkflow._has_checkpoint_decision(result) or result.unchanged:
@@ -481,6 +486,23 @@ class PullWorkflow:
         if coverage == "complete":
             return ArtifactOutcome.NO_CHANGE
         return ArtifactOutcome.INDETERMINATE
+
+    @staticmethod
+    def _engine_has_warnings(result: Any) -> bool:
+        if result.failures or result.status != RunStatus.COMPLETE:
+            return True
+        for diagnostic in result.diagnostics:
+            if int(diagnostic.get("discovery_failures", 0) or 0) > 0:
+                return True
+            for key in (
+                "discovery_failure_counts",
+                "candidate_retrieval_failure_counts",
+                "validation_failure_counts",
+            ):
+                counts = diagnostic.get(key)
+                if isinstance(counts, dict) and any(int(value) > 0 for value in counts.values()):
+                    return True
+        return False
 
     @staticmethod
     def _engine_coverage(result: Any) -> str | None:
@@ -507,6 +529,22 @@ class PullWorkflow:
 
     @staticmethod
     def _engine_diagnostic(result: Any, outcome: ArtifactOutcome) -> str:
+        if outcome == ArtifactOutcome.SUCCESS:
+            return "Retrieved and ingested through repository ingress."
+        if outcome == ArtifactOutcome.SUCCESS_WITH_WARNINGS:
+            count = int(result.durable_acquisitions)
+            return (
+                f"Retrieved and ingested {count} artifact"
+                f"{'s' if count != 1 else ''} with warnings; earlier discovery and "
+                "candidate diagnostics remain available for review."
+            )
+        if outcome == ArtifactOutcome.RETRIEVAL_FAILURE:
+            messages = [
+                str(item.get("message"))
+                for item in result.diagnostics if item.get("message")
+            ]
+            if messages:
+                return "; ".join(dict.fromkeys(messages))
         summaries = [
             str(item.get("operator_summary"))
             for item in result.diagnostics if item.get("operator_summary")
@@ -533,7 +571,6 @@ class PullWorkflow:
         if messages:
             return "; ".join(messages)
         return {
-            ArtifactOutcome.SUCCESS: "Retrieved and ingested through repository ingress.",
             ArtifactOutcome.DUPLICATE: "Exact artifact bytes already exist in immutable storage.",
             ArtifactOutcome.RETRIEVAL_FAILURE: "Retrieval did not complete.",
         }[outcome]
@@ -695,6 +732,7 @@ class PullWorkflow:
             len(firms),
             len(artifacts),
             counts[ArtifactOutcome.SUCCESS],
+            counts[ArtifactOutcome.SUCCESS_WITH_WARNINGS],
             counts[ArtifactOutcome.DUPLICATE],
             counts[ArtifactOutcome.NO_CHANGE],
             counts[ArtifactOutcome.INDETERMINATE],
@@ -749,8 +787,10 @@ class PullWorkflow:
             record["completed_at"],
             tuple(PullStage(item) for item in record["completed_stages"]),
             tuple(firms),
-            PullSummary(indeterminate=0, **record["summary"])
-            if "indeterminate" not in record["summary"]
-            else PullSummary(**record["summary"]),
+            PullSummary(**{
+                "indeterminate": 0,
+                "success_with_warnings": 0,
+                **record["summary"],
+            }),
             tuple(record["diagnostics"]),
         )

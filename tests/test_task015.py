@@ -428,12 +428,43 @@ class PullWorkflowCase(unittest.TestCase):
                 failures=1, durable_acquisitions=1,
                 diagnostics=({"coverage": "indeterminate"},),
             )),
-            ArtifactOutcome.RETRIEVAL_FAILURE,
+            ArtifactOutcome.SUCCESS_WITH_WARNINGS,
+        )
+        warning_result = engine_result(
+            failures=1,
+            durable_acquisitions=2,
+            diagnostics=({"operator_summary": "The configured hint timed out."},),
+        )
+        self.assertIn(
+            "Retrieved and ingested 2 artifacts with warnings",
+            PullWorkflow._engine_diagnostic(
+                warning_result, ArtifactOutcome.SUCCESS_WITH_WARNINGS
+            ),
+        )
+        self.assertNotIn(
+            "hint timed out",
+            PullWorkflow._engine_diagnostic(
+                warning_result, ArtifactOutcome.SUCCESS_WITH_WARNINGS
+            ),
         )
         self.assertEqual(
             PullWorkflow._engine_outcome(engine_result(durable_acquisitions=1)),
             ArtifactOutcome.SUCCESS,
         )
+        warning_artifact = SimpleNamespace(
+            outcome=ArtifactOutcome.SUCCESS_WITH_WARNINGS
+        )
+        self.assertEqual(
+            PullWorkflow._artifact_status((warning_artifact,)), PullStatus.COMPLETED
+        )
+        self.assertEqual(
+            PullWorkflow._summary((SimpleNamespace(
+                artifacts=(warning_artifact,),
+            ),)).success_with_warnings,
+            1,
+        )
+        html = (Path(__file__).parents[1] / "src/rfi/admin/pull_sources.html").read_text()
+        self.assertIn("run.summary.success_with_warnings", html)
         self.assertEqual(
             PullWorkflow._engine_outcome(engine_result(
                 diagnostics=({"coverage": "complete"}, {

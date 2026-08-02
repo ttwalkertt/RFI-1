@@ -287,7 +287,10 @@ class AcquisitionEngine:
         skips = 0
         failures = 0
         last_success: str | None = None
+        checkpoint_success: str | None = None
         maximum_position = checkpoint_before.position if checkpoint_before else 0
+        maximum_success_position = maximum_position
+        successful_candidates: dict[str, dict[str, Any]] = {}
         previous_page_position = 0
         status = RunStatus.COMPLETE
         checkpoint_confirmed = False
@@ -436,6 +439,13 @@ class AcquisitionEngine:
                                 "deferred candidate retrieval lacks validated position"
                             )
                         maximum_position = max(maximum_position, validated_position)
+                        checkpoint_position = validated_position
+                    else:
+                        checkpoint_position = candidate.position
+                    successful_candidates[candidate.candidate_id] = candidate.canonical()
+                    if checkpoint_position > maximum_success_position:
+                        maximum_success_position = checkpoint_position
+                        checkpoint_success = attempt_id
                     last_success = attempt_id
                     if receipt.idempotent:
                         unchanged += 1
@@ -590,6 +600,18 @@ class AcquisitionEngine:
             elif checkpoint_confirmed and checkpoint_before is not None and retrievals == 0:
                 if self._repository.record_no_change(source_id, checkpoint_before):
                     unchanged += 1
+        elif (
+            status == RunStatus.PARTIAL
+            and durable > 0
+            and checkpoint_success is not None
+            and maximum_success_position > (
+                checkpoint_before.position if checkpoint_before else 0
+            )
+        ):
+            target = self._target_checkpoint(
+                maximum_success_position, successful_candidates
+            )
+            self._repository.advance_checkpoint(source_id, checkpoint_success, target)
 
         return AcquisitionRunResult(
             run_id=run_id,

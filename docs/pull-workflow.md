@@ -78,13 +78,16 @@ stored bytes, and successful retrieval ledger contract.
 
 ## Aggregation semantics
 
-Artifact outcomes are `success`, `duplicate`, `no_change`, `indeterminate`, `skipped`,
-`configuration_problem`, and `retrieval_failure`. Configuration and retrieval failures are the
-failure-bearing outcomes. `no_change` requires a checkpoint decision or affirmative complete
-coverage. A failure-free zero-result run with exhausted bounds, incomplete coverage, or no
-affirmative completeness evidence is `indeterminate`; policy exhaustion is not a retrieval
-failure. Operational failure takes precedence over acquisition signals, followed by successful
-acquisition, duplicate, checkpoint-based no change, complete-discovery no change, and finally
+Artifact outcomes are `success`, `success_with_warnings`, `duplicate`, `no_change`,
+`indeterminate`, `skipped`, `configuration_problem`, and `retrieval_failure`. Configuration and
+retrieval failures are the failure-bearing outcomes. `success_with_warnings` means that at least
+one artifact was durably acquired while candidate or recoverable discovery diagnostics were also
+recorded; those diagnostics remain inspectable and do not erase durable progress. `no_change`
+requires a checkpoint decision or affirmative complete coverage. A failure-free zero-result run
+with exhausted bounds, incomplete coverage, or no affirmative completeness evidence is
+`indeterminate`; policy exhaustion is not a retrieval failure. Durable acquisition takes
+precedence over candidate-level failures, followed by duplicate, checkpoint-based no change,
+complete-discovery no change, genuine source failure when nothing was retained, and finally
 indeterminate coverage. A firm or run is:
 
 - `completed` when it has no failure-bearing artifact or all selected firms completed;

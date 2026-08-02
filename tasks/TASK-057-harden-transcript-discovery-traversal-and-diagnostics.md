@@ -2,7 +2,7 @@
 
 ## Status
 
-Complete
+Complete; partial-success correction complete
 
 ## Objective
 
@@ -318,6 +318,38 @@ TASK-057 is complete when:
 - TASK-056 retained anchors, existing acquisition semantics, and unrelated subsystems remain intact;
 - focused tests and full repository validation pass;
 - implementation and review evidence are committed and pushed on a task branch without merging.
+
+## Corrective Hardening — Partial Success and Checkpoint Advancement
+
+A live Western Digital pull retained 30 validated transcript artifacts, recorded one candidate
+retrieval failure and one recoverable configured-hint timeout, but reported the transcript source
+as `retrieval_failure`. Because engine checkpoint finalization was gated on a completely clean run,
+the durable checkpoint also remained at its prior reporting period.
+
+This corrective repair is limited to post-evaluation result semantics. Discovery, graph traversal,
+transport, ranking, candidate ordering, validation, and checkpoint qualification policy remain
+unchanged.
+
+Required corrective behavior:
+
+- one or more durable acquisitions take precedence over candidate-level failures;
+- mixed durable acquisition and warning evidence produces the explicit operator outcome
+  `success_with_warnings`;
+- the primary operator summary describes retained acquisition rather than an earlier recoverable
+  discovery failure;
+- all discovery, transport, candidate retrieval, and validation warnings remain in structured
+  diagnostics;
+- a partial run advances to the highest successfully validated retained position under the
+  existing checkpoint policy;
+- checkpoint evidence is anchored to a successful attempt only;
+- all-candidates-failed remains `retrieval_failure`;
+- no-change and fail-closed validation behavior remain unchanged; and
+- TASK-056 anchors continue to learn only from successful retained evidence.
+
+Corrective acceptance additionally requires focused mixed-success, hint-timeout, checkpoint,
+all-failed, no-change, and retained-anchor regressions; full repository validation; updated review
+documentation; and a regenerated commit-aware TASK-057 review package from a clean committed
+branch.
 
 ## Required Architectural Status Summary
 

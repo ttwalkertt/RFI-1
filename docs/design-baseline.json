@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 7579,
+      "destination_size": 7674,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "ebc271abc3d937012edfb65a3c8453b2177b0cc101f49acabbf35abe24d3cecd",
-      "content_change": "task roadmap reconciled through completed TASK-057 transcript graph traversal"
+      "destination_sha256": "7406c09dff30509f77786ca020e3ca899b3ba2371e2fcc1b996d6fd8f0e27151",
+      "content_change": "task roadmap reconciled through TASK-057 partial-success corrective hardening"
     },
     {
       "source": "ROADMAP.md",
