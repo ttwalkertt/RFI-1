@@ -42,6 +42,7 @@ from rfi.acquisition.contracts import (
 )
 from rfi.acquisition.repository import AcquisitionRepository
 from rfi.acquisition.engine import (
+    AdapterAcquisitionTrial,
     AdapterCandidate,
     AdapterFailure,
     DiscoveryPage,
@@ -983,8 +984,64 @@ class BoundedTranscriptDiscovery:
         return (3, -period.ordinal), "reporting_period_historical"
 
 
+class TranscriptAcquisitionOrchestrator:
+    """Own ordered transcript seed planning; trials never select their successor."""
+
+    def __init__(
+        self, repository: AcquisitionRepository | None, adapter_id: str
+    ) -> None:
+        self._repository = repository
+        self._adapter_id = adapter_id
+
+    def plan(self, profile: SourceProfile) -> tuple[AdapterAcquisitionTrial, ...]:
+        history: tuple[dict[str, object], ...] = ()
+        firm_id = profile.policy.get("firm_id")
+        if self._repository is not None and isinstance(firm_id, str):
+            history = self._repository.discovery_anchors(
+                firm_id, profile.source_id, self._adapter_id
+            )
+        planned: list[tuple[str, str]] = []
+        seen: set[str] = set()
+
+        def append(kind: str, seed: str) -> None:
+            if seed in seen:
+                return
+            seen.add(seed)
+            planned.append((kind, seed))
+
+        mode = profile.configuration.get("mode")
+        if mode == "discovery":
+            for anchor in history:
+                for form in ("resolved_url", "requested_url"):
+                    value = anchor.get(form)
+                    if isinstance(value, str) and value:
+                        append("learned_seed", value)
+            hints = tuple(
+                value for value in profile.configuration.get("discovery_hints", ())
+                if isinstance(value, str)
+            )
+            fallback_seed = next((
+                value for value in hints
+                if value.startswith(("http://", "https://"))
+            ), next((
+                value.removeprefix("identity:") for value in hints
+                if value.startswith("identity:")
+            ), "deterministic-empty-discovery"))
+            planned.append(("configured_pipeline", fallback_seed))
+        else:
+            value = profile.configuration.get("url")
+            if isinstance(value, str) and value:
+                append("configured_seed", value)
+        if not planned:
+            planned.append(("empty_seed", "deterministic-empty-discovery"))
+        return tuple(
+            AdapterAcquisitionTrial(f"transcript-trial-{index}", seed, kind)
+            for index, (kind, seed) in enumerate(planned, 1)
+        )
+
+
 class EarningsTranscriptPullAdapter:
-    """Discover transcript URLs, then delegate validation to the TASK-048 retriever."""
+    """Execute one orchestrator-selected transcript trial through TASK-048 validation."""
 
     adapter_id = "earnings-call-transcript"
     artifact_ids = ("earnings_transcript",)
@@ -1008,8 +1065,33 @@ class EarningsTranscriptPullAdapter:
         self._budgets: dict[str, BudgetedTranscriptTransport] = {}
         self._validated_expected: set[str] = set()
         self._repository = repository
+        self._orchestrator = TranscriptAcquisitionOrchestrator(
+            repository, self.adapter_id
+        )
 
     def discover(self, profile: SourceProfile, continuation: str | None) -> DiscoveryPage:
+        """Compatibility entry point for callers that request one aggregate discovery page."""
+        return self._discover(profile, continuation)
+
+    def acquisition_trials(
+        self, profile: SourceProfile
+    ) -> tuple[AdapterAcquisitionTrial, ...]:
+        """Plan deterministic trials; only this orchestration seam sequences learned seeds."""
+        self._validate_profile(profile)
+        return self._orchestrator.plan(profile)
+
+    def discover_trial(
+        self, profile: SourceProfile, trial: AdapterAcquisitionTrial
+    ) -> DiscoveryPage:
+        """Execute traversal and ranking from exactly one orchestrator-selected seed."""
+        if not isinstance(trial, AdapterAcquisitionTrial):
+            raise ContractError("deterministic transcript trial is malformed")
+        return self._discover(profile, None, trial)
+
+    def _discover(
+        self, profile: SourceProfile, continuation: str | None,
+        trial: AdapterAcquisitionTrial | None = None,
+    ) -> DiscoveryPage:
         if continuation is not None:
             raise AdapterFailure(
                 FailureClass.MALFORMED_ADAPTER,
@@ -1042,6 +1124,28 @@ class EarningsTranscriptPullAdapter:
                 history = self._repository.discovery_anchors(
                     firm_id, profile.source_id, self.adapter_id
                 )
+            if trial is not None and mode == "discovery":
+                history = ()
+                if trial.seed_kind == "learned_seed":
+                    identity_terms = ()
+                    source_hints = ()
+                    history = ({
+                        "normalized_url": normalize_transcript_url(trial.starting_seed),
+                        "requested_url": trial.starting_seed,
+                        "resolved_url": None,
+                    },)
+                elif trial.seed_kind == "configured_seed":
+                    identity_terms = ()
+                    source_hints = (trial.starting_seed,)
+                elif trial.seed_kind == "configured_pipeline":
+                    pass
+                elif trial.seed_kind == "empty_seed":
+                    identity_terms = ()
+                    source_hints = ()
+                else:
+                    raise ContractError(
+                        f"unknown deterministic transcript seed kind: {trial.seed_kind}"
+                    )
             today = date.fromisoformat(self._clock()[:10])
             checkpoint_period, expected_period, period_basis = (
                 self._reporting_period_context(profile, tuple(history), today)
@@ -1087,6 +1191,7 @@ class EarningsTranscriptPullAdapter:
                     ),
                     "expected_reporting_period": expected_period.code,
                     "reporting_period_basis": period_basis,
+                    **self._trial_diagnostics(trial),
                 }
                 classification, summary = self._classify_outcome(early, ())
                 early.update({"primary_classification": classification,
@@ -1159,6 +1264,7 @@ class EarningsTranscriptPullAdapter:
             "validation_failure_counts": {},
             "candidate_retrieval_failure_counts": {},
             "candidate_failure_samples": [],
+            **self._trial_diagnostics(trial),
         })
         if budgeted.exhausted:
             coverage = "indeterminate"
@@ -1182,6 +1288,19 @@ class EarningsTranscriptPullAdapter:
             ),
             **final_diagnostics,
         })
+
+    @staticmethod
+    def _trial_diagnostics(
+        trial: AdapterAcquisitionTrial | None,
+    ) -> dict[str, Any]:
+        if trial is None:
+            return {}
+        return {
+            "trial_id": trial.trial_id,
+            "starting_seed": redact_diagnostic_url(trial.starting_seed),
+            "seed_kind": trial.seed_kind,
+            "trial_outcome": "pending_validation",
+        }
 
     @staticmethod
     def _classify_outcome(

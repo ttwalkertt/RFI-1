@@ -117,6 +117,21 @@ class DiscoveryPage:
         validate_json(self.diagnostics, "page diagnostics")
 
 
+@dataclass(frozen=True)
+class AdapterAcquisitionTrial:
+    """One independently attributable deterministic adapter trial."""
+
+    trial_id: str
+    starting_seed: str
+    seed_kind: str
+
+    def __post_init__(self) -> None:
+        require_identifier(self.trial_id, "trial_id")
+        if not self.starting_seed.strip():
+            raise ContractError("acquisition trial starting_seed must not be blank")
+        require_identifier(self.seed_kind, "trial seed_kind")
+
+
 class SourceAdapter(Protocol):
     """Minimum discovery/retrieval boundary; adapters never receive a repository."""
 
@@ -295,9 +310,56 @@ class AcquisitionEngine:
         status = RunStatus.COMPLETE
         checkpoint_confirmed = False
 
-        while True:
+        acquisition_trials: tuple[AdapterAcquisitionTrial, ...] | None = None
+        trial_planning_failed = False
+        try:
+            if hasattr(adapter, "acquisition_trials") or hasattr(adapter, "discover_trial"):
+                if not (
+                    callable(getattr(adapter, "acquisition_trials", None))
+                    and callable(getattr(adapter, "discover_trial", None))
+                ):
+                    raise ContractError(
+                        "trial-oriented adapters require acquisition_trials and discover_trial"
+                    )
+                acquisition_trials = adapter.acquisition_trials(profile)
+                if not isinstance(acquisition_trials, tuple) or not acquisition_trials:
+                    raise ContractError("trial-oriented adapter returned no acquisition trials")
+                if any(
+                    not isinstance(item, AdapterAcquisitionTrial)
+                    for item in acquisition_trials
+                ):
+                    raise ContractError("trial-oriented adapter returned a malformed trial")
+        except (ContractError, TypeError, AttributeError) as error:
+            failures += 1
+            status = RunStatus.FAILED
+            diagnostics.append(
+                self._diagnostic(FailureClass.MALFORMED_ADAPTER, str(error), False)
+            )
+            trial_planning_failed = True
+        except Exception as error:
+            failures += 1
+            status = RunStatus.FAILED
+            diagnostics.append(self._diagnostic(
+                FailureClass.MALFORMED_ADAPTER,
+                str(error) or error.__class__.__name__,
+                False,
+            ))
+            trial_planning_failed = True
+        trial_index = 0
+
+        while not trial_planning_failed:
+            active_trial = (
+                acquisition_trials[trial_index]
+                if acquisition_trials is not None else None
+            )
+            success_before_trial = last_success
+            failures_before_trial = failures
             try:
-                page = adapter.discover(profile, continuation)
+                page = (
+                    adapter.discover_trial(profile, active_trial)
+                    if active_trial is not None
+                    else adapter.discover(profile, continuation)
+                )
                 self._validate_page(page)
             except AdapterFailure as error:
                 failures += 1
@@ -323,7 +385,16 @@ class AcquisitionEngine:
                 )
                 break
             pages += 1
-            diagnostics.append({"page": pages, **page.diagnostics})
+            diagnostics.append({
+                "page": pages,
+                **({
+                    "trial_id": active_trial.trial_id,
+                    "starting_seed": active_trial.starting_seed,
+                    "seed_kind": active_trial.seed_kind,
+                } if active_trial is not None else {}),
+                **page.diagnostics,
+            })
+            trial_diagnostic_index = len(diagnostics) - 1
             ordered = sorted(
                 page.candidates,
                 key=lambda item: (
@@ -570,7 +641,48 @@ class AcquisitionEngine:
                         )
                     )
                     break
+            trial_validated = active_trial is not None and last_success != success_before_trial
+            if active_trial is not None:
+                diagnostics[trial_diagnostic_index].update({
+                    "trial_outcome": (
+                        "validated_success" if trial_validated else
+                        "failed" if failures > failures_before_trial else
+                        "no_validated_artifact"
+                    ),
+                    "acquisition_termination_reason": (
+                        "first_validated_success" if trial_validated else
+                        "next_seed" if trial_index + 1 < len(acquisition_trials or ()) else
+                        "seed_trials_exhausted"
+                    ),
+                })
+            if trial_validated:
+                break
             if status != RunStatus.COMPLETE:
+                retry_next_trial = (
+                    acquisition_trials is not None
+                    and status in {RunStatus.PARTIAL, RunStatus.BLOCKED}
+                    and trial_index + 1 < len(acquisition_trials)
+                )
+                if retry_next_trial:
+                    status = RunStatus.COMPLETE
+                    trial_index += 1
+                    previous_page_position = 0
+                    continue
+                break
+            if acquisition_trials is not None:
+                if page.next_token is not None:
+                    failures += 1
+                    status = RunStatus.FAILED
+                    diagnostics.append(self._diagnostic(
+                        FailureClass.MALFORMED_ADAPTER,
+                        "deterministic acquisition trial returned a continuation token",
+                        False,
+                    ))
+                    break
+                trial_index += 1
+                previous_page_position = 0
+                if trial_index < len(acquisition_trials):
+                    continue
                 break
             if ordered:
                 previous_page_position = max(item.position for item in ordered)
