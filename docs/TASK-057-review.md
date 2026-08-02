@@ -270,12 +270,36 @@ The browser proof wait condition now waits for
 both API responses and rendered checkboxes, removing a validation race without changing production
 behavior or durable state.
 
+## Final Acquisition Correctness Baseline
+
+The final architectural-review repair closes four bounded correctness gaps without changing search,
+ranking, traversal order, validation policy, checkpoint qualification, or retained-anchor learning.
+
+- PDF resources discovered from an HTML listing remain typed graph proposals. Discovery fetches the
+  listing once; the TASK-048 retriever fetches and validates the PDF once. Both durable PDF success
+  and retryable PDF timeout are covered through the acquisition engine, with no internal exception
+  escaping.
+- Redirect-like transcript hints resolving to one normalized final URL collapse into one adapter
+  candidate. The single immutable retrieval attempt retains both requested aliases and the resolved
+  URL in discovery provenance, and the engine emits one logical outcome without ambiguity.
+- Discovery catches only expected transport and parsing failures. Unexpected discovery or validator
+  implementation defects reach the engine's adapter boundary and become nonretryable
+  `malformed_adapter` diagnostics; timeout and provider failures keep their existing retry behavior.
+- A dedicated listing regression proves one listing request, unchanged expected-period ordering,
+  lazy candidate retrieval, and the existing validation-mismatch classification. No candidate body
+  cache or shared mutable response state was introduced.
+
+Fixture transports now raise explicit `OSError` values for intentionally unavailable responses
+instead of relying on incidental `KeyError` or `IndexError` exceptions. This makes provider-failure
+evidence obey the same exception contract as production transports and lets programming defects
+remain distinguishable.
+
 ## Verification Results
 
-- `make task057-test`: PASS, 102 focused and compatibility tests.
+- `make task057-test`: PASS, 104 focused and compatibility tests.
 - `make task057-proof`: PASS, nine deterministic reproduction cases.
 - `git diff --check`: PASS.
-- `make validate`: PASS. All 551 unit tests passed, followed by every repository demonstration,
+- `make validate`: PASS. All 553 unit tests passed, followed by every repository demonstration,
   offline provider proof, lint, format, type, import, documentation, design-baseline, and build gate.
 
 ## Changed-File Inventory
@@ -304,6 +328,10 @@ The partial-success corrective repair changes `src/rfi/acquisition/engine.py`, t
 contracts, orchestration, and browser presentation, TASK-015/057 and engine regressions, the Pull
 Workflow documentation, TASK-057 governance and review records, and the governed design-baseline
 checksum for `TASKS.md`.
+The final acquisition correctness repair narrows exception handling in `src/rfi/discovery.py`, adds
+the engine's nonretryable unexpected-defect boundary, strengthens TASK-048A/057 fixtures and
+regressions, updates the deterministic reproduction fixture, and records this final baseline in
+TASK-057 governance and review documentation.
 
 ## Limitations
 
@@ -330,7 +358,8 @@ checksum for `TASKS.md`.
 - **Transcript transport bounds — Complete.** Page, byte, host, elapsed, and redirect controls are
   independently named and observable.
 - **Candidate retrieval and validation — Complete.** The TASK-048 retriever remains the single
-  candidate evidence gate with an explicit independent evaluation bound.
+  candidate evidence gate with an explicit independent evaluation bound; HTML and PDF proposals
+  use the same typed path.
 - **Discovery diagnostics and Pull Sources presentation — Complete.** Major transport,
   eligibility, candidate, exhaustion, and coverage outcomes are actionable and testable.
 - **Retained-anchor history — Complete.** TASK-056 ordering, persistence, and atomic learning
@@ -338,6 +367,10 @@ checksum for `TASKS.md`.
 - **Mixed-result finalization — Complete.** Durable acquisitions produce success with warnings,
   warning evidence remains inspectable, and successfully validated progress advances checkpoints
   without allowing failed candidates to qualify progress.
+- **Canonical candidate identity and exception boundary — Complete.** Redirect aliases converge
+  before engine candidate emission with exact provenance retained; expected provider failures keep
+  their retry semantics and unexpected implementation defects are nonretryable malformed-adapter
+  failures.
 - **Acquisition evidence and SEC verticals — Complete and unaffected.** Checkpoints, transactions,
   immutable bytes, provenance, observations, and SEC adapters pass compatibility validation.
 - **Live provider variability — Usable with limitations.** External pages may still require

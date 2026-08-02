@@ -658,7 +658,7 @@ class BoundedTranscriptDiscovery:
                     state.configured_hint_attempt_sequence.append(hint_attempt)
                 try:
                     response = self.transport.get(url)
-                except Exception as error:
+                except (OSError, TimeoutError, ValueError, UnicodeError) as error:
                     if anchor_labels and url in anchor_labels:
                         position, form = anchor_labels[url]
                         state.anchor_attempts.append(self._anchor_diagnostic(
@@ -727,7 +727,7 @@ class BoundedTranscriptDiscovery:
                 parser = _PageParser()
                 try:
                     parser.feed(response.content.decode("utf-8", "replace"))
-                except Exception as error:
+                except (ValueError, UnicodeError) as error:
                     failure("page_parse_failure", response.url, error)
                     continue
                 state.raw_hyperlinks += len(parser.links)
@@ -839,7 +839,7 @@ class BoundedTranscriptDiscovery:
                 queries_submitted += 1
                 response = self.search.search(query, self.policy.max_results_per_query)
                 self.transport.accept_response(response.received_bytes)
-            except Exception as error:
+            except (OSError, TimeoutError, ValueError, UnicodeError) as error:
                 if self.transport.exhausted:
                     exhausted_budget = self.transport.exhausted_budget
                     exhausted = True

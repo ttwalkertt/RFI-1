@@ -55,7 +55,7 @@
 | TASK-054 | Reload externally managed firm profiles from the Target Firms console | Complete |
 | TASK-055 | Detect unimported external firm configuration | Complete |
 | TASK-056 | Persistent discovery anchor history | Complete |
-| TASK-057 | Harden transcript discovery traversal and diagnostics | Complete; partial-success correction complete |
+| TASK-057 | Harden transcript discovery traversal and diagnostics | Complete; acquisition correctness baseline hardened |
 | TASK-058 | Pull Workflow progress feedback | Complete |
 
 ## Architectural Progression

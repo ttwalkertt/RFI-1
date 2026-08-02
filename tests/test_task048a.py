@@ -35,10 +35,14 @@ from rfi.storage import RepositoryDatabase
 
 
 class TranscriptTransport(EarningsTranscriptTransport):
-    def __init__(self, responses: dict[str, EarningsTranscriptHttpResponse]) -> None:
+    def __init__(
+        self, responses: dict[str, EarningsTranscriptHttpResponse | Exception]
+    ) -> None:
         self.responses = responses
 
     def get(self, url: str) -> EarningsTranscriptHttpResponse:
+        if url not in self.responses:
+            raise OSError(f"fixture transport has no response for {url}")
         value = self.responses[url]
         if isinstance(value, Exception):
             raise value
@@ -54,6 +58,8 @@ class Search:
 
     def search(self, query: str, limit: int) -> DiscoverySearchResponse:
         self.queries.append((query, limit))
+        if not self.responses:
+            raise OSError("fixture search has no response")
         return self.responses.pop(0)
 
 

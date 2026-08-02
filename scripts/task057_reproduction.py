@@ -33,6 +33,8 @@ class Transport:
 
     def get(self, url: str) -> EarningsTranscriptHttpResponse:
         self.requests.append(url)
+        if url not in self.responses:
+            raise OSError(f"fixture transport has no response for {url}")
         value = self.responses[url]
         if isinstance(value, Exception):
             raise value

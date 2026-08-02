@@ -2,7 +2,7 @@
 
 ## Status
 
-Complete; partial-success correction complete
+Complete; acquisition correctness baseline hardened
 
 ## Objective
 
@@ -350,6 +350,29 @@ Corrective acceptance additionally requires focused mixed-success, hint-timeout,
 all-failed, no-change, and retained-anchor regressions; full repository validation; updated review
 documentation; and a regenerated commit-aware TASK-057 review package from a clean committed
 branch.
+
+## Final Acquisition Correctness Baseline
+
+The final corrective pass is limited to four architectural-review findings and introduces no new
+discovery or acquisition capability:
+
+- transcript-like PDF links enter the same typed proposal state as HTML links and continue through
+  the existing TASK-048 retrieval, date, firm, media, and transcript validation boundary;
+- requested redirect aliases converge on the normalized resolved transcript before adapter
+  candidate emission, while every exact alias remains immutable discovery provenance;
+- only expected transport and parsing exceptions become provider diagnostics inside discovery;
+  unexpected implementation exceptions terminate through the acquisition engine as nonretryable
+  `malformed_adapter` failures; and
+- ordinary listing pages are fetched once during discovery and are not fetched again by the
+  candidate retriever. Candidate bodies remain uncached and validation ownership remains wholly in
+  `EarningsCallTranscriptAcquisition`.
+
+Acceptance evidence must prove successful and failed PDF paths, redirect alias provenance and
+single logical emission, transient timeout compatibility, nonretryable internal-defect
+classification, provider-failure compatibility, listing fetch-once behavior, unchanged candidate
+ordering, and unchanged validation outcomes. TASK-056 learning, TASK-057 partial-success and
+checkpoint semantics, search, ranking, traversal order, and checkpoint qualification remain
+unchanged.
 
 ## Required Architectural Status Summary
 

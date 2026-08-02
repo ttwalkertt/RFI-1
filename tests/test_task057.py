@@ -66,6 +66,8 @@ class Transport:
 
     def get(self, url: str) -> EarningsTranscriptHttpResponse:
         self.requests.append(url)
+        if url not in self.responses:
+            raise OSError(f"fixture transport has no response for {url}")
         value = self.responses[url]
         if isinstance(value, Exception):
             raise value
@@ -889,22 +891,81 @@ class CorrectiveRobustnessTests(unittest.TestCase):
             "Source checkpoint indicates no new artifact.",
         )
 
-    def test_pdf_hint_admits_typed_proposal_and_validation_remains_lazy(self) -> None:
+    def test_pdf_proposal_admission_and_successful_engine_acquisition(self) -> None:
+        listing = "https://ir.example.com/transcripts/"
         url = "https://ir.example.com/2026-04-30-earnings-call-transcript.pdf"
-        response = EarningsTranscriptHttpResponse(url, 200, "application/pdf", b"%PDF-1.7")
-        transport = Transport({url: response})
+        response = EarningsTranscriptHttpResponse(
+            url, 200, "application/pdf", b"%PDF-1.7\nvalidated transcript bytes"
+        )
+        transport = Transport({
+            listing: html(
+                listing, f"<a href='{url}'>Q2 2026 earnings call transcript</a>"
+            ),
+            url: response,
+        })
         adapter = EarningsTranscriptPullAdapter(
             DiscoveryPolicyCatalog({"standard": policy()}, "standard"), Search(),
             transport, lambda: "2026-08-01T00:00:00Z",
         )
-        page = adapter.discover(profile(url), None)
+        page = adapter.discover(profile(listing), None)
         self.assertEqual(len(page.candidates), 1)
         self.assertEqual(page.diagnostics["candidate_admitted_count"], 1)
         self.assertEqual(page.diagnostics["candidate_evaluated_count"], 0)
-        self.assertEqual(transport.requests, [url])
-        result = adapter.retrieve(profile(url), page.candidates[0])
+        self.assertEqual(transport.requests, [listing])
+        result = adapter.retrieve(profile(listing), page.candidates[0])
         self.assertEqual(result.media_type, "application/pdf")
-        self.assertEqual(transport.requests, [url, url])
+        self.assertEqual(transport.requests, [listing, url])
+
+        engine_transport = Transport({
+            listing: html(
+                listing, f"<a href='{url}'>Q2 2026 earnings call transcript</a>"
+            ),
+            url: response,
+        })
+        engine_adapter = EarningsTranscriptPullAdapter(
+            DiscoveryPolicyCatalog({"standard": policy()}, "standard"), Search(),
+            engine_transport, lambda: "2026-08-01T00:00:00Z",
+        )
+        configured = profile(listing)
+        with tempfile.TemporaryDirectory() as directory:
+            repository = AcquisitionRepository(Path(directory) / "acquisition")
+            repository.register_source(configured)
+            engine_result = AcquisitionEngine(
+                repository, AdapterRegistry((engine_adapter,)),
+                lambda: "2026-08-01T00:00:00Z",
+            ).run_source(configured.source_id, "pdf-success")
+        self.assertEqual(engine_result.status, RunStatus.COMPLETE)
+        self.assertEqual(engine_result.durable_acquisitions, 1)
+        self.assertEqual(len(engine_result.outcomes), 1)
+        self.assertEqual(engine_transport.requests, [listing, url])
+
+    def test_failed_pdf_retrieval_is_structured_and_no_exception_escapes(self) -> None:
+        listing = "https://ir.example.com/transcripts/"
+        url = "https://ir.example.com/2026-04-30-earnings-call-transcript.pdf"
+        configured = profile(listing)
+        transport = Transport({
+            listing: html(
+                listing, f"<a href='{url}'>Q2 2026 earnings call transcript</a>"
+            ),
+            url: TimeoutError("pdf retrieval timed out"),
+        })
+        adapter = EarningsTranscriptPullAdapter(
+            DiscoveryPolicyCatalog({"standard": policy()}, "standard"), Search(),
+            transport, lambda: "2026-08-01T00:00:00Z",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            repository = AcquisitionRepository(Path(directory) / "acquisition")
+            repository.register_source(configured)
+            result = AcquisitionEngine(
+                repository, AdapterRegistry((adapter,)),
+                lambda: "2026-08-01T00:00:00Z",
+            ).run_source(configured.source_id, "pdf-timeout")
+        self.assertEqual(result.status, RunStatus.PARTIAL)
+        self.assertEqual(result.failures, 1)
+        self.assertEqual(result.diagnostics[-1]["failure_code"], "candidate_fetch_timeout")
+        self.assertEqual(result.diagnostics[-1]["failure_class"], "transient_adapter")
+        self.assertTrue(result.diagnostics[-1]["retryable"])
+        self.assertEqual(transport.requests, [listing, url])
 
     def test_redirect_aliases_collapse_before_engine_candidate_emission(self) -> None:
         first = "https://ir.example.com/alias-a-2026-04-30-earnings-call-transcript"
@@ -946,9 +1007,21 @@ class CorrectiveRobustnessTests(unittest.TestCase):
                 repository, AdapterRegistry((engine_adapter,)),
                 lambda: "2026-08-01T00:00:00Z",
             ).run_source(configured.source_id, "redirect-alias")
+            history = [
+                item for item in repository.history()
+                if item.get("record_type") == "retrieval_attempt"
+            ]
         self.assertEqual(result.status, RunStatus.COMPLETE)
         self.assertEqual(result.candidates_discovered, 1)
         self.assertEqual(result.candidates_unique, 1)
+        self.assertEqual(len(result.outcomes), 1)
+        self.assertEqual(len(history), 1)
+        retained = history[0]["candidate"]["provenance"]
+        self.assertEqual(set(retained["metadata"]["observed_aliases"]), {
+            first, second, final,
+        })
+        self.assertEqual(set(retained["locations"]), {first, second, final})
+        self.assertEqual(history[0]["diagnostics"]["final_url"], final)
         self.assertNotIn("ambiguous duplicate", json.dumps(result.to_dict()))
 
     def test_failed_expected_period_proposals_do_not_suppress_valid_fallback(self) -> None:
@@ -1042,31 +1115,84 @@ class CorrectiveRobustnessTests(unittest.TestCase):
         self.assertEqual(engine_transport.requests, [hint, expected])
 
     def test_unexpected_programming_exception_is_not_reported_as_provider_failure(self) -> None:
-        adapter = EarningsTranscriptPullAdapter(
-            DiscoveryPolicyCatalog({"standard": policy()}, "standard"), Search(),
-            Transport({}), lambda: "2026-08-01T00:00:00Z",
-        )
-        with patch.object(BoundedTranscriptDiscovery, "discover", side_effect=NameError("bug")):
-            with self.assertRaises(NameError):
-                adapter.discover(profile("https://ir.example.com/transcripts/"), None)
-
         hint = "https://ir.example.com/transcripts/"
         candidate = "https://ir.example.com/2026-04-30-earnings-call-transcript.html"
+        configured = profile(hint)
+
+        for phase in ("discovery", "retrieval"):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as directory:
+                transport = Transport({
+                    hint: html(
+                        hint,
+                        f"<a href='{candidate}'>Q2 earnings call transcript</a>",
+                    ),
+                    candidate: html(
+                        candidate,
+                        "Firm A earnings call transcript April 30, 2026. Operator. ",
+                    ),
+                })
+                adapter = EarningsTranscriptPullAdapter(
+                    DiscoveryPolicyCatalog({"standard": policy()}, "standard"), Search(),
+                    transport, lambda: "2026-08-01T00:00:00Z",
+                )
+                repository = AcquisitionRepository(Path(directory) / "acquisition")
+                repository.register_source(configured)
+                engine = AcquisitionEngine(
+                    repository, AdapterRegistry((adapter,)),
+                    lambda: "2026-08-01T00:00:00Z",
+                )
+                target = (
+                    patch.object(
+                        BoundedTranscriptDiscovery, "discover",
+                        side_effect=NameError("discovery implementation defect"),
+                    )
+                    if phase == "discovery"
+                    else patch.object(
+                        EarningsCallTranscriptAcquisition,
+                        "_transcript_validation_failure",
+                        side_effect=NameError("validator implementation defect"),
+                    )
+                )
+                with target:
+                    result = engine.run_source(configured.source_id, f"bug-{phase}")
+                self.assertEqual(result.status, RunStatus.FAILED)
+                self.assertEqual(result.failures, 1)
+                self.assertEqual(
+                    result.diagnostics[-1]["failure_class"], "malformed_adapter"
+                )
+                self.assertFalse(result.diagnostics[-1]["retryable"])
+                self.assertNotEqual(
+                    result.diagnostics[-1]["failure_class"], "transient_adapter"
+                )
+
+    def test_listing_is_fetched_once_while_order_and_validation_remain_owned(self) -> None:
+        hint = "https://ir.example.com/transcripts/"
+        older = "https://ir.example.com/2026-01-30-earnings-call-transcript.html"
+        expected = "https://ir.example.com/2026-04-30-earnings-call-transcript.html"
+        listing = html(
+            hint,
+            f"<a href='{older}'>Q1 2026 earnings call transcript</a>"
+            f"<a href='{expected}'>Q2 2026 earnings call transcript</a>",
+        )
         transport = Transport({
-            hint: html(hint, f"<a href='{candidate}'>Q2 earnings call transcript</a>"),
-            candidate: html(candidate, "Firm A earnings call transcript. Operator."),
+            hint: listing,
+            expected: html(expected, "Quarterly results without speaker evidence."),
         })
         adapter = EarningsTranscriptPullAdapter(
             DiscoveryPolicyCatalog({"standard": policy()}, "standard"), Search(),
             transport, lambda: "2026-08-01T00:00:00Z",
         )
         page = adapter.discover(profile(hint), None)
-        with patch.object(
-            EarningsCallTranscriptAcquisition, "_transcript_validation_failure",
-            side_effect=NameError("validator bug"),
-        ):
-            with self.assertRaises(NameError):
-                adapter.retrieve(profile(hint), page.candidates[0])
+        self.assertEqual(transport.requests, [hint])
+        self.assertEqual(
+            [item.provenance.metadata["resolved_url"] for item in page.candidates],
+            [expected, older],
+        )
+        with self.assertRaises(AdapterFailure) as raised:
+            adapter.retrieve(profile(hint), page.candidates[0])
+        self.assertEqual(raised.exception.code, "candidate_validation_mismatch")
+        self.assertEqual(transport.requests, [hint, expected])
+        self.assertEqual(transport.requests.count(hint), 1)
 
     def test_sequential_discovery_has_no_cached_candidate_bodies_or_stale_state(self) -> None:
         hint = "https://ir.example.com/transcripts/"

@@ -311,6 +311,17 @@ class AcquisitionEngine:
                     self._diagnostic(FailureClass.MALFORMED_ADAPTER, str(error), False)
                 )
                 break
+            except Exception as error:
+                failures += 1
+                status = RunStatus.FAILED
+                diagnostics.append(
+                    self._diagnostic(
+                        FailureClass.MALFORMED_ADAPTER,
+                        str(error) or error.__class__.__name__,
+                        False,
+                    )
+                )
+                break
             pages += 1
             diagnostics.append({"page": pages, **page.diagnostics})
             ordered = sorted(
@@ -546,6 +557,17 @@ class AcquisitionEngine:
                     status = RunStatus.FAILED
                     diagnostics.append(
                         self._diagnostic(FailureClass.MALFORMED_ADAPTER, str(error), False)
+                    )
+                    break
+                except Exception as error:
+                    failures += 1
+                    status = RunStatus.FAILED
+                    diagnostics.append(
+                        self._diagnostic(
+                            FailureClass.MALFORMED_ADAPTER,
+                            str(error) or error.__class__.__name__,
+                            False,
+                        )
                     )
                     break
             if status != RunStatus.COMPLETE:
