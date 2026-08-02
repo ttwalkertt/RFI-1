@@ -5,9 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import date
 from enum import StrEnum
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Protocol, runtime_checkable
 
 from rfi.acquisition.contracts import (
     CandidateDocument,
@@ -20,8 +19,6 @@ from rfi.acquisition.contracts import (
     RetrievalOutcome,
     RetrievalResult,
     SourceProfile,
-    TranscriptAcquisitionTarget,
-    TranscriptSelectionMode,
     require_identifier,
     validate_json,
 )
@@ -70,6 +67,16 @@ class AdapterFailure(RuntimeError):
         self.code = code or classification.value
 
 
+@runtime_checkable
+class AdapterAcquisitionTarget(Protocol):
+    """Provider-neutral immutable target carried through deterministic trials."""
+
+    firm_id: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return stable target semantics for boundary validation."""
+
+
 @dataclass(frozen=True)
 class AdapterCandidate:
     """Provider-neutral discovery item before repository contract conversion."""
@@ -79,7 +86,7 @@ class AdapterCandidate:
     position: int
     revision: str
     provenance: DiscoveryProvenance
-    acquisition_target: TranscriptAcquisitionTarget | None = None
+    acquisition_target: AdapterAcquisitionTarget | None = None
     disposition: str = "acquire"
     disposition_reason: str | None = None
 
@@ -131,15 +138,57 @@ class AdapterAcquisitionTrial:
     trial_id: str
     starting_seed: str
     seed_kind: str
-    acquisition_target: TranscriptAcquisitionTarget
+    acquisition_target: AdapterAcquisitionTarget
 
     def __post_init__(self) -> None:
         require_identifier(self.trial_id, "trial_id")
         if not self.starting_seed.strip():
             raise ContractError("acquisition trial starting_seed must not be blank")
         require_identifier(self.seed_kind, "trial seed_kind")
-        if not isinstance(self.acquisition_target, TranscriptAcquisitionTarget):
+        if not isinstance(self.acquisition_target, AdapterAcquisitionTarget):
             raise ContractError("acquisition trial target is malformed")
+
+
+@dataclass(frozen=True)
+class AdapterSelectionDecision:
+    """Provider-neutral qualification result returned by an adapter policy."""
+
+    qualifies: bool
+    disposition: str
+    validation_outcome: str
+    diagnostics: dict[str, JsonValue] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        require_identifier(self.disposition, "selection disposition")
+        require_identifier(self.validation_outcome, "selection validation outcome")
+        validate_json(self.diagnostics, "selection decision diagnostics")
+
+
+@dataclass(frozen=True)
+class AdapterSelectionCandidate:
+    """Validated retrieval awaiting adapter-policy terminal reduction."""
+
+    candidate: AdapterCandidate
+    repository_candidate: CandidateDocument
+    retrieval: RetrievalResult
+    decision: AdapterSelectionDecision
+
+
+class AdapterTerminalSelectionPolicy(Protocol):
+    """Adapter-owned qualification and terminal reduction policy seam."""
+
+    def qualify(
+        self, candidate: AdapterCandidate, retrieval: RetrievalResult
+    ) -> AdapterSelectionDecision:
+        """Classify one successfully validated retrieval."""
+
+    def select(
+        self, candidates: tuple[AdapterSelectionCandidate, ...]
+    ) -> AdapterSelectionCandidate:
+        """Select exactly one globally preferred qualified retrieval."""
+
+    def attribution(self) -> dict[str, JsonValue]:
+        """Return stable terminal diagnostic attribution."""
 
 
 class SourceAdapter(Protocol):
@@ -321,11 +370,11 @@ class AcquisitionEngine:
         checkpoint_confirmed = False
 
         acquisition_trials: tuple[AdapterAcquisitionTrial, ...] | None = None
-        range_selection = False
+        selection_policy: AdapterTerminalSelectionPolicy | None = None
         selection_checkpoint_eligible = True
-        qualified_selection_candidates: list[
-            tuple[str, int, AdapterCandidate, CandidateDocument, RetrievalResult]
-        ] = []
+        selection_incomplete_status: RunStatus | None = None
+        qualified_selection_candidates: list[AdapterSelectionCandidate] = []
+        selected_selection_candidate: AdapterSelectionCandidate | None = None
         trial_planning_failed = False
         try:
             if hasattr(adapter, "acquisition_trials") or hasattr(adapter, "discover_trial"):
@@ -344,18 +393,23 @@ class AcquisitionEngine:
                     for item in acquisition_trials
                 ):
                     raise ContractError("trial-oriented adapter returned a malformed trial")
-                targets = {item.acquisition_target for item in acquisition_trials}
-                if len(targets) != 1:
+                target = acquisition_trials[0].acquisition_target
+                if any(item.acquisition_target is not target for item in acquisition_trials):
                     raise ContractError(
                         "deterministic acquisition trials changed the immutable target"
                     )
-                target = acquisition_trials[0].acquisition_target
                 if target.firm_id != profile.policy.get("firm_id"):
                     raise ContractError("acquisition target firm differs from source profile")
-                range_selection = (
-                    target.selection.mode
-                    == TranscriptSelectionMode.FIRST_IN_DATE_RANGE
-                )
+                factory = getattr(adapter, "terminal_selection_policy", None)
+                if factory is not None:
+                    if not callable(factory):
+                        raise ContractError("adapter terminal selection policy is malformed")
+                    selection_policy = factory(profile, acquisition_trials)
+                    if selection_policy is not None and not all(callable(getattr(
+                        selection_policy, name, None
+                    )) for name in ("qualify", "select", "attribution")):
+                        raise ContractError("adapter terminal selection policy is malformed")
+                    selection_checkpoint_eligible = selection_policy is None
         except (ContractError, TypeError, AttributeError) as error:
             failures += 1
             status = RunStatus.FAILED
@@ -494,7 +548,7 @@ class AcquisitionEngine:
                     continue
                 seen_candidates[candidate.candidate_id] = candidate.canonical()
                 if (
-                    not range_selection
+                    selection_policy is None
                     and checkpoint_before
                     and candidate.position <= checkpoint_before.position
                 ):
@@ -542,53 +596,32 @@ class AcquisitionEngine:
                     result = adapter.retrieve(profile, candidate)
                     if not isinstance(result, RetrievalResult):
                         raise ContractError("adapter retrieval did not return RetrievalResult")
-                    if range_selection:
-                        event_date = result.diagnostics.get("validated_event_date")
-                        if not isinstance(event_date, str):
+                    if selection_policy is not None:
+                        decision = selection_policy.qualify(candidate, result)
+                        if not isinstance(decision, AdapterSelectionDecision):
                             raise ContractError(
-                                "range-qualified transcript lacks validated event date"
+                                "adapter selection policy returned a malformed decision"
                             )
-                        selection = active_trial.acquisition_target.selection
-                        try:
-                            normalized_event_date = date.fromisoformat(event_date)
-                        except ValueError as error:
-                            raise ContractError(
-                                "range-qualified transcript event date is invalid"
-                            ) from error
-                        if not selection.contains(normalized_event_date):
-                            raise ContractError(
-                                "adapter returned a transcript outside the immutable selection"
-                            )
-                        proposal_rank = candidate.provenance.metadata.get(
-                            "proposal_rank", candidate.position
+                        self._record_selection_diagnostic(
+                            diagnostics[trial_diagnostic_index], candidate, decision
                         )
-                        if not isinstance(proposal_rank, int):
-                            raise ContractError("transcript proposal rank is malformed")
-                        qualified_selection_candidates.append((
-                            event_date, proposal_rank, candidate, repository_candidate, result
-                        ))
-                        page_diagnostics = diagnostics[trial_diagnostic_index]
-                        samples = page_diagnostics.setdefault(
-                            "candidate_qualification_dispositions", []
-                        )
-                        if isinstance(samples, list) and len(samples) < 20:
-                            samples.append({
-                                "candidate_id": candidate.candidate_id,
-                                "disposition": "qualified",
-                                "validated_event_date": event_date,
-                            })
+                        if decision.qualifies:
+                            qualified_selection_candidates.append(AdapterSelectionCandidate(
+                                candidate, repository_candidate, result, decision
+                            ))
+                        else:
+                            skips += 1
+                            outcomes.append(CandidateRunOutcome(
+                                candidate.candidate_id,
+                                candidate.document_id,
+                                candidate.position,
+                                candidate.revision,
+                                "selection_rejected",
+                                None,
+                                False,
+                                decision.validation_outcome,
+                            ))
                         continue
-                    if active_trial is not None:
-                        page_diagnostics = diagnostics[trial_diagnostic_index]
-                        samples = page_diagnostics.setdefault(
-                            "candidate_qualification_dispositions", []
-                        )
-                        if isinstance(samples, list) and len(samples) < 20:
-                            samples.append({
-                                "candidate_id": candidate.candidate_id,
-                                "disposition": "qualified",
-                                "validation_outcome": "validated",
-                            })
                     attempt_id = self._attempt_id(run_id, candidate, "success")
                     receipt = self._repository.record_success(
                         attempt_id, repository_candidate, result
@@ -630,30 +663,7 @@ class AcquisitionEngine:
                         )
                     )
                 except AdapterFailure as error:
-                    if range_selection and error.code == "selection_date_out_of_range":
-                        skips += 1
-                        outcomes.append(CandidateRunOutcome(
-                            candidate.candidate_id,
-                            candidate.document_id,
-                            candidate.position,
-                            candidate.revision,
-                            "selection_rejected",
-                            None,
-                            False,
-                            str(error),
-                        ))
-                        page_diagnostics = diagnostics[trial_diagnostic_index]
-                        samples = page_diagnostics.setdefault(
-                            "candidate_qualification_dispositions", []
-                        )
-                        if isinstance(samples, list) and len(samples) < 20:
-                            samples.append({
-                                "candidate_id": candidate.candidate_id,
-                                "disposition": "outside_requested_date_range",
-                                "validation_outcome": "validated",
-                            })
-                        continue
-                    if range_selection:
+                    if selection_policy is not None:
                         failures += 1
                         failed_id = self._attempt_id(
                             run_id, candidate, error.classification.value
@@ -669,7 +679,7 @@ class AcquisitionEngine:
                                 "failure_code": error.code,
                                 "message": str(error),
                                 "retryable": error.retryable,
-                                "effective_selection_mode": "first_in_date_range",
+                                **selection_policy.attribution(),
                             },
                         )
                         outcomes.append(CandidateRunOutcome(
@@ -685,28 +695,24 @@ class AcquisitionEngine:
                         diagnostics.append(
                             self._failure_diagnostic(error, candidate.candidate_id)
                         )
-                        page_diagnostics = diagnostics[trial_diagnostic_index]
-                        samples = page_diagnostics.setdefault(
-                            "candidate_qualification_dispositions", []
+                        self._record_selection_diagnostic(
+                            diagnostics[trial_diagnostic_index], candidate,
+                            AdapterSelectionDecision(
+                                False, "validation_rejected", error.code,
+                                {"retryable": error.retryable},
+                            ),
+                            retrieval_failure=error.retryable,
                         )
-                        if isinstance(samples, list) and len(samples) < 20:
-                            samples.append({
-                                "candidate_id": candidate.candidate_id,
-                                "disposition": "validation_rejected",
-                                "validation_outcome": error.code,
-                            })
+                        if error.classification != FailureClass.POLICY_REJECTION:
+                            candidate_status = (
+                                RunStatus.PARTIAL if error.retryable else RunStatus.BLOCKED
+                            )
+                            if (
+                                selection_incomplete_status is None
+                                or candidate_status == RunStatus.BLOCKED
+                            ):
+                                selection_incomplete_status = candidate_status
                         continue
-                    if active_trial is not None:
-                        page_diagnostics = diagnostics[trial_diagnostic_index]
-                        samples = page_diagnostics.setdefault(
-                            "candidate_qualification_dispositions", []
-                        )
-                        if isinstance(samples, list) and len(samples) < 20:
-                            samples.append({
-                                "candidate_id": candidate.candidate_id,
-                                "disposition": "validation_rejected",
-                                "validation_outcome": error.code,
-                            })
                     if error.code == "historical_candidate_superseded":
                         skips += 1
                         skipped_id = self._attempt_id(run_id, candidate, "skip")
@@ -803,7 +809,7 @@ class AcquisitionEngine:
             )
             trial_validated = (
                 active_trial is not None
-                and not range_selection
+                and selection_policy is None
                 and last_success != success_before_trial
             )
             if active_trial is not None:
@@ -817,7 +823,7 @@ class AcquisitionEngine:
                     "acquisition_termination_reason": (
                         "first_validated_success" if trial_validated else
                         "next_seed" if trial_index + 1 < len(acquisition_trials or ()) else
-                        "selection_trials_exhausted" if range_selection else
+                        "selection_trials_exhausted" if selection_policy is not None else
                         "seed_trials_exhausted"
                     ),
                     "validation_outcome": (
@@ -826,7 +832,7 @@ class AcquisitionEngine:
                     ),
                     "terminal_selection_outcome": (
                         "selected" if trial_validated else
-                        "pending_global_selection" if range_selection and (
+                        "pending_global_selection" if selection_policy is not None and (
                             trial_qualified or qualified_selection_candidates
                         ) else
                         "continue" if trial_index + 1 < len(acquisition_trials or ()) else
@@ -881,23 +887,36 @@ class AcquisitionEngine:
             continuations.append(page.next_token)
             continuation = page.next_token
 
-        if range_selection and status == RunStatus.COMPLETE:
-            if qualified_selection_candidates:
-                selected = min(
-                    qualified_selection_candidates,
-                    key=lambda item: (
-                        item[0], item[1], item[2].document_id,
-                        item[2].revision, item[2].candidate_id,
-                    ),
+        if (
+            selection_policy is not None
+            and status == RunStatus.COMPLETE
+            and selection_incomplete_status is not None
+        ):
+            status = selection_incomplete_status
+
+        if (
+            selection_policy is not None
+            and status == RunStatus.COMPLETE
+            and qualified_selection_candidates
+        ):
+            try:
+                selected_selection_candidate = selection_policy.select(
+                    tuple(qualified_selection_candidates)
                 )
-                event_date, _, candidate, repository_candidate, result = selected
+                if selected_selection_candidate not in qualified_selection_candidates:
+                    raise ContractError(
+                        "adapter selection policy chose an unknown candidate"
+                    )
+                candidate = selected_selection_candidate.candidate
+                repository_candidate = selected_selection_candidate.repository_candidate
+                result = selected_selection_candidate.retrieval
                 attempt_id = self._attempt_id(run_id, candidate, "success")
                 receipt = self._repository.record_success(
                     attempt_id, repository_candidate, result
                 )
                 validated_position = result.diagnostics.get("validated_position")
                 if not isinstance(validated_position, int) or validated_position < 1:
-                    raise ContractError("selected transcript lacks validated position")
+                    raise ContractError("selected retrieval lacks validated position")
                 maximum_position = max(maximum_position, validated_position)
                 selection_checkpoint_eligible = (
                     checkpoint_before is None
@@ -928,44 +947,15 @@ class AcquisitionEngine:
                     True,
                     f"artifact {receipt.artifact_id}",
                 ))
-                diagnostics.append({
-                    "effective_selection_mode": "first_in_date_range",
-                    "requested_date_range": {
-                        "start_date": (
-                            acquisition_trials[0].acquisition_target.selection
-                            .start_date.isoformat()
-                        ),
-                        "end_date": (
-                            acquisition_trials[0].acquisition_target.selection
-                            .end_date.isoformat()
-                        ),
-                    },
-                    "terminal_selection_outcome": "selected",
-                    "validation_outcome": "validated",
-                    "selected_candidate_id": candidate.candidate_id,
-                    "selected_validated_event_date": event_date,
-                    "qualified_candidate_count": len(qualified_selection_candidates),
-                })
-            else:
-                diagnostics.append({
-                    "effective_selection_mode": "first_in_date_range",
-                    "requested_date_range": {
-                        "start_date": (
-                            acquisition_trials[0].acquisition_target.selection
-                            .start_date.isoformat()
-                        ),
-                        "end_date": (
-                            acquisition_trials[0].acquisition_target.selection
-                            .end_date.isoformat()
-                        ),
-                    },
-                    "terminal_selection_outcome": "no_match",
-                    "validation_outcome": "no_qualifying_validated_artifact",
-                    "qualified_candidate_count": 0,
-                })
+            except (ContractError, ConflictError, IntegrityError) as error:
+                failures += 1
+                status = RunStatus.FAILED
+                diagnostics.append(self._diagnostic(
+                    FailureClass.MALFORMED_ADAPTER, str(error), False
+                ))
 
         if status == RunStatus.COMPLETE and not (
-            range_selection and not qualified_selection_candidates
+            selection_policy is not None and selected_selection_candidate is None
         ) and selection_checkpoint_eligible:
             target = self._target_checkpoint(maximum_position, seen_candidates)
             if checkpoint_before != target:
@@ -1009,6 +999,43 @@ class AcquisitionEngine:
                 maximum_success_position, successful_candidates
             )
             self._repository.advance_checkpoint(source_id, checkpoint_success, target)
+
+        if selection_policy is not None:
+            attribution = selection_policy.attribution()
+            validate_json(attribution, "terminal selection attribution")
+            if selected_selection_candidate is not None:
+                terminal_outcome = "selected"
+                validation_outcome = "validated"
+            elif status == RunStatus.COMPLETE:
+                terminal_outcome = "no_match"
+                validation_outcome = "no_qualifying_validated_artifact"
+            elif status in {RunStatus.PARTIAL, RunStatus.BLOCKED}:
+                terminal_outcome = "incomplete"
+                validation_outcome = "selection_incomplete"
+            else:
+                terminal_outcome = "failed"
+                validation_outcome = "selection_failed"
+            selected_diagnostics: dict[str, JsonValue] = {}
+            if selected_selection_candidate is not None:
+                selected_diagnostics = {
+                    "selected_candidate_id": (
+                        selected_selection_candidate.candidate.candidate_id
+                    ),
+                    **{
+                        f"selected_{key}": value
+                        for key, value in (
+                            selected_selection_candidate.decision.diagnostics.items()
+                        )
+                    },
+                }
+            diagnostics.append({
+                **attribution,
+                "terminal_selection_outcome": terminal_outcome,
+                "terminal_run_status": status.value,
+                "validation_outcome": validation_outcome,
+                "qualified_candidate_count": len(qualified_selection_candidates),
+                **selected_diagnostics,
+            })
 
         return AcquisitionRunResult(
             run_id=run_id,
@@ -1058,6 +1085,62 @@ class AcquisitionEngine:
             raise ContractError("adapter discovery did not return DiscoveryPage")
         if any(not isinstance(candidate, AdapterCandidate) for candidate in page.candidates):
             raise ContractError("discovery page contains a malformed candidate")
+
+    @staticmethod
+    def _record_selection_diagnostic(
+        page: dict[str, JsonValue],
+        candidate: AdapterCandidate,
+        decision: AdapterSelectionDecision,
+        retrieval_failure: bool = False,
+    ) -> None:
+        """Fold policy qualification into the existing bounded diagnostic model."""
+        evaluated = page.get("candidate_evaluated_count", 0)
+        page["candidate_evaluated_count"] = (
+            evaluated + 1 if isinstance(evaluated, int) else 1
+        )
+        dispositions = page.get("candidate_disposition_counts")
+        if not isinstance(dispositions, dict):
+            dispositions = {}
+            page["candidate_disposition_counts"] = dispositions
+        current = dispositions.get(decision.disposition, 0)
+        dispositions[decision.disposition] = current + 1 if isinstance(current, int) else 1
+        if decision.validation_outcome != "validated":
+            validation_failures = page.get("validation_failure_counts")
+            if not isinstance(validation_failures, dict):
+                validation_failures = {}
+                page["validation_failure_counts"] = validation_failures
+            current = validation_failures.get(decision.validation_outcome, 0)
+            validation_failures[decision.validation_outcome] = (
+                current + 1 if isinstance(current, int) else 1
+            )
+        if retrieval_failure:
+            retrieval_failures = page.get("candidate_retrieval_failure_counts")
+            if not isinstance(retrieval_failures, dict):
+                retrieval_failures = {}
+                page["candidate_retrieval_failure_counts"] = retrieval_failures
+            current = retrieval_failures.get(decision.validation_outcome, 0)
+            retrieval_failures[decision.validation_outcome] = (
+                current + 1 if isinstance(current, int) else 1
+            )
+        samples = page.get("candidate_disposition_samples")
+        if not isinstance(samples, list):
+            samples = []
+            page["candidate_disposition_samples"] = samples
+        if len(samples) < 20:
+            sample = {
+                "candidate_id": candidate.candidate_id,
+                "disposition": decision.disposition,
+                "validation_outcome": decision.validation_outcome,
+                **decision.diagnostics,
+            }
+            samples.append(sample)
+            if decision.validation_outcome != "validated":
+                failure_samples = page.get("candidate_failure_samples")
+                if not isinstance(failure_samples, list):
+                    failure_samples = []
+                    page["candidate_failure_samples"] = failure_samples
+                if len(failure_samples) < 20:
+                    failure_samples.append(dict(sample))
 
     @staticmethod
     def _repository_candidate(

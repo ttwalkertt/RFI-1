@@ -11,7 +11,8 @@ Omitted selection remains `latest`. Existing invocation paths, traversal, learne
 retry behavior, checkpoint ownership, retained-anchor learning, and TASK-058's first-success
 behavior for `latest` are unchanged. `first_in_date_range` validates the complete bounded candidate
 set across the unchanged trial plan, then publishes exactly one globally earliest qualifying
-transcript.
+transcript. The corrective review established that artifact content—not URLs, labels, titles,
+redirects, or starting seeds—is the sole date evidence used to qualify that transcript.
 
 No HTTP/service API, CLI, GUI, operator-supplied seed, LLM, continuation-cursor, or historical
 backfill orchestration was introduced.
@@ -32,9 +33,11 @@ validate candidates in the existing deterministic rank, publish the first valida
 stop. For `first_in_date_range`, each trial uses the same traversal and ranking implementation.
 Candidate bodies are validated by `EarningsCallTranscriptAcquisition`; only its normalized event
 date can qualify the candidate. Qualified results remain non-durable until every planned trial is
-evaluated. The engine selects by ascending validated event date and then the existing deterministic
-proposal/candidate ordering, persists exactly one result, and applies established success learning
-and checkpoint rules.
+evaluated. A transcript-specific terminal policy selects by ascending validated event date, the
+globally comparable semantic projection of the existing deterministic rank, and validated content
+SHA-256. Seed-local phase, proposal rank, traversal depth, and URL-derived identities do not
+participate. The provider-neutral engine coordinates only a generic qualification/reduction seam,
+persists the selected result, and applies established success learning and checkpoint rules.
 
 An unsuccessful range selection publishes no artifact, checkpoint, or learned anchor. A successful
 historical selection cannot move an existing checkpoint backward. The requested selection is never
@@ -55,13 +58,16 @@ relaxed.
 1. `EarningsTranscriptPullAdapter` resolves omitted selection to `latest`.
 2. `acquisition_trials()` creates one immutable target from the governed source profile.
 3. `TranscriptAcquisitionOrchestrator.plan()` attaches that same target to every seed trial.
-4. `AcquisitionEngine` verifies that all trial targets are identical.
+4. `AcquisitionEngine` verifies that all trial targets are identical and obtains an optional,
+   provider-neutral terminal-selection policy from the adapter.
 5. `discover_trial()` verifies the adapter's immutable selection and attaches the target to every
    ranked candidate and its provenance metadata.
 6. `retrieve()` verifies the candidate target against its canonical provenance before invoking the
    existing transcript validator.
-7. The engine qualifies only normalized `validated_event_date` evidence and records the selection
-   in terminal diagnostics and durable retrieval provenance.
+7. The transcript policy qualifies normalized `validated_event_date` evidence, performs global
+   terminal reduction, and returns provider-neutral decisions to the engine.
+8. The engine folds each decision into the existing candidate evaluation/disposition/failure
+   counters and bounded samples, then emits one terminal selection diagnostic for every run status.
 
 ## Compatibility Proof for `latest`
 
@@ -87,14 +93,21 @@ Focused tests prove:
 - reversing discovery order for same-date candidates does not change the selected artifact;
 - URL/title date hints cannot qualify an artifact whose normalized validated event date is outside
   the request;
+- a validated content date inside the request qualifies even when URL/title dates conflict;
+- same-date candidates discovered from different seeds select the same artifact when seed order is
+  reversed;
+- seed-local proposal ranks and URL-derived candidate identities cannot break same-date ties;
 - exactly one qualifying artifact becomes durable;
 - explicit structured no-match is emitted when nothing qualifies;
+- complete, partial, blocked, and failed runs each emit a terminal selection outcome;
+- aggregate qualification counts remain exact after bounded diagnostic samples reach their limit;
+- `date.max` remains an inclusive valid endpoint without next-day arithmetic or overflow;
 - unsuccessful selection creates no checkpoint or retained anchor; and
 - trial, candidate, validation, terminal, and durable provenance all carry selection attribution.
 
 ## Verification Results
 
-- `make task059-test`: PASS, 113 tests, including TASK-059, TASK-058, TASK-057, TASK-056,
+- `make task059-test`: PASS, 118 tests, including TASK-059, TASK-058, TASK-057, TASK-056,
   TASK-053, TASK-052, TASK-048/TASK-048A, Pull Workflow, REST, and capability selection.
 - Existing REST localhost test: PASS when run with permission to bind an ephemeral loopback port.
 - `make task059-proof`: PASS.
@@ -105,11 +118,11 @@ Focused tests prove:
 ## Files Changed
 
 - `src/rfi/acquisition/contracts.py`: typed immutable selection and target contracts.
-- `src/rfi/acquisition/engine.py`: target verification, range qualification, globally earliest
-  terminal selection, structured diagnostics, and deferred single-result persistence.
+- `src/rfi/acquisition/engine.py`: provider-neutral target and terminal-policy protocols,
+  integrated structured diagnostics, and deferred single-result persistence.
 - `src/rfi/acquisition/__init__.py`: contract exports.
-- `src/rfi/discovery.py`: target construction, propagation, provenance, and selection-aware
-  validation intervals.
+- `src/rfi/discovery.py`: target construction, propagation, provenance, content-date validation,
+  transcript-specific qualification, and globally deterministic terminal reduction.
 - `tests/test_task059.py`: focused acceptance and invariant evidence.
 - `scripts/task059_selection.py`: manual default compatibility and propagation proof.
 - `scripts/task058_orchestration.py`: excludes TASK-059 attribution fields from the TASK-058
@@ -127,8 +140,9 @@ Focused tests prove:
 - The candidate/traversal bounds are unchanged. “Earliest” means the earliest fully validated
   transcript in the complete bounded deterministic trial result, not an assertion of unbounded web
   completeness.
-- Same-day ambiguity uses existing deterministic ranking and candidate tie-breaking. No continuation
-  identity or cursor was added.
+- Same-day ambiguity uses the globally comparable semantic fields of the existing deterministic
+  ranking, then validated content SHA-256. Seed topology, per-trial proposal rank, and URL-derived
+  identities are excluded. No continuation identity or cursor was added.
 - Range attempts exhaust the existing seed plan before terminal selection so starting-seed order
   cannot select a later qualifying date. This changes only when success is declared for the new
   mode; orchestration still owns trial order, exhaustion, and terminal publication.
@@ -143,9 +157,9 @@ Focused tests prove:
 | Transcript acquisition target | Firm, canonical artifact, and selection identity shared across trials | Complete | Transcript-specific target |
 | Transcript orchestration | Unchanged learned-seed planning, trial ownership, and terminal publication | Complete | Range mode exhausts bounded trials before selection |
 | Deterministic transcript trial | One starting seed, unchanged traversal/ranking, validation, diagnostics | Complete | Existing discovery budgets remain authoritative |
-| Candidate qualification | Validated event-date eligibility and deterministic earliest selection | Complete | Same-day identity uses existing tie-breaking |
+| Candidate qualification | Content-validated event-date eligibility and deterministic earliest selection | Complete | Same-day reduction excludes seed-local and URL identity fields |
 | Persistence, learning, checkpointing | Publish one success; never learn/checkpoint from no-match | Complete | Historical success does not move checkpoint backward |
-| Structured diagnostics/provenance | Mode, requested range, qualification, validation, terminal outcome | Complete | Bounded candidate samples |
+| Structured diagnostics/provenance | Existing counters/samples plus mode, requested range, and terminal outcome | Complete | Bounded samples; aggregate counts remain exact |
 | Public selection invocation | Service/operator selection input | Not Started | Recommended next exposure milestone |
 | LLM temporary-seed recovery | Bounded advisory starting-seed proposals | Not Started | Separate future milestone |
 | Historical backfill orchestration | Repeated range requests and continuation policy | Not Started | Separate future milestone |

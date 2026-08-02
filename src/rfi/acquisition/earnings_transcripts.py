@@ -37,14 +37,14 @@ _SPEAKER_EVIDENCE = re.compile(
     r"\b(?:operator|question-and-answer|questions and answers|prepared remarks|"
     r"chief executive officer|chief financial officer)\b", re.I
 )
-_ISO_DATE = re.compile(r"(?<!\d)(20\d{2})[-_/](0[1-9]|1[0-2])[-_/](0[1-9]|[12]\d|3[01])(?!\d)")
+_ISO_DATE = re.compile(r"(?<!\d)(\d{4})[-_/](0[1-9]|1[0-2])[-_/](0[1-9]|[12]\d|3[01])(?!\d)")
 _MONTH_DATE = re.compile(
     r"\b(January|February|March|April|May|June|July|August|September|October|"
-    r"November|December)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d{2})\b", re.I
+    r"November|December)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b", re.I
 )
 _DAY_MONTH_DATE = re.compile(
     r"\b(\d{1,2})[- ](January|February|March|April|May|June|July|August|September|"
-    r"October|November|December)[- ](20\d{2})\b", re.I
+    r"October|November|December)[- ](\d{4})\b", re.I
 )
 _QUARTER_YEAR = re.compile(r"\bq([1-4])\D{0,12}(20\d{2})\b", re.I)
 _YEAR_QUARTER = re.compile(r"\b(20\d{2})\D{0,12}q([1-4])\b", re.I)
@@ -100,7 +100,9 @@ class ReportingPeriod:
     quarter: int
 
     def __post_init__(self) -> None:
-        if self.year < 2000 or self.year > 2100 or self.quarter not in {1, 2, 3, 4}:
+        if self.year < date.min.year or self.year > date.max.year or self.quarter not in {
+            1, 2, 3, 4
+        }:
             raise ValueError("reporting period is outside the supported range")
 
     @property
@@ -356,10 +358,21 @@ class EarningsCallTranscriptAcquisition:
                 ))
                 continue
             try:
-                artifact_date = self._artifact_date(proposal.label, response.url, response.content)
+                validated_content_date = (
+                    self.source.configuration.get("validated_event_date_evidence")
+                    == "artifact_content"
+                )
+                defer_date_qualification = (
+                    self.source.configuration.get("defer_date_qualification") is True
+                )
+                artifact_date = self._artifact_date(*(
+                    (response.content,)
+                    if validated_content_date
+                    else (proposal.label, response.url, response.content)
+                ))
                 if artifact_date is None:
                     raise ValueError("candidate publication/event date could not be established")
-                if not request.contains(artifact_date):
+                if not validated_content_date and not request.contains(artifact_date):
                     dispositions.append(CandidateDisposition(
                         CandidateDispositionCode.WRONG_REPORTING_PERIOD.value, normalized
                     ))
@@ -391,6 +404,12 @@ class EarningsCallTranscriptAcquisition:
                     ))
                     dispositions.append(CandidateDisposition(
                         CandidateDispositionCode.WRONG_FIRM.value, normalized,
+                        period.code,
+                    ))
+                    continue
+                if not defer_date_qualification and not request.contains(artifact_date):
+                    dispositions.append(CandidateDisposition(
+                        CandidateDispositionCode.WRONG_REPORTING_PERIOD.value, normalized,
                         period.code,
                     ))
                     continue

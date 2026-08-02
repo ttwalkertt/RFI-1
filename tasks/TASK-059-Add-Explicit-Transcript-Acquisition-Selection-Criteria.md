@@ -171,6 +171,13 @@ Add focused tests proving:
     artifact;
 -   same-date candidates use existing deterministic tie-breaking;
 -   URLs and titles alone cannot satisfy selection;
+-   conflicting URL/title dates cannot override validated artifact-content dates;
+-   same-date candidates discovered from different seeds are independent of
+    seed order, seed-local proposal rank, and URL-derived identities;
+-   complete, partial, blocked, and failed runs have terminal selection
+    diagnostics;
+-   qualification counts remain exact beyond bounded diagnostic samples;
+-   an inclusive `date.max` endpoint does not overflow;
 -   failed selection does not alter learning or checkpoints;
 -   existing transcript acquisition behavior remains unchanged.
 

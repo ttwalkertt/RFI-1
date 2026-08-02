@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -19,6 +20,7 @@ from rfi.acquisition import (
     TranscriptSelectionMode,
 )
 from rfi.acquisition.contracts import ContractError
+from rfi.acquisition.engine import AdapterFailure, DiscoveryPage, FailureClass, RunStatus
 from rfi.discovery import (
     DiscoveryPolicy,
     DiscoveryPolicyCatalog,
@@ -243,9 +245,13 @@ class TranscriptSelectionContractTests(unittest.TestCase):
         trial = next(item for item in result.diagnostics if "trial_id" in item)
         self.assertEqual(trial["effective_selection_mode"], "first_in_date_range")
         self.assertEqual(
-            trial["candidate_qualification_dispositions"][0]["disposition"],
-            "outside_requested_date_range",
+            trial["candidate_disposition_counts"]["wrong_reporting_period"], 1,
         )
+        self.assertEqual(
+            trial["candidate_disposition_samples"][0]["validation_outcome"],
+            "selection_date_mismatch",
+        )
+        self.assertNotIn("candidate_qualification_dispositions", trial)
 
     def test_same_date_tie_breaking_is_stable_when_discovery_order_reverses(self) -> None:
         seed = "https://ir.example.com/transcripts"
@@ -290,6 +296,237 @@ class TranscriptSelectionContractTests(unittest.TestCase):
                 return str(success["candidate"]["provenance"]["metadata"]["requested_url"])
 
         self.assertEqual(selected_url((beta, alpha)), selected_url((alpha, beta)))
+
+    def test_validated_content_date_overrides_conflicting_url_and_title_dates(self) -> None:
+        selection = TranscriptAcquisitionSelection.first_in_date_range(
+            date(2025, 1, 1), date(2025, 3, 31)
+        )
+
+        def run(advisory_date: str, validated_date: str) -> tuple[object, list[dict]]:
+            seed = "https://ir.example.com/transcripts"
+            candidate = (
+                "https://ir.example.com/2025-01-30-earnings-call-transcript.html"
+                if advisory_date.startswith("January")
+                else "https://ir.example.com/2024-12-15-earnings-call-transcript.html"
+            )
+            transport = Transport({
+                seed: response(
+                    seed,
+                    f"<a href='{candidate}'>{advisory_date} earnings call transcript</a>",
+                ),
+                candidate: response(candidate, transcript_body(validated_date)),
+            })
+            configured = source(seed)
+            with tempfile.TemporaryDirectory() as directory:
+                firms = FirmRepository.initialize(Path(directory) / "firms")
+                firms.create(FirmDraft(
+                    "firm-a", "Firm A", "2025-01-01", status=FirmStatus.ACTIVE
+                ))
+                repository = AcquisitionRepository(Path(directory) / "acquisition")
+                repository.register_source(configured)
+                adapter = EarningsTranscriptPullAdapter(
+                    policies(), Search(), transport,
+                    lambda: "2026-08-01T00:00:00Z",
+                    repository=repository,
+                    selection=selection,
+                )
+                result = AcquisitionEngine(
+                    repository, AdapterRegistry((adapter,)),
+                    lambda: "2026-08-01T00:00:00Z",
+                ).run_source(configured.source_id, "task059-conflicting-dates")
+                return result, repository.history()
+
+        rejected, rejected_history = run("January 30, 2025", "December 15, 2024")
+        accepted, accepted_history = run("December 15, 2024", "January 30, 2025")
+
+        self.assertEqual(rejected.durable_acquisitions, 0)
+        self.assertFalse(any(item.get("outcome") == "success" for item in rejected_history))
+        rejected_page = next(item for item in rejected.diagnostics if "trial_id" in item)
+        self.assertEqual(
+            rejected_page["validation_failure_counts"]["selection_date_mismatch"], 1
+        )
+        self.assertEqual(accepted.durable_acquisitions, 1)
+        success = next(item for item in accepted_history if item.get("outcome") == "success")
+        self.assertEqual(success["diagnostics"]["validated_event_date"], "2025-01-30")
+
+    def test_same_date_global_selection_is_seed_order_independent(self) -> None:
+        first_seed = "https://first.example/transcripts"
+        second_seed = "https://second.example/transcripts"
+        first_candidate = "https://first.example/q1-earnings-call-transcript.html"
+        second_candidate = "https://second.example/q1-earnings-call-transcript.html"
+        first_body = transcript_body("January 30, 2025") + " Alpha appendix."
+        second_body = transcript_body("January 30, 2025") + " Beta appendix."
+        expected = min(
+            hashlib.sha256(f"<html>{body}</html>".encode()).hexdigest()
+            for body in (first_body, second_body)
+        )
+        selection = TranscriptAcquisitionSelection.first_in_date_range(
+            date(2025, 1, 1), date(2025, 12, 31)
+        )
+
+        def selected_digest(seed_order: tuple[str, str]) -> str:
+            transport = Transport({
+                first_seed: response(first_seed, (
+                    f"<a href='{first_candidate}'>January 30, 2025 earnings call transcript</a>"
+                )),
+                first_candidate: response(first_candidate, first_body),
+                second_seed: response(second_seed, (
+                    f"<a href='{second_candidate}'>January 30, 2025 earnings call transcript</a>"
+                )),
+                second_candidate: response(second_candidate, second_body),
+            })
+            configured = source()
+            anchors = tuple(
+                {"normalized_url": seed, "requested_url": seed, "resolved_url": None}
+                for seed in seed_order
+            )
+            with tempfile.TemporaryDirectory() as directory:
+                firms = FirmRepository.initialize(Path(directory) / "firms")
+                firms.create(FirmDraft(
+                    "firm-a", "Firm A", "2025-01-01", status=FirmStatus.ACTIVE
+                ))
+                repository = AcquisitionRepository(Path(directory) / "acquisition")
+                repository.register_source(configured)
+                adapter = EarningsTranscriptPullAdapter(
+                    policies(), Search(), transport,
+                    lambda: "2026-08-01T00:00:00Z",
+                    repository=repository,
+                    selection=selection,
+                )
+                with patch.object(repository, "discovery_anchors", return_value=anchors):
+                    result = AcquisitionEngine(
+                        repository, AdapterRegistry((adapter,)),
+                        lambda: "2026-08-01T00:00:00Z",
+                    ).run_source(configured.source_id, "task059-seed-order")
+            terminal = next(
+                item for item in result.diagnostics
+                if item.get("terminal_selection_outcome") == "selected"
+            )
+            return str(terminal["selected_validated_content_sha256"])
+
+        self.assertEqual(selected_digest((first_seed, second_seed)), expected)
+        self.assertEqual(selected_digest((second_seed, first_seed)), expected)
+
+    def test_terminal_selection_diagnostic_covers_every_run_status(self) -> None:
+        selection = TranscriptAcquisitionSelection.first_in_date_range(
+            date(2025, 1, 1), date(2025, 12, 31)
+        )
+        cases = (
+            (DiscoveryPage((), None, {}), RunStatus.COMPLETE, "no_match"),
+            (AdapterFailure(FailureClass.TRANSIENT_ADAPTER, "later", True),
+             RunStatus.PARTIAL, "incomplete"),
+            (AdapterFailure(FailureClass.POLICY_REJECTION, "blocked", False),
+             RunStatus.BLOCKED, "incomplete"),
+            (ContractError("malformed"), RunStatus.FAILED, "failed"),
+        )
+        for index, (effect, expected_status, expected_outcome) in enumerate(cases):
+            with self.subTest(status=expected_status), tempfile.TemporaryDirectory() as directory:
+                configured = source()
+                repository = AcquisitionRepository(Path(directory) / "acquisition")
+                repository.register_source(configured)
+                adapter = EarningsTranscriptPullAdapter(
+                    policies(), Search(), Transport({}),
+                    lambda: "2026-08-01T00:00:00Z",
+                    repository=repository,
+                    selection=selection,
+                )
+                patcher = (
+                    patch.object(adapter, "discover_trial", side_effect=effect)
+                    if isinstance(effect, Exception)
+                    else patch.object(adapter, "discover_trial", return_value=effect)
+                )
+                with patcher:
+                    result = AcquisitionEngine(
+                        repository, AdapterRegistry((adapter,)),
+                        lambda: "2026-08-01T00:00:00Z",
+                    ).run_source(configured.source_id, f"task059-terminal-{index}")
+            terminal = [
+                item for item in result.diagnostics
+                if item.get("terminal_run_status") == result.status.value
+                and "effective_selection_mode" in item
+            ]
+            self.assertEqual(result.status, expected_status)
+            self.assertEqual(len(terminal), 1, json.dumps(result.to_dict(), indent=2))
+            self.assertEqual(terminal[0]["terminal_selection_outcome"], expected_outcome)
+
+    def test_qualification_counts_are_complete_beyond_sample_limit(self) -> None:
+        seed = "https://ir.example.com/transcripts"
+        candidates = tuple(
+            f"https://ir.example.com/q4-2024-{index}-earnings-call-transcript.html"
+            for index in range(25)
+        )
+        links = "".join(
+            f"<a href='{url}'>December 15, 2024 earnings call transcript</a>"
+            for url in candidates
+        )
+        transport = Transport({
+            seed: response(seed, links),
+            **{
+                url: response(url, transcript_body("December 15, 2024"))
+                for url in candidates
+            },
+        })
+        configured = source(seed)
+        selection = TranscriptAcquisitionSelection.first_in_date_range(
+            date(2025, 1, 1), date(2025, 3, 31)
+        )
+        expanded = DiscoveryPolicyCatalog({
+            "standard": DiscoveryPolicy(2, 5, 1000, 2, 60, 8, 4_000_000, 60)
+        }, "standard")
+        with tempfile.TemporaryDirectory() as directory:
+            repository = AcquisitionRepository(Path(directory) / "acquisition")
+            repository.register_source(configured)
+            adapter = EarningsTranscriptPullAdapter(
+                expanded, Search(), transport,
+                lambda: "2026-08-01T00:00:00Z",
+                repository=repository,
+                selection=selection,
+            )
+            result = AcquisitionEngine(
+                repository, AdapterRegistry((adapter,)),
+                lambda: "2026-08-01T00:00:00Z",
+            ).run_source(configured.source_id, "task059-accounting")
+        page = next(item for item in result.diagnostics if "trial_id" in item)
+        self.assertEqual(page["candidate_evaluated_count"], 25)
+        self.assertEqual(page["candidate_disposition_counts"]["wrong_reporting_period"], 25)
+        self.assertEqual(page["validation_failure_counts"]["selection_date_mismatch"], 25)
+        self.assertEqual(len(page["candidate_disposition_samples"]), 20)
+
+    def test_date_max_is_included_without_boundary_overflow(self) -> None:
+        seed = "https://ir.example.com/transcripts"
+        candidate = "https://ir.example.com/max-earnings-call-transcript.html"
+        transport = Transport({
+            seed: response(
+                seed,
+                f"<a href='{candidate}'>December 31, 9999 earnings call transcript</a>",
+            ),
+            candidate: response(candidate, transcript_body("December 31, 9999")),
+        })
+        configured = source(seed)
+        selection = TranscriptAcquisitionSelection.first_in_date_range(date.max, date.max)
+        with tempfile.TemporaryDirectory() as directory:
+            firms = FirmRepository.initialize(Path(directory) / "firms")
+            firms.create(FirmDraft(
+                "firm-a", "Firm A", "2025-01-01", status=FirmStatus.ACTIVE
+            ))
+            repository = AcquisitionRepository(Path(directory) / "acquisition")
+            repository.register_source(configured)
+            adapter = EarningsTranscriptPullAdapter(
+                policies(), Search(), transport,
+                lambda: "2026-08-01T00:00:00Z",
+                repository=repository,
+                selection=selection,
+            )
+            result = AcquisitionEngine(
+                repository, AdapterRegistry((adapter,)),
+                lambda: "2026-08-01T00:00:00Z",
+            ).run_source(configured.source_id, "task059-date-max")
+        self.assertEqual(result.durable_acquisitions, 1, json.dumps(result.to_dict(), indent=2))
+        terminal = next(
+            item for item in result.diagnostics
+            if item.get("terminal_selection_outcome") == "selected"
+        )
+        self.assertEqual(terminal["selected_validated_event_date"], date.max.isoformat())
 
 
 if __name__ == "__main__":

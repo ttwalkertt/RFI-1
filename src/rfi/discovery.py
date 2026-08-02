@@ -37,6 +37,7 @@ from rfi.acquisition.contracts import (
     ContractError,
     DiscoveryProvenance,
     IntervalAcquisitionRequest,
+    JsonValue,
     RetrievalResult,
     SourceProfile,
     TranscriptAcquisitionSelection,
@@ -48,6 +49,8 @@ from rfi.acquisition.engine import (
     AdapterAcquisitionTrial,
     AdapterCandidate,
     AdapterFailure,
+    AdapterSelectionCandidate,
+    AdapterSelectionDecision,
     DiscoveryPage,
     FailureClass,
 )
@@ -872,6 +875,14 @@ class BoundedTranscriptDiscovery:
                 "url": item.observed_url,
                 "label": item.label,
                 "observed_aliases": list(item.observed_aliases),
+                # This is the existing semantic link rank with topology and identity
+                # tie-breakers removed so it remains globally comparable across seeds.
+                "deterministic_selection_rank": [
+                    item.rank.candidate_priority,
+                    item.rank.period_ordinal_priority,
+                    item.rank.terminology_priority,
+                    item.rank.document_priority,
+                ],
             }
             for item in ordered_candidates
         )
@@ -1047,6 +1058,79 @@ class TranscriptAcquisitionOrchestrator:
         )
 
 
+@dataclass(frozen=True)
+class TranscriptTerminalSelectionPolicy:
+    """Qualify and globally reduce validated transcripts for a date-range target."""
+
+    selection: TranscriptAcquisitionSelection
+
+    def qualify(
+        self, candidate: AdapterCandidate, retrieval: RetrievalResult
+    ) -> AdapterSelectionDecision:
+        value = retrieval.diagnostics.get("validated_event_date")
+        if not isinstance(value, str):
+            raise ContractError("validated transcript lacks an event date")
+        try:
+            event_date = date.fromisoformat(value)
+        except ValueError as error:
+            raise ContractError("validated transcript event date is malformed") from error
+        rank = self._deterministic_rank(candidate)
+        evidence = {
+            "validated_event_date": value,
+            "validated_content_sha256": hashlib.sha256(retrieval.content).hexdigest(),
+            "deterministic_selection_rank": list(rank),
+        }
+        if not self.selection.contains(event_date):
+            return AdapterSelectionDecision(
+                False,
+                CandidateDispositionCode.WRONG_REPORTING_PERIOD.value,
+                "selection_date_mismatch",
+                evidence,
+            )
+        return AdapterSelectionDecision(
+            True,
+            CandidateDispositionCode.VALID_NEW_ARTIFACT.value,
+            "validated",
+            evidence,
+        )
+
+    def select(
+        self, candidates: tuple[AdapterSelectionCandidate, ...]
+    ) -> AdapterSelectionCandidate:
+        if not candidates:
+            raise ContractError("terminal transcript selection requires candidates")
+        return min(candidates, key=self._selection_key)
+
+    def attribution(self) -> dict[str, JsonValue]:
+        if self.selection.start_date is None or self.selection.end_date is None:
+            raise ContractError("terminal transcript selection range is malformed")
+        return {
+            "effective_selection_mode": self.selection.mode.value,
+            "requested_date_range": {
+                "start_date": self.selection.start_date.isoformat(),
+                "end_date": self.selection.end_date.isoformat(),
+            },
+        }
+
+    def _selection_key(
+        self, item: AdapterSelectionCandidate
+    ) -> tuple[object, ...]:
+        event_date = item.decision.diagnostics.get("validated_event_date")
+        digest = item.decision.diagnostics.get("validated_content_sha256")
+        if not isinstance(event_date, str) or not isinstance(digest, str):
+            raise ContractError("qualified transcript selection evidence is malformed")
+        return (event_date, self._deterministic_rank(item.candidate), digest)
+
+    @staticmethod
+    def _deterministic_rank(candidate: AdapterCandidate) -> tuple[int, ...]:
+        value = candidate.provenance.metadata.get("deterministic_selection_rank")
+        if not isinstance(value, list) or len(value) != 4 or any(
+            isinstance(item, bool) or not isinstance(item, int) for item in value
+        ):
+            raise ContractError("deterministic transcript selection rank is malformed")
+        return tuple(value)
+
+
 class EarningsTranscriptPullAdapter:
     """Execute one orchestrator-selected transcript trial through TASK-048 validation."""
 
@@ -1094,6 +1178,20 @@ class EarningsTranscriptPullAdapter:
             raise ContractError("transcript acquisition target requires firm_id")
         target = TranscriptAcquisitionTarget(firm_id, selection=self._selection)
         return self._orchestrator.plan(profile, target)
+
+    def terminal_selection_policy(
+        self, profile: SourceProfile,
+        trials: tuple[AdapterAcquisitionTrial, ...],
+    ) -> TranscriptTerminalSelectionPolicy | None:
+        """Keep transcript qualification and reduction outside the neutral engine."""
+        self._validate_profile(profile)
+        if not trials or any(
+            trial.acquisition_target.selection != self._selection for trial in trials
+        ):
+            raise ContractError("terminal transcript selection target changed")
+        if self._selection.mode == TranscriptSelectionMode.FIRST_IN_DATE_RANGE:
+            return TranscriptTerminalSelectionPolicy(self._selection)
+        return None
 
     def discover_trial(
         self, profile: SourceProfile, trial: AdapterAcquisitionTrial
@@ -1251,6 +1349,9 @@ class EarningsTranscriptPullAdapter:
                         "expected_reporting_period": expected_period.code,
                         "deferred_candidate_evaluation": True,
                         "proposal_rank": proposal_rank,
+                        "deterministic_selection_rank": list(
+                            proposal.get("deterministic_selection_rank", (0, 0, 0, 0))
+                        ),
                         "acquisition_target": (
                             trial.acquisition_target.to_dict() if trial is not None else
                             TranscriptAcquisitionTarget(
@@ -1587,6 +1688,14 @@ class EarningsTranscriptPullAdapter:
                     metadata.get("expected_reporting_period")
                     if selection.mode == TranscriptSelectionMode.LATEST else None
                 ),
+                "validated_event_date_evidence": (
+                    "artifact_content"
+                    if selection.mode == TranscriptSelectionMode.FIRST_IN_DATE_RANGE
+                    else "advisory_priority"
+                ),
+                "defer_date_qualification": (
+                    selection.mode == TranscriptSelectionMode.FIRST_IN_DATE_RANGE
+                ),
             },
             profile.policy,
         )
@@ -1610,14 +1719,13 @@ class EarningsTranscriptPullAdapter:
                 False, "historical_candidate_superseded",
             )
         interval_start = (
-            selection.start_date
+            date.min
             if selection.mode == TranscriptSelectionMode.FIRST_IN_DATE_RANGE
             else date(2000, 1, 1)
         )
         interval_end = (
-            selection.end_date + timedelta(days=1)
+            date.max
             if selection.mode == TranscriptSelectionMode.FIRST_IN_DATE_RANGE
-            and selection.end_date is not None
             else date.fromisoformat(self._clock()[:10]) + timedelta(days=1)
         )
         assert interval_start is not None
@@ -1651,7 +1759,6 @@ class EarningsTranscriptPullAdapter:
                     and selection.start_date is not None and selection.end_date is not None
                     else None
                 ),
-                "candidate_qualification_disposition": "qualified",
             })
         if len(interval.artifacts) > 1:
             raise ContractError("single transcript proposal produced multiple artifacts")
@@ -1670,15 +1777,6 @@ class EarningsTranscriptPullAdapter:
             retriever.candidate_dispositions[0].code
             if retriever.candidate_dispositions else "candidate_validation_mismatch"
         )
-        if (
-            selection.mode == TranscriptSelectionMode.FIRST_IN_DATE_RANGE
-            and disposition == CandidateDispositionCode.WRONG_REPORTING_PERIOD.value
-        ):
-            raise AdapterFailure(
-                FailureClass.POLICY_REJECTION,
-                "Validated transcript event date is outside the requested inclusive range.",
-                False, "selection_date_out_of_range",
-            )
         raise AdapterFailure(
             FailureClass.POLICY_REJECTION,
             "Transcript candidate did not establish a new validated artifact.",
