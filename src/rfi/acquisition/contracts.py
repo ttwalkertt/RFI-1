@@ -47,6 +47,87 @@ class IntervalCoverage(StrEnum):
     INDETERMINATE = "indeterminate"
 
 
+class TranscriptSelectionMode(StrEnum):
+    """Bounded selector vocabulary for one transcript acquisition attempt."""
+
+    LATEST = "latest"
+    FIRST_IN_DATE_RANGE = "first_in_date_range"
+
+
+@dataclass(frozen=True)
+class TranscriptAcquisitionSelection:
+    """Immutable rules deciding which validated transcript qualifies."""
+
+    mode: TranscriptSelectionMode = TranscriptSelectionMode.LATEST
+    start_date: date | None = None
+    end_date: date | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.mode, TranscriptSelectionMode):
+            raise ContractError("transcript selection mode is invalid")
+        if self.mode == TranscriptSelectionMode.LATEST:
+            if self.start_date is not None or self.end_date is not None:
+                raise ContractError("latest transcript selection cannot include a date range")
+            return
+        if not isinstance(self.start_date, date) or not isinstance(self.end_date, date):
+            raise ContractError("first_in_date_range requires date boundaries")
+        if self.start_date > self.end_date:
+            raise ContractError("transcript selection start_date must not follow end_date")
+
+    @classmethod
+    def latest(cls) -> TranscriptAcquisitionSelection:
+        return cls()
+
+    @classmethod
+    def first_in_date_range(
+        cls, start_date: date, end_date: date
+    ) -> TranscriptAcquisitionSelection:
+        return cls(TranscriptSelectionMode.FIRST_IN_DATE_RANGE, start_date, end_date)
+
+    def contains(self, event_date: date) -> bool:
+        """Qualify only normalized validated dates, with inclusive boundaries."""
+        if self.mode == TranscriptSelectionMode.LATEST:
+            return True
+        assert self.start_date is not None and self.end_date is not None
+        return self.start_date <= event_date <= self.end_date
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        return {
+            "mode": self.mode.value,
+            "start_date": self.start_date.isoformat() if self.start_date else None,
+            "end_date": self.end_date.isoformat() if self.end_date else None,
+        }
+
+
+@dataclass(frozen=True)
+class TranscriptAcquisitionTarget:
+    """Immutable transcript identity and selection contract shared by all trials."""
+
+    firm_id: str
+    canonical_artifact_id: str = "earnings_transcript"
+    selection: TranscriptAcquisitionSelection = field(
+        default_factory=TranscriptAcquisitionSelection.latest
+    )
+
+    def __post_init__(self) -> None:
+        require_identifier(self.firm_id, "transcript acquisition target firm_id")
+        require_identifier(
+            self.canonical_artifact_id,
+            "transcript acquisition target canonical_artifact_id",
+        )
+        if self.canonical_artifact_id != "earnings_transcript":
+            raise ContractError("transcript acquisition target has the wrong artifact type")
+        if not isinstance(self.selection, TranscriptAcquisitionSelection):
+            raise ContractError("transcript acquisition target selection is invalid")
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        return {
+            "firm_id": self.firm_id,
+            "canonical_artifact_id": self.canonical_artifact_id,
+            "selection": self.selection.to_dict(),
+        }
+
+
 @dataclass(frozen=True)
 class IntervalAcquisitionRequest:
     """Request artifacts for one firm and type in ``[start_date, end_date)``."""

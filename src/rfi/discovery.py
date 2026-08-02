@@ -39,6 +39,9 @@ from rfi.acquisition.contracts import (
     IntervalAcquisitionRequest,
     RetrievalResult,
     SourceProfile,
+    TranscriptAcquisitionSelection,
+    TranscriptAcquisitionTarget,
+    TranscriptSelectionMode,
 )
 from rfi.acquisition.repository import AcquisitionRepository
 from rfi.acquisition.engine import (
@@ -993,7 +996,9 @@ class TranscriptAcquisitionOrchestrator:
         self._repository = repository
         self._adapter_id = adapter_id
 
-    def plan(self, profile: SourceProfile) -> tuple[AdapterAcquisitionTrial, ...]:
+    def plan(
+        self, profile: SourceProfile, target: TranscriptAcquisitionTarget
+    ) -> tuple[AdapterAcquisitionTrial, ...]:
         history: tuple[dict[str, object], ...] = ()
         firm_id = profile.policy.get("firm_id")
         if self._repository is not None and isinstance(firm_id, str):
@@ -1035,7 +1040,9 @@ class TranscriptAcquisitionOrchestrator:
         if not planned:
             planned.append(("empty_seed", "deterministic-empty-discovery"))
         return tuple(
-            AdapterAcquisitionTrial(f"transcript-trial-{index}", seed, kind)
+            AdapterAcquisitionTrial(
+                f"transcript-trial-{index}", seed, kind, target
+            )
             for index, (kind, seed) in enumerate(planned, 1)
         )
 
@@ -1056,6 +1063,7 @@ class EarningsTranscriptPullAdapter:
         clock: Callable[[], str] = utc_now,
         monotonic: Callable[[], float] = time.monotonic,
         repository: AcquisitionRepository | None = None,
+        selection: TranscriptAcquisitionSelection | None = None,
     ) -> None:
         self._policies = policies
         self._search = search or DuckDuckGoHtmlSearch()
@@ -1065,6 +1073,9 @@ class EarningsTranscriptPullAdapter:
         self._budgets: dict[str, BudgetedTranscriptTransport] = {}
         self._validated_expected: set[str] = set()
         self._repository = repository
+        self._selection = selection or TranscriptAcquisitionSelection.latest()
+        if not isinstance(self._selection, TranscriptAcquisitionSelection):
+            raise ContractError("transcript acquisition selection is malformed")
         self._orchestrator = TranscriptAcquisitionOrchestrator(
             repository, self.adapter_id
         )
@@ -1078,7 +1089,11 @@ class EarningsTranscriptPullAdapter:
     ) -> tuple[AdapterAcquisitionTrial, ...]:
         """Plan deterministic trials; only this orchestration seam sequences learned seeds."""
         self._validate_profile(profile)
-        return self._orchestrator.plan(profile)
+        firm_id = profile.policy.get("firm_id")
+        if not isinstance(firm_id, str):
+            raise ContractError("transcript acquisition target requires firm_id")
+        target = TranscriptAcquisitionTarget(firm_id, selection=self._selection)
+        return self._orchestrator.plan(profile, target)
 
     def discover_trial(
         self, profile: SourceProfile, trial: AdapterAcquisitionTrial
@@ -1086,6 +1101,8 @@ class EarningsTranscriptPullAdapter:
         """Execute traversal and ranking from exactly one orchestrator-selected seed."""
         if not isinstance(trial, AdapterAcquisitionTrial):
             raise ContractError("deterministic transcript trial is malformed")
+        if trial.acquisition_target.selection != self._selection:
+            raise ContractError("deterministic transcript trial selection changed")
         return self._discover(profile, None, trial)
 
     def _discover(
@@ -1234,7 +1251,19 @@ class EarningsTranscriptPullAdapter:
                         "expected_reporting_period": expected_period.code,
                         "deferred_candidate_evaluation": True,
                         "proposal_rank": proposal_rank,
+                        "acquisition_target": (
+                            trial.acquisition_target.to_dict() if trial is not None else
+                            TranscriptAcquisitionTarget(
+                                str(profile.policy["firm_id"]), selection=self._selection
+                            ).to_dict()
+                        ),
                     },
+                ),
+                (
+                    trial.acquisition_target if trial is not None else
+                    TranscriptAcquisitionTarget(
+                        str(profile.policy["firm_id"]), selection=self._selection
+                    )
                 ),
             ))
         self._budgets[profile.source_id] = budgeted
@@ -1300,6 +1329,18 @@ class EarningsTranscriptPullAdapter:
             "starting_seed": redact_diagnostic_url(trial.starting_seed),
             "seed_kind": trial.seed_kind,
             "trial_outcome": "pending_validation",
+            "effective_selection_mode": (
+                trial.acquisition_target.selection.mode.value
+            ),
+            "requested_date_range": (
+                {
+                    "start_date": trial.acquisition_target.selection.start_date.isoformat(),
+                    "end_date": trial.acquisition_target.selection.end_date.isoformat(),
+                }
+                if trial.acquisition_target.selection.mode
+                == TranscriptSelectionMode.FIRST_IN_DATE_RANGE
+                else None
+            ),
         }
 
     @staticmethod
@@ -1502,6 +1543,17 @@ class EarningsTranscriptPullAdapter:
         label = metadata.get("link_label")
         allowed_hosts = metadata.get("allowed_hosts")
         identity_terms = metadata.get("firm_identity_terms")
+        target_value = metadata.get("acquisition_target")
+        if not isinstance(target_value, dict):
+            raise AdapterFailure(
+                FailureClass.MALFORMED_ADAPTER,
+                "earnings transcript proposal lacks acquisition target",
+                False, "missing_transcript_acquisition_target",
+            )
+        target = candidate.acquisition_target
+        if target is None or target.to_dict() != target_value:
+            raise ContractError("transcript candidate acquisition target changed")
+        selection = target.selection
         if not isinstance(url, str) or not isinstance(label, str):
             raise AdapterFailure(
                 FailureClass.MALFORMED_ADAPTER,
@@ -1529,8 +1581,12 @@ class EarningsTranscriptPullAdapter:
                 ),
                 "checkpoint_reporting_period": (
                     metadata.get("checkpoint_reporting_period") or None
+                    if selection.mode == TranscriptSelectionMode.LATEST else None
                 ),
-                "expected_reporting_period": metadata.get("expected_reporting_period"),
+                "expected_reporting_period": (
+                    metadata.get("expected_reporting_period")
+                    if selection.mode == TranscriptSelectionMode.LATEST else None
+                ),
             },
             profile.policy,
         )
@@ -1542,6 +1598,8 @@ class EarningsTranscriptPullAdapter:
             if isinstance(expected_value, str) and expected_value else None
         )
         if (
+            selection.mode == TranscriptSelectionMode.LATEST
+            and
             profile.source_id in self._validated_expected
             and expected is not None and proposal_period is not None
             and proposal_period < expected
@@ -1551,9 +1609,21 @@ class EarningsTranscriptPullAdapter:
                 "A validated expected-period transcript already takes precedence.",
                 False, "historical_candidate_superseded",
             )
+        interval_start = (
+            selection.start_date
+            if selection.mode == TranscriptSelectionMode.FIRST_IN_DATE_RANGE
+            else date(2000, 1, 1)
+        )
+        interval_end = (
+            selection.end_date + timedelta(days=1)
+            if selection.mode == TranscriptSelectionMode.FIRST_IN_DATE_RANGE
+            and selection.end_date is not None
+            else date.fromisoformat(self._clock()[:10]) + timedelta(days=1)
+        )
+        assert interval_start is not None
         interval = retriever.acquire(IntervalAcquisitionRequest(
             str(profile.policy["firm_id"]), "earnings_transcript",
-            date(2000, 1, 1), date.fromisoformat(self._clock()[:10]) + timedelta(days=1),
+            interval_start, interval_end,
         ))
         if len(interval.artifacts) == 1:
             envelope = interval.artifacts[0]
@@ -1570,6 +1640,18 @@ class EarningsTranscriptPullAdapter:
                     envelope.artifact_date
                 ).ordinal,
                 "validated_revision": f"published-{envelope.artifact_date.isoformat()}",
+                "validated_event_date": envelope.artifact_date.isoformat(),
+                "effective_selection_mode": selection.mode.value,
+                "requested_date_range": (
+                    {
+                        "start_date": selection.start_date.isoformat(),
+                        "end_date": selection.end_date.isoformat(),
+                    }
+                    if selection.mode == TranscriptSelectionMode.FIRST_IN_DATE_RANGE
+                    and selection.start_date is not None and selection.end_date is not None
+                    else None
+                ),
+                "candidate_qualification_disposition": "qualified",
             })
         if len(interval.artifacts) > 1:
             raise ContractError("single transcript proposal produced multiple artifacts")
@@ -1588,6 +1670,15 @@ class EarningsTranscriptPullAdapter:
             retriever.candidate_dispositions[0].code
             if retriever.candidate_dispositions else "candidate_validation_mismatch"
         )
+        if (
+            selection.mode == TranscriptSelectionMode.FIRST_IN_DATE_RANGE
+            and disposition == CandidateDispositionCode.WRONG_REPORTING_PERIOD.value
+        ):
+            raise AdapterFailure(
+                FailureClass.POLICY_REJECTION,
+                "Validated transcript event date is outside the requested inclusive range.",
+                False, "selection_date_out_of_range",
+            )
         raise AdapterFailure(
             FailureClass.POLICY_REJECTION,
             "Transcript candidate did not establish a new validated artifact.",

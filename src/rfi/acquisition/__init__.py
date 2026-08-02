@@ -15,6 +15,9 @@ from rfi.acquisition.contracts import (
     RetrievalOutcome,
     RetrievalResult,
     SourceProfile,
+    TranscriptAcquisitionSelection,
+    TranscriptAcquisitionTarget,
+    TranscriptSelectionMode,
 )
 from rfi.acquisition.engine import (
     AcquisitionEngine,
@@ -121,6 +124,9 @@ __all__ = [
     "SecTransport",
     "SecUrllibTransport",
     "SourceProfile",
+    "TranscriptAcquisitionSelection",
+    "TranscriptAcquisitionTarget",
+    "TranscriptSelectionMode",
     "UrllibEarningsTranscriptTransport",
     "credential_from_environment",
     "fixture_profiles",

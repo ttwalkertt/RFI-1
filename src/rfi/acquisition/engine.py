@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
+from datetime import date
 from enum import StrEnum
 from typing import Any, Callable, Protocol
 
@@ -19,6 +20,8 @@ from rfi.acquisition.contracts import (
     RetrievalOutcome,
     RetrievalResult,
     SourceProfile,
+    TranscriptAcquisitionTarget,
+    TranscriptSelectionMode,
     require_identifier,
     validate_json,
 )
@@ -76,6 +79,7 @@ class AdapterCandidate:
     position: int
     revision: str
     provenance: DiscoveryProvenance
+    acquisition_target: TranscriptAcquisitionTarget | None = None
     disposition: str = "acquire"
     disposition_reason: str | None = None
 
@@ -92,7 +96,7 @@ class AdapterCandidate:
 
     def canonical(self) -> dict[str, Any]:
         """Return stable candidate semantics used for ambiguity detection."""
-        return {
+        value = {
             "candidate_id": self.candidate_id,
             "document_id": self.document_id,
             "position": self.position,
@@ -101,6 +105,9 @@ class AdapterCandidate:
             "disposition": self.disposition,
             "disposition_reason": self.disposition_reason,
         }
+        if self.acquisition_target is not None:
+            value["acquisition_target"] = self.acquisition_target.to_dict()
+        return value
 
 
 @dataclass(frozen=True)
@@ -124,12 +131,15 @@ class AdapterAcquisitionTrial:
     trial_id: str
     starting_seed: str
     seed_kind: str
+    acquisition_target: TranscriptAcquisitionTarget
 
     def __post_init__(self) -> None:
         require_identifier(self.trial_id, "trial_id")
         if not self.starting_seed.strip():
             raise ContractError("acquisition trial starting_seed must not be blank")
         require_identifier(self.seed_kind, "trial seed_kind")
+        if not isinstance(self.acquisition_target, TranscriptAcquisitionTarget):
+            raise ContractError("acquisition trial target is malformed")
 
 
 class SourceAdapter(Protocol):
@@ -311,6 +321,11 @@ class AcquisitionEngine:
         checkpoint_confirmed = False
 
         acquisition_trials: tuple[AdapterAcquisitionTrial, ...] | None = None
+        range_selection = False
+        selection_checkpoint_eligible = True
+        qualified_selection_candidates: list[
+            tuple[str, int, AdapterCandidate, CandidateDocument, RetrievalResult]
+        ] = []
         trial_planning_failed = False
         try:
             if hasattr(adapter, "acquisition_trials") or hasattr(adapter, "discover_trial"):
@@ -329,6 +344,18 @@ class AcquisitionEngine:
                     for item in acquisition_trials
                 ):
                     raise ContractError("trial-oriented adapter returned a malformed trial")
+                targets = {item.acquisition_target for item in acquisition_trials}
+                if len(targets) != 1:
+                    raise ContractError(
+                        "deterministic acquisition trials changed the immutable target"
+                    )
+                target = acquisition_trials[0].acquisition_target
+                if target.firm_id != profile.policy.get("firm_id"):
+                    raise ContractError("acquisition target firm differs from source profile")
+                range_selection = (
+                    target.selection.mode
+                    == TranscriptSelectionMode.FIRST_IN_DATE_RANGE
+                )
         except (ContractError, TypeError, AttributeError) as error:
             failures += 1
             status = RunStatus.FAILED
@@ -354,6 +381,7 @@ class AcquisitionEngine:
             )
             success_before_trial = last_success
             failures_before_trial = failures
+            qualified_before_trial = len(qualified_selection_candidates)
             try:
                 page = (
                     adapter.discover_trial(profile, active_trial)
@@ -465,7 +493,11 @@ class AcquisitionEngine:
                     )
                     continue
                 seen_candidates[candidate.candidate_id] = candidate.canonical()
-                if checkpoint_before and candidate.position <= checkpoint_before.position:
+                if (
+                    not range_selection
+                    and checkpoint_before
+                    and candidate.position <= checkpoint_before.position
+                ):
                     checkpoint_confirmed = True
                     outcomes.append(
                         CandidateRunOutcome(
@@ -510,6 +542,53 @@ class AcquisitionEngine:
                     result = adapter.retrieve(profile, candidate)
                     if not isinstance(result, RetrievalResult):
                         raise ContractError("adapter retrieval did not return RetrievalResult")
+                    if range_selection:
+                        event_date = result.diagnostics.get("validated_event_date")
+                        if not isinstance(event_date, str):
+                            raise ContractError(
+                                "range-qualified transcript lacks validated event date"
+                            )
+                        selection = active_trial.acquisition_target.selection
+                        try:
+                            normalized_event_date = date.fromisoformat(event_date)
+                        except ValueError as error:
+                            raise ContractError(
+                                "range-qualified transcript event date is invalid"
+                            ) from error
+                        if not selection.contains(normalized_event_date):
+                            raise ContractError(
+                                "adapter returned a transcript outside the immutable selection"
+                            )
+                        proposal_rank = candidate.provenance.metadata.get(
+                            "proposal_rank", candidate.position
+                        )
+                        if not isinstance(proposal_rank, int):
+                            raise ContractError("transcript proposal rank is malformed")
+                        qualified_selection_candidates.append((
+                            event_date, proposal_rank, candidate, repository_candidate, result
+                        ))
+                        page_diagnostics = diagnostics[trial_diagnostic_index]
+                        samples = page_diagnostics.setdefault(
+                            "candidate_qualification_dispositions", []
+                        )
+                        if isinstance(samples, list) and len(samples) < 20:
+                            samples.append({
+                                "candidate_id": candidate.candidate_id,
+                                "disposition": "qualified",
+                                "validated_event_date": event_date,
+                            })
+                        continue
+                    if active_trial is not None:
+                        page_diagnostics = diagnostics[trial_diagnostic_index]
+                        samples = page_diagnostics.setdefault(
+                            "candidate_qualification_dispositions", []
+                        )
+                        if isinstance(samples, list) and len(samples) < 20:
+                            samples.append({
+                                "candidate_id": candidate.candidate_id,
+                                "disposition": "qualified",
+                                "validation_outcome": "validated",
+                            })
                     attempt_id = self._attempt_id(run_id, candidate, "success")
                     receipt = self._repository.record_success(
                         attempt_id, repository_candidate, result
@@ -551,6 +630,83 @@ class AcquisitionEngine:
                         )
                     )
                 except AdapterFailure as error:
+                    if range_selection and error.code == "selection_date_out_of_range":
+                        skips += 1
+                        outcomes.append(CandidateRunOutcome(
+                            candidate.candidate_id,
+                            candidate.document_id,
+                            candidate.position,
+                            candidate.revision,
+                            "selection_rejected",
+                            None,
+                            False,
+                            str(error),
+                        ))
+                        page_diagnostics = diagnostics[trial_diagnostic_index]
+                        samples = page_diagnostics.setdefault(
+                            "candidate_qualification_dispositions", []
+                        )
+                        if isinstance(samples, list) and len(samples) < 20:
+                            samples.append({
+                                "candidate_id": candidate.candidate_id,
+                                "disposition": "outside_requested_date_range",
+                                "validation_outcome": "validated",
+                            })
+                        continue
+                    if range_selection:
+                        failures += 1
+                        failed_id = self._attempt_id(
+                            run_id, candidate, error.classification.value
+                        )
+                        self._repository.record_outcome(
+                            failed_id,
+                            repository_candidate,
+                            RetrievalOutcome.FAILED,
+                            candidate.provenance.discovered_at,
+                            profile.mechanism,
+                            {
+                                "failure_class": error.classification.value,
+                                "failure_code": error.code,
+                                "message": str(error),
+                                "retryable": error.retryable,
+                                "effective_selection_mode": "first_in_date_range",
+                            },
+                        )
+                        outcomes.append(CandidateRunOutcome(
+                            candidate.candidate_id,
+                            candidate.document_id,
+                            candidate.position,
+                            candidate.revision,
+                            "failed",
+                            failed_id,
+                            True,
+                            str(error),
+                        ))
+                        diagnostics.append(
+                            self._failure_diagnostic(error, candidate.candidate_id)
+                        )
+                        page_diagnostics = diagnostics[trial_diagnostic_index]
+                        samples = page_diagnostics.setdefault(
+                            "candidate_qualification_dispositions", []
+                        )
+                        if isinstance(samples, list) and len(samples) < 20:
+                            samples.append({
+                                "candidate_id": candidate.candidate_id,
+                                "disposition": "validation_rejected",
+                                "validation_outcome": error.code,
+                            })
+                        continue
+                    if active_trial is not None:
+                        page_diagnostics = diagnostics[trial_diagnostic_index]
+                        samples = page_diagnostics.setdefault(
+                            "candidate_qualification_dispositions", []
+                        )
+                        if isinstance(samples, list) and len(samples) < 20:
+                            samples.append({
+                                "candidate_id": candidate.candidate_id,
+                                "disposition": "validation_rejected",
+                                "validation_outcome": error.code,
+                            })
                     if error.code == "historical_candidate_superseded":
                         skips += 1
                         skipped_id = self._attempt_id(run_id, candidate, "skip")
@@ -641,18 +797,40 @@ class AcquisitionEngine:
                         )
                     )
                     break
-            trial_validated = active_trial is not None and last_success != success_before_trial
+            trial_qualified = (
+                active_trial is not None
+                and len(qualified_selection_candidates) > qualified_before_trial
+            )
+            trial_validated = (
+                active_trial is not None
+                and not range_selection
+                and last_success != success_before_trial
+            )
             if active_trial is not None:
                 diagnostics[trial_diagnostic_index].update({
                     "trial_outcome": (
                         "validated_success" if trial_validated else
+                        "qualified_candidate" if trial_qualified else
                         "failed" if failures > failures_before_trial else
                         "no_validated_artifact"
                     ),
                     "acquisition_termination_reason": (
                         "first_validated_success" if trial_validated else
                         "next_seed" if trial_index + 1 < len(acquisition_trials or ()) else
+                        "selection_trials_exhausted" if range_selection else
                         "seed_trials_exhausted"
+                    ),
+                    "validation_outcome": (
+                        "validated" if trial_validated or trial_qualified
+                        else "no_qualifying_validated_artifact"
+                    ),
+                    "terminal_selection_outcome": (
+                        "selected" if trial_validated else
+                        "pending_global_selection" if range_selection and (
+                            trial_qualified or qualified_selection_candidates
+                        ) else
+                        "continue" if trial_index + 1 < len(acquisition_trials or ()) else
+                        "no_match"
                     ),
                 })
             if trial_validated:
@@ -703,7 +881,92 @@ class AcquisitionEngine:
             continuations.append(page.next_token)
             continuation = page.next_token
 
-        if status == RunStatus.COMPLETE:
+        if range_selection and status == RunStatus.COMPLETE:
+            if qualified_selection_candidates:
+                selected = min(
+                    qualified_selection_candidates,
+                    key=lambda item: (
+                        item[0], item[1], item[2].document_id,
+                        item[2].revision, item[2].candidate_id,
+                    ),
+                )
+                event_date, _, candidate, repository_candidate, result = selected
+                attempt_id = self._attempt_id(run_id, candidate, "success")
+                receipt = self._repository.record_success(
+                    attempt_id, repository_candidate, result
+                )
+                validated_position = result.diagnostics.get("validated_position")
+                if not isinstance(validated_position, int) or validated_position < 1:
+                    raise ContractError("selected transcript lacks validated position")
+                maximum_position = max(maximum_position, validated_position)
+                selection_checkpoint_eligible = (
+                    checkpoint_before is None
+                    or validated_position > checkpoint_before.position
+                )
+                maximum_success_position = max(
+                    maximum_success_position, validated_position
+                )
+                checkpoint_success = attempt_id
+                last_success = attempt_id
+                successful_candidates[candidate.candidate_id] = candidate.canonical()
+                if receipt.idempotent:
+                    unchanged += 1
+                    observed = "unchanged"
+                elif not receipt.artifact_created:
+                    duplicates += 1
+                    observed = "duplicate"
+                else:
+                    durable += 1
+                    observed = "acquired"
+                outcomes.append(CandidateRunOutcome(
+                    candidate.candidate_id,
+                    candidate.document_id,
+                    candidate.position,
+                    candidate.revision,
+                    observed,
+                    attempt_id,
+                    True,
+                    f"artifact {receipt.artifact_id}",
+                ))
+                diagnostics.append({
+                    "effective_selection_mode": "first_in_date_range",
+                    "requested_date_range": {
+                        "start_date": (
+                            acquisition_trials[0].acquisition_target.selection
+                            .start_date.isoformat()
+                        ),
+                        "end_date": (
+                            acquisition_trials[0].acquisition_target.selection
+                            .end_date.isoformat()
+                        ),
+                    },
+                    "terminal_selection_outcome": "selected",
+                    "validation_outcome": "validated",
+                    "selected_candidate_id": candidate.candidate_id,
+                    "selected_validated_event_date": event_date,
+                    "qualified_candidate_count": len(qualified_selection_candidates),
+                })
+            else:
+                diagnostics.append({
+                    "effective_selection_mode": "first_in_date_range",
+                    "requested_date_range": {
+                        "start_date": (
+                            acquisition_trials[0].acquisition_target.selection
+                            .start_date.isoformat()
+                        ),
+                        "end_date": (
+                            acquisition_trials[0].acquisition_target.selection
+                            .end_date.isoformat()
+                        ),
+                    },
+                    "terminal_selection_outcome": "no_match",
+                    "validation_outcome": "no_qualifying_validated_artifact",
+                    "qualified_candidate_count": 0,
+                })
+
+        if status == RunStatus.COMPLETE and not (
+            range_selection and not qualified_selection_candidates
+        ) and selection_checkpoint_eligible:
             target = self._target_checkpoint(maximum_position, seen_candidates)
             if checkpoint_before != target:
                 if not seen_candidates:

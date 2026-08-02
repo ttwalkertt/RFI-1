@@ -57,6 +57,7 @@
 | TASK-056 | Persistent discovery anchor history | Complete |
 | TASK-057 | Harden transcript discovery traversal and diagnostics | Complete; acquisition correctness baseline hardened |
 | TASK-058 | Pull Workflow progress feedback | Complete |
+| TASK-059 | Explicit transcript acquisition selection criteria | Complete |
 
 ## Architectural Progression
 

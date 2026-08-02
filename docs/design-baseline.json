@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 7680,
+      "destination_size": 7757,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "57ca2ff97162b5c111a0d62bc9a53ca57a45cfd9b1632c8259bfcccff873b9a3",
-      "content_change": "task roadmap reconciled through TASK-057 acquisition correctness baseline hardening"
+      "destination_sha256": "b17852d493f3b3b48001c7300607badf813821ff533cbedffcbbfb29e63d8312",
+      "content_change": "task roadmap reconciled through completed TASK-059 transcript selection criteria"
     },
     {
       "source": "ROADMAP.md",

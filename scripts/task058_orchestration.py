@@ -84,6 +84,7 @@ def proof() -> dict[str, object]:
 
     ignored_diagnostics = {
         "trial_id", "starting_seed", "seed_kind", "trial_outcome",
+        "effective_selection_mode", "requested_date_range",
     }
     legacy_diagnostics = {
         key: value for key, value in legacy_page.diagnostics.items()
