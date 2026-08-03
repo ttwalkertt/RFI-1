@@ -139,12 +139,16 @@ class AdapterAcquisitionTrial:
     starting_seed: str
     seed_kind: str
     acquisition_target: AdapterAcquisitionTarget
+    seed_source: str = "configured"
 
     def __post_init__(self) -> None:
         require_identifier(self.trial_id, "trial_id")
         if not self.starting_seed.strip():
             raise ContractError("acquisition trial starting_seed must not be blank")
         require_identifier(self.seed_kind, "trial seed_kind")
+        require_identifier(self.seed_source, "trial seed_source")
+        if self.seed_source not in {"learned", "configured", "operator_supplied"}:
+            raise ContractError("acquisition trial seed_source is unknown")
         if not isinstance(self.acquisition_target, AdapterAcquisitionTarget):
             raise ContractError("acquisition trial target is malformed")
 
@@ -491,6 +495,7 @@ class AcquisitionEngine:
                     "trial_id": active_trial.trial_id,
                     "starting_seed": active_trial.starting_seed,
                     "seed_kind": active_trial.seed_kind,
+                    "seed_source": active_trial.seed_source,
                 } if active_trial is not None else {}),
                 **page.diagnostics,
             })

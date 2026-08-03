@@ -83,7 +83,7 @@ def proof() -> dict[str, object]:
     trial_page = trial_adapter.discover_trial(configured, trials[0])
 
     ignored_diagnostics = {
-        "trial_id", "starting_seed", "seed_kind", "trial_outcome",
+        "trial_id", "starting_seed", "seed_kind", "seed_source", "trial_outcome",
         "effective_selection_mode", "requested_date_range",
     }
     legacy_diagnostics = {

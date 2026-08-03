@@ -108,6 +108,7 @@ def proof() -> dict[str, object]:
             "result": result.status.value,
             "trial_count": len(trial_diagnostics),
             "seed_kind": trial_diagnostics[0]["seed_kind"],
+            "seed_source": trial_diagnostics[0]["seed_source"],
             "effective_selection": target.selection.to_dict(),
             "supplied_seed": seed,
             "selected_artifact_url": successful[0]["candidate"]["provenance"][
@@ -125,7 +126,8 @@ def proof() -> dict[str, object]:
     if not all((
         evidence["result"] == "complete",
         evidence["trial_count"] == 1,
-        evidence["seed_kind"] == "operator_supplied",
+        evidence["seed_kind"] == "single_seed",
+        evidence["seed_source"] == "operator_supplied",
         evidence["selected_url_differs_from_seed"],
         evidence["durable_acquisitions"] == 1,
         evidence["checkpoint_advanced"],

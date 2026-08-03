@@ -111,12 +111,16 @@ class TranscriptAcquisitionOrchestrationTests(unittest.TestCase):
                 trials = adapter.acquisition_trials(configured)
 
         self.assertEqual(
-            [(item.seed_kind, item.starting_seed) for item in trials],
+            [(item.seed_kind, item.seed_source, item.starting_seed) for item in trials],
             [
-                ("learned_seed", "https://cdn.example.com/new"),
-                ("learned_seed", "https://ir.example.com/new"),
-                ("learned_seed", "https://ir.example.com/old"),
-                ("configured_pipeline", "https://ir.example.com/transcripts"),
+                ("single_seed", "learned", "https://cdn.example.com/new"),
+                ("single_seed", "learned", "https://ir.example.com/new"),
+                ("single_seed", "learned", "https://ir.example.com/old"),
+                (
+                    "configured_pipeline",
+                    "configured",
+                    "https://ir.example.com/transcripts",
+                ),
             ],
         )
         self.assertEqual(len({item.trial_id for item in trials}), len(trials))
@@ -240,7 +244,7 @@ class TranscriptAcquisitionOrchestrationTests(unittest.TestCase):
         self.assertEqual(retained, ())
         trial_diagnostics = [item for item in result.diagnostics if "trial_id" in item]
         self.assertEqual(
-            sum(item["seed_kind"] == "learned_seed" for item in trial_diagnostics), 2
+            sum(item["seed_source"] == "learned" for item in trial_diagnostics), 2
         )
         self.assertEqual(len(trial_diagnostics), 3)
         self.assertEqual(

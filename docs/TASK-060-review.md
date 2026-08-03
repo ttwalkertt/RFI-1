@@ -26,9 +26,9 @@ capability, and builds the same governed `SourceProfile` used by ordinary Pull W
 It never publishes or revises firm configuration.
 
 The transcript adapter normalizes the supplied URL and creates one `AdapterAcquisitionTrial` with
-`seed_kind=operator_supplied`. `AcquisitionEngine.run_source_trial()` supplies that one trial to the
-existing private run lifecycle. Normal `run_source()` still obtains its learned/configured trial
-plan exactly as before.
+`seed_kind=single_seed` and provenance-only `seed_source=operator_supplied`.
+`AcquisitionEngine.run_source_trial()` supplies that one trial to the existing private run
+lifecycle. Normal `run_source()` still obtains its learned/configured trial plan exactly as before.
 
 ## API Contract
 
@@ -88,21 +88,25 @@ where no narrower existing classification applies.
 
 ## Seed Provenance and Convergence Proof
 
-The trial retains normalized `starting_seed`, `trial_id`, immutable acquisition target, and
-`seed_kind=operator_supplied`. Operator diagnostics use the existing URL redaction function.
-Candidate and retrieval provenance continue to identify the URLs actually discovered, requested,
-resolved, validated, and persisted.
+The trial retains normalized `starting_seed`, `trial_id`, immutable acquisition target,
+`seed_kind=single_seed`, and provenance-only `seed_source=operator_supplied`. Operator diagnostics
+use the existing URL redaction function. Candidate and retrieval provenance continue to identify
+the URLs actually discovered, requested, resolved, validated, and persisted.
 
 Both paths converge as follows:
 
 1. learned acquisition uses `acquisition_trials()` to select a learned starting seed;
 2. injected acquisition uses `injected_trial()` to validate one operator starting seed;
-3. both call `discover_trial(profile, trial)`;
-4. both enter the same engine trial loop, candidate evaluator, repository transaction, terminal
+3. both are represented by `seed_kind=single_seed`, and origin is retained only in `seed_source`;
+4. both enter the same `configured_hint` discovery stage through `discover_trial(profile, trial)`;
+5. both enter the same engine trial loop, candidate evaluator, repository transaction, terminal
    selection, checkpoint finalization, and existing result projection.
 
-The focused spy test observes exactly one invocation of the identical `discover_trial` method for
-each path. The manual proof records this request sequence:
+The focused regression proves identical stages, ranked candidates, request traversal, page
+diagnostics after removing `seed_source`, and terminal acquisition results after removing only
+that provenance field for both `latest` and `first_in_date_range`. It also proves the learned seed
+no longer enters the formerly divergent `retained_anchor` stage. The manual proof records this
+request sequence:
 
 1. `https://ir.example.com/archive`;
 2. `https://ir.example.com/q2-2026-earnings-call-transcript.html`.

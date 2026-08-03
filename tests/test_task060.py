@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 from datetime import date
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock, patch
 
 from rfi.acquisition import (
@@ -113,69 +114,117 @@ class TranscriptSeedAcquisitionTests(unittest.TestCase):
         repository.register_source(configured)
         return repository
 
-    def test_injected_and_learned_seed_use_one_identical_trial_method(self) -> None:
+    def test_injected_and_learned_seeds_converge_before_discovery(self) -> None:
         seed = "https://ir.example.com/archive"
-        artifact = "https://ir.example.com/q2-2025-transcript.html"
+        later = "https://ir.example.com/q2-2025-transcript.html"
+        earlier = "https://ir.example.com/q1-2025-transcript.html"
+        configured = source()
         responses = {
             seed: response(
-                seed, f"<a href='{artifact}'>April 30, 2025 earnings call transcript</a>"
+                seed,
+                f"<a href='{later}'>April 30, 2025 earnings call transcript</a>"
+                f"<a href='{earlier}'>January 30, 2025 earnings call transcript</a>",
             ),
-            artifact: response(artifact, transcript_body("April 30, 2025")),
+            later: response(later, transcript_body("April 30, 2025")),
+            earlier: response(earlier, transcript_body("January 30, 2025")),
         }
-        configured = source()
 
-        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
-            learned_repository = self._repository(first, configured)
-            learned_adapter = EarningsTranscriptPullAdapter(
-                policies(), Search(), Transport(responses),
-                lambda: "2026-08-03T00:00:00Z", repository=learned_repository,
-            )
-            with patch.object(
-                learned_repository, "discovery_anchors",
-                return_value=({
+        def terminal_projection(result: Any) -> dict[str, Any]:
+            value = result.to_dict()
+            for diagnostic in value["diagnostics"]:
+                diagnostic.pop("seed_source", None)
+            return value
+
+        for selection in (
+            TranscriptAcquisitionSelection.latest(),
+            TranscriptAcquisitionSelection.first_in_date_range(
+                date(2025, 1, 1), date(2025, 12, 31)
+            ),
+        ):
+            with self.subTest(selection=selection.mode.value), tempfile.TemporaryDirectory(
+            ) as first, tempfile.TemporaryDirectory() as second:
+                learned_repository = self._repository(first, configured)
+                learned_transport = Transport(responses)
+                learned_adapter = EarningsTranscriptPullAdapter(
+                    policies(), Search(), learned_transport,
+                    lambda: "2026-08-03T00:00:00Z", repository=learned_repository,
+                    selection=selection,
+                )
+                learned_anchor = ({
                     "normalized_url": seed,
                     "requested_url": seed,
                     "resolved_url": None,
-                },),
-            ), patch.object(
-                learned_adapter, "discover_trial", wraps=learned_adapter.discover_trial
-            ) as learned_trial:
-                learned = AcquisitionEngine(
-                    learned_repository, AdapterRegistry((learned_adapter,)),
-                    lambda: "2026-08-03T00:00:00Z",
-                ).run_source("source-a", "learned")
+                },)
+                with patch.object(
+                    learned_repository, "discovery_anchors", return_value=learned_anchor
+                ):
+                    learned_trial = learned_adapter.acquisition_trials(configured)[0]
+                    learned_page = learned_adapter.discover_trial(configured, learned_trial)
+                    learned_traversal = tuple(learned_transport.requests)
+                    learned_transport.requests.clear()
+                    learned = AcquisitionEngine(
+                        learned_repository, AdapterRegistry((learned_adapter,)),
+                        lambda: "2026-08-03T00:00:00Z",
+                    ).run_source_trial("source-a", "equivalent", learned_trial)
 
-            injected_repository = self._repository(second, configured)
-            injected_adapter = EarningsTranscriptPullAdapter(
-                policies(), Search(), Transport(responses),
-                lambda: "2026-08-03T00:00:00Z", repository=injected_repository,
-            )
-            target = TranscriptAcquisitionTarget("firm-a")
-            trial = injected_adapter.injected_trial(configured, target, seed)
-            with patch.object(
-                injected_adapter, "discover_trial", wraps=injected_adapter.discover_trial
-            ) as injected_trial:
+                injected_repository = self._repository(second, configured)
+                injected_transport = Transport(responses)
+                injected_adapter = EarningsTranscriptPullAdapter(
+                    policies(), Search(), injected_transport,
+                    lambda: "2026-08-03T00:00:00Z", repository=injected_repository,
+                    selection=selection,
+                )
+                target = TranscriptAcquisitionTarget("firm-a", selection=selection)
+                injected_trial = injected_adapter.injected_trial(configured, target, seed)
+                injected_page = injected_adapter.discover_trial(configured, injected_trial)
+                injected_traversal = tuple(injected_transport.requests)
+                injected_transport.requests.clear()
                 injected = AcquisitionEngine(
                     injected_repository, AdapterRegistry((injected_adapter,)),
                     lambda: "2026-08-03T00:00:00Z",
-                ).run_source_trial("source-a", "injected", trial)
-            successful = [item for item in injected_repository.history()
-                          if item.get("record_type") == "retrieval_attempt"
-                          and item.get("outcome") == "success"]
+                ).run_source_trial("source-a", "equivalent", injected_trial)
 
-        self.assertEqual(learned.durable_acquisitions, 1)
-        self.assertEqual(injected.durable_acquisitions, 1)
-        learned_trial.assert_called_once()
-        injected_trial.assert_called_once()
-        self.assertIsInstance(
-            learned_trial.call_args.args[1], type(injected_trial.call_args.args[1])
-        )
-        diagnostic = injected.diagnostics[0]
-        self.assertEqual(diagnostic["seed_kind"], "operator_supplied")
-        self.assertEqual(diagnostic["starting_seed"], seed)
-        self.assertEqual(diagnostic["trial_outcome"], "validated_success")
-        self.assertEqual(len([item for item in injected.diagnostics if "trial_id" in item]), 1)
-        self.assertEqual(successful[0]["candidate"]["provenance"]["locations"][-1], artifact)
+                self.assertEqual(learned_trial.seed_kind, "single_seed")
+                self.assertEqual(injected_trial.seed_kind, "single_seed")
+                self.assertEqual(learned_trial.seed_source, "learned")
+                self.assertEqual(injected_trial.seed_source, "operator_supplied")
+                self.assertEqual(
+                    learned_page.diagnostics["stage_sequence"], ["configured_hint"]
+                )
+                self.assertEqual(
+                    learned_page.diagnostics["stage_sequence"],
+                    injected_page.diagnostics["stage_sequence"],
+                )
+                self.assertNotIn(
+                    "retained_anchor", learned_page.diagnostics["stage_sequence"]
+                )
+                self.assertEqual(
+                    [candidate.canonical() for candidate in learned_page.candidates],
+                    [candidate.canonical() for candidate in injected_page.candidates],
+                )
+                self.assertEqual(learned_traversal, injected_traversal)
+                self.assertEqual(
+                    learned_page.diagnostics["top_ranked_candidates"],
+                    injected_page.diagnostics["top_ranked_candidates"],
+                )
+                learned_page_diagnostics = dict(learned_page.diagnostics)
+                injected_page_diagnostics = dict(injected_page.diagnostics)
+                learned_page_diagnostics.pop("seed_source")
+                injected_page_diagnostics.pop("seed_source")
+                self.assertEqual(learned_page_diagnostics, injected_page_diagnostics)
+                self.assertEqual(
+                    terminal_projection(learned), terminal_projection(injected)
+                )
+                learned_diagnostic = next(
+                    item for item in learned.diagnostics if "trial_id" in item
+                )
+                injected_diagnostic = next(
+                    item for item in injected.diagnostics if "trial_id" in item
+                )
+                self.assertEqual(learned_diagnostic["seed_source"], "learned")
+                self.assertEqual(
+                    injected_diagnostic["seed_source"], "operator_supplied"
+                )
 
     def test_default_latest_and_first_in_range_flow_unchanged(self) -> None:
         seed = "https://ir.example.com/archive"

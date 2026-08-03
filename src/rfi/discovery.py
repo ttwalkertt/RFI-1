@@ -1016,14 +1016,14 @@ class TranscriptAcquisitionOrchestrator:
             history = self._repository.discovery_anchors(
                 firm_id, profile.source_id, self._adapter_id
             )
-        planned: list[tuple[str, str]] = []
+        planned: list[tuple[str, str, str]] = []
         seen: set[str] = set()
 
-        def append(kind: str, seed: str) -> None:
+        def append(kind: str, seed: str, source: str) -> None:
             if seed in seen:
                 return
             seen.add(seed)
-            planned.append((kind, seed))
+            planned.append((kind, seed, source))
 
         mode = profile.configuration.get("mode")
         if mode == "discovery":
@@ -1031,7 +1031,7 @@ class TranscriptAcquisitionOrchestrator:
                 for form in ("resolved_url", "requested_url"):
                     value = anchor.get(form)
                     if isinstance(value, str) and value:
-                        append("learned_seed", value)
+                        append("single_seed", value, "learned")
             hints = tuple(
                 value for value in profile.configuration.get("discovery_hints", ())
                 if isinstance(value, str)
@@ -1043,18 +1043,18 @@ class TranscriptAcquisitionOrchestrator:
                 value.removeprefix("identity:") for value in hints
                 if value.startswith("identity:")
             ), "deterministic-empty-discovery"))
-            planned.append(("configured_pipeline", fallback_seed))
+            planned.append(("configured_pipeline", fallback_seed, "configured"))
         else:
             value = profile.configuration.get("url")
             if isinstance(value, str) and value:
-                append("configured_seed", value)
+                append("configured_seed", value, "configured")
         if not planned:
-            planned.append(("empty_seed", "deterministic-empty-discovery"))
+            planned.append(("empty_seed", "deterministic-empty-discovery", "configured"))
         return tuple(
             AdapterAcquisitionTrial(
-                f"transcript-trial-{index}", seed, kind, target
+                f"transcript-trial-{index}", seed, kind, target, source
             )
-            for index, (kind, seed) in enumerate(planned, 1)
+            for index, (kind, seed, source) in enumerate(planned, 1)
         )
 
 
@@ -1209,7 +1209,8 @@ class EarningsTranscriptPullAdapter:
             raise ContractError("injected transcript trial selection changed")
         normalized = normalize_transcript_url(starting_seed)
         return AdapterAcquisitionTrial(
-            "transcript-trial-1", normalized, "operator_supplied", target
+            "transcript-trial-1", normalized, "single_seed", target,
+            "operator_supplied",
         )
 
     def terminal_selection_policy(
@@ -1274,18 +1275,10 @@ class EarningsTranscriptPullAdapter:
                 )
             if trial is not None and mode == "discovery":
                 history = ()
-                if trial.seed_kind == "learned_seed":
-                    identity_terms = ()
-                    source_hints = ()
-                    history = ({
-                        "normalized_url": normalize_transcript_url(trial.starting_seed),
-                        "requested_url": trial.starting_seed,
-                        "resolved_url": None,
-                    },)
-                elif trial.seed_kind == "configured_seed":
+                if trial.seed_kind == "single_seed":
                     identity_terms = ()
                     source_hints = (trial.starting_seed,)
-                elif trial.seed_kind == "operator_supplied":
+                elif trial.seed_kind == "configured_seed":
                     identity_terms = ()
                     source_hints = (trial.starting_seed,)
                 elif trial.seed_kind == "configured_pipeline":
@@ -1465,6 +1458,7 @@ class EarningsTranscriptPullAdapter:
             "trial_id": trial.trial_id,
             "starting_seed": redact_diagnostic_url(trial.starting_seed),
             "seed_kind": trial.seed_kind,
+            "seed_source": trial.seed_source,
             "trial_outcome": "pending_validation",
             "effective_selection_mode": (
                 trial.acquisition_target.selection.mode.value
