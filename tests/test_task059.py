@@ -85,6 +85,66 @@ def policies() -> DiscoveryPolicyCatalog:
 
 
 class TranscriptSelectionContractTests(unittest.TestCase):
+    def test_latest_archive_page_persists_only_first_validated_transcript(self) -> None:
+        seed = "https://stockanalysis.com/stocks/orcl/transcripts/"
+        latest = "https://stockanalysis.com/stocks/orcl/transcripts/30001-q2-2026/"
+        prior = "https://stockanalysis.com/stocks/orcl/transcripts/29001-q1-2026/"
+        historical = "https://stockanalysis.com/stocks/orcl/transcripts/28001-q4-2025/"
+        archive = "".join((
+            f"<a href='{latest}'>Earnings Call: Q2 2026</a>",
+            f"<a href='{prior}'>Earnings Call: Q1 2026</a>",
+            f"<a href='{historical}'>Earnings Call: Q4 2025</a>",
+        ))
+        transport = Transport({
+            seed: response(seed, archive),
+            latest: response(latest, transcript_body("August 3, 2026")),
+            # The live archive failure returned independently retrievable pages whose
+            # content all validated as the current reporting period. Latest-mode
+            # orchestration must still terminate after the first ranked success.
+            prior: response(prior, transcript_body("August 3, 2026")),
+            historical: response(historical, transcript_body("August 3, 2026")),
+        })
+        configured = source(seed)
+
+        with tempfile.TemporaryDirectory() as directory:
+            firms = FirmRepository.initialize(Path(directory) / "firms")
+            firms.create(FirmDraft(
+                "firm-a", "Firm A", "2025-01-01", status=FirmStatus.ACTIVE
+            ))
+            repository = AcquisitionRepository(Path(directory) / "acquisition")
+            repository.register_source(configured)
+            adapter = EarningsTranscriptPullAdapter(
+                policies(), Search(), transport,
+                lambda: "2026-08-03T00:00:00Z",
+                repository=repository,
+                selection=TranscriptAcquisitionSelection.latest(),
+            )
+            result = AcquisitionEngine(
+                repository, AdapterRegistry((adapter,)),
+                lambda: "2026-08-03T00:00:00Z",
+            ).run_source(configured.source_id, "task059-latest-archive")
+            successes = [
+                item for item in repository.history()
+                if item.get("outcome") == "success"
+            ]
+            learned = repository.discovery_anchors(
+                "firm-a", configured.source_id, adapter.adapter_id
+            )
+
+        self.assertEqual(result.durable_acquisitions, 1, json.dumps(
+            result.to_dict(), indent=2
+        ))
+        self.assertEqual(len(successes), 1)
+        self.assertEqual(
+            successes[0]["candidate"]["provenance"]["metadata"]["requested_url"],
+            latest,
+        )
+        self.assertEqual(
+            [item["normalized_url"] for item in learned],
+            [latest],
+        )
+        self.assertEqual(transport.requests, [seed, latest])
+
     def test_selection_contract_is_typed_and_bounded(self) -> None:
         with self.assertRaises(ContractError):
             TranscriptAcquisitionSelection("other")  # type: ignore[arg-type]

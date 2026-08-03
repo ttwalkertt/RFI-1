@@ -685,6 +685,10 @@ class AcquisitionEngine:
                             f"artifact {receipt.artifact_id}",
                         )
                     )
+                    # A successful deterministic trial is terminal. Range selection
+                    # follows the deferred policy path above and is reduced globally.
+                    if active_trial is not None:
+                        break
                 except AdapterFailure as error:
                     if selection_policy is not None:
                         failures += 1
