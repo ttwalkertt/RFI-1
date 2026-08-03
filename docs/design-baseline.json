@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 7825,
+      "destination_size": 7886,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "80295e510dc004c97885cf11b03399323fd1987c74ab3f396eb88b5bac46c77b",
-      "content_change": "task roadmap reconciled through completed TASK-060 seed-injection API"
+      "destination_sha256": "0d7bc60d4818f1e01c6c368b5dd7251059120c750a816204b9ae86d06cc52880",
+      "content_change": "task roadmap reconciled through completed TASK-061 transcript learning inspection API"
     },
     {
       "source": "ROADMAP.md",

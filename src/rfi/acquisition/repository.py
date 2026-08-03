@@ -332,6 +332,28 @@ class AcquisitionRepository:
             ).fetchall()
         return tuple(self._decode(row[0], "discovery anchor") for row in rows)
 
+    def transcript_learning(self, firm_id: str) -> tuple[dict[str, Any], ...]:
+        """Return persisted transcript anchors in repository execution order."""
+        require_identifier(firm_id, "firm_id")
+        with self._database.connect(read_only=True) as connection:
+            rows = connection.execute(
+                "SELECT anchors.canonical_json,sources.canonical_json "
+                "FROM discovery_anchor_history AS anchors "
+                "JOIN governed_sources AS sources ON sources.source_id=anchors.source_id "
+                "WHERE anchors.firm_id=? "
+                "ORDER BY anchors.source_id,anchors.adapter_id,anchors.stack_position",
+                (firm_id,),
+            ).fetchall()
+        learning = []
+        for anchor_value, source_value in rows:
+            source = self._decode(source_value, "governed source")
+            if (
+                source.get("mechanism") == "earnings_transcript"
+                and source.get("policy", {}).get("artifact_id") == "earnings_transcript"
+            ):
+                learning.append(self._decode(anchor_value, "discovery anchor"))
+        return tuple(learning)
+
     def has_retained_artifact(
         self, candidate: CandidateDocument, result: RetrievalResult
     ) -> bool:

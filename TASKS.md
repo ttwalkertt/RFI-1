@@ -59,6 +59,7 @@
 | TASK-058 | Pull Workflow progress feedback | Complete |
 | TASK-059 | Explicit transcript acquisition selection criteria | Complete |
 | TASK-060 | Seed-injection transcript acquisition API | Complete |
+| TASK-061 | Transcript learning inspection API | Complete |
 
 ## Architectural Progression
 

@@ -126,6 +126,11 @@ request state exits two.
   `202 Accepted` with a run ID and status/result URLs.
 - `GET /api/pulls/{run_id}` reads durable progress.
 - `GET /api/pulls/{run_id}/results` reads the complete durable plan, snapshots, and results.
+- `GET /api/transcript-acquisitions/learning/{firm_id}` reads the firm's persisted transcript
+  learning. It returns `{"firm_id":"seagate","learning":[]}` when no learning exists and returns
+  the existing persisted discovery-anchor records in repository execution order when populated.
+  The request performs no acquisition, discovery, learning, checkpoint advancement, or source
+  registration. Unknown firms use the existing API error envelope.
 
 The local HTTP adapter starts the workflow in a background thread so the browser can poll durable
 stage progress. It contains no retrieval planning or repository calls.

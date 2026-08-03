@@ -309,6 +309,11 @@ class PullWorkflow:
                 trial,
             )
 
+    def transcript_learning(self, firm_id: str) -> tuple[dict[str, Any], ...]:
+        """Expose the firm's persisted transcript learning without changing it."""
+        firm = self._firms.get(firm_id)
+        return self._acquisition.transcript_learning(firm.firm_id)
+
     def _resolve_firms(self, request: PullRequest) -> tuple[Any, ...]:
         if request.all_configured:
             return tuple(

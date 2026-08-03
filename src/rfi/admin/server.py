@@ -900,6 +900,20 @@ class AdminHandler(BaseHTTPRequestHandler):
                 {"items": [asdict(item) for item in pull_workflow.configured_firms()]},
             )
             return
+        if (
+            method == "GET"
+            and len(parts) == 4
+            and parts[:3] == ["api", "transcript-acquisitions", "learning"]
+        ):
+            if query:
+                raise PullError("transcript learning inspection does not accept query parameters")
+            firm_id = parts[3]
+            learning = pull_workflow.transcript_learning(firm_id)
+            self._send_json(
+                HTTPStatus.OK,
+                {"firm_id": firm_id, "learning": list(learning)},
+            )
+            return
         if method == "POST" and parts == ["api", "transcript-acquisitions", "seed"]:
             if query:
                 raise PullError("transcript seed acquisition does not accept query parameters")
