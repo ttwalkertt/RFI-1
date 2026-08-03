@@ -45,7 +45,11 @@ This design SHALL:
 
 The following invariants are mandatory.
 
-1.  Every acquisition SHALL be orchestrated as an ordered sequence of independent deterministic trials. Normal acquisition SHALL begin by executing one deterministic trial for each learned FIFO seed in FIFO order.
+1.  Every acquisition SHALL be orchestrated as bounded deterministic resolution phases. Normal
+    acquisition SHALL begin with one consolidated phase containing canonical learned FIFO seeds
+    in FIFO order. A configured fallback, when present, is a separate conditional phase sharing
+    the same run-level resource context. Operator and recovery invocations remain exact
+    single-seed phases.
 
 2.  The LLM SHALL NOT be invoked unless deterministic acquisition fails
     to validate the requested transcript.
@@ -53,7 +57,9 @@ The following invariants are mandatory.
 3.  Every LLM-proposed URL SHALL be treated only as a temporary starting
     seed.
 
-4.  Every temporary seed SHALL execute the same single-seed deterministic trial implementation used by normal learned-seed acquisition.
+4.  Every temporary seed SHALL execute the same exact-seed deterministic resolver used by
+    operator seed injection. It SHALL NOT activate normal learned seeds or the configured
+    fallback.
 
 5.  Validation SHALL determine success. A supplied seed URL is never
     considered authoritative.
@@ -80,18 +86,20 @@ The following invariants are mandatory.
 
 # Normal Acquisition
 
-The acquisition orchestrator owns learned-seed sequencing.
+The acquisition orchestrator owns learned-seed sequencing and canonicalization.
 
-For each learned FIFO seed, the orchestrator executes one independent deterministic trial.
+Normal acquisition executes one consolidated learned-seed resolution phase. It fetches each
+canonical learned seed at most once, classifies transcript documents for direct validation, and
+extracts only immediate transcript-document links from listing pages. It does not recursively
+traverse listing graphs.
 
-Each trial:
+If learned resolution does not produce a validated `latest` result, the orchestrator may execute
+one configured archive fallback phase. Both phases share one run-level page, byte, host, redirect,
+elapsed, and unique-candidate resource context.
 
-1. Executes deterministic traversal from exactly one starting seed.
-2. Ranks candidate artifacts.
-3. Validates candidates against the immutable acquisition target.
-4. Produces an independently attributable trial outcome.
-
-On the first validated success, the orchestrator performs the existing learning and checkpoint behavior and terminates. The LLM is never invoked during successful normal acquisition.
+On the first validated `latest` success, the orchestrator performs the existing learning and
+checkpoint behavior and terminates. Range selection continues to use its existing global terminal
+reduction. The LLM is never invoked during successful normal acquisition.
 
 ------------------------------------------------------------------------
 
@@ -102,7 +110,7 @@ Only after deterministic acquisition fails:
 1.  Produce complete structured diagnostics.
 2.  Supply bounded diagnostics to the LLM.
 3.  Request one temporary starting URL.
-4.  Execute the same single-seed deterministic trial implementation.
+4.  Execute the same exact-seed deterministic resolver used by operator injection.
 5.  Validate normally.
 6.  If unsuccessful, repeat using cumulative bounded diagnostics.
 
@@ -142,21 +150,21 @@ retained-seed mechanisms.
 
 # Determinism Boundary
 
-Each acquisition trial is deterministic for a fixed:
+Each acquisition phase is deterministic for a fixed:
 
 -   acquisition target;
 -   repository state;
 -   acquisition policy; and
 -   starting seed.
 
-Only temporary-seed selection between failed deterministic trials is
+Only temporary-seed selection between failed deterministic phases is
 LLM-assisted.
 
 ------------------------------------------------------------------------
 
 # Diagnostics
 
-Every deterministic acquisition trial SHALL produce complete structured
+Every deterministic acquisition phase SHALL produce complete structured
 diagnostics.
 
 Those diagnostics become the bounded context supplied to the LLM for the
@@ -184,7 +192,8 @@ This design does not:
 
 The expected implementation sequence is:
 
-1. Refactor acquisition into an explicit orchestration layer and reusable single-seed deterministic trials while preserving current behavior.
+1. Refactor acquisition into an explicit orchestration layer, a bounded consolidated normal
+   resolution phase, and a reusable exact-seed resolver for operator and recovery invocations.
 2. Introduce explicit acquisition selection criteria with a default of `latest`.
 3. Add bounded LLM-assisted temporary-seed recovery.
 4. Expose selection criteria through external invocation paths while preserving default behavior.

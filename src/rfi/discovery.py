@@ -443,11 +443,30 @@ class BudgetedTranscriptTransport(EarningsTranscriptTransport):
         self.redirects = 0
         self.exhausted = False
         self.exhausted_budget = ""
+        self.cache_hits = 0
+        self._responses: dict[str, EarningsTranscriptHttpResponse] = {}
+        self.candidate_identities: set[str] = set()
+        self.candidate_capacity_exhausted = False
 
     def get(self, url: str) -> EarningsTranscriptHttpResponse:
+        identity = normalize_transcript_url(url)
+        cached = self._responses.get(identity)
+        if cached is not None:
+            self.cache_hits += 1
+            return cached
         self.begin_request(url)
         response = self.inner.get(url)
         redirect_chain = tuple(getattr(response, "redirects", ()))
+        response_hosts = {
+            (urllib.parse.urlsplit(item).hostname or "").casefold()
+            for item in (*redirect_chain, response.url)
+        }
+        response_hosts.discard("")
+        if len(self.hosts | response_hosts) > self.policy.max_distinct_hosts:
+            self.exhausted = True
+            self.exhausted_budget = "max_distinct_hosts"
+            raise ValueError("discovery distinct-host bound exhausted")
+        self.hosts.update(response_hosts)
         redirect_count = len(redirect_chain)
         if (
             not redirect_count
@@ -460,6 +479,8 @@ class BudgetedTranscriptTransport(EarningsTranscriptTransport):
             self.exhausted_budget = "max_redirects"
             raise ValueError("discovery redirect bound exhausted")
         self.accept_response(len(response.content))
+        self._responses[identity] = response
+        self._responses[normalize_transcript_url(response.url)] = response
         return response
 
     def begin_request(self, url: str) -> None:
@@ -998,6 +1019,384 @@ class BoundedTranscriptDiscovery:
         return (3, -period.ordinal), "reporting_period_historical"
 
 
+class TranscriptPageClassification(str, Enum):
+    """Content-evidenced role of one resolver seed response."""
+
+    TRANSCRIPT_DOCUMENT = "transcript_document"
+    TRANSCRIPT_LISTING = "transcript_listing"
+    UNSUPPORTED = "unsupported"
+    FAILED = "failed"
+
+
+class BoundedTranscriptResolver:
+    """Resolve supplied pages directly without recursively crawling their graph."""
+
+    DIAGNOSTIC_SAMPLE_LIMIT = 8
+    RANKING_SAMPLE_LIMIT = 10
+
+    def __init__(
+        self,
+        transport: BudgetedTranscriptTransport,
+        policy: DiscoveryPolicy,
+    ) -> None:
+        self.transport = transport
+        self.policy = policy
+
+    def resolve(
+        self,
+        seeds: tuple[str, ...],
+        phase: str,
+        seed_kind: str,
+        seed_source: str,
+        checkpoint_period: ReportingPeriod | None,
+        expected_period: ReportingPeriod | None,
+        duplicate_seed_count: int = 0,
+    ) -> TranscriptDiscoveryResult:
+        """Classify canonical seeds and admit documents or immediate document links."""
+        canonical: list[str] = []
+        seen: set[str] = set()
+        duplicates = duplicate_seed_count
+        for seed in seeds:
+            identity = normalize_transcript_url(seed)
+            if identity in seen:
+                duplicates += 1
+                continue
+            seen.add(identity)
+            canonical.append(identity)
+
+        proposals: list[dict[str, Any]] = []
+        listings: list[str] = []
+        classification_counts: Counter[str] = Counter()
+        classification_samples: list[dict[str, JsonValue]] = []
+        failure_counts: Counter[str] = Counter()
+        failure_samples: list[dict[str, JsonValue]] = []
+        raw_hyperlinks = 0
+        normalized_unique_hyperlinks = 0
+        eligible_hyperlinks = 0
+        rejected_links = 0
+        exhausted = False
+        exhausted_budget = ""
+
+        for seed_position, seed in enumerate(canonical):
+            if self.transport.exhausted:
+                exhausted = True
+                exhausted_budget = self.transport.exhausted_budget
+                break
+            try:
+                response = self.transport.get(seed)
+            except (OSError, TimeoutError, ValueError, UnicodeError) as error:
+                classification = TranscriptPageClassification.FAILED
+                code = self._failure_code(error)
+                failure_counts[code] += 1
+                if len(failure_samples) < self.DIAGNOSTIC_SAMPLE_LIMIT:
+                    failure_samples.append({
+                        "classification": code,
+                        "url": redact_diagnostic_url(seed),
+                        "error_type": error.__class__.__name__,
+                    })
+                if self.transport.exhausted:
+                    exhausted = True
+                    exhausted_budget = self.transport.exhausted_budget
+                self._record_classification(
+                    classification_counts, classification_samples,
+                    seed, classification, seed_position,
+                )
+                if exhausted:
+                    break
+                continue
+
+            if response.status < 200 or response.status >= 300:
+                classification = TranscriptPageClassification.FAILED
+                code = "seed_http_failure"
+                failure_counts[code] += 1
+                if len(failure_samples) < self.DIAGNOSTIC_SAMPLE_LIMIT:
+                    failure_samples.append({
+                        "classification": code,
+                        "url": redact_diagnostic_url(response.url),
+                        "http_status": response.status,
+                    })
+                self._record_classification(
+                    classification_counts, classification_samples,
+                    seed, classification, seed_position,
+                )
+                continue
+
+            try:
+                requested_identity = normalize_transcript_url(seed)
+                redirect_identities = tuple(
+                    normalize_transcript_url(item) for item in response.redirects
+                )
+            except ValueError:
+                redirect_identities = (requested_identity,)
+            if (
+                requested_identity in redirect_identities
+                or len(redirect_identities) != len(set(redirect_identities))
+            ):
+                classification = TranscriptPageClassification.FAILED
+                failure_counts["redirect_cycle"] += 1
+                if len(failure_samples) < self.DIAGNOSTIC_SAMPLE_LIMIT:
+                    failure_samples.append({
+                        "classification": "redirect_cycle",
+                        "url": redact_diagnostic_url(response.url),
+                    })
+                self._record_classification(
+                    classification_counts, classification_samples,
+                    seed, classification, seed_position,
+                )
+                continue
+
+            transcript_failure = (
+                EarningsCallTranscriptAcquisition._transcript_validation_failure(
+                    response, seed
+                )
+            )
+            if transcript_failure is None:
+                classification = TranscriptPageClassification.TRANSCRIPT_DOCUMENT
+                proposals.append(self._proposal(
+                    response.url, seed, seed, seed_position, phase, seed_kind, seed_source,
+                    checkpoint_period, expected_period, 0,
+                    ("content_validated_transcript_document",),
+                    tuple(dict.fromkeys((seed, response.url))),
+                ))
+                self._record_classification(
+                    classification_counts, classification_samples,
+                    seed, classification, seed_position,
+                )
+                continue
+
+            direct_links: list[tuple[LinkRank, str, str, str, tuple[str, ...]]] = []
+            if response.media_type.casefold() in {"text/html", "application/xhtml+xml"}:
+                parser = _PageParser()
+                try:
+                    parser.feed(response.content.decode("utf-8", "replace"))
+                except (ValueError, UnicodeError) as error:
+                    classification = TranscriptPageClassification.FAILED
+                    failure_counts["page_parse_failure"] += 1
+                    if len(failure_samples) < self.DIAGNOSTIC_SAMPLE_LIMIT:
+                        failure_samples.append({
+                            "classification": "page_parse_failure",
+                            "url": redact_diagnostic_url(response.url),
+                            "error_type": error.__class__.__name__,
+                        })
+                    self._record_classification(
+                        classification_counts, classification_samples,
+                        seed, classification, seed_position,
+                    )
+                    continue
+                listings.append(response.url)
+                raw_hyperlinks += len(parser.links)
+                page_seen: set[str] = set()
+                for href, label in parser.links:
+                    observed = urllib.parse.urljoin(response.url, href)
+                    try:
+                        target = normalize_transcript_url(observed)
+                    except ValueError:
+                        rejected_links += 1
+                        continue
+                    if target in page_seen or target == normalize_transcript_url(response.url):
+                        rejected_links += 1
+                        continue
+                    page_seen.add(target)
+                    normalized_unique_hyperlinks += 1
+                    evidence = urllib.parse.unquote(f"{label} {target}").casefold()
+                    is_candidate = EarningsCallTranscriptAcquisition._looks_like_transcript(
+                        label, target
+                    )
+                    if not is_candidate and "transcripts" in evidence:
+                        is_candidate = EarningsCallTranscriptAcquisition._looks_like_transcript(
+                            label, target.replace("transcripts", "transcript")
+                        )
+                    if not is_candidate:
+                        rejected_links += 1
+                        continue
+                    eligible_hyperlinks += 1
+                    rank, reasons = self._rank(
+                        target, label, response.url, checkpoint_period, expected_period
+                    )
+                    direct_links.append((rank, observed, target, label, tuple(reasons)))
+
+            direct_links.sort(key=lambda item: item[0])
+            if len(direct_links) > self.policy.max_unique_eligible_links_per_page:
+                exhausted = True
+                exhausted_budget = "max_unique_eligible_links_per_page"
+            for rank, observed, target, label, reasons in direct_links[
+                : self.policy.max_unique_eligible_links_per_page
+            ]:
+                proposals.append(self._proposal(
+                    observed, label or observed, seed, seed_position, phase, seed_kind,
+                    seed_source,
+                    checkpoint_period, expected_period, 1, reasons, (observed, target), rank,
+                ))
+            classification = (
+                TranscriptPageClassification.TRANSCRIPT_LISTING
+                if direct_links else TranscriptPageClassification.UNSUPPORTED
+            )
+            self._record_classification(
+                classification_counts, classification_samples,
+                seed, classification, seed_position,
+            )
+            if exhausted:
+                break
+
+        if self.transport.exhausted:
+            exhausted = True
+            exhausted_budget = self.transport.exhausted_budget
+        if exhausted_budget and exhausted_budget not in DISCOVERY_BUDGET_FIELDS:
+            raise RuntimeError("transcript resolver reported an unknown exhausted budget")
+        allowed_hosts = sorted({
+            urllib.parse.urlsplit(str(item["url"])).hostname or ""
+            for item in proposals
+        } | self.transport.hosts)
+        top = [
+            {
+                "url": redact_diagnostic_url(str(item["url"])),
+                "reasons": list(item.get("ranking_reasons", [])),
+                "depth": item.get("traversal_depth", 0),
+            }
+            for item in proposals[: self.RANKING_SAMPLE_LIMIT]
+        ]
+        return TranscriptDiscoveryResult(
+            tuple(dict.fromkeys(listings)),
+            tuple(proposals),
+            tuple(host for host in allowed_hosts if host),
+            exhausted,
+            {
+                "resolution_mode": "bounded_one_hop",
+                "recursive_traversal": False,
+                "search_queries": 0,
+                "pages": self.transport.pages,
+                "distinct_hosts": len(self.transport.hosts),
+                "bytes": self.transport.bytes,
+                "redirect_count": self.transport.redirects,
+                "response_cache_hits": self.transport.cache_hits,
+                "canonical_seed_count": len(canonical),
+                "duplicate_seed_count": duplicates,
+                "candidate_urls": len(proposals),
+                "candidate_admitted_count": len(proposals),
+                "raw_hyperlinks": raw_hyperlinks,
+                "normalized_unique_hyperlinks": normalized_unique_hyperlinks,
+                "eligible_hyperlinks": eligible_hyperlinks,
+                "traversed_hyperlinks": 0,
+                "rejected_link_count": rejected_links,
+                "page_classification_counts": dict(sorted(classification_counts.items())),
+                "page_classification_samples": classification_samples,
+                "discovery_failures": sum(failure_counts.values()),
+                "discovery_failure_counts": dict(sorted(failure_counts.items())),
+                "transport_failures": failure_samples,
+                "top_ranked_candidates": top,
+                "bounds_exhausted": exhausted,
+                "exhausted_budget": exhausted_budget,
+                "stage_sequence": [phase],
+                "configured_hint_count": len(canonical) if phase == "configured_hint" else 0,
+                "configured_hint_pages": (
+                    sum(classification_counts.values()) if phase == "configured_hint" else 0
+                ),
+                "configured_hint_status": (
+                    "used" if phase == "configured_hint" and canonical else "not_supplied"
+                ),
+                "anchor_attempts": [],
+                "configured_hint_attempt_sequence": [],
+                "anchor_to_hint_fallthrough": False,
+                "hint_to_traversal_fallthrough": False,
+                "configured_hint_fallthrough": False,
+                "bounded_traversal_fallthrough": False,
+            },
+        )
+
+    @staticmethod
+    def _record_classification(
+        counts: Counter[str], samples: list[dict[str, JsonValue]], seed: str,
+        classification: TranscriptPageClassification, position: int,
+    ) -> None:
+        counts[classification.value] += 1
+        if len(samples) < BoundedTranscriptResolver.DIAGNOSTIC_SAMPLE_LIMIT:
+            samples.append({
+                "seed_position": position + 1,
+                "url": redact_diagnostic_url(seed),
+                "classification": classification.value,
+            })
+
+    @staticmethod
+    def _failure_code(error: Exception) -> str:
+        if isinstance(error, (TimeoutError, socket.timeout)):
+            return "seed_fetch_timeout"
+        if isinstance(error, urllib.error.HTTPError):
+            return "seed_http_failure"
+        return "seed_transport_failure"
+
+    @staticmethod
+    def _rank(
+        target: str, label: str, parent: str,
+        checkpoint: ReportingPeriod | None, expected: ReportingPeriod | None,
+        depth: int = 1,
+    ) -> tuple[LinkRank, list[str]]:
+        parsed = urllib.parse.urlsplit(target)
+        period = reporting_period_from_evidence(label, target)
+        period_rank, period_reason = BoundedTranscriptDiscovery._period_rank(
+            period, checkpoint, expected
+        )
+        terminology = int("transcript" in urllib.parse.unquote(
+            f"{label} {target}"
+        ).casefold()) + int(any(
+            term in urllib.parse.unquote(f"{label} {target}").casefold()
+            for term in ("earnings", "quarter", "results", "conference call")
+        ))
+        document = int(parsed.path.casefold().endswith((".html", ".htm", ".pdf")))
+        same_host = (urllib.parse.urlsplit(parent).hostname or "").casefold() == (
+            parsed.hostname or ""
+        ).casefold()
+        reasons = [
+            "direct_seed_candidate" if depth == 0 else "direct_listing_candidate"
+        ]
+        if same_host:
+            reasons.append("same_authoritative_host")
+        if terminology:
+            reasons.append("transcript_earnings_terminology")
+        if period_reason and period is not None:
+            reasons.extend((period_reason, f"reporting_period_{period.code}"))
+        if document:
+            reasons.append("document_like_path")
+        reasons.append(f"depth_{depth}")
+        return LinkRank(
+            0, period_rank[0], period_rank[1], 0 if same_host else 1,
+            0 if same_host else 1, -terminology, -document,
+            depth, target, label,
+        ), reasons
+
+    @staticmethod
+    def _proposal(
+        url: str, label: str, seed: str, seed_position: int, phase: str,
+        seed_kind: str, seed_source: str, checkpoint: ReportingPeriod | None,
+        expected: ReportingPeriod | None, depth: int, reasons: tuple[str, ...],
+        aliases: tuple[str, ...], rank: LinkRank | None = None,
+    ) -> dict[str, Any]:
+        normalized = normalize_transcript_url(url)
+        if rank is None:
+            rank, ranked_reasons = BoundedTranscriptResolver._rank(
+                normalized, label, seed, checkpoint, expected, depth
+            )
+            reasons = tuple(dict.fromkeys((*reasons, *ranked_reasons)))
+        return {
+            "url": normalized,
+            "label": label,
+            "observed_aliases": list(dict.fromkeys((*aliases, normalized))),
+            "deterministic_selection_rank": [
+                rank.candidate_priority,
+                rank.period_ordinal_priority,
+                rank.terminology_priority,
+                rank.document_priority,
+            ],
+            "starting_seed": seed,
+            "seed_position": seed_position,
+            "seed_kind": seed_kind,
+            "seed_source": seed_source,
+            "traversal_depth": depth,
+            "parent_path": [seed] if depth == 0 else [seed, normalized],
+            "ranking_reasons": list(reasons),
+            "allowed_hosts": [urllib.parse.urlsplit(normalized).hostname or ""],
+        }
+
+
 class TranscriptAcquisitionOrchestrator:
     """Own ordered transcript seed planning; trials never select their successor."""
 
@@ -1016,46 +1415,67 @@ class TranscriptAcquisitionOrchestrator:
             history = self._repository.discovery_anchors(
                 firm_id, profile.source_id, self._adapter_id
             )
-        planned: list[tuple[str, str, str]] = []
-        seen: set[str] = set()
-
-        def append(kind: str, seed: str, source: str) -> None:
-            if seed in seen:
-                return
-            seen.add(seed)
-            planned.append((kind, seed, source))
+        planned: list[AdapterAcquisitionTrial] = []
 
         mode = profile.configuration.get("mode")
         if mode == "discovery":
+            learned: list[str] = []
+            learned_seen: set[str] = set()
+            duplicate_seed_count = 0
             for anchor in history:
                 for form in ("resolved_url", "requested_url"):
                     value = anchor.get(form)
                     if isinstance(value, str) and value:
-                        append("single_seed", value, "learned")
+                        normalized = normalize_transcript_url(value)
+                        if normalized in learned_seen:
+                            duplicate_seed_count += 1
+                            continue
+                        learned_seen.add(normalized)
+                        learned.append(normalized)
             hints = tuple(
                 value for value in profile.configuration.get("discovery_hints", ())
-                if isinstance(value, str)
+                if isinstance(value, str) and value.startswith(("http://", "https://"))
             )
-            fallback_seed = next((
-                value for value in hints
-                if value.startswith(("http://", "https://"))
-            ), next((
-                value.removeprefix("identity:") for value in hints
-                if value.startswith("identity:")
-            ), "deterministic-empty-discovery"))
-            planned.append(("configured_pipeline", fallback_seed, "configured"))
+            if learned:
+                planned.append(AdapterAcquisitionTrial(
+                    "transcript-trial-1",
+                    learned[0],
+                    "single_seed" if len(learned) == 1 else "resolution_session",
+                    target,
+                    "learned",
+                    tuple(learned),
+                    duplicate_seed_count,
+                    len(learned) > 1,
+                ))
+            fallback = normalize_transcript_url(hints[0]) if hints else None
+            if fallback is not None and fallback not in learned_seen:
+                planned.append(AdapterAcquisitionTrial(
+                    f"transcript-trial-{len(planned) + 1}",
+                    fallback,
+                    "configured_fallback",
+                    target,
+                    "configured",
+                    (fallback,),
+                ))
+            if not planned:
+                planned.append(AdapterAcquisitionTrial(
+                    "transcript-trial-1", "deterministic-empty-discovery",
+                    "empty_seed", target, "configured",
+                ))
         else:
             value = profile.configuration.get("url")
             if isinstance(value, str) and value:
-                append("configured_seed", value, "configured")
+                normalized = normalize_transcript_url(value)
+                planned.append(AdapterAcquisitionTrial(
+                    "transcript-trial-1", normalized, "configured_seed", target,
+                    "configured", (normalized,),
+                ))
         if not planned:
-            planned.append(("empty_seed", "deterministic-empty-discovery", "configured"))
-        return tuple(
-            AdapterAcquisitionTrial(
-                f"transcript-trial-{index}", seed, kind, target, source
-            )
-            for index, (kind, seed, source) in enumerate(planned, 1)
-        )
+            planned.append(AdapterAcquisitionTrial(
+                "transcript-trial-1", "deterministic-empty-discovery",
+                "empty_seed", target, "configured",
+            ))
+        return tuple(planned)
 
 
 @dataclass(frozen=True)
@@ -1171,8 +1591,10 @@ class EarningsTranscriptPullAdapter:
     def acquisition_trials(
         self, profile: SourceProfile
     ) -> tuple[AdapterAcquisitionTrial, ...]:
-        """Plan deterministic trials; only this orchestration seam sequences learned seeds."""
+        """Plan one learned resolution phase and at most one configured fallback."""
         self._validate_profile(profile)
+        self._budgets.pop(profile.source_id, None)
+        self._validated_expected.discard(profile.source_id)
         firm_id = profile.policy.get("firm_id")
         if not isinstance(firm_id, str):
             raise ContractError("transcript acquisition target requires firm_id")
@@ -1208,9 +1630,11 @@ class EarningsTranscriptPullAdapter:
         if target.selection != self._selection:
             raise ContractError("injected transcript trial selection changed")
         normalized = normalize_transcript_url(starting_seed)
+        self._budgets.pop(profile.source_id, None)
+        self._validated_expected.discard(profile.source_id)
         return AdapterAcquisitionTrial(
             "transcript-trial-1", normalized, "single_seed", target,
-            "operator_supplied",
+            "operator_supplied", (normalized,),
         )
 
     def terminal_selection_policy(
@@ -1230,7 +1654,7 @@ class EarningsTranscriptPullAdapter:
     def discover_trial(
         self, profile: SourceProfile, trial: AdapterAcquisitionTrial
     ) -> DiscoveryPage:
-        """Execute traversal and ranking from exactly one orchestrator-selected seed."""
+        """Execute one orchestrator-selected bounded resolution phase."""
         if not isinstance(trial, AdapterAcquisitionTrial):
             raise ContractError("deterministic transcript trial is malformed")
         if trial.acquisition_target.selection != self._selection:
@@ -1254,10 +1678,35 @@ class EarningsTranscriptPullAdapter:
             policy = self._policies.resolve(
                 str(configuration.get("discovery_class") or "") or None
             )
-            budgeted = BudgetedTranscriptTransport(
-                self._transport, policy, self._monotonic
-            )
             mode = configuration.get("mode")
+            resolver_kinds = {
+                "single_seed", "resolution_session", "configured_fallback",
+                "configured_seed", "empty_seed",
+            }
+            resolution_trial = (
+                trial is not None
+                and mode == "discovery"
+                and trial.seed_kind in resolver_kinds
+            )
+            budgeted = (
+                self._budgets.get(profile.source_id) if resolution_trial else None
+            )
+            if budgeted is None:
+                budgeted = BudgetedTranscriptTransport(
+                    self._transport, policy, self._monotonic
+                )
+            elif (
+                resolution_trial
+                and trial is not None
+                and trial.seed_kind == "configured_fallback"
+                and budgeted.candidate_capacity_exhausted
+            ):
+                raise AdapterFailure(
+                    FailureClass.TRANSIENT_ADAPTER,
+                    "Transcript run-level candidate evaluation budget was exhausted.",
+                    True,
+                    "max_candidate_evaluations",
+                )
             identity_terms = tuple(
                 value.removeprefix("identity:")
                 for value in configuration.get("discovery_hints", ())
@@ -1273,34 +1722,49 @@ class EarningsTranscriptPullAdapter:
                 history = self._repository.discovery_anchors(
                     firm_id, profile.source_id, self.adapter_id
                 )
-            if trial is not None and mode == "discovery":
+            if (
+                resolution_trial
+                and trial is not None
+                and trial.seed_kind != "resolution_session"
+            ):
                 history = ()
-                if trial.seed_kind == "single_seed":
-                    identity_terms = ()
-                    source_hints = (trial.starting_seed,)
-                elif trial.seed_kind == "configured_seed":
-                    identity_terms = ()
-                    source_hints = (trial.starting_seed,)
-                elif trial.seed_kind == "configured_pipeline":
-                    pass
-                elif trial.seed_kind == "empty_seed":
-                    identity_terms = ()
-                    source_hints = ()
-                else:
-                    raise ContractError(
-                        f"unknown deterministic transcript seed kind: {trial.seed_kind}"
-                    )
             today = date.fromisoformat(self._clock()[:10])
             checkpoint_period, expected_period, period_basis = (
-                self._reporting_period_context(profile, tuple(history), today)
+                self._reporting_period_context(
+                    profile, () if resolution_trial else tuple(history), today
+                )
             )
             if mode == "discovery":
-                discovered = BoundedTranscriptDiscovery(
-                    self._search, budgeted, policy
-                ).discover(
-                    identity_terms, source_hints, tuple(history),
-                    checkpoint_period, expected_period,
-                )
+                if resolution_trial:
+                    assert trial is not None
+                    phase = (
+                        "retained_anchor"
+                        if trial.seed_kind == "resolution_session"
+                        else "configured_hint"
+                    )
+                    seeds = () if trial.seed_kind == "empty_seed" else trial.seeds
+                    discovered = BoundedTranscriptResolver(
+                        budgeted, policy
+                    ).resolve(
+                        seeds,
+                        phase,
+                        trial.seed_kind,
+                        trial.seed_source,
+                        checkpoint_period,
+                        expected_period,
+                        trial.duplicate_seed_count,
+                    )
+                else:
+                    if trial is not None and trial.seed_kind != "configured_pipeline":
+                        raise ContractError(
+                            f"unknown deterministic transcript seed kind: {trial.seed_kind}"
+                        )
+                    discovered = BoundedTranscriptDiscovery(
+                        self._search, budgeted, policy
+                    ).discover(
+                        identity_terms, source_hints, tuple(history),
+                        checkpoint_period, expected_period,
+                    )
             else:
                 url = configuration.get("url")
                 if not isinstance(url, str) or not url:
@@ -1313,6 +1777,17 @@ class EarningsTranscriptPullAdapter:
                     {"search_queries": 0, "pages": 0, "distinct_hosts": 0,
                      "bytes": 0, "candidate_urls": int(mode == "direct_url"),
                      "bounds_exhausted": False, "exhausted_budget": ""},
+                )
+            if (
+                resolution_trial
+                and discovered.exhausted
+                and not discovered.candidate_proposals
+            ):
+                raise AdapterFailure(
+                    FailureClass.TRANSIENT_ADAPTER,
+                    "Transcript run-level resolution budget was exhausted.",
+                    True,
+                    str(discovered.diagnostics.get("exhausted_budget") or "budget_exhausted"),
                 )
             if not discovered.listing_urls and not discovered.candidate_proposals:
                 early = {
@@ -1344,7 +1819,20 @@ class EarningsTranscriptPullAdapter:
                 return DiscoveryPage((), None, early)
         except DiscoveryPolicyError as error:
             raise ContractError(str(error)) from error
-        selected = discovered.candidate_proposals[:policy.max_candidate_evaluations]
+        selected_values: list[dict[str, Any]] = []
+        candidate_limit_reached = False
+        for proposal in discovered.candidate_proposals:
+            identity = normalize_transcript_url(str(proposal["url"]))
+            if identity in budgeted.candidate_identities:
+                selected_values.append(proposal)
+                continue
+            if len(budgeted.candidate_identities) >= policy.max_candidate_evaluations:
+                candidate_limit_reached = True
+                budgeted.candidate_capacity_exhausted = True
+                continue
+            budgeted.candidate_identities.add(identity)
+            selected_values.append(proposal)
+        selected = tuple(selected_values)
         candidates = []
         discovered_at = self._clock()
         for proposal_rank, proposal in enumerate(selected):
@@ -1370,7 +1858,9 @@ class EarningsTranscriptPullAdapter:
                         "requested_url": aliases[0],
                         "resolved_url": url,
                         "observed_aliases": list(aliases),
-                        "allowed_hosts": list(discovered.allowed_hosts),
+                        "allowed_hosts": list(
+                            proposal.get("allowed_hosts", discovered.allowed_hosts)
+                        ),
                         "firm_identity_terms": list(identity_terms),
                         "checkpoint_reporting_period": (
                             checkpoint_period.code if checkpoint_period else ""
@@ -1380,6 +1870,23 @@ class EarningsTranscriptPullAdapter:
                         "proposal_rank": proposal_rank,
                         "deterministic_selection_rank": list(
                             proposal.get("deterministic_selection_rank", (0, 0, 0, 0))
+                        ),
+                        **{
+                            key: proposal[key]
+                            for key in (
+                                "traversal_depth", "parent_path", "ranking_reasons",
+                            )
+                            if key in proposal
+                        },
+                        **(
+                            {
+                                key: proposal[key]
+                                for key in ("starting_seed", "seed_kind", "seed_source")
+                                if key in proposal
+                            }
+                            if trial is not None
+                            and trial.seed_kind == "resolution_session"
+                            else {}
                         ),
                         "acquisition_target": (
                             trial.acquisition_target.to_dict() if trial is not None else
@@ -1398,7 +1905,6 @@ class EarningsTranscriptPullAdapter:
             ))
         self._budgets[profile.source_id] = budgeted
         self._validated_expected.discard(profile.source_id)
-        candidate_limit_reached = len(discovered.candidate_proposals) > len(selected)
         coverage = "indeterminate"
         final_diagnostics = dict(discovered.diagnostics)
         final_diagnostics.update({
@@ -1417,6 +1923,7 @@ class EarningsTranscriptPullAdapter:
             "expected_reporting_period": expected_period.code,
             "reporting_period_basis": period_basis,
             "candidate_selected_count": len(candidates),
+            "run_unique_candidate_count": len(budgeted.candidate_identities),
             "candidate_evaluated_count": 0,
             "candidate_disposition_counts": {},
             "candidate_disposition_samples": [],
@@ -1457,6 +1964,12 @@ class EarningsTranscriptPullAdapter:
         return {
             "trial_id": trial.trial_id,
             "starting_seed": redact_diagnostic_url(trial.starting_seed),
+            "starting_seed_count": len(trial.seeds),
+            "starting_seed_samples": [
+                redact_diagnostic_url(seed) for seed in trial.seeds[:8]
+            ],
+            "starting_seed_samples_omitted": len(trial.seeds) > 8,
+            "duplicate_seed_count": trial.duplicate_seed_count,
             "seed_kind": trial.seed_kind,
             "seed_source": trial.seed_source,
             "trial_outcome": "pending_validation",
@@ -1759,6 +2272,7 @@ class EarningsTranscriptPullAdapter:
             else date.fromisoformat(self._clock()[:10]) + timedelta(days=1)
         )
         assert interval_start is not None
+        cache_hits_before = budgeted.cache_hits
         interval = retriever.acquire(IntervalAcquisitionRequest(
             str(profile.policy["firm_id"]), "earnings_transcript",
             interval_start, interval_end,
@@ -1780,6 +2294,7 @@ class EarningsTranscriptPullAdapter:
                 "validated_revision": f"published-{envelope.artifact_date.isoformat()}",
                 "validated_event_date": envelope.artifact_date.isoformat(),
                 "effective_selection_mode": selection.mode.value,
+                "response_cache_reused": budgeted.cache_hits > cache_hits_before,
                 "requested_date_range": (
                     {
                         "start_date": selection.start_date.isoformat(),

@@ -61,6 +61,7 @@
 | TASK-060 | Seed-injection transcript acquisition API | Complete |
 | TASK-061 | Transcript learning inspection API | Complete |
 | TASK-062 | Separate candidate identity from discovery occurrence | Complete |
+| TASK-063 | Bounded transcript resolution session | Complete |
 
 ## Architectural Progression
 

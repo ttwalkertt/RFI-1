@@ -256,9 +256,11 @@ class TranscriptSelectionContractTests(unittest.TestCase):
         )
         self.assertEqual(terminal["qualified_candidate_count"], 2)
         self.assertEqual(terminal["selected_validated_event_date"], "2025-01-30")
+        # TASK-063 consolidates learned seeds into one resolution phase while
+        # retaining the same two qualified candidates and terminal reduction.
         self.assertEqual(
             [item["trial_outcome"] for item in result.diagnostics if "trial_id" in item],
-            ["qualified_candidate", "qualified_candidate", "no_validated_artifact"],
+            ["qualified_candidate"],
         )
 
     def test_wrong_date_no_match_never_checkpoints_or_learns(self) -> None:

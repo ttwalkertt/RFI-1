@@ -254,16 +254,19 @@ class TranscriptAcquisitionOrchestrationTests(unittest.TestCase):
         self.assertEqual(
             [(item.seed_kind, item.seed_source, item.starting_seed) for item in trials],
             [
-                ("single_seed", "learned", "https://cdn.example.com/new"),
-                ("single_seed", "learned", "https://ir.example.com/new"),
-                ("single_seed", "learned", "https://ir.example.com/old"),
+                ("resolution_session", "learned", "https://cdn.example.com/new"),
                 (
-                    "configured_pipeline",
+                    "configured_fallback",
                     "configured",
                     "https://ir.example.com/transcripts",
                 ),
             ],
         )
+        self.assertEqual(trials[0].seeds, (
+            "https://cdn.example.com/new",
+            "https://ir.example.com/new",
+            "https://ir.example.com/old",
+        ))
         self.assertEqual(len({item.trial_id for item in trials}), len(trials))
 
     def test_failed_learned_trial_advances_only_orchestration_and_success_stops_fifo(self) -> None:
@@ -299,7 +302,7 @@ class TranscriptAcquisitionOrchestrationTests(unittest.TestCase):
                 "Firm A quarterly earnings call transcript April 30, 2026. "
                 "Operator. Chief Executive Officer. Prepared remarks.",
             ),
-            unexecuted: AssertionError("orchestration did not stop after validation"),
+            unexecuted: response(unexecuted, "Investor relations archive index"),
         })
         configured = source("https://configured.example/transcripts")
 
@@ -330,16 +333,15 @@ class TranscriptAcquisitionOrchestrationTests(unittest.TestCase):
         self.assertEqual(result.failures, 1)
         self.assertEqual(
             transport.requests,
-            [failed, failed_candidate, successful, successful_candidate],
+            [failed, successful, unexecuted, failed_candidate, successful_candidate],
         )
-        self.assertNotIn(unexecuted, transport.requests)
         trial_diagnostics = [
             item for item in result.diagnostics if "trial_id" in item
         ]
-        self.assertEqual(len(trial_diagnostics), 2)
+        self.assertEqual(len(trial_diagnostics), 1)
         self.assertEqual(
             [item["trial_outcome"] for item in trial_diagnostics],
-            ["failed", "validated_success"],
+            ["validated_success"],
         )
         self.assertEqual(
             trial_diagnostics[-1]["acquisition_termination_reason"],
@@ -437,9 +439,9 @@ class TranscriptAcquisitionOrchestrationTests(unittest.TestCase):
         self.assertEqual(retained, ())
         trial_diagnostics = [item for item in result.diagnostics if "trial_id" in item]
         self.assertEqual(
-            sum(item["seed_source"] == "learned" for item in trial_diagnostics), 2
+            sum(item["seed_source"] == "learned" for item in trial_diagnostics), 1
         )
-        self.assertEqual(len(trial_diagnostics), 3)
+        self.assertEqual(len(trial_diagnostics), 1)
         self.assertEqual(
             trial_diagnostics[-1]["acquisition_termination_reason"],
             "seed_trials_exhausted",

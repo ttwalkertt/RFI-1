@@ -311,10 +311,9 @@ class AdapterCandidate:
             bounded, omitted = _bounded_occurrence_value(value)
             bounded_metadata[key] = bounded
             details_omitted = details_omitted or omitted
-        starting_seed = (
-            trial.starting_seed if trial is not None
-            else _string_or_none(metadata.get("starting_seed"))
-        )
+        starting_seed = _string_or_none(metadata.get("starting_seed"))
+        if starting_seed is None and trial is not None:
+            starting_seed = trial.starting_seed
         if starting_seed is not None:
             bounded_seed, omitted = _bounded_occurrence_value(starting_seed)
             assert isinstance(bounded_seed, str)
@@ -328,10 +327,11 @@ class AdapterCandidate:
             self.provenance.discovered_at,
             trial.trial_id if trial is not None else _string_or_none(metadata.get("trial_id")),
             starting_seed,
-            trial.seed_kind if trial is not None else _string_or_none(metadata.get("seed_kind")),
+            _string_or_none(metadata.get("seed_kind"))
+            or (trial.seed_kind if trial is not None else None),
             (
-                trial.seed_source if trial is not None
-                else _string_or_none(metadata.get("seed_source"))
+                _string_or_none(metadata.get("seed_source"))
+                or (trial.seed_source if trial is not None else None)
             ),
             locations,
             bounded_metadata,
@@ -362,6 +362,9 @@ class AdapterAcquisitionTrial:
     seed_kind: str
     acquisition_target: AdapterAcquisitionTarget
     seed_source: str = "configured"
+    starting_seeds: tuple[str, ...] = ()
+    duplicate_seed_count: int = 0
+    continue_candidate_failures: bool = False
 
     def __post_init__(self) -> None:
         require_identifier(self.trial_id, "trial_id")
@@ -373,6 +376,26 @@ class AdapterAcquisitionTrial:
             raise ContractError("acquisition trial seed_source is unknown")
         if not isinstance(self.acquisition_target, AdapterAcquisitionTarget):
             raise ContractError("acquisition trial target is malformed")
+        if self.starting_seeds:
+            if self.starting_seeds[0] != self.starting_seed:
+                raise ContractError("acquisition trial primary seed changed")
+            if any(not isinstance(seed, str) or not seed.strip() for seed in self.starting_seeds):
+                raise ContractError("acquisition trial contains a malformed seed")
+            if len(set(self.starting_seeds)) != len(self.starting_seeds):
+                raise ContractError("acquisition trial contains duplicate canonical seeds")
+        if (
+            isinstance(self.duplicate_seed_count, bool)
+            or not isinstance(self.duplicate_seed_count, int)
+            or self.duplicate_seed_count < 0
+        ):
+            raise ContractError("acquisition trial duplicate seed count is invalid")
+        if not isinstance(self.continue_candidate_failures, bool):
+            raise ContractError("acquisition trial failure-continuation policy is invalid")
+
+    @property
+    def seeds(self) -> tuple[str, ...]:
+        """Return the ordered run-phase seeds without changing single-seed callers."""
+        return self.starting_seeds or (self.starting_seed,)
 
 
 @dataclass(frozen=True)
@@ -686,6 +709,7 @@ class AcquisitionEngine:
             failures_before_trial = failures
             qualified_before_trial = len(qualified_selection_candidates)
             retained_replays_before_trial = retained_replays
+            continued_candidate_status: RunStatus | None = None
             try:
                 page = (
                     adapter.discover_trial(profile, active_trial)
@@ -1067,11 +1091,22 @@ class AcquisitionEngine:
                         )
                     )
                     diagnostics.append(self._failure_diagnostic(error, candidate.candidate_id))
-                    status = (
+                    candidate_failure_status = (
                         RunStatus.PARTIAL
                         if durable or unchanged
                         else self._failure_status(error)
                     )
+                    if (
+                        active_trial is not None
+                        and active_trial.continue_candidate_failures
+                    ):
+                        if (
+                            continued_candidate_status is None
+                            or candidate_failure_status == RunStatus.BLOCKED
+                        ):
+                            continued_candidate_status = candidate_failure_status
+                        continue
+                    status = candidate_failure_status
                     break
                 except ConflictError as error:
                     failures += 1
@@ -1117,6 +1152,12 @@ class AcquisitionEngine:
                     or retained_replays > retained_replays_before_trial
                 )
             )
+            if (
+                continued_candidate_status is not None
+                and not trial_validated
+                and not trial_qualified
+            ):
+                status = continued_candidate_status
             if active_trial is not None:
                 diagnostics[trial_diagnostic_index].update({
                     "trial_outcome": (

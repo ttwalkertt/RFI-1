@@ -21,6 +21,7 @@ from rfi.acquisition.earnings_transcripts import (
 )
 from rfi.discovery import (
     BoundedTranscriptDiscovery,
+    BoundedTranscriptResolver,
     BudgetedTranscriptTransport,
     DiscoveryPolicy,
     DiscoveryPolicyCatalog,
@@ -731,7 +732,7 @@ class ClassificationAndBoundaryTests(unittest.TestCase):
 
 
 class CorrectiveRobustnessTests(unittest.TestCase):
-    def test_hint_timeout_with_downstream_success_is_success_with_warnings(self) -> None:
+    def test_first_configured_hint_timeout_does_not_cascade_to_more_hints(self) -> None:
         timed_out_hint = "https://ir-timeout.example.com/transcripts/"
         retained = "https://ir.example.com/2026-04-30-earnings-call-transcript.html"
         configured = SourceProfile(
@@ -761,17 +762,12 @@ class CorrectiveRobustnessTests(unittest.TestCase):
             ).run_source(configured.source_id, "hint-warning")
 
         self.assertEqual(result.status, RunStatus.COMPLETE)
-        self.assertEqual(result.durable_acquisitions, 1)
+        self.assertEqual(result.durable_acquisitions, 0)
         self.assertEqual(result.failures, 0)
         self.assertEqual(PullWorkflow._engine_outcome(result),
-                         ArtifactOutcome.SUCCESS_WITH_WARNINGS)
-        self.assertIn("hint_fetch_timeout", json.dumps(result.to_dict()))
-        self.assertNotIn(
-            "hint timed out",
-            PullWorkflow._engine_diagnostic(
-                result, ArtifactOutcome.SUCCESS_WITH_WARNINGS
-            ),
-        )
+                         ArtifactOutcome.INDETERMINATE)
+        self.assertIn("seed_fetch_timeout", json.dumps(result.to_dict()))
+        self.assertEqual(transport.requests, [timed_out_hint])
 
     def test_first_success_advances_checkpoint_without_later_candidate_failure(self) -> None:
         timed_out_hint = "https://ir-timeout.example.com/transcripts/"
@@ -780,7 +776,7 @@ class CorrectiveRobustnessTests(unittest.TestCase):
         failed = "https://ir.example.com/2026-07-30-earnings-call-transcript.html"
         configured = SourceProfile(
             "source-a", "Firm A transcripts", True, "earnings_transcript",
-            {"mode": "discovery", "discovery_hints": [timed_out_hint, listing],
+            {"mode": "discovery", "discovery_hints": [listing, timed_out_hint],
              "discovery_class": "standard"},
             {"firm_id": "firm-a", "artifact_id": "earnings_transcript",
              "retrieval_adapter_id": "earnings-call-transcript",
@@ -825,15 +821,14 @@ class CorrectiveRobustnessTests(unittest.TestCase):
         self.assertEqual(
             result.checkpoint_after.position, ReportingPeriod.parse("2026-Q2").ordinal
         )
-        self.assertEqual(PullWorkflow._engine_outcome(result),
-                         ArtifactOutcome.SUCCESS_WITH_WARNINGS)
+        self.assertEqual(PullWorkflow._engine_outcome(result), ArtifactOutcome.SUCCESS)
         summary = PullWorkflow._engine_diagnostic(
-            result, ArtifactOutcome.SUCCESS_WITH_WARNINGS
+            result, ArtifactOutcome.SUCCESS
         )
-        self.assertIn("Retrieved and ingested 1 artifact with warnings", summary)
+        self.assertIn("Retrieved and ingested", summary)
         self.assertNotIn("hint timed out", summary)
         evidence = json.dumps(result.to_dict())
-        self.assertIn("hint_fetch_timeout", evidence)
+        self.assertNotIn("seed_fetch_timeout", evidence)
         self.assertNotIn("candidate_fetch_timeout", evidence)
         self.assertNotIn(failed, transport.requests)
         self.assertEqual(len(anchors), 1)
@@ -992,7 +987,7 @@ class CorrectiveRobustnessTests(unittest.TestCase):
         aliases = page.candidates[0].provenance.metadata["observed_aliases"]
         self.assertEqual(set(aliases), {first, second, final})
         adapter.retrieve(configured, page.candidates[0])
-        self.assertEqual(transport.requests, [first, second, final])
+        self.assertEqual(transport.requests, [first, second])
 
         engine_transport = Transport({
             first: html(final, body), second: html(final, body), final: html(final, body),
@@ -1019,9 +1014,9 @@ class CorrectiveRobustnessTests(unittest.TestCase):
         self.assertEqual(len(history), 1)
         retained = history[0]["candidate"]["provenance"]
         self.assertEqual(set(retained["metadata"]["observed_aliases"]), {
-            first, second, final,
+            first, final,
         })
-        self.assertEqual(set(retained["locations"]), {first, second, final})
+        self.assertEqual(set(retained["locations"]), {first, final})
         self.assertEqual(history[0]["diagnostics"]["final_url"], final)
         self.assertNotIn("ambiguous duplicate", json.dumps(result.to_dict()))
 
@@ -1144,7 +1139,7 @@ class CorrectiveRobustnessTests(unittest.TestCase):
                 )
                 target = (
                     patch.object(
-                        BoundedTranscriptDiscovery, "discover",
+                        BoundedTranscriptResolver, "resolve",
                         side_effect=NameError("discovery implementation defect"),
                     )
                     if phase == "discovery"

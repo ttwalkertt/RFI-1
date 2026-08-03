@@ -227,7 +227,7 @@ class TraversalBudgetSemanticsTests(unittest.TestCase):
         self.assertEqual(diagnostics["configured_hint_status"], "used")
         self.assertEqual(diagnostics["raw_hyperlinks"], 36)
         self.assertEqual(diagnostics["eligible_hyperlinks"], 1)
-        self.assertEqual(diagnostics["traversed_hyperlinks"], 1)
+        self.assertEqual(diagnostics["traversed_hyperlinks"], 0)
         self.assertEqual(diagnostics["candidate_urls"], 1)
         self.assertEqual(diagnostics["search_queries"], 0)
         self.assertEqual(requests, [STOCK_ANALYSIS_HINT, candidate])
