@@ -386,6 +386,7 @@ class AcquisitionEngine:
         previous_page_position = 0
         status = RunStatus.COMPLETE
         checkpoint_confirmed = False
+        retained_replays = 0
 
         acquisition_trials: tuple[AdapterAcquisitionTrial, ...] | None = None
         selection_policy: AdapterTerminalSelectionPolicy | None = None
@@ -458,6 +459,7 @@ class AcquisitionEngine:
             success_before_trial = last_success
             failures_before_trial = failures
             qualified_before_trial = len(qualified_selection_candidates)
+            retained_replays_before_trial = retained_replays
             try:
                 page = (
                     adapter.discover_trial(profile, active_trial)
@@ -645,10 +647,6 @@ class AcquisitionEngine:
                                 decision.validation_outcome,
                             ))
                         continue
-                    attempt_id = self._attempt_id(run_id, candidate, "success")
-                    receipt = self._repository.record_success(
-                        attempt_id, repository_candidate, result
-                    )
                     if deferred_evaluation:
                         validated_position = result.diagnostics.get("validated_position")
                         if not isinstance(validated_position, int) or validated_position < 1:
@@ -659,6 +657,41 @@ class AcquisitionEngine:
                         checkpoint_position = validated_position
                     else:
                         checkpoint_position = candidate.position
+                    retained_replay = (
+                        active_trial is not None
+                        and checkpoint_before is not None
+                        and checkpoint_position <= checkpoint_before.position
+                        and self._repository.has_retained_source_artifact(source_id, result)
+                    )
+                    if retained_replay:
+                        checkpoint_confirmed = True
+                        selection_checkpoint_eligible = False
+                        retained_replays += 1
+                        if fail_at == EngineFailurePoint.BEFORE_CHECKPOINT_FINALIZATION:
+                            failures += 1
+                            status = RunStatus.PARTIAL
+                            diagnostics.append({
+                                "failure_class": FailureClass.TRANSIENT_ADAPTER.value,
+                                "message": "injected failure before checkpoint finalization",
+                                "retryable": True,
+                            })
+                        else:
+                            unchanged += 1
+                            outcomes.append(CandidateRunOutcome(
+                                candidate.candidate_id,
+                                candidate.document_id,
+                                candidate.position,
+                                candidate.revision,
+                                "unchanged",
+                                None,
+                                False,
+                                "validated artifact is already retained at durable progress",
+                            ))
+                        break
+                    attempt_id = self._attempt_id(run_id, candidate, "success")
+                    receipt = self._repository.record_success(
+                        attempt_id, repository_candidate, result
+                    )
                     successful_candidates[candidate.candidate_id] = candidate.canonical()
                     if checkpoint_position > maximum_success_position:
                         maximum_success_position = checkpoint_position
@@ -837,7 +870,10 @@ class AcquisitionEngine:
             trial_validated = (
                 active_trial is not None
                 and selection_policy is None
-                and last_success != success_before_trial
+                and (
+                    last_success != success_before_trial
+                    or retained_replays > retained_replays_before_trial
+                )
             )
             if active_trial is not None:
                 diagnostics[trial_diagnostic_index].update({

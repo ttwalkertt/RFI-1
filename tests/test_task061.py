@@ -229,8 +229,21 @@ class TranscriptLearningInspectionTests(unittest.TestCase):
         self.assertEqual(before, after)
 
     def test_injected_acquisition_is_visible_through_learning_endpoint(self) -> None:
-        seed = "https://ir.example.com/archive"
-        artifact = "https://ir.example.com/q2-2025-transcript.html"
+        seed = "https://stockanalysis.com/stocks/orcl/transcripts/"
+        q4 = "https://stockanalysis.com/stocks/orcl/transcripts/32001-q4-2026/"
+        q3 = "https://stockanalysis.com/stocks/orcl/transcripts/31001-q3-2026/"
+        artifact = "https://stockanalysis.com/stocks/orcl/transcripts/30001-q2-2026/"
+        q1 = "https://stockanalysis.com/stocks/orcl/transcripts/29001-q1-2026/"
+        archive = "".join((
+            f"<a href='{q4}'>Earnings Call: Q4 2026</a>",
+            f"<a href='{q3}'>Earnings Call: Q3 2026</a>",
+            f"<a href='{artifact}'>Earnings Call: Q2 2026</a>",
+            f"<a href='{q1}'>Earnings Call: Q1 2026</a>",
+        ))
+        validated = (
+            "Firm A quarterly earnings call transcript August 3, 2026. "
+            "Operator. Chief Executive Officer. Prepared remarks."
+        )
         self.profiles.publish(
             SourceProfileDraft(
                 "firm-a",
@@ -262,15 +275,11 @@ class TranscriptLearningInspectionTests(unittest.TestCase):
             Search(),
             Transport(
                 {
-                    seed: response(
-                        seed,
-                        f"<a href='{artifact}'>April 30, 2025 earnings transcript</a>",
-                    ),
-                    artifact: response(
-                        artifact,
-                        "Firm A quarterly earnings call transcript April 30, 2025. "
-                        "Operator. Chief Executive Officer. Prepared remarks.",
-                    ),
+                    seed: response(seed, archive),
+                    q4: response(q4, validated),
+                    q3: response(q3, validated),
+                    artifact: response(artifact, validated),
+                    q1: response(q1, validated),
                 }
             ),
             lambda: "2026-08-03T00:00:00Z",
@@ -309,6 +318,24 @@ class TranscriptLearningInspectionTests(unittest.TestCase):
                     "starting_seed": seed,
                 },
             )
+            checkpoint = self.repository.checkpoints()
+            snapshot = {
+                "revision": self.repository.repository_revision(),
+                "history": self.repository.history(),
+                "artifacts": self.repository.artifact_metadata(),
+                "observations": self.repository.observations(),
+                "learning": self.repository.transcript_learning("firm-a"),
+            }
+            replay_status, replay = self._request(
+                base,
+                "/api/transcript-acquisitions/seed",
+                "POST",
+                {
+                    "firm_id": "firm-a",
+                    "canonical_artifact_id": "earnings_transcript",
+                    "starting_seed": seed,
+                },
+            )
             learning_status, learning = self._request(
                 base, "/api/transcript-acquisitions/learning/firm-a"
             )
@@ -318,6 +345,17 @@ class TranscriptLearningInspectionTests(unittest.TestCase):
             thread.join(timeout=3)
         self.assertEqual(acquisition_status, 200, acquisition)
         self.assertEqual(acquisition["durable_acquisitions"], 1)
+        self.assertEqual(replay_status, 200, replay)
+        self.assertEqual(replay["durable_acquisitions"], 0)
+        self.assertEqual(replay["unchanged"], 1)
+        self.assertEqual(self.repository.checkpoints(), checkpoint)
+        self.assertEqual(self.repository.repository_revision(), snapshot["revision"])
+        self.assertEqual(self.repository.history(), snapshot["history"])
+        self.assertEqual(self.repository.artifact_metadata(), snapshot["artifacts"])
+        self.assertEqual(self.repository.observations(), snapshot["observations"])
+        self.assertEqual(
+            self.repository.transcript_learning("firm-a"), snapshot["learning"]
+        )
         self.assertEqual(learning_status, 200)
         self.assertEqual(len(learning["learning"]), 1)
         self.assertEqual(learning["learning"][0]["normalized_url"], artifact)

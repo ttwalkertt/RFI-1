@@ -368,6 +368,20 @@ class AcquisitionRepository:
             ).fetchone()
         return row is not None
 
+    def has_retained_source_artifact(
+        self, source_id: str, result: RetrievalResult
+    ) -> bool:
+        """Return whether exact validated bytes are already retained for this source."""
+        self.source(source_id)
+        artifact_id = f"artifact-{sha256_bytes(result.content)}"
+        with self._database.connect(read_only=True) as connection:
+            row = connection.execute(
+                "SELECT 1 FROM artifact_observations "
+                "WHERE source_id=? AND artifact_id=? LIMIT 1",
+                (source_id, artifact_id),
+            ).fetchone()
+        return row is not None
+
     @staticmethod
     def normalize_discovery_url(url: str) -> str:
         """Conservatively normalize URL identity without changing observed provenance."""
