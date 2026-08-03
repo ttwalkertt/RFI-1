@@ -13,8 +13,11 @@ from typing import Any, Callable
 from rfi.acquisition import (
     AcquisitionEngine,
     AcquisitionRepository,
+    AcquisitionRunResult,
+    AdapterRegistry,
     RunStatus,
     SourceProfile,
+    TranscriptAcquisitionTarget,
 )
 from rfi.firms.contracts import FirmCatalog
 from rfi.pull.adapters import RetrievalAdapterRegistry
@@ -260,6 +263,52 @@ class PullWorkflow:
         """Return complete durable workflow results and the exact planning snapshot."""
         return self._runs.get(run_id)
 
+    def acquire_transcript_from_seed(
+        self, target: TranscriptAcquisitionTarget, starting_seed: str
+    ) -> AcquisitionRunResult:
+        """Run one advisory seed through the configured transcript acquisition path."""
+        if not isinstance(target, TranscriptAcquisitionTarget):
+            raise PullError("transcript acquisition target is required")
+        with self._execution_lock:
+            firm = self._firms.get(target.firm_id)
+            profile = self._profiles.get(target.firm_id)
+            plan = self._planner().plan(firm, profile)
+            artifacts = tuple(
+                item for item in plan.artifacts
+                if item.artifact_id == target.canonical_artifact_id
+            )
+            if len(artifacts) != 1:
+                raise PullError("configured transcript artifact does not match the request")
+            artifact = artifacts[0]
+            selected = None
+            for candidate in artifact.runnable_candidates:
+                registration = self._adapters.select(artifact.artifact_id, candidate)
+                if registration.capability.adapter_id == "earnings-call-transcript":
+                    selected = (candidate, registration)
+                    break
+            if selected is None:
+                raise PullError("firm has no runnable transcript discovery configuration")
+            candidate, registration = selected
+            source = self._source_profile(plan, artifact, candidate, registration)
+            adapter = registration.source_adapter
+            with_selection = getattr(adapter, "with_selection", None)
+            if not callable(with_selection):
+                raise PullError("configured transcript adapter does not accept selection")
+            invocation_adapter = with_selection(target.selection)
+            injected_trial = getattr(invocation_adapter, "injected_trial", None)
+            if not callable(injected_trial):
+                raise PullError("configured transcript adapter does not accept an injected seed")
+            self._acquisition.register_source(source)
+            trial = injected_trial(source, target, starting_seed)
+            engine = AcquisitionEngine(
+                self._acquisition, AdapterRegistry((invocation_adapter,)), self._clock
+            )
+            return engine.run_source_trial(
+                source.source_id,
+                f"injected-{self._identifier_factory()}",
+                trial,
+            )
+
     def _resolve_firms(self, request: PullRequest) -> tuple[Any, ...]:
         if request.all_configured:
             return tuple(
@@ -349,33 +398,10 @@ class PullWorkflow:
         artifact: PlannedArtifact,
         candidate: RetrievalCandidate,
     ) -> tuple[RetrievalAttemptResult, ArtifactOutcome]:
-        candidate_value = self._candidate_value(candidate)
         registration = self._adapters.select(artifact.artifact_id, candidate)
         adapter_id = registration.capability.adapter_id
-        revision_id = (
-            firm.profile.source_profile_revision_id if firm.profile is not None else "defaults"
-        )
-        source_id = self._source_id(
-            firm.firm.firm_id,
-            artifact.artifact_id,
-            revision_id,
-            candidate_value,
-            adapter_id,
-        )
-        source = SourceProfile(
-            source_id=source_id,
-            name=f"{firm.firm.canonical_name}: {artifact.label}",
-            enabled=True,
-            mechanism=registration.source_adapter.mechanism,
-            configuration=candidate_value,
-            policy={
-                "firm_id": firm.firm.firm_id,
-                "artifact_id": artifact.artifact_id,
-                "source_profile_revision_id": revision_id,
-                "retrieval_adapter_id": adapter_id,
-                "document_id": f"document-{firm.firm.firm_id}-{artifact.artifact_id}",
-            },
-        )
+        source = self._source_profile(firm, artifact, candidate, registration)
+        source_id = source.source_id
         try:
             self._acquisition.register_source(source)
             engine = AcquisitionEngine(
@@ -416,6 +442,41 @@ class PullWorkflow:
                 ),
                 ArtifactOutcome.RETRIEVAL_FAILURE,
             )
+
+    def _source_profile(
+        self,
+        firm: PlannedFirm,
+        artifact: PlannedArtifact,
+        candidate: RetrievalCandidate,
+        registration: Any,
+    ) -> SourceProfile:
+        """Build the governed engine source shared by normal and injected acquisition."""
+        candidate_value = self._candidate_value(candidate)
+        adapter_id = registration.capability.adapter_id
+        revision_id = (
+            firm.profile.source_profile_revision_id if firm.profile is not None else "defaults"
+        )
+        source_id = self._source_id(
+            firm.firm.firm_id,
+            artifact.artifact_id,
+            revision_id,
+            candidate_value,
+            adapter_id,
+        )
+        return SourceProfile(
+            source_id=source_id,
+            name=f"{firm.firm.canonical_name}: {artifact.label}",
+            enabled=True,
+            mechanism=registration.source_adapter.mechanism,
+            configuration=candidate_value,
+            policy={
+                "firm_id": firm.firm.firm_id,
+                "artifact_id": artifact.artifact_id,
+                "source_profile_revision_id": revision_id,
+                "retrieval_adapter_id": adapter_id,
+                "document_id": f"document-{firm.firm.firm_id}-{artifact.artifact_id}",
+            },
+        )
 
     def _artifact_ids(self, result: Any) -> tuple[str, ...]:
         attempt_ids = {item.attempt_id for item in result.outcomes if item.attempt_id}

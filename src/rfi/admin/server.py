@@ -5,13 +5,19 @@ from __future__ import annotations
 import json
 import threading
 from dataclasses import asdict
+from datetime import date
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from rfi.acquisition import AcquisitionRepository
+from rfi.acquisition import (
+    AcquisitionRepository,
+    TranscriptAcquisitionSelection,
+    TranscriptAcquisitionTarget,
+    TranscriptSelectionMode,
+)
 from rfi.admin.field_definitions import field_definitions
 from rfi.admin.help import (
     HELP_WINDOW_NAME,
@@ -886,6 +892,30 @@ class AdminHandler(BaseHTTPRequestHandler):
                 {"items": [asdict(item) for item in pull_workflow.configured_firms()]},
             )
             return
+        if method == "POST" and parts == ["api", "transcript-acquisitions", "seed"]:
+            if query:
+                raise PullError("transcript seed acquisition does not accept query parameters")
+            body = self._body(reject_duplicate_fields=True)
+            allowed = {
+                "firm_id", "canonical_artifact_id", "selection", "starting_seed"
+            }
+            required = {"firm_id", "canonical_artifact_id", "starting_seed"}
+            if set(body) - allowed:
+                raise PullError("transcript seed acquisition contains unsupported fields")
+            if required - set(body):
+                raise PullError("transcript seed acquisition is missing required fields")
+            firm_id = body["firm_id"]
+            artifact_id = body["canonical_artifact_id"]
+            starting_seed = body["starting_seed"]
+            if not all(isinstance(value, str) for value in (
+                firm_id, artifact_id, starting_seed
+            )):
+                raise PullError("transcript seed fields must be strings")
+            selection = self._transcript_selection(body.get("selection"))
+            target = TranscriptAcquisitionTarget(firm_id, artifact_id, selection)
+            result = pull_workflow.acquire_transcript_from_seed(target, starting_seed)
+            self._send_json(HTTPStatus.OK, result.to_dict())
+            return
         if method == "POST" and parts == ["api", "pulls"]:
             body = self._body()
             firm_ids = body.get("firm_ids", [])
@@ -929,6 +959,7 @@ class AdminHandler(BaseHTTPRequestHandler):
                 source_profile_service.canonical_template(),
             )
             return
+
         if method == "GET" and parts == ["api", "firms"]:
             items = firm_service.list_firms(
                 self._first(query, "q"),
@@ -1052,7 +1083,40 @@ class AdminHandler(BaseHTTPRequestHandler):
                 return
         self._error(HTTPStatus.NOT_FOUND, "unknown API request")
 
-    def _body(self) -> dict[str, Any]:
+    @staticmethod
+    def _transcript_selection(value: Any) -> TranscriptAcquisitionSelection:
+        """Parse the narrow REST DTO into the repository-owned immutable contract."""
+        if value is None:
+            return TranscriptAcquisitionSelection.latest()
+        if not isinstance(value, dict):
+            raise PullError("transcript selection must be an object")
+        mode_value = value.get("mode")
+        if not isinstance(mode_value, str):
+            raise PullError("transcript selection mode is required")
+        try:
+            mode = TranscriptSelectionMode(mode_value)
+        except ValueError as error:
+            raise PullError("transcript selection mode is unsupported") from error
+        if mode == TranscriptSelectionMode.LATEST:
+            if set(value) != {"mode"}:
+                raise PullError("latest transcript selection accepts only mode")
+            return TranscriptAcquisitionSelection.latest()
+        if set(value) != {"mode", "start_date", "end_date"}:
+            raise PullError(
+                "first_in_date_range requires only mode, start_date, and end_date"
+            )
+        start = value["start_date"]
+        end = value["end_date"]
+        if not isinstance(start, str) or not isinstance(end, str):
+            raise PullError("transcript selection dates must be ISO date strings")
+        try:
+            return TranscriptAcquisitionSelection.first_in_date_range(
+                date.fromisoformat(start), date.fromisoformat(end)
+            )
+        except ValueError as error:
+            raise PullError("transcript selection dates must be valid ISO dates") from error
+
+    def _body(self, *, reject_duplicate_fields: bool = False) -> dict[str, Any]:
         length_text = self.headers.get("Content-Length")
         if not length_text:
             raise ConceptError("request body is required")
@@ -1061,7 +1125,18 @@ class AdminHandler(BaseHTTPRequestHandler):
             raise ConceptError("request body exceeds local console limit")
         if self.headers.get_content_type() != "application/json":
             raise ConceptError("application/json is required")
-        value = json.loads(self.rfile.read(length))
+        def strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            value: dict[str, Any] = {}
+            for name, item in pairs:
+                if name in value:
+                    raise PullError("transcript seed acquisition repeats a request field")
+                value[name] = item
+            return value
+
+        value = json.loads(
+            self.rfile.read(length),
+            object_pairs_hook=strict_object if reject_duplicate_fields else None,
+        )
         if not isinstance(value, dict):
             raise ConceptError("request JSON must be an object")
         return value

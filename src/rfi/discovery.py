@@ -1179,6 +1179,39 @@ class EarningsTranscriptPullAdapter:
         target = TranscriptAcquisitionTarget(firm_id, selection=self._selection)
         return self._orchestrator.plan(profile, target)
 
+    def with_selection(
+        self, selection: TranscriptAcquisitionSelection
+    ) -> EarningsTranscriptPullAdapter:
+        """Create an invocation-scoped adapter while retaining deterministic policy."""
+        return EarningsTranscriptPullAdapter(
+            self._policies,
+            self._search,
+            self._transport,
+            self._clock,
+            self._monotonic,
+            self._repository,
+            selection,
+        )
+
+    def injected_trial(
+        self,
+        profile: SourceProfile,
+        target: TranscriptAcquisitionTarget,
+        starting_seed: str,
+    ) -> AdapterAcquisitionTrial:
+        """Validate one advisory operator seed and bind it to the immutable target."""
+        self._validate_profile(profile)
+        if not isinstance(target, TranscriptAcquisitionTarget):
+            raise ContractError("injected transcript acquisition target is malformed")
+        if target.firm_id != profile.policy.get("firm_id"):
+            raise ContractError("injected transcript target firm differs from source profile")
+        if target.selection != self._selection:
+            raise ContractError("injected transcript trial selection changed")
+        normalized = normalize_transcript_url(starting_seed)
+        return AdapterAcquisitionTrial(
+            "transcript-trial-1", normalized, "operator_supplied", target
+        )
+
     def terminal_selection_policy(
         self, profile: SourceProfile,
         trials: tuple[AdapterAcquisitionTrial, ...],
@@ -1250,6 +1283,9 @@ class EarningsTranscriptPullAdapter:
                         "resolved_url": None,
                     },)
                 elif trial.seed_kind == "configured_seed":
+                    identity_terms = ()
+                    source_hints = (trial.starting_seed,)
+                elif trial.seed_kind == "operator_supplied":
                     identity_terms = ()
                     source_hints = (trial.starting_seed,)
                 elif trial.seed_kind == "configured_pipeline":

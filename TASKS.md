@@ -58,6 +58,7 @@
 | TASK-057 | Harden transcript discovery traversal and diagnostics | Complete; acquisition correctness baseline hardened |
 | TASK-058 | Pull Workflow progress feedback | Complete |
 | TASK-059 | Explicit transcript acquisition selection criteria | Complete |
+| TASK-060 | Seed-injection transcript acquisition API | Complete |
 
 ## Architectural Progression
 

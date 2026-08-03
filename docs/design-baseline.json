@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 7757,
+      "destination_size": 7825,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "b17852d493f3b3b48001c7300607badf813821ff533cbedffcbbfb29e63d8312",
-      "content_change": "task roadmap reconciled through completed TASK-059 transcript selection criteria"
+      "destination_sha256": "80295e510dc004c97885cf11b03399323fd1987c74ab3f396eb88b5bac46c77b",
+      "content_change": "task roadmap reconciled through completed TASK-060 seed-injection API"
     },
     {
       "source": "ROADMAP.md",

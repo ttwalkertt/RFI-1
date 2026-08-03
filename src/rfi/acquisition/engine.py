@@ -308,9 +308,23 @@ class AcquisitionEngine:
         with self._repository.acquisition_transaction():
             return self._run_source(source_id, run_key, fail_at)
 
+    def run_source_trial(
+        self,
+        source_id: str,
+        run_key: str,
+        trial: AdapterAcquisitionTrial,
+        fail_at: EngineFailurePoint | None = None,
+    ) -> AcquisitionRunResult:
+        """Execute one caller-selected trial through the normal acquisition lifecycle."""
+        if not isinstance(trial, AdapterAcquisitionTrial):
+            raise ContractError("injected acquisition trial is malformed")
+        with self._repository.acquisition_transaction():
+            return self._run_source(source_id, run_key, fail_at, (trial,))
+
     def _run_source(
         self, source_id: str, run_key: str,
         fail_at: EngineFailurePoint | None = None,
+        acquisition_trial_override: tuple[AdapterAcquisitionTrial, ...] | None = None,
     ) -> AcquisitionRunResult:
         require_identifier(run_key, "run_key")
         started = self._clock()
@@ -385,7 +399,11 @@ class AcquisitionEngine:
                     raise ContractError(
                         "trial-oriented adapters require acquisition_trials and discover_trial"
                     )
-                acquisition_trials = adapter.acquisition_trials(profile)
+                acquisition_trials = (
+                    acquisition_trial_override
+                    if acquisition_trial_override is not None
+                    else adapter.acquisition_trials(profile)
+                )
                 if not isinstance(acquisition_trials, tuple) or not acquisition_trials:
                     raise ContractError("trial-oriented adapter returned no acquisition trials")
                 if any(
