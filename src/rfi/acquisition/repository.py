@@ -357,30 +357,69 @@ class AcquisitionRepository:
     def has_retained_artifact(
         self, candidate: CandidateDocument, result: RetrievalResult
     ) -> bool:
-        """Return whether validated bytes already exist for this source document."""
+        """Return whether this document's validated durable revision is retained."""
         self.source(candidate.source_id)
         artifact_id = f"artifact-{sha256_bytes(result.content)}"
         with self._database.connect(read_only=True) as connection:
-            row = connection.execute(
-                "SELECT 1 FROM artifact_observations "
-                "WHERE source_id=? AND document_id=? AND artifact_id=? LIMIT 1",
-                (candidate.source_id, candidate.document_id, artifact_id),
-            ).fetchone()
-        return row is not None
+            rows = connection.execute(
+                "SELECT artifacts.artifact_id,artifacts.media_type,attempts.canonical_json "
+                "FROM acquisition_attempts AS attempts "
+                "JOIN artifacts ON artifacts.artifact_id=attempts.artifact_id "
+                "WHERE attempts.source_id=? AND attempts.document_id=? "
+                "AND attempts.outcome='success'",
+                (candidate.source_id, candidate.document_id),
+            ).fetchall()
+        return self._matches_retained_revision(rows, artifact_id, result)
 
     def has_retained_source_artifact(
         self, source_id: str, result: RetrievalResult
     ) -> bool:
-        """Return whether exact validated bytes are already retained for this source."""
+        """Return whether the validated durable source revision is already retained."""
         self.source(source_id)
         artifact_id = f"artifact-{sha256_bytes(result.content)}"
         with self._database.connect(read_only=True) as connection:
-            row = connection.execute(
-                "SELECT 1 FROM artifact_observations "
-                "WHERE source_id=? AND artifact_id=? LIMIT 1",
-                (source_id, artifact_id),
-            ).fetchone()
-        return row is not None
+            rows = connection.execute(
+                "SELECT artifacts.artifact_id,artifacts.media_type,attempts.canonical_json "
+                "FROM current_checkpoints AS checkpoints "
+                "JOIN checkpoint_events AS events ON events.event_id=checkpoints.event_id "
+                "JOIN acquisition_attempts AS attempts ON attempts.attempt_id=events.attempt_id "
+                "JOIN artifacts ON artifacts.artifact_id=attempts.artifact_id "
+                "WHERE checkpoints.source_id=? AND attempts.outcome='success'",
+                (source_id,),
+            ).fetchall()
+        return self._matches_retained_revision(rows, artifact_id, result)
+
+    def _matches_retained_revision(
+        self, rows: list[Any], artifact_id: str, result: RetrievalResult
+    ) -> bool:
+        """Match exact bytes or the validator's stable position/revision identity."""
+        durable_identity = self._validated_revision_identity(result.diagnostics)
+        for retained_id, media_type, value in rows:
+            if str(media_type) != result.media_type:
+                continue
+            if str(retained_id) == artifact_id:
+                return True
+            record = self._decode(value, "successful acquisition attempt")
+            if (
+                durable_identity is not None
+                and self._validated_revision_identity(record.get("diagnostics"))
+                == durable_identity
+            ):
+                return True
+        return False
+
+    @staticmethod
+    def _validated_revision_identity(value: Any) -> tuple[int, str] | None:
+        if not isinstance(value, dict):
+            return None
+        position = value.get("validated_position")
+        revision = value.get("validated_revision")
+        if (
+            isinstance(position, bool) or not isinstance(position, int)
+            or position < 1 or not isinstance(revision, str) or not revision
+        ):
+            return None
+        return position, revision
 
     @staticmethod
     def normalize_discovery_url(url: str) -> str:

@@ -355,6 +355,9 @@ class TranscriptSeedAcquisitionTests(unittest.TestCase):
         for selection in selections:
             with self.subTest(selection=selection.mode.value), tempfile.TemporaryDirectory(
             ) as directory:
+                responses[artifact] = response(
+                    artifact, transcript_body("January 30, 2025")
+                )
                 repository = self._repository(directory, configured)
                 adapter = EarningsTranscriptPullAdapter(
                     policies(), Search(), Transport(responses),
@@ -379,6 +382,11 @@ class TranscriptSeedAcquisitionTests(unittest.TestCase):
                 history = repository.history()
                 artifacts = repository.artifact_metadata()
                 revision = repository.repository_revision()
+                responses[artifact] = response(
+                    artifact,
+                    transcript_body("January 30, 2025")
+                    + "<script>window.providerQuoteUpdatedAt=1785792558036</script>",
+                )
 
                 learned_replay = engine.run_source("source-a", "ordinary-learned")
                 injected_replay = engine.run_source_trial(
@@ -432,14 +440,13 @@ class TranscriptSeedAcquisitionTests(unittest.TestCase):
             f"<a href='{q2}'>Earnings Call: Q2 2026</a>",
             f"<a href='{q1}'>Earnings Call: Q1 2026</a>",
         ))
-        validated = transcript_body("August 3, 2026")
         configured = source(seed)
         transport = Transport({
             seed: response(seed, archive),
-            q4: response(q4, validated),
-            q3: response(q3, validated),
-            q2: response(q2, validated),
-            q1: response(q1, validated),
+            q4: response(q4, transcript_body("August 3, 2026") + " Oracle Q4."),
+            q3: response(q3, transcript_body("August 3, 2026") + " Oracle Q3."),
+            q2: response(q2, transcript_body("August 3, 2026") + " Oracle Q2."),
+            q1: response(q1, transcript_body("August 3, 2026") + " Oracle Q1."),
         })
 
         with tempfile.TemporaryDirectory() as directory:
@@ -467,6 +474,11 @@ class TranscriptSeedAcquisitionTests(unittest.TestCase):
                     "firm-a", "source-a", adapter.adapter_id
                 ),
             }
+            transport.responses[q4] = response(
+                q4,
+                transcript_body("August 3, 2026")
+                + " Oracle Q4.<script>quoteUpdatedAt=1785792558036</script>",
+            )
 
             injected_replay = engine.run_source_trial(
                 "source-a", "oracle-repeat",
