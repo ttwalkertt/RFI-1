@@ -933,10 +933,6 @@ class AcquisitionEngine:
                 candidate = selected_selection_candidate.candidate
                 repository_candidate = selected_selection_candidate.repository_candidate
                 result = selected_selection_candidate.retrieval
-                attempt_id = self._attempt_id(run_id, candidate, "success")
-                receipt = self._repository.record_success(
-                    attempt_id, repository_candidate, result
-                )
                 validated_position = result.diagnostics.get("validated_position")
                 if not isinstance(validated_position, int) or validated_position < 1:
                     raise ContractError("selected retrieval lacks validated position")
@@ -945,31 +941,54 @@ class AcquisitionEngine:
                     checkpoint_before is None
                     or validated_position > checkpoint_before.position
                 )
-                maximum_success_position = max(
-                    maximum_success_position, validated_position
+                retained_replay = (
+                    checkpoint_before is not None
+                    and validated_position <= checkpoint_before.position
+                    and self._repository.has_retained_artifact(repository_candidate, result)
                 )
-                checkpoint_success = attempt_id
-                last_success = attempt_id
-                successful_candidates[candidate.candidate_id] = candidate.canonical()
-                if receipt.idempotent:
+                if retained_replay:
+                    checkpoint_confirmed = True
                     unchanged += 1
-                    observed = "unchanged"
-                elif not receipt.artifact_created:
-                    duplicates += 1
-                    observed = "duplicate"
+                    outcomes.append(CandidateRunOutcome(
+                        candidate.candidate_id,
+                        candidate.document_id,
+                        candidate.position,
+                        candidate.revision,
+                        "unchanged",
+                        None,
+                        False,
+                        "validated artifact is already retained at durable progress",
+                    ))
                 else:
-                    durable += 1
-                    observed = "acquired"
-                outcomes.append(CandidateRunOutcome(
-                    candidate.candidate_id,
-                    candidate.document_id,
-                    candidate.position,
-                    candidate.revision,
-                    observed,
-                    attempt_id,
-                    True,
-                    f"artifact {receipt.artifact_id}",
-                ))
+                    attempt_id = self._attempt_id(run_id, candidate, "success")
+                    receipt = self._repository.record_success(
+                        attempt_id, repository_candidate, result
+                    )
+                    maximum_success_position = max(
+                        maximum_success_position, validated_position
+                    )
+                    checkpoint_success = attempt_id
+                    last_success = attempt_id
+                    successful_candidates[candidate.candidate_id] = candidate.canonical()
+                    if receipt.idempotent:
+                        unchanged += 1
+                        observed = "unchanged"
+                    elif not receipt.artifact_created:
+                        duplicates += 1
+                        observed = "duplicate"
+                    else:
+                        durable += 1
+                        observed = "acquired"
+                    outcomes.append(CandidateRunOutcome(
+                        candidate.candidate_id,
+                        candidate.document_id,
+                        candidate.position,
+                        candidate.revision,
+                        observed,
+                        attempt_id,
+                        True,
+                        f"artifact {receipt.artifact_id}",
+                    ))
             except (ContractError, ConflictError, IntegrityError) as error:
                 failures += 1
                 status = RunStatus.FAILED
@@ -981,21 +1000,33 @@ class AcquisitionEngine:
             selection_policy is not None and selected_selection_candidate is None
         ) and selection_checkpoint_eligible:
             target = self._target_checkpoint(maximum_position, seen_candidates)
-            if checkpoint_before != target:
+            checkpoint_replay = (
+                checkpoint_before is not None
+                and checkpoint_confirmed
+                and retrievals == 0
+                and target.position == checkpoint_before.position
+            )
+            if (
+                fail_at == EngineFailurePoint.BEFORE_CHECKPOINT_FINALIZATION
+                and seen_candidates
+            ):
+                failures += 1
+                status = RunStatus.PARTIAL
+                diagnostics.append(
+                    {
+                        "failure_class": FailureClass.TRANSIENT_ADAPTER.value,
+                        "message": "injected failure before checkpoint finalization",
+                        "retryable": True,
+                    }
+                )
+            elif checkpoint_replay:
+                if self._repository.record_no_change(source_id, checkpoint_before):
+                    unchanged += 1
+            elif checkpoint_before != target:
                 if not seen_candidates:
                     # A successfully evaluated empty listing is a truthful no-change result.
                     # With no successful attempt there is deliberately no checkpoint to advance.
                     pass
-                elif fail_at == EngineFailurePoint.BEFORE_CHECKPOINT_FINALIZATION:
-                    failures += 1
-                    status = RunStatus.PARTIAL
-                    diagnostics.append(
-                        {
-                            "failure_class": FailureClass.TRANSIENT_ADAPTER.value,
-                            "message": "injected failure before checkpoint finalization",
-                            "retryable": True,
-                        }
-                    )
                 elif last_success is None:
                     status = RunStatus.BLOCKED
                     diagnostics.append(
@@ -1197,8 +1228,24 @@ class AcquisitionEngine:
     def _target_checkpoint(
         position: int, candidates: dict[str, dict[str, Any]]
     ) -> Checkpoint:
-        """Derive durable progress independently of provider continuation tokens."""
-        payload = json.dumps(candidates, sort_keys=True, separators=(",", ":")).encode()
+        """Derive durable progress from candidate semantics, excluding provenance."""
+        stable_candidates = {
+            candidate_id: {
+                key: candidate.get(key)
+                for key in (
+                    "candidate_id",
+                    "document_id",
+                    "position",
+                    "revision",
+                    "disposition",
+                    "disposition_reason",
+                )
+            }
+            for candidate_id, candidate in candidates.items()
+        }
+        payload = json.dumps(
+            stable_candidates, sort_keys=True, separators=(",", ":")
+        ).encode()
         cursor = f"engine-{hashlib.sha256(payload).hexdigest()[:24]}"
         return Checkpoint(position, cursor)
 

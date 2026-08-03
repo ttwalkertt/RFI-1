@@ -17,7 +17,9 @@ from rfi.acquisition import (
     AcquisitionEngine,
     AcquisitionRepository,
     AdapterRegistry,
+    EngineFailurePoint,
     EarningsTranscriptHttpResponse,
+    RunStatus,
     SourceProfile,
     TranscriptAcquisitionSelection,
     TranscriptAcquisitionTarget,
@@ -330,6 +332,236 @@ class TranscriptSeedAcquisitionTests(unittest.TestCase):
         self.assertIsNotNone(result.checkpoint_after)
         self.assertEqual(len(anchors), 1)
         self.assertEqual(anchors[0]["normalized_url"], artifact)
+
+    def test_checkpoint_replay_is_observable_no_change_for_both_selectors(self) -> None:
+        seed = "https://ir.example.com/archive"
+        artifact = "https://ir.example.com/q1-2025-earnings-call-transcript.html"
+        configured = source()
+        responses = {
+            seed: response(
+                seed, f"<a href='{artifact}'>January 30, 2025 earnings transcript</a>"
+            ),
+            artifact: response(artifact, transcript_body("January 30, 2025")),
+        }
+        selections = (
+            TranscriptAcquisitionSelection.latest(),
+            TranscriptAcquisitionSelection.first_in_date_range(
+                date(2025, 1, 1), date(2025, 12, 31)
+            ),
+        )
+
+        for selection in selections:
+            with self.subTest(selection=selection.mode.value), tempfile.TemporaryDirectory(
+            ) as directory:
+                repository = self._repository(directory, configured)
+                adapter = EarningsTranscriptPullAdapter(
+                    policies(), Search(), Transport(responses),
+                    lambda: "2026-08-03T00:00:00Z", repository=repository,
+                    selection=selection,
+                )
+                engine = AcquisitionEngine(
+                    repository, AdapterRegistry((adapter,)),
+                    lambda: "2026-08-03T00:00:00Z",
+                )
+                target = TranscriptAcquisitionTarget("firm-a", selection=selection)
+
+                ordinary = engine.run_source("source-a", "ordinary-empty")
+                injected = engine.run_source_trial(
+                    "source-a", "injected-success",
+                    adapter.injected_trial(configured, target, seed),
+                )
+                checkpoint = injected.checkpoint_after
+                anchors = repository.discovery_anchors(
+                    "firm-a", "source-a", adapter.adapter_id
+                )
+                history = repository.history()
+                artifacts = repository.artifact_metadata()
+                revision = repository.repository_revision()
+
+                learned_replay = engine.run_source("source-a", "ordinary-learned")
+                injected_replay = engine.run_source_trial(
+                    "source-a", "injected-repeat",
+                    adapter.injected_trial(configured, target, seed),
+                )
+
+                self.assertEqual(ordinary.status, RunStatus.COMPLETE)
+                self.assertEqual(ordinary.durable_acquisitions, 0)
+                self.assertIsNone(ordinary.checkpoint_after)
+                self.assertEqual(injected.status, RunStatus.COMPLETE)
+                self.assertEqual(injected.durable_acquisitions, 1)
+                self.assertIsNotNone(checkpoint)
+                for replay in (learned_replay, injected_replay):
+                    self.assertEqual(replay.status, RunStatus.COMPLETE)
+                    self.assertEqual(replay.durable_acquisitions, 0)
+                    self.assertEqual(
+                        replay.unchanged, 1, json.dumps(replay.to_dict(), indent=2)
+                    )
+                    self.assertEqual(replay.checkpoint_before, checkpoint)
+                    self.assertEqual(replay.checkpoint_after, checkpoint)
+                    self.assertNotIn(
+                        "blocked", {item.outcome for item in replay.outcomes}
+                    )
+                    self.assertTrue(
+                        any(
+                            item.outcome in {"checkpoint_filtered", "unchanged"}
+                            for item in replay.outcomes
+                        ),
+                        json.dumps(replay.to_dict(), indent=2),
+                    )
+                self.assertEqual(repository.history(), history)
+                self.assertEqual(repository.artifact_metadata(), artifacts)
+                self.assertEqual(
+                    repository.discovery_anchors(
+                        "firm-a", "source-a", adapter.adapter_id
+                    ),
+                    anchors,
+                )
+                self.assertEqual(repository.repository_revision(), revision)
+
+    def test_checkpoint_cursor_ignores_provenance_and_candidate_order(self) -> None:
+        first = {
+            "candidate-b": {
+                "candidate_id": "candidate-b",
+                "document_id": "document-b",
+                "position": 2,
+                "revision": "v1",
+                "provenance": {"locations": ["https://one.example/b"]},
+                "disposition": "acquire",
+                "disposition_reason": None,
+            },
+            "candidate-a": {
+                "candidate_id": "candidate-a",
+                "document_id": "document-a",
+                "position": 1,
+                "revision": "v1",
+                "provenance": {"locations": ["https://one.example/a"]},
+                "disposition": "acquire",
+                "disposition_reason": None,
+            },
+        }
+        equivalent = {
+            "candidate-a": {
+                **first["candidate-a"],
+                "provenance": {"locations": ["https://two.example/archive", "a"]},
+            },
+            "candidate-b": {
+                **first["candidate-b"],
+                "provenance": {"locations": ["https://two.example/b"]},
+            },
+        }
+        revised = {
+            **equivalent,
+            "candidate-b": {**equivalent["candidate-b"], "revision": "v2"},
+        }
+
+        checkpoint = AcquisitionEngine._target_checkpoint(2, first)
+        self.assertEqual(
+            checkpoint, AcquisitionEngine._target_checkpoint(2, equivalent)
+        )
+        self.assertNotEqual(
+            checkpoint.cursor,
+            AcquisitionEngine._target_checkpoint(2, revised).cursor,
+        )
+
+    def test_newer_validated_artifact_advances_after_checkpoint_replay_repair(self) -> None:
+        first_seed = "https://ir.example.com/archive-q1"
+        first_artifact = "https://ir.example.com/q1-2025-earnings-call-transcript.html"
+        newer_seed = "https://ir.example.com/archive-q2"
+        newer_artifact = "https://ir.example.com/q2-2025-earnings-call-transcript.html"
+        configured = source()
+        responses = {
+            first_seed: response(
+                first_seed,
+                f"<a href='{first_artifact}'>January 30, 2025 earnings transcript</a>",
+            ),
+            first_artifact: response(
+                first_artifact, transcript_body("January 30, 2025")
+            ),
+            newer_seed: response(
+                newer_seed,
+                f"<a href='{newer_artifact}'>April 30, 2025 earnings transcript</a>",
+            ),
+            newer_artifact: response(
+                newer_artifact, transcript_body("April 30, 2025")
+            ),
+        }
+
+        for selection in (
+            TranscriptAcquisitionSelection.latest(),
+            TranscriptAcquisitionSelection.first_in_date_range(
+                date(2025, 1, 1), date(2025, 12, 31)
+            ),
+        ):
+            with self.subTest(selection=selection.mode.value), tempfile.TemporaryDirectory(
+            ) as directory:
+                repository = self._repository(directory, configured)
+                adapter = EarningsTranscriptPullAdapter(
+                    policies(), Search(), Transport(responses),
+                    lambda: "2026-08-03T00:00:00Z", repository=repository,
+                    selection=selection,
+                )
+                engine = AcquisitionEngine(
+                    repository, AdapterRegistry((adapter,)),
+                    lambda: "2026-08-03T00:00:00Z",
+                )
+                target = TranscriptAcquisitionTarget("firm-a", selection=selection)
+                first = engine.run_source_trial(
+                    "source-a", "first",
+                    adapter.injected_trial(configured, target, first_seed),
+                )
+                newer = engine.run_source_trial(
+                    "source-a", "newer",
+                    adapter.injected_trial(configured, target, newer_seed),
+                )
+
+                self.assertEqual(first.durable_acquisitions, 1)
+                self.assertEqual(newer.status, RunStatus.COMPLETE)
+                self.assertEqual(newer.durable_acquisitions, 1)
+                self.assertGreater(
+                    newer.checkpoint_after.position, first.checkpoint_after.position
+                )
+                self.assertEqual(len(repository.artifact_metadata()), 2)
+                self.assertEqual(
+                    repository.discovery_anchors(
+                        "firm-a", "source-a", adapter.adapter_id
+                    )[0]["normalized_url"],
+                    newer_artifact,
+                )
+
+    def test_partial_checkpoint_replay_cannot_claim_no_change(self) -> None:
+        seed = "https://ir.example.com/archive"
+        artifact = "https://ir.example.com/q1-2025-earnings-call-transcript.html"
+        configured = source()
+        with tempfile.TemporaryDirectory() as directory:
+            repository = self._repository(directory, configured)
+            adapter = EarningsTranscriptPullAdapter(
+                policies(), Search(), Transport({
+                    seed: response(
+                        seed,
+                        f"<a href='{artifact}'>January 30, 2025 earnings transcript</a>",
+                    ),
+                    artifact: response(artifact, transcript_body("January 30, 2025")),
+                }), lambda: "2026-08-03T00:00:00Z", repository=repository,
+            )
+            target = TranscriptAcquisitionTarget("firm-a")
+            first = AcquisitionEngine(
+                repository, AdapterRegistry((adapter,)),
+                lambda: "2026-08-03T00:00:00Z",
+            ).run_source_trial(
+                "source-a", "first", adapter.injected_trial(configured, target, seed)
+            )
+            replay = AcquisitionEngine(
+                repository, AdapterRegistry((adapter,)),
+                lambda: "2026-08-03T00:00:00Z",
+            ).run_source_trial(
+                "source-a", "partial", adapter.injected_trial(configured, target, seed),
+                EngineFailurePoint.BEFORE_CHECKPOINT_FINALIZATION,
+            )
+
+        self.assertEqual(replay.status, RunStatus.PARTIAL)
+        self.assertEqual(replay.unchanged, 0)
+        self.assertEqual(replay.checkpoint_before, first.checkpoint_after)
+        self.assertEqual(replay.checkpoint_after, first.checkpoint_after)
 
     def test_service_resolves_governed_firm_profile_without_configuration_write(self) -> None:
         seed = "https://ir.example.com/archive"

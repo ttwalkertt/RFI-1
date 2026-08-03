@@ -332,6 +332,20 @@ class AcquisitionRepository:
             ).fetchall()
         return tuple(self._decode(row[0], "discovery anchor") for row in rows)
 
+    def has_retained_artifact(
+        self, candidate: CandidateDocument, result: RetrievalResult
+    ) -> bool:
+        """Return whether validated bytes already exist for this source document."""
+        self.source(candidate.source_id)
+        artifact_id = f"artifact-{sha256_bytes(result.content)}"
+        with self._database.connect(read_only=True) as connection:
+            row = connection.execute(
+                "SELECT 1 FROM artifact_observations "
+                "WHERE source_id=? AND document_id=? AND artifact_id=? LIMIT 1",
+                (candidate.source_id, candidate.document_id, artifact_id),
+            ).fetchone()
+        return row is not None
+
     @staticmethod
     def normalize_discovery_url(url: str) -> str:
         """Conservatively normalize URL identity without changing observed provenance."""
@@ -427,6 +441,21 @@ class AcquisitionRepository:
             resolved = record.get("diagnostics", {}).get("final_url")
             if not isinstance(requested, str) or not requested:
                 return False
+            normalized = self.normalize_discovery_url(
+                resolved if isinstance(resolved, str) else requested
+            )
+            retained = connection.execute(
+                "SELECT normalized_url FROM discovery_anchor_history "
+                "WHERE firm_id=? AND source_id=? AND adapter_id=? "
+                "ORDER BY stack_position LIMIT 1",
+                (
+                    source["policy"]["firm_id"],
+                    source_id,
+                    source["policy"]["retrieval_adapter_id"],
+                ),
+            ).fetchone()
+            if retained is not None and str(retained[0]) == normalized:
+                return True
             self._record_discovery_anchor_values(
                 connection, source, source_id, requested,
                 resolved if isinstance(resolved, str) else None,

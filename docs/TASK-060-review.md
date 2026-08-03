@@ -114,11 +114,31 @@ request sequence:
 Only the second URL is validated, persisted, and learned. The injected archive seed is not promoted
 merely because it was supplied.
 
+## Checkpoint Replay and Observable No-Change
+
+Checkpoint cursors hash stable candidate identity, position, revision, and disposition fields.
+Discovery locations, traversal metadata, seed source, selector attribution, and other incidental
+provenance do not participate. Existing checkpoints with an older cursor shape remain compatible:
+a complete run that confirms only candidates at or below the durable position finalizes against
+the existing checkpoint as observable no-change rather than requiring a new successful retrieval.
+
+For `first_in_date_range`, validation and terminal selection still run normally. After selection,
+the repository suppresses a new observation only when the selected bytes already exist for that
+source and document at the durable position. A genuinely newer or changed validated artifact still
+uses ordinary success ingress. Replay does not rewrite the learned-anchor stack when its current
+top already represents the checkpoint artifact.
+
+The focused regression executes one repository through empty ordinary acquisition, injected
+success, learned-seed replay, and repeated injection for both selectors. Each replay is complete
+with `unchanged=1`, zero new durable artifacts, identical before/after checkpoints, and unchanged
+history, artifact metadata, learned anchors, and repository revision. A separate regression proves
+that newer validated periods advance and an explicit pre-finalization fault remains partial.
+
 ## Verification Results
 
-- `make task060-test`: PASS, 124 focused and transcript/Pull/API regression tests.
-- `make task060-proof`: PASS; one injected trial selected a related URL, advanced one checkpoint,
-  and learned the validated artifact URL once.
+- `make task060-test`: PASS, 128 focused and transcript/Pull/API regression tests.
+- `make task060-proof`: PASS; empty ordinary acquisition, injected success, learned-seed replay,
+  and repeated injection completed with one durable artifact and observable unchanged replays.
 - `make task059-test`: PASS.
 - `make task058-test`: PASS.
 - Transcript acquisition regression suite: PASS.
@@ -126,7 +146,7 @@ merely because it was supplied.
 - `make task059-proof`: PASS.
 - `make task058-proof`: PASS with unchanged normal acquisition behavior.
 - Lint, formatting, type checking, documentation, baseline, and diff checks: PASS.
-- `make validate`: PASS, 573 tests plus all repository demos, offline proofs, quality checks,
+- `make validate`: PASS, 577 tests plus all repository demos, offline proofs, quality checks,
   documentation checks, architecture checks, and source archive integrity verification.
 
 The final review package reruns and retains the full output of each required command.

@@ -87,12 +87,14 @@ def proof() -> dict[str, object]:
             policy, NoSearch(), transport, lambda: "2026-08-03T00:00:00Z",
             repository=repository,
         )
-        target = TranscriptAcquisitionTarget("firm-a")
-        trial = adapter.injected_trial(profile, target, seed)
-        result = AcquisitionEngine(
+        engine = AcquisitionEngine(
             repository, AdapterRegistry((adapter,)),
             lambda: "2026-08-03T00:00:00Z",
-        ).run_source_trial("source-a", "manual-proof", trial)
+        )
+        target = TranscriptAcquisitionTarget("firm-a")
+        ordinary_before = engine.run_source("source-a", "ordinary-before")
+        trial = adapter.injected_trial(profile, target, seed)
+        result = engine.run_source_trial("source-a", "manual-proof", trial)
         successful = [
             item for item in repository.history()
             if item.get("record_type") == "retrieval_attempt"
@@ -101,11 +103,20 @@ def proof() -> dict[str, object]:
         anchors = repository.discovery_anchors(
             "firm-a", "source-a", "earnings-call-transcript"
         )
+        history = repository.history()
+        artifacts = repository.artifact_metadata()
+        checkpoint = result.checkpoint_after
+        learned_replay = engine.run_source("source-a", "ordinary-learned")
+        injected_replay = engine.run_source_trial(
+            "source-a", "injected-replay", adapter.injected_trial(profile, target, seed)
+        )
         trial_diagnostics = [
             item for item in result.diagnostics if item.get("trial_id")
         ]
         evidence = {
             "result": result.status.value,
+            "ordinary_before": ordinary_before.status.value,
+            "ordinary_before_durable": ordinary_before.durable_acquisitions,
             "trial_count": len(trial_diagnostics),
             "seed_kind": trial_diagnostics[0]["seed_kind"],
             "seed_source": trial_diagnostics[0]["seed_source"],
@@ -122,9 +133,29 @@ def proof() -> dict[str, object]:
             "learned_anchor_is_validated_artifact": (
                 len(anchors) == 1 and anchors[0]["normalized_url"] == selected
             ),
+            "learned_replay": learned_replay.status.value,
+            "learned_replay_unchanged": learned_replay.unchanged,
+            "injected_replay": injected_replay.status.value,
+            "injected_replay_unchanged": injected_replay.unchanged,
+            "replay_checkpoint_unchanged": (
+                checkpoint is not None
+                and learned_replay.checkpoint_before == checkpoint
+                and learned_replay.checkpoint_after == checkpoint
+                and injected_replay.checkpoint_before == checkpoint
+                and injected_replay.checkpoint_after == checkpoint
+            ),
+            "replay_repository_unchanged": (
+                repository.history() == history
+                and repository.artifact_metadata() == artifacts
+                and repository.discovery_anchors(
+                    "firm-a", "source-a", "earnings-call-transcript"
+                ) == anchors
+            ),
         }
     if not all((
         evidence["result"] == "complete",
+        evidence["ordinary_before"] == "complete",
+        evidence["ordinary_before_durable"] == 0,
         evidence["trial_count"] == 1,
         evidence["seed_kind"] == "single_seed",
         evidence["seed_source"] == "operator_supplied",
@@ -132,6 +163,12 @@ def proof() -> dict[str, object]:
         evidence["durable_acquisitions"] == 1,
         evidence["checkpoint_advanced"],
         evidence["learned_anchor_is_validated_artifact"],
+        evidence["learned_replay"] == "complete",
+        evidence["learned_replay_unchanged"] == 1,
+        evidence["injected_replay"] == "complete",
+        evidence["injected_replay_unchanged"] == 1,
+        evidence["replay_checkpoint_unchanged"],
+        evidence["replay_repository_unchanged"],
     )):
         raise RuntimeError("TASK-060 seed-injection proof failed")
     return evidence
