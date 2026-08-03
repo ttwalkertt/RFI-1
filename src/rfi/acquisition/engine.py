@@ -102,13 +102,39 @@ class AdapterCandidate:
             raise ContractError("skipped adapter candidate requires a reason")
 
     def canonical(self) -> dict[str, Any]:
-        """Return stable candidate semantics used for ambiguity detection."""
+        """Return the complete candidate representation used for persistence."""
         value = {
             "candidate_id": self.candidate_id,
             "document_id": self.document_id,
             "position": self.position,
             "revision": self.revision,
             "provenance": self.provenance.to_dict(),
+            "disposition": self.disposition,
+            "disposition_reason": self.disposition_reason,
+        }
+        if self.acquisition_target is not None:
+            value["acquisition_target"] = self.acquisition_target.to_dict()
+        return value
+
+    def stable_equivalence_projection(self) -> dict[str, Any]:
+        """Return durable semantics for duplicate identity conflict detection."""
+        trial_local_metadata = {
+            "proposal_rank", "seed_kind", "seed_source", "starting_seed", "trial_id",
+        }
+        provenance = self.provenance.to_dict()
+        metadata = provenance.get("metadata", {})
+        if isinstance(metadata, dict):
+            provenance["metadata"] = {
+                key: value for key, value in metadata.items()
+                if key not in trial_local_metadata
+            }
+        provenance.pop("discovered_at", None)
+        value = {
+            "candidate_id": self.candidate_id,
+            "document_id": self.document_id,
+            "position": self.position,
+            "revision": self.revision,
+            "provenance": provenance,
             "disposition": self.disposition,
             "disposition_reason": self.disposition_reason,
         }
@@ -368,6 +394,8 @@ class AcquisitionEngine:
         continuations: list[str] = []
         seen_tokens: set[str] = set()
         seen_candidates: dict[str, dict[str, Any]] = {}
+        seen_candidate_equivalence: dict[str, dict[str, Any]] = {}
+        authoritative_candidates: dict[str, AdapterCandidate] = {}
         outcomes: list[CandidateRunOutcome] = []
         diagnostics: list[dict[str, JsonValue]] = []
         pages = 0
@@ -536,7 +564,10 @@ class AcquisitionEngine:
                     maximum_position = max(maximum_position, candidate.position)
                 prior = seen_candidates.get(candidate.candidate_id)
                 if prior is not None:
-                    if prior != candidate.canonical():
+                    if (
+                        seen_candidate_equivalence[candidate.candidate_id]
+                        != candidate.stable_equivalence_projection()
+                    ):
                         failures += 1
                         status = RunStatus.FAILED
                         diagnostics.append(
@@ -547,14 +578,17 @@ class AcquisitionEngine:
                             )
                         )
                         break
+                    authoritative = authoritative_candidates[candidate.candidate_id]
                     duplicates += 1
-                    attempt_id = self._attempt_id(run_id, candidate, "duplicate")
-                    repository_candidate = self._repository_candidate(profile, candidate)
+                    attempt_id = self._attempt_id(run_id, authoritative, "duplicate")
+                    repository_candidate = self._repository_candidate(
+                        profile, authoritative
+                    )
                     created = self._repository.record_outcome(
                         attempt_id,
                         repository_candidate,
                         RetrievalOutcome.DUPLICATE,
-                        candidate.provenance.discovered_at,
+                        authoritative.provenance.discovered_at,
                         profile.mechanism,
                         {"reason": "duplicate discovery occurrence"},
                     )
@@ -572,6 +606,10 @@ class AcquisitionEngine:
                     )
                     continue
                 seen_candidates[candidate.candidate_id] = candidate.canonical()
+                seen_candidate_equivalence[
+                    candidate.candidate_id
+                ] = candidate.stable_equivalence_projection()
+                authoritative_candidates[candidate.candidate_id] = candidate
                 if (
                     selection_policy is None
                     and checkpoint_before
