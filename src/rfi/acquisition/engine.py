@@ -23,6 +23,7 @@ from rfi.acquisition.contracts import (
     validate_json,
 )
 from rfi.acquisition.repository import AcquisitionRepository
+from rfi.acquisition.url_identity import normalize_discovery_url
 
 
 class FailureClass(StrEnum):
@@ -67,6 +68,95 @@ class AdapterFailure(RuntimeError):
         self.code = code or classification.value
 
 
+_CANDIDATE_IDENTITY_METADATA_FIELDS = frozenset({
+    "accepted_at",
+    "acceptance_datetime",
+    "accession_no",
+    "accession_number",
+    "adapter_id",
+    "allowed_hosts",
+    "amendment",
+    "amendment_policy",
+    "archive_path",
+    "artifact_role",
+    "canonical_artifact_id",
+    "checkpoint_reporting_period",
+    "company_name",
+    "complete_submission_archive_path",
+    "configured_source",
+    "deferred_candidate_evaluation",
+    "expected_reporting_period",
+    "filed_at",
+    "filing_date",
+    "firm_id",
+    "firm_identity_terms",
+    "fixture_source",
+    "form_type",
+    "issuer_cik",
+    "issuer_ticker",
+    "link_to_txt",
+    "ordering_key",
+    "period_of_report",
+    "primary_document",
+    "provider",
+    "provider_surface",
+    "resolved_url",
+    "revision",
+    "sequence",
+    "submissions_path",
+})
+
+_DISCOVERY_OCCURRENCE_METADATA_FIELDS = frozenset({
+    "deterministic_selection_rank",
+    "link_label",
+    "observed_aliases",
+    "parent_path",
+    "parent_url",
+    "proposal_rank",
+    "ranking_reasons",
+    "requested_url",
+    "seed_kind",
+    "seed_source",
+    "starting_seed",
+    "traversal_depth",
+    "trial_id",
+})
+
+_MAX_OCCURRENCE_CANDIDATE_SAMPLES = 8
+_MAX_OCCURRENCES_PER_CANDIDATE = 3
+_MAX_OCCURRENCE_COLLECTION_ITEMS = 8
+_MAX_OCCURRENCE_STRING_LENGTH = 512
+
+
+def _string_or_none(value: object) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _bounded_occurrence_value(value: JsonValue) -> tuple[JsonValue, bool]:
+    if isinstance(value, str):
+        return value[:_MAX_OCCURRENCE_STRING_LENGTH], (
+            len(value) > _MAX_OCCURRENCE_STRING_LENGTH
+        )
+    if isinstance(value, list):
+        bounded: list[JsonValue] = []
+        truncated = len(value) > _MAX_OCCURRENCE_COLLECTION_ITEMS
+        for item in value[:_MAX_OCCURRENCE_COLLECTION_ITEMS]:
+            projected, item_truncated = _bounded_occurrence_value(item)
+            bounded.append(projected)
+            truncated = truncated or item_truncated
+        return bounded, truncated
+    if isinstance(value, dict):
+        bounded_dict: dict[str, JsonValue] = {}
+        items = list(value.items())
+        truncated = len(items) > _MAX_OCCURRENCE_COLLECTION_ITEMS
+        for key, item in items[:_MAX_OCCURRENCE_COLLECTION_ITEMS]:
+            projected, item_truncated = _bounded_occurrence_value(item)
+            bounded_dict[key] = projected
+            truncated = truncated or item_truncated
+        return bounded_dict, truncated
+    return value, False
+
+
 @runtime_checkable
 class AdapterAcquisitionTarget(Protocol):
     """Provider-neutral immutable target carried through deterministic trials."""
@@ -75,6 +165,66 @@ class AdapterAcquisitionTarget(Protocol):
 
     def to_dict(self) -> dict[str, Any]:
         """Return stable target semantics for boundary validation."""
+
+
+@dataclass(frozen=True)
+class CandidateIdentity:
+    """Allowlisted stable semantics used for duplicate conflict detection."""
+
+    candidate_id: str
+    document_id: str
+    position: int
+    revision: str
+    disposition: str
+    disposition_reason: str | None
+    discovery_method: str
+    provider_identifiers: dict[str, str]
+    canonical_locations: tuple[str, ...]
+    metadata: dict[str, JsonValue]
+    acquisition_target: dict[str, Any] | None
+
+    def to_dict(self) -> dict[str, Any]:
+        value: dict[str, Any] = {
+            "candidate_id": self.candidate_id,
+            "document_id": self.document_id,
+            "position": self.position,
+            "revision": self.revision,
+            "disposition": self.disposition,
+            "disposition_reason": self.disposition_reason,
+            "discovery_method": self.discovery_method,
+            "provider_identifiers": dict(self.provider_identifiers),
+            "canonical_locations": list(self.canonical_locations),
+            "metadata": dict(self.metadata),
+        }
+        if self.acquisition_target is not None:
+            value["acquisition_target"] = dict(self.acquisition_target)
+        return value
+
+
+@dataclass(frozen=True)
+class DiscoveryOccurrence:
+    """Trial-local attribution for one observation of a stable candidate."""
+
+    discovered_at: str
+    trial_id: str | None
+    starting_seed: str | None
+    seed_kind: str | None
+    seed_source: str | None
+    locations: tuple[str, ...]
+    metadata: dict[str, JsonValue]
+    details_omitted: bool
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        return {
+            "discovered_at": self.discovered_at,
+            "trial_id": self.trial_id,
+            "starting_seed": self.starting_seed,
+            "seed_kind": self.seed_kind,
+            "seed_source": self.seed_source,
+            "locations": list(self.locations),
+            "metadata": dict(self.metadata),
+            "details_omitted": self.details_omitted,
+        }
 
 
 @dataclass(frozen=True)
@@ -116,31 +266,77 @@ class AdapterCandidate:
             value["acquisition_target"] = self.acquisition_target.to_dict()
         return value
 
-    def stable_equivalence_projection(self) -> dict[str, Any]:
-        """Return durable semantics for duplicate identity conflict detection."""
-        trial_local_metadata = {
-            "proposal_rank", "seed_kind", "seed_source", "starting_seed", "trial_id",
+    def identity(self) -> CandidateIdentity:
+        """Return the one allowlisted candidate identity representation."""
+        metadata = {
+            key: value for key, value in self.provenance.metadata.items()
+            if key in _CANDIDATE_IDENTITY_METADATA_FIELDS
         }
-        provenance = self.provenance.to_dict()
-        metadata = provenance.get("metadata", {})
-        if isinstance(metadata, dict):
-            provenance["metadata"] = {
-                key: value for key, value in metadata.items()
-                if key not in trial_local_metadata
-            }
-        provenance.pop("discovered_at", None)
-        value = {
-            "candidate_id": self.candidate_id,
-            "document_id": self.document_id,
-            "position": self.position,
-            "revision": self.revision,
-            "provenance": provenance,
-            "disposition": self.disposition,
-            "disposition_reason": self.disposition_reason,
+        resolved = metadata.get("resolved_url")
+        if isinstance(resolved, str):
+            resolved = normalize_discovery_url(resolved)
+            metadata["resolved_url"] = resolved
+        canonical_locations = (
+            (resolved,) if isinstance(resolved, str)
+            else self.provenance.locations
+        )
+        return CandidateIdentity(
+            self.candidate_id,
+            self.document_id,
+            self.position,
+            self.revision,
+            self.disposition,
+            self.disposition_reason,
+            self.provenance.discovery_method,
+            dict(self.provenance.provider_identifiers),
+            canonical_locations,
+            metadata,
+            (
+                self.acquisition_target.to_dict()
+                if self.acquisition_target is not None else None
+            ),
+        )
+
+    def occurrence(
+        self, trial: AdapterAcquisitionTrial | None = None
+    ) -> DiscoveryOccurrence:
+        """Return trial-local discovery attribution excluded from identity."""
+        metadata = {
+            key: value for key, value in self.provenance.metadata.items()
+            if key in _DISCOVERY_OCCURRENCE_METADATA_FIELDS
         }
-        if self.acquisition_target is not None:
-            value["acquisition_target"] = self.acquisition_target.to_dict()
-        return value
+        bounded_metadata: dict[str, JsonValue] = {}
+        details_omitted = False
+        for key, value in metadata.items():
+            bounded, omitted = _bounded_occurrence_value(value)
+            bounded_metadata[key] = bounded
+            details_omitted = details_omitted or omitted
+        starting_seed = (
+            trial.starting_seed if trial is not None
+            else _string_or_none(metadata.get("starting_seed"))
+        )
+        if starting_seed is not None:
+            bounded_seed, omitted = _bounded_occurrence_value(starting_seed)
+            assert isinstance(bounded_seed, str)
+            starting_seed = bounded_seed
+            details_omitted = details_omitted or omitted
+        locations = self.provenance.locations[:_MAX_OCCURRENCE_COLLECTION_ITEMS]
+        details_omitted = details_omitted or (
+            len(self.provenance.locations) > len(locations)
+        )
+        return DiscoveryOccurrence(
+            self.provenance.discovered_at,
+            trial.trial_id if trial is not None else _string_or_none(metadata.get("trial_id")),
+            starting_seed,
+            trial.seed_kind if trial is not None else _string_or_none(metadata.get("seed_kind")),
+            (
+                trial.seed_source if trial is not None
+                else _string_or_none(metadata.get("seed_source"))
+            ),
+            locations,
+            bounded_metadata,
+            details_omitted,
+        )
 
 
 @dataclass(frozen=True)
@@ -394,8 +590,10 @@ class AcquisitionEngine:
         continuations: list[str] = []
         seen_tokens: set[str] = set()
         seen_candidates: dict[str, dict[str, Any]] = {}
-        seen_candidate_equivalence: dict[str, dict[str, Any]] = {}
+        seen_candidate_identities: dict[str, CandidateIdentity] = {}
         authoritative_candidates: dict[str, AdapterCandidate] = {}
+        occurrence_counts: dict[str, int] = {}
+        occurrence_samples: dict[str, list[DiscoveryOccurrence]] = {}
         outcomes: list[CandidateRunOutcome] = []
         diagnostics: list[dict[str, JsonValue]] = []
         pages = 0
@@ -557,6 +755,14 @@ class AcquisitionEngine:
                 break
             for candidate in ordered:
                 discovered += 1
+                identity = candidate.identity()
+                occurrence = candidate.occurrence(active_trial)
+                occurrence_counts[candidate.candidate_id] = (
+                    occurrence_counts.get(candidate.candidate_id, 0) + 1
+                )
+                samples = occurrence_samples.setdefault(candidate.candidate_id, [])
+                if len(samples) < _MAX_OCCURRENCES_PER_CANDIDATE:
+                    samples.append(occurrence)
                 deferred_evaluation = (
                     candidate.provenance.metadata.get("deferred_candidate_evaluation") is True
                 )
@@ -565,8 +771,8 @@ class AcquisitionEngine:
                 prior = seen_candidates.get(candidate.candidate_id)
                 if prior is not None:
                     if (
-                        seen_candidate_equivalence[candidate.candidate_id]
-                        != candidate.stable_equivalence_projection()
+                        seen_candidate_identities[candidate.candidate_id]
+                        != identity
                     ):
                         failures += 1
                         status = RunStatus.FAILED
@@ -606,9 +812,7 @@ class AcquisitionEngine:
                     )
                     continue
                 seen_candidates[candidate.candidate_id] = candidate.canonical()
-                seen_candidate_equivalence[
-                    candidate.candidate_id
-                ] = candidate.stable_equivalence_projection()
+                seen_candidate_identities[candidate.candidate_id] = identity
                 authoritative_candidates[candidate.candidate_id] = candidate
                 if (
                     selection_policy is None
@@ -1169,6 +1373,18 @@ class AcquisitionEngine:
                 **selected_diagnostics,
             })
 
+        occurrence_diagnostic = self._occurrence_diagnostic(
+            occurrence_counts, occurrence_samples
+        )
+        if occurrence_diagnostic is not None:
+            insertion = len(diagnostics)
+            if diagnostics and (
+                "failure_class" in diagnostics[-1]
+                or "terminal_run_status" in diagnostics[-1]
+            ):
+                insertion -= 1
+            diagnostics.insert(insertion, occurrence_diagnostic)
+
         return AcquisitionRunResult(
             run_id=run_id,
             source_id=source_id,
@@ -1217,6 +1433,42 @@ class AcquisitionEngine:
             raise ContractError("adapter discovery did not return DiscoveryPage")
         if any(not isinstance(candidate, AdapterCandidate) for candidate in page.candidates):
             raise ContractError("discovery page contains a malformed candidate")
+
+    @staticmethod
+    def _occurrence_diagnostic(
+        occurrence_counts: dict[str, int],
+        occurrence_samples: dict[str, list[DiscoveryOccurrence]],
+    ) -> dict[str, JsonValue] | None:
+        """Return exact totals with bounded first-occurrence-ordered samples."""
+        repeated = [
+            candidate_id for candidate_id, count in occurrence_counts.items()
+            if count > 1
+        ]
+        if not repeated:
+            return None
+        selected = repeated[:_MAX_OCCURRENCE_CANDIDATE_SAMPLES]
+        samples: list[dict[str, JsonValue]] = []
+        for candidate_id in selected:
+            occurrences = occurrence_samples[candidate_id]
+            total = occurrence_counts[candidate_id]
+            samples.append({
+                "candidate_id": candidate_id,
+                "occurrence_count": total,
+                "authoritative_occurrence": occurrences[0].to_dict(),
+                "occurrences": [item.to_dict() for item in occurrences],
+                "occurrences_omitted": total > len(occurrences),
+            })
+        value: dict[str, JsonValue] = {
+            "diagnostic_type": "candidate_occurrences",
+            "candidates_with_multiple_occurrences": len(repeated),
+            "duplicate_occurrence_count": sum(
+                occurrence_counts[candidate_id] - 1 for candidate_id in repeated
+            ),
+            "candidate_samples": samples,
+            "candidate_samples_omitted": len(repeated) > len(selected),
+        }
+        validate_json(value, "candidate occurrence diagnostics")
+        return value
 
     @staticmethod
     def _record_selection_diagnostic(

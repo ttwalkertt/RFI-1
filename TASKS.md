@@ -60,6 +60,7 @@
 | TASK-059 | Explicit transcript acquisition selection criteria | Complete |
 | TASK-060 | Seed-injection transcript acquisition API | Complete |
 | TASK-061 | Transcript learning inspection API | Complete |
+| TASK-062 | Separate candidate identity from discovery occurrence | Complete |
 
 ## Architectural Progression
 
