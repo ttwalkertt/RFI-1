@@ -40,8 +40,41 @@ def run(name: str, command: list[str]) -> dict[str, object]:
 
 def generate(base: str | None) -> int:
     outcomes = [
+        run(
+            "checkpoint-replay-focused",
+            [
+                ".venv/bin/python",
+                "-m",
+                "unittest",
+                "tests.test_task060.TranscriptSeedAcquisitionTests."
+                "test_oracle_archive_injected_and_learned_replay_are_mutation_free",
+                "tests.test_task060.TranscriptSeedAcquisitionTests."
+                "test_checkpoint_replay_is_observable_no_change_for_both_selectors",
+                "tests.test_task060.TranscriptSeedAcquisitionTests."
+                "test_newer_validated_artifact_advances_after_checkpoint_replay_repair",
+                "tests.test_task060.TranscriptSeedAcquisitionTests."
+                "test_partial_checkpoint_replay_cannot_claim_no_change",
+                "tests.test_task060.TranscriptSeedAcquisitionTests."
+                "test_same_position_different_checkpoint_cursor_remains_a_conflict",
+                "tests.test_task061.TranscriptLearningInspectionTests."
+                "test_injected_acquisition_is_visible_through_learning_endpoint",
+                "-v",
+            ],
+        ),
         run("focused", ["make", "task061-test"]),
+        run("task059-regression", ["make", "task059-test"]),
         run("task060-regression", ["make", "task060-test"]),
+        run(
+            "repository-regression",
+            [
+                ".venv/bin/python",
+                "-m",
+                "unittest",
+                "tests.test_acquisition",
+                "tests.test_engine",
+                "-v",
+            ],
+        ),
         run(
             "transcript-regression",
             [
@@ -89,8 +122,11 @@ def generate(base: str | None) -> int:
     if any(item["exit_code"] for item in outcomes):
         raise RuntimeError("one or more TASK-061 validations failed")
     names = (
+        "checkpoint-replay-focused",
         "focused",
+        "task059-regression",
         "task060-regression",
+        "repository-regression",
         "transcript-regression",
         "admin-api-regression",
         "injected-acquisition-integration",
@@ -105,6 +141,7 @@ def generate(base: str | None) -> int:
         ),
         ("design/TASK-060-review.md", ROOT / "docs/TASK-060-review.md"),
         ("completion/repository-review.md", ROOT / "docs/TASK-061-review.md"),
+        ("evidence/task060-tests.py", ROOT / "tests/test_task060.py"),
         ("evidence/task061-tests.py", ROOT / "tests/test_task061.py"),
         *(
             (f"validation/{name}.txt", VALIDATION / f"{name}.txt")

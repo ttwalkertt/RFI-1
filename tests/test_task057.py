@@ -773,7 +773,7 @@ class CorrectiveRobustnessTests(unittest.TestCase):
             ),
         )
 
-    def test_mixed_success_advances_checkpoint_and_reports_warnings(self) -> None:
+    def test_first_success_advances_checkpoint_without_later_candidate_failure(self) -> None:
         timed_out_hint = "https://ir-timeout.example.com/transcripts/"
         listing = "https://ir.example.com/transcripts/"
         retained = "https://ir.example.com/2026-04-30-earnings-call-transcript.html"
@@ -819,9 +819,9 @@ class CorrectiveRobustnessTests(unittest.TestCase):
                 "firm-a", configured.source_id, "earnings-call-transcript"
             )
 
-        self.assertEqual(result.status, RunStatus.PARTIAL)
+        self.assertEqual(result.status, RunStatus.COMPLETE)
         self.assertEqual(result.durable_acquisitions, 1)
-        self.assertEqual(result.failures, 1)
+        self.assertEqual(result.failures, 0)
         self.assertEqual(
             result.checkpoint_after.position, ReportingPeriod.parse("2026-Q2").ordinal
         )
@@ -834,7 +834,8 @@ class CorrectiveRobustnessTests(unittest.TestCase):
         self.assertNotIn("hint timed out", summary)
         evidence = json.dumps(result.to_dict())
         self.assertIn("hint_fetch_timeout", evidence)
-        self.assertIn("candidate_fetch_timeout", evidence)
+        self.assertNotIn("candidate_fetch_timeout", evidence)
+        self.assertNotIn(failed, transport.requests)
         self.assertEqual(len(anchors), 1)
         self.assertEqual(anchors[0]["requested_url"], retained)
 
@@ -1111,7 +1112,7 @@ class CorrectiveRobustnessTests(unittest.TestCase):
             ).run_source(configured.source_id, "expected-precedence")
         self.assertEqual(engine_result.status, RunStatus.COMPLETE)
         self.assertEqual(engine_result.durable_acquisitions, 1)
-        self.assertEqual(engine_result.skips, 1)
+        self.assertEqual(engine_result.skips, 0)
         self.assertEqual(engine_transport.requests, [hint, expected])
 
     def test_unexpected_programming_exception_is_not_reported_as_provider_failure(self) -> None:

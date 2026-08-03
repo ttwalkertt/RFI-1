@@ -2,37 +2,25 @@
 
 ## Result
 
-TASK-061 is Complete. The local REST API now exposes the acquisition repository's current
-transcript learning for one canonical firm through:
+TASK-061 is complete. The local REST API exposes the acquisition repository's current transcript
+learning for one canonical firm through:
 
 ```http
 GET /api/transcript-acquisitions/learning/{firm_id}
 ```
 
-The endpoint is observational. It validates the firm through the existing firm catalog, opens the
-acquisition database read-only, and returns the existing persisted discovery-anchor records. It
-does not plan or register a source, run discovery or acquisition, learn, advance a checkpoint, or
-write any repository projection.
+The endpoint remains observational and reads existing discovery-anchor history through a read-only
+repository connection. It does not plan acquisition, discover, learn, advance a checkpoint, or
+write repository state.
 
-## Architectural Summary
-
-`AcquisitionRepository.transcript_learning()` is the only new repository operation. It reads
-`discovery_anchor_history`, joins the already governed source record to select transcript learning,
-and decodes the existing canonical anchor JSON. No new table, file, cache, DTO, or alternate
-learning representation exists.
-
-`PullWorkflow.transcript_learning()` is a narrow service facade. It resolves the caller's canonical
-`firm_id` through the same firm catalog used by existing Pull Workflow operations, then delegates
-directly to the repository read. It does not acquire the execution lock because no acquisition or
-mutable workflow state is involved.
-
-The admin HTTP adapter parses the fixed firm path, rejects populated query controls, invokes the
-service, and projects the returned tuple as JSON. The caller never supplies `source_id`, adapter
-identity, stack position, or any other internal repository identifier.
+This final branch also contains operator-requested corrective repairs discovered through real
+Oracle and IBM archive testing: `latest` terminates after its first validated candidate, and an
+equivalent repeat acquisition recognizes the checkpoint's stable validated revision without
+attempting to bind a traversal-dependent cursor.
 
 ## Endpoint Contract and Response Schema
 
-The request contains exactly one path identity and no request body:
+The request supplies one canonical firm path identity and no body:
 
 ```http
 GET /api/transcript-acquisitions/learning/seagate
@@ -47,137 +35,160 @@ An empty successful response is:
 }
 ```
 
-Each populated `learning` element is the existing persisted discovery-anchor model, including only
-repository-owned fields:
+Each populated `learning` element is the canonical JSON already stored in
+`discovery_anchor_history`. Persisted fields include record/schema identity, firm/source/adapter
+identity, normalized/requested/resolved URL evidence, attempt and artifact identity, success time,
+source-profile revision, and qualification. The response invents no confidence, score, date,
+promotion, or recovery metadata. Unknown firms use the existing HTTP 400 `invalid_request`
+convention.
 
-- `schema_version` and `record_type`;
-- `firm_id`, `source_id`, and `adapter_id`;
-- `normalized_url`, `requested_url`, and optional `resolved_url`;
-- `attempt_id` and optional `artifact_id`;
-- `succeeded_at` and optional `source_profile_revision_id`;
-- `qualification` (`retained_artifact` or `no_change`).
+## Repository Order and Read-Only Proof
 
-The API does not add labels, confidence, scores, promotion status, inferred dates, or recovery
-metadata. Internal identities can be inspected in the returned persisted record, but they are not
-request inputs and callers do not need to resolve them.
+The repository query groups independent histories by persisted source and adapter identity and
+orders each by authoritative `stack_position`. It decodes stored canonical JSON without sorting or
+reconstructing anchor metadata in application code.
 
-Unknown firms retain the existing admin API convention: HTTP 400 with the normal JSON error
-envelope, `error_code: invalid_request`, and `error: unknown firm: {firm_id}`.
+The populated-state test proves exact JSON equality between the existing `discovery_anchors()`
+projection and the API response. The repeated-read test snapshots repository revision, sources,
+attempts, artifacts, checkpoints, and learning before two GET requests and proves every value is
+unchanged afterward. Empty learning returns HTTP 200 with an empty array.
 
-## Repository Order Proof
+## Live Corrective Replay Diagnosis
 
-The authoritative learning order is `discovery_anchor_history.stack_position`, the same persisted
-order returned by `discovery_anchors()` and consumed by transcript trial planning. The new query
-orders by persisted `source_id`, persisted `adapter_id`, then `stack_position`; this keeps every
-independent learning history contiguous and preserves its exact execution order. It returns each
-row's canonical JSON without reconstructing or sorting anchor metadata in application code.
+The reported Oracle request was reproduced against an isolated copy of the operator repository.
+The running server was confirmed to use this checkout, virtual environment, branch, and commit.
+The exact pre-repair conflict was:
 
-`test_populated_learning_preserves_persisted_repository_order` records three successes, obtains the
-existing `discovery_anchors()` repository projection, and proves byte-for-JSON equality with the API
-array. It separately proves the observed URLs remain in the expected move-to-front order.
+- persisted checkpoint position: `8107`;
+- persisted checkpoint cursor: `engine-e61b3a001cf4b33258d8b610`;
+- replay-proposed checkpoint position: `8107`;
+- replay-proposed checkpoint cursor: `engine-e30530ac68b9ea19cade9623`;
+- differing checkpoint fields: cursor only.
 
-There is no invented cross-history recency order: distinct governed source/adapter histories have
-independent stack positions and are grouped by their persisted identity.
+Both positions derive from validated event date `2026-08-03`, mapped to reporting period `2026-Q3`
+and ordinal `8107`. The position therefore represented the same durable progress.
 
-## Read-Only and Empty-State Proof
+The persisted cursor was hashed from the original discovery candidate membership. The replay
+cursor input contained the checkpoint-filtered Q3/Q4 candidates, including candidate/document
+identity, proposal-period position and revision, disposition, and disposition reason. Its current
+provenance, seed source, proposal rank, and traversal diagnostics were excluded by the cursor
+helper, but the changed candidate membership still produced a different hash. Candidate membership
+is derived from checkpoint-aware discovery and is not the durable validated revision.
 
-The repository query uses `RepositoryDatabase.connect(read_only=True)` and executes one `SELECT`.
-The service performs only firm lookup and that query. The handler performs only JSON serialization.
-No mutation method is reachable from this call chain.
+The first repair attempted to recognize replay by exact artifact bytes. Live StockAnalysis evidence
+showed why that was insufficient: the retained Q2 page was 258,853 bytes and its current response
+was 258,854 bytes. Embedded epoch timestamps, quote price, after-hours change, and quote time had
+changed while the source, media type, validated position, and validated revision were unchanged.
+The exact SHA-256 therefore changed and the engine incorrectly reached checkpoint advancement.
 
-`test_repeated_reads_do_not_mutate_repository_state` snapshots repository revision, governed
-sources, acquisition history, artifact metadata, checkpoints, and transcript learning before two
-HTTP reads, proves both responses are identical, then proves every snapshot is unchanged.
+TASK-060's Oracle regression reused identical fixture bytes and began with a clean one-artifact
+state. It did not model mutable provider wrapper data together with checkpoint-filtered candidate
+membership and the historical multi-artifact repository state, so this path was not covered.
 
-`test_empty_learning_state_returns_success` uses a known firm with no anchor history and proves HTTP
-200 with the exact empty response. It does not require a saved or runnable transcript profile.
+## Corrective Architecture
 
-## Injected-Acquisition Integration Proof
+The repository retains one read-only equivalence seam. It first accepts exact artifact identity.
+When bytes differ, it compares the validator-owned durable identity: media type,
+`validated_position`, and `validated_revision`. Latest replay compares that identity directly with
+the successful attempt that anchors the current checkpoint. Range replay additionally scopes the
+same comparison to the selected source document.
 
-`test_injected_acquisition_is_visible_through_learning_endpoint` configures the existing transcript
-adapter with a bounded fixture transport, starts at an injected archive URL through the TASK-060
-POST endpoint, discovers and validates a different transcript URL, and persists one artifact. A
-subsequent TASK-061 GET returns one existing learned anchor whose `normalized_url` and
-`requested_url` are the validated transcript URL rather than the supplied archive seed.
+No replay identity is persisted. Seed origin, trial ID, run ID, proposal rank, candidate iteration
+order, traversal path, request identity, provenance, and diagnostic metadata do not participate.
+The existing artifact, observation, attempt, and checkpoint models remain the only durable models.
 
-This proves the new endpoint observes existing evidence-based learning. It does not teach the
-operator-supplied seed or introduce a second learning path.
+After successful validation, a trial-oriented latest acquisition whose validated position is not
+newer and whose validated revision matches the current checkpoint attempt emits the existing
+`unchanged` outcome. It does not call `record_success()` or `advance_checkpoint()`. The existing
+checkpoint remains authoritative and its cursor is neither recomputed nor rebound.
+
+The repository's monotonic and same-position/different-cursor checks are unchanged. A genuinely
+newer validated position uses the normal success and checkpoint-advancement path. Results without
+a valid durable position/revision identity fall back to exact artifact identity and fail closed
+rather than claiming semantic equivalence.
+
+## Replay and Integration Proof
+
+The realistic Oracle regression uses one StockAnalysis archive page containing Q4, Q3, Q2, and Q1
+2026-labelled links with distinct artifact bytes. It changes provider-wrapper bytes between the
+first run and replay while preserving the validator-owned durable revision, and proves:
+
+1. the first injected `latest` run persists exactly one validated artifact and observation;
+2. the checkpoint advances once;
+3. an identical injected replay completes with `unchanged == 1`;
+4. a learned-seed replay also completes unchanged;
+5. artifact, observation, attempt, anchor, repository revision, checkpoint position, and checkpoint
+   cursor are unchanged across replay;
+6. a failure injected before checkpoint finalization remains partial with `unchanged == 0`;
+7. a genuinely newer validated artifact advances normally;
+8. `first_in_date_range` replay remains mutation-free with changed wrapper bytes; and
+9. an intentionally different cursor at the same position is still rejected by the repository.
+
+The repair was also exercised against an isolated copy of the actual operator repository using the
+reported HTTP POST. It returned HTTP 200 with `durable_acquisitions=0`, `unchanged=1`, and the exact
+existing checkpoint. Before and after remained revision `5224`, artifacts `2288`, observations
+`2676`, anchors `18`, position `8107`, and cursor `engine-e61b3a001cf4b33258d8b610`. The operator
+repository itself was not modified during diagnosis or verification.
+
+The TASK-061 HTTP integration test sends the Oracle-shaped POST twice through the real admin API.
+Both responses are HTTP 200; the first reports one durable acquisition, the second reports zero
+durable acquisitions and one unchanged result. A subsequent learning GET returns the single
+validated learned anchor.
 
 ## Complexity and Robustness Review
 
-The required deliberate review found:
+The deliberate review confirmed:
 
-- accidental mutation: none; the call graph terminates in a read-only connection and repeated-read
-  state snapshots are identical;
-- duplicate representations: none; the response contains decoded canonical anchor records from the
-  existing table;
-- order preservation: exact within every persisted learning history, with deterministic grouping
-  for independent histories;
-- unnecessary complexity: avoided; one repository query, one service facade, and one handler route
-  were sufficient;
-- hidden caller assumptions: none; only canonical `firm_id` is supplied, and empty state does not
-  depend on source-profile or adapter resolution;
-- empty-state correctness: HTTP 200 and an empty array for every known firm without transcript
-  learning.
+- no seed-origin special case exists; learned and operator-supplied trials use the same engine path;
+- no second checkpoint table, cursor type, replay record, or parallel learning representation was
+  introduced;
+- replay exits before existing mutation methods rather than adding replay-only persistence;
+- the source-wide comparison is anchored to the current checkpoint attempt, not arbitrary prior or
+  partial attempts;
+- repository same-position/different-cursor validation remains unchanged and fail-closed;
+- checkpoint monotonicity rules are unchanged;
+- latest and range selector contracts, learning policy, search ranking, seed injection shape, and
+  request idempotency remain unchanged;
+- missing or malformed validated revision identity cannot be treated as semantically equivalent;
+- partial failure precedence is explicitly tested and preserved; and
+- no duplicate artifact, observation, learned anchor, attempt, or repository revision is produced.
 
-No corrective finding remained after this review.
+No remaining in-scope corrective finding was identified.
 
 ## Verification Results
 
-- `make task061-test`: PASS, 5 focused repository/service/HTTP acceptance tests.
-- `make task060-test`: PASS, 128 seed injection, transcript, Pull Workflow, and REST regressions.
-- Transcript acquisition regression suite: PASS, 77 tests covering TASK-048/048A, TASK-052/053,
-  TASK-056, and TASK-057.
-- Relevant admin/API suite: PASS, 29 tests covering TASK-009, TASK-012, and TASK-015.
-- Injected acquisition followed by learning inspection: PASS as a separately runnable focused
-  integration case.
-- Format, lint, type, documentation, baseline, diff, and source archive checks: PASS.
-- `make validate`: PASS, 582 tests plus all repository demos, offline proofs, quality checks,
-  documentation checks, architecture checks, and source archive integrity verification.
+- Focused checkpoint/replay tests: PASS (6 tests).
+- TASK-059 regression target: PASS (119 tests).
+- TASK-060 regression target: PASS (131 tests).
+- TASK-061 focused/API target: PASS (5 tests).
+- Acquisition repository and engine regression suite: PASS (42 tests).
+- Transcript acquisition and admin/API regressions: PASS.
+- Full `make validate`: PASS.
 
-The final review package reruns and retains the complete output of every required command.
-
-## Files Changed
-
-- `src/rfi/acquisition/repository.py`: read-only transcript learning query over existing anchors.
-- `src/rfi/pull/workflow.py`: canonical-firm validation and repository delegation.
-- `src/rfi/admin/server.py`: fixed GET endpoint and existing error-envelope integration.
-- `tests/test_task061.py`: focused empty, ordered, unknown, mutation-free, and injected integration
-  evidence.
-- `scripts/generate_task061_review.py`: commit-aware validation, package assembly, and verification.
-- `Makefile`: TASK-061 focused and review targets.
-- `docs/pull-workflow.md`: public REST contract.
-- `TASKS.md`, the TASK-061 ticket, and the design baseline: completed milestone governance.
+The generated package contains command output and exit status for every required validation, plus
+the commit-aware patch, file inventory, manifest, and SHA-256 checksums.
 
 ## Assumptions and Limitations
 
-- The endpoint is synchronous and local, matching the existing admin REST boundary.
-- Learning remains capped and qualified by the existing TASK-056 repository policy.
-- Exact persisted URLs and internal provenance identifiers are returned because they are existing
-  repository state; the endpoint adds no redaction or fabricated display metadata.
-- Independent source/adapter learning histories have no persisted cross-history recency order. They
-  are grouped deterministically while preserving each history's authoritative stack order.
-- This endpoint does not assess anchor quality, availability, freshness, or likelihood of success.
-- No pagination or continuation cursor is present because the existing repository learning set is
-  bounded.
-
-## Explicit Scope Confirmation
-
-No edit/delete/reorder operation, deterministic search change, learning-policy change, checkpoint
-change, seed-injection change, acquisition change, backfill, continuation cursor, LLM recovery,
-recovery workspace, operator UI, or historical representation was added.
+- Existing bad Oracle/IBM artifacts, anchors, observations, and checkpoints are not deleted or
+  backfilled by this repair.
+- Content-date extraction that allowed historical-labelled archive URLs to validate as
+  `2026-08-03` is a separate issue and is unchanged.
+- Validator-owned `validated_position` and `validated_revision` define durable acquisition
+  equivalence. Provider wrapper-byte changes without a validator revision change are observationally
+  unchanged; a future content-sensitive validator revision can distinguish genuine same-period
+  publication revisions without changing checkpoint architecture.
+- Independent learning histories have no persisted global recency order; their internal stack
+  order remains authoritative.
 
 ## Architectural Status Summary
 
 | Subsystem | Responsibility | Status | Important limitations / next milestone |
 |---|---|---|---|
-| Transcript learning authority | Persist bounded, evidence-qualified anchor histories and execution order | Complete | Existing three-entry bound and qualification policy remain unchanged |
-| Learning inspection repository query | Read existing transcript anchor records by canonical firm scope | Complete | Independent histories have no global recency order |
-| Learning inspection service | Validate canonical firm identity without requiring internal identifiers | Complete | Read-only; does not assess configuration readiness |
-| Learning inspection REST API | Return exact persisted learning or an empty array using existing errors | Complete | Local synchronous JSON API; no UI or pagination |
-| Transcript acquisition/search/learning/checkpoints | Existing deterministic behavior and transactional mutation ownership | Complete and unchanged | Future policy work remains separately governed |
-| LLM-assisted seed recovery | Propose bounded temporary seeds after deterministic exhaustion | Not Started | Separate future milestone; may consume this inspection surface |
-| Recovery workspace | Persist bounded recovery context and operator review | Not Started | Separate future milestone |
-
-The next architectural milestone may use this observational surface to evaluate deterministic
-learning quality before authorizing any search, learning-policy, or recovery behavior change.
+| Transcript learning authority | Persist bounded qualified anchor histories | Complete and unchanged | Existing policy and bounds retained |
+| Learning inspection API | Return persisted learning by canonical firm | Complete | Read-only; no UI or pagination |
+| Latest acquisition | Publish first validated deterministic candidate | Complete | Existing bad state is not backfilled |
+| Durable replay equivalence | Match checkpoint-owned validated position/revision | Corrected | Depends on current validator revision semantics |
+| Checkpoint repository | Enforce monotonic position and immutable cursor binding | Complete and unchanged | Genuine inconsistencies remain conflicts |
+| Range selection | Select one globally earliest validated in-range artifact | Complete and unchanged | Existing deferred reducer retained |
+| LLM recovery workspace | Future bounded recovery and operator review | Not started | Separate milestone |
