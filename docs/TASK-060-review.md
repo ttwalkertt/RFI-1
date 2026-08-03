@@ -41,6 +41,11 @@ No query parameters are accepted. The JSON body accepts only:
 - `starting_seed`: required single absolute HTTP(S) URL string;
 - `selection`: optional existing selection object.
 
+The server detects a query component from the raw request target before parsed query values are
+constructed and before the JSON body is read. Therefore every literal query delimiter is rejected,
+including blank forms such as `?retry=`, valueless forms such as `?retry`, and a trailing `?`.
+The existing parsed-query rejection remains as a secondary defense for nonblank values.
+
 Omitted selection request:
 
 ```json

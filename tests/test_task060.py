@@ -9,6 +9,7 @@ import unittest
 import urllib.error
 import urllib.request
 from datetime import date
+from http.client import HTTPConnection
 from pathlib import Path
 from typing import Any
 from unittest.mock import Mock, patch
@@ -670,6 +671,26 @@ class TranscriptSeedApiTests(unittest.TestCase):
                     finally:
                         error.close()
 
+            def post_target(
+                target: str, payload: dict[str, object] | bytes
+            ) -> tuple[int, dict]:
+                connection = HTTPConnection(host, port, timeout=3)
+                try:
+                    connection.request(
+                        "POST",
+                        target,
+                        body=(
+                            payload
+                            if isinstance(payload, bytes)
+                            else json.dumps(payload).encode()
+                        ),
+                        headers={"Content-Type": "application/json"},
+                    )
+                    response = connection.getresponse()
+                    return response.status, json.loads(response.read())
+                finally:
+                    connection.close()
+
             valid = {
                 "firm_id": "seagate",
                 "canonical_artifact_id": "earnings_transcript",
@@ -680,14 +701,44 @@ class TranscriptSeedApiTests(unittest.TestCase):
                 target, seed = server.pull_workflow.acquire_transcript_from_seed.call_args.args
                 self.assertEqual(target.selection.mode, TranscriptSelectionMode.LATEST)
                 self.assertEqual(seed, valid["starting_seed"])
+                server.pull_workflow.acquire_transcript_from_seed.reset_mock()
+                for query in (
+                    "?retry=1",
+                    "?retry=",
+                    "?retry",
+                    "?retry=1&retry=2",
+                    "?unknown=",
+                    "?",
+                ):
+                    with self.subTest(query=query):
+                        status, response_body = post_target(
+                            "/api/transcript-acquisitions/seed" + query, valid
+                        )
+                        self.assertEqual(status, 400)
+                        self.assertEqual(
+                            response_body["error"],
+                            "transcript seed acquisition does not accept query parameters",
+                        )
+                        self.assertEqual(response_body["error_code"], "invalid_request")
+                server.pull_workflow.acquire_transcript_from_seed.assert_not_called()
+                malformed_query_status, malformed_query_body = post_target(
+                    "/api/transcript-acquisitions/seed?retry=", b"{"
+                )
+                self.assertEqual(malformed_query_status, 400)
+                self.assertEqual(
+                    malformed_query_body["error"],
+                    "transcript seed acquisition does not accept query parameters",
+                )
+                self.assertEqual(malformed_query_body["error_code"], "invalid_request")
                 self.assertEqual(post({**valid, "seeds": [valid["starting_seed"]]})[0], 400)
                 self.assertEqual(post({**valid, "starting_seed": ["a", "b"]})[0], 400)
+                self.assertEqual(post_raw("{"), 400)
                 self.assertEqual(post_raw(
                     '{"firm_id":"seagate","canonical_artifact_id":'
                     '"earnings_transcript","starting_seed":"https://one.example",'
                     '"starting_seed":"https://two.example"}'
                 ), 400)
-                self.assertEqual(post(valid, "?retry=true")[0], 400)
+                server.pull_workflow.acquire_transcript_from_seed.assert_not_called()
                 range_request = {
                     **valid,
                     "selection": {

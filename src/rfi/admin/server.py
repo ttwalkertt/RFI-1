@@ -458,6 +458,14 @@ class AdminHandler(BaseHTTPRequestHandler):
             if not path.startswith("/api/"):
                 self._error(HTTPStatus.NOT_FOUND, "unknown browser request")
                 return
+            if (
+                method == "POST"
+                and path == "/api/transcript-acquisitions/seed"
+                and "?" in self.path
+            ):
+                raise PullError(
+                    "transcript seed acquisition does not accept query parameters"
+                )
             self._api(method, path, parse_qs(split.query))
         except FirmConfigurationReloadInProgress as error:
             self._error(
