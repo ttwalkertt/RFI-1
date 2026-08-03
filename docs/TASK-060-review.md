@@ -14,6 +14,11 @@ transcript URL. After trial construction, injected and learned seeds both execut
 lifecycle. Traversal, ranking, retrieval, validation, terminal selection, persistence, learning,
 checkpoint finalization, and diagnostics were not forked.
 
+The final implementation includes three corrective repairs. Learned and injected seeds now enter
+one deterministic single-seed stage; checkpoint-equivalent replay is observable as unchanged from
+durable validated artifact semantics; and the HTTP boundary rejects a raw query component before
+body parsing or acquisition dispatch.
+
 ## Architectural Summary
 
 The REST adapter parses a narrow transport shape directly into the existing frozen
@@ -29,6 +34,10 @@ The transcript adapter normalizes the supplied URL and creates one `AdapterAcqui
 `seed_kind=single_seed` and provenance-only `seed_source=operator_supplied`.
 `AcquisitionEngine.run_source_trial()` supplies that one trial to the existing private run
 lifecycle. Normal `run_source()` still obtains its learned/configured trial plan exactly as before.
+After trial selection, neither discovery nor the engine branches on `seed_source`; it is copied
+only into attributable diagnostics. Traversal phase, stage priority, candidate admission, ranking,
+fallback, validation, selection, checkpoint inputs, persistence, and learning use the same code and
+contracts for every single-seed origin.
 
 ## API Contract
 
@@ -45,6 +54,8 @@ The server detects a query component from the raw request target before parsed q
 constructed and before the JSON body is read. Therefore every literal query delimiter is rejected,
 including blank forms such as `?retry=`, valueless forms such as `?retry`, and a trailing `?`.
 The existing parsed-query rejection remains as a secondary defense for nonblank values.
+A request with no query delimiter continues through the existing body validation and acquisition
+dispatch without any query-specific semantic change.
 
 Omitted selection request:
 
@@ -103,9 +114,16 @@ Both paths converge as follows:
 1. learned acquisition uses `acquisition_trials()` to select a learned starting seed;
 2. injected acquisition uses `injected_trial()` to validate one operator starting seed;
 3. both are represented by `seed_kind=single_seed`, and origin is retained only in `seed_source`;
-4. both enter the same `configured_hint` discovery stage through `discover_trial(profile, trial)`;
+4. both enter the same single-seed `configured_hint` discovery stage through
+   `discover_trial(profile, trial)`; the retained stage name is an implementation stage, not origin;
 5. both enter the same engine trial loop, candidate evaluator, repository transaction, terminal
    selection, checkpoint finalization, and existing result projection.
+
+There is no semantic read of `seed_source` after the trial contract validates its allowed value.
+Changing only that provenance field cannot alter traversal, stage priority, candidates, ranking,
+validation, terminal selection, checkpoint cursor construction, or repository learning. For the
+same target, selector, and starting URL, learned and operator-supplied trials are semantically
+identical apart from the recorded provenance value.
 
 The focused regression proves identical stages, ranked candidates, request traversal, page
 diagnostics after removing `seed_source`, and terminal acquisition results after removing only
@@ -139,6 +157,20 @@ with `unchanged=1`, zero new durable artifacts, identical before/after checkpoin
 history, artifact metadata, learned anchors, and repository revision. A separate regression proves
 that newer validated periods advance and an explicit pre-finalization fault remains partial.
 
+The acceptance sequence is therefore:
+
+1. ordinary acquisition misses, completes with zero durable artifacts, and has no checkpoint;
+2. injected acquisition validates and persists one artifact, learns its validated URL, and advances
+   the checkpoint once;
+3. ordinary acquisition uses that learned URL and completes as observable unchanged/no-change with
+   zero new durable artifacts.
+
+Repeating the injected acquisition with a distinct run request is also idempotent: it completes
+with `unchanged=1`, retains the same checkpoint, and does not add an observation or learned anchor.
+Checkpoint cursor identity hashes stable candidate identity, position, revision, and disposition;
+artifact replay equivalence additionally confirms the validated content hash for the same durable
+source document. Discovery provenance, traversal path, and seed origin are non-authoritative.
+
 ## Verification Results
 
 - `make task060-test`: PASS, 128 focused and transcript/Pull/API regression tests.
@@ -147,7 +179,8 @@ that newer validated periods advance and an explicit pre-finalization fault rema
 - `make task059-test`: PASS.
 - `make task058-test`: PASS.
 - Transcript acquisition regression suite: PASS.
-- API/REST regression tests: PASS.
+- Admin/API regression suites: PASS, 29 tests covering the core admin server, stable application
+  HTTP/CLI boundary, and Pull REST workflow.
 - `make task059-proof`: PASS.
 - `make task058-proof`: PASS with unchanged normal acquisition behavior.
 - Lint, formatting, type checking, documentation, baseline, and diff checks: PASS.
@@ -158,11 +191,15 @@ The final review package reruns and retains the full output of each required com
 
 ## Files Changed
 
-- `src/rfi/acquisition/engine.py`: one-trial public entry point converging on the normal lifecycle.
+- `src/rfi/acquisition/engine.py`: one-trial public entry point, provenance-independent checkpoint
+  cursor, and observable equivalent-replay finalization.
+- `src/rfi/acquisition/repository.py`: validated retained-artifact equivalence and no-op learned
+  anchor preservation for replay.
 - `src/rfi/discovery.py`: invocation-scoped selection adapter, injected-trial construction, and
   operator seed provenance.
 - `src/rfi/pull/workflow.py`: governed firm/profile resolution and shared source construction.
-- `src/rfi/admin/server.py`: strict narrow REST endpoint and selection DTO parsing.
+- `src/rfi/admin/server.py`: strict narrow REST endpoint, raw query-component rejection, and
+  selection DTO parsing.
 - `tests/test_task060.py`: focused service, engine, provenance, learning, checkpoint, and REST tests.
 - `scripts/task060_seed_injection.py`: deterministic manual related-URL proof.
 - `scripts/generate_task060_review.py`: commit-aware validation and verified package generation.
@@ -181,6 +218,8 @@ The final review package reruns and retains the full output of each required com
   requested transcript exists or is reachable within current budgets.
 - The response is the acquisition-engine result rather than a new overlapping workflow result.
 - Duplicate JSON field rejection is scoped to this endpoint; existing API decoding is unchanged.
+- Request-level idempotency keys are not implemented; acquisition/repository replay is idempotent
+  from durable validated state rather than a request identifier.
 - No operator UI was required or added.
 
 ## Explicit Scope Confirmation
@@ -195,12 +234,12 @@ the injected trial clears identity search terms and begins only from the supplie
 
 | Subsystem | Responsibility | Status | Important limitations / next milestone |
 |---|---|---|---|
-| Seed-injection REST boundary | Strict request parsing into existing immutable target and selector | Complete | Local synchronous API; no UI |
+| Seed-injection REST boundary | Body-only parsing into existing immutable target and selector; raw query rejection before body read | Complete | Local synchronous API; no UI or request idempotency key |
 | Seed-injection service | Resolve governed firm/profile and construct one attributable trial | Complete | Requires runnable transcript discovery configuration |
 | Deterministic transcript trial | Traversal, ranking, retrieval, validation, and diagnostics from one seed | Complete | Existing bounded discovery limits remain authoritative |
 | Transcript terminal selection | Latest compatibility or global earliest validated range result | Complete | No backfill or continuation orchestration |
-| Persistence, learning, checkpointing | Existing outcome-driven atomic success lifecycle | Complete | Injected seed itself never teaches |
-| Normal learned-seed acquisition | Existing FIFO/configured sequencing and observable behavior | Complete | Unchanged by TASK-060 |
+| Persistence, learning, checkpointing | Outcome-driven atomic success plus provenance-independent equivalent replay | Complete | Injected seed itself never teaches; durable validated artifact identity governs replay |
+| Normal learned-seed acquisition | FIFO seed selection followed by the shared deterministic single-seed stage and configured fallback | Complete | Multi-trial fallback order remains unchanged |
 | LLM-assisted seed recovery | Bounded proposal after deterministic exhaustion | Not Started | Separate future milestone |
 | Recovery workspace | Persist bounded recovery context and operator review | Not Started | Separate future milestone |
 | Historical backfill | Repeated governed date-range acquisition | Not Started | Separate future milestone |

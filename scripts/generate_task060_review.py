@@ -43,8 +43,8 @@ def generate(base: str | None) -> int:
             "tests.test_task048", "tests.test_task048a", "-v",
         ]),
         run("api-rest-regression", [
-            ".venv/bin/python", "-m", "unittest", "tests.test_task015",
-            "tests.test_task012", "-v",
+            ".venv/bin/python", "-m", "unittest", "tests.test_task009",
+            "tests.test_task012", "tests.test_task015", "-v",
         ]),
         run("manual-proof", ["make", "task060-proof"]),
         run("task059-proof", ["make", "task059-proof"]),
