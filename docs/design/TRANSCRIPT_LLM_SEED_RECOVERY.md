@@ -93,6 +93,12 @@ canonical learned seed at most once, classifies transcript documents for direct 
 extracts only immediate transcript-document links from listing pages. It does not recursively
 traverse listing graphs.
 
+Document classification uses the repository's explicit structural transcript assessment. That
+assessment is limited to media type, document signature, JavaScript-shell evidence,
+transcript/earnings terminology, and speaker/section structure. Firm identity, event date,
+selection, checkpoint, persistence, and learning remain downstream validator or engine concerns
+and cannot change page role.
+
 If learned resolution does not produce a validated `latest` result, the orchestrator may execute
 one configured archive fallback phase. Both phases share one run-level page, byte, host, redirect,
 elapsed, and unique-candidate resource context.

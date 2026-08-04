@@ -73,8 +73,11 @@ Every successfully fetched seed page receives exactly one classification:
 Classification shall use response content and media evidence. URL or link text terminology alone
 shall not classify the fetched page as a transcript document.
 
-Classification is not durable validation. Transcript documents still pass the existing firm,
-date, content, selection, persistence, learning, and checkpoint contracts.
+Classification is not durable validation. One explicit structural assessment may inspect media,
+document signatures, transcript/earnings terminology, JavaScript-shell evidence, and transcript
+speaker/section evidence. It shall not inspect firm identity, event date, selector eligibility,
+checkpoint state, persistence, or learning. Transcript documents still pass those existing durable
+qualification contracts after classification.
 
 ---
 
@@ -214,8 +217,8 @@ Add focused tests proving:
 14. a genuinely conflicting `CandidateIdentity` still fails closed;
 15. replay and checkpoint behavior remain unchanged.
 
-Use captured Amazon, IBM, and Western Digital seed shapes where multiple learned transcript pages
-previously converged on the same archive graph.
+Use a sanitized fixture derived from the operator-provided Amazon failure capture. Synthetic IBM
+and Western Digital shapes may supplement that captured evidence but shall be labeled synthetic.
 
 ---
 

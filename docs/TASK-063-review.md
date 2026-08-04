@@ -2,155 +2,177 @@
 
 ## Result
 
-TASK-063 is complete. Production transcript acquisition no longer launches an independent graph
-crawl for every learned seed. It now canonicalizes the learned repository history into one ordered
-resolution phase, classifies only the supplied pages, admits direct transcript documents or one-hop
-transcript links, and uses at most one configured fallback under the same ephemeral run budget.
+TASK-063 is complete with its corrective classifier review applied. Production transcript
+acquisition canonicalizes learned repository history into one ordered resolution phase, classifies
+only supplied pages, admits direct transcript documents or one-hop transcript links, and uses at
+most one configured fallback under the same ephemeral run budget.
 
-No recursive listing traversal or search-engine fallback occurs in the production engine path.
-Existing selector, validation, persistence, learning, checkpoint, and replay contracts remain the
-authoritative downstream behavior.
+The resolver now depends on an explicit public structural document assessment rather than the
+retriever's private validation method. Firm identity, event date, selection, checkpoints,
+persistence, and learning remain downstream concerns and cannot reclassify a structurally
+recognized transcript page as a listing or unsupported page.
 
-## Root Cause and Architectural Boundary
+## What `_transcript_validation_failure()` Checks
 
-The former production topology treated every learned URL as an independent discovery trial. Each
-trial constructed a new graph traversal and fresh page, byte, host, redirect, elapsed-time, and
-candidate ceilings. Learned transcript pages for Amazon, IBM, and Western Digital linked into the
-same archive graph, so the engine repeatedly fetched and expanded shared pages before TASK-062
-could deduplicate the resulting candidates.
+Before the corrective review, `_transcript_validation_failure(response, label)` performed these
+checks:
 
-TASK-063 replaces that production path with a resolver, not another crawler:
+1. Reject empty or whitespace-only content.
+2. For HTML or XHTML:
+   - require an HTML or doctype signature;
+   - reject a short page instructing the caller to enable or requiring JavaScript;
+   - require transcript terminology in the link label or extracted page text;
+   - require earnings, quarterly, financial-results, results-call, or conference-call terminology
+     in extracted page text; and
+   - require speaker or section evidence such as Operator, prepared remarks, questions and answers,
+     CEO, or CFO.
+3. For PDF:
+   - require a `%PDF-` signature; and
+   - require transcript plus earnings-call terminology in the label and final URL evidence.
+4. Reject every other media type.
+
+It did **not** check HTTP status, governed host, firm identity, publication/event date, requested
+date range, selector eligibility, reporting-period checkpoint, retained-artifact replay,
+persistence, learning, or checkpoint advancement. The caller performs HTTP and host checks before
+this method, establishes date evidence separately, and performs firm, selection, checkpoint, and
+durable lifecycle checks elsewhere.
+
+The method therefore contained structural candidate validation, not durable qualification.
+Nevertheless, using a private validator method to choose resolver topology made that separation
+implicit and fragile.
+
+## Explicit Classifier and Validator Boundary
+
+`TranscriptDocumentStatus`, `TranscriptDocumentAssessment`, and
+`classify_transcript_document()` now define one public, pure structural assessment. Its inputs are
+only the fetched response and observed label. Its output states whether the page has transcript
+document structure and, when it does not, the exact structural reason.
+
+The resolver calls only `classify_transcript_document()`. A positive assessment produces a direct
+document proposal and prevents link parsing. A non-document HTML assessment may proceed through
+the existing one-hop listing parser.
+
+`_transcript_validation_failure()` remains the candidate validator's compatibility mapping. It
+maps the structural assessment to the existing stable `CandidateFailureCode` values. Changing
+firm, date, selector, checkpoint, persistence, or learning validation no longer changes resolver
+page roles. Changing structural classification requires an explicit change to the public
+assessment contract and its focused tests.
+
+Focused negative controls prove:
+
+- a structurally valid Other Corp transcript is classified `transcript_document`, does not follow
+  its archive link, and then fails the existing Firm A identity validation;
+- a structurally valid 2026 transcript remains `transcript_document`, does not follow its archive
+  link, and is then rejected by a requested 2025 date range; and
+- patching the private `_transcript_validation_failure()` to raise does not affect resolver
+  classification, proving the resolver no longer calls it.
+
+## Resolution Architecture
 
 ```text
 repository learning order
   -> canonical learned-seed phase
-       -> classify each supplied page once
+       -> public structural page assessment
        -> direct document, or immediate transcript links only
-  -> existing validation and selector
-  -> one configured fallback only when the learned phase has no terminal result
+  -> existing retrieval and durable qualification
+  -> one configured fallback only when no terminal learned result exists
 ```
 
-The pre-existing graph-discovery class remains only as an explicit compatibility seam for legacy
-callers that invoke aggregate `discover()` directly. Normal engine trials and injected trials use
-`BoundedTranscriptResolver`; removing the old compatibility seam is a separate cleanup.
-
-## Resolution and Classification Contract
-
-`BoundedTranscriptResolver` owns the single production classification definition:
-
-- `transcript_document`: the existing transcript structure validator accepts the response body;
-- `transcript_listing`: the HTML contains at least one immediate eligible transcript link;
-- `unsupported`: neither document evidence nor an eligible direct link is present; and
-- `failed`: transport, HTTP, redirect-cycle, or parsing behavior fails.
-
-Classification uses fetched content and media evidence. A document classification is still only a
-candidate proposal: existing firm, event-date, content, selection, persistence, learning, and
-checkpoint validation remains mandatory.
-
-Listing pages are parsed once. Eligible immediate links are ranked by the existing reporting-period,
-same-host, transcript terminology, document-path, normalized-URL, and label fields. A discovered
-listing link is never placed on another traversal queue. Production diagnostics state
-`resolution_mode=bounded_one_hop`, `recursive_traversal=false`, `traversed_hyperlinks=0`, and
-`search_queries=0`.
+No recursive listing traversal or search-engine fallback occurs in the production engine path.
+The pre-existing graph-discovery class remains only as a compatibility seam for legacy callers of
+aggregate `discover()`; normal engine trials and injected trials use `BoundedTranscriptResolver`.
 
 ## Ordering and Terminal Behavior
 
 The orchestrator reads learned anchors in repository order, considers resolved then requested URL
-forms, and applies the existing conservative transcript URL normalizer. The first canonical
-occurrence remains authoritative and exact duplicate counts are retained.
+forms, and applies the conservative transcript URL normalizer. The first canonical occurrence is
+authoritative and duplicate counts remain observable.
 
-Candidate proposal order is:
+Proposal order remains learned-seed FIFO position, existing within-page rank, existing
+deterministic tie-breakers, then configured fallback. `latest` stops after the first validated
+result. Candidate retrieval failures within a consolidated learned phase continue to the next
+ordered candidate, preserving the former useful per-seed fallthrough. Contract, integrity, and
+repository conflicts remain fail closed.
 
-```text
-learned seed FIFO position
-  -> existing within-page rank
-  -> existing deterministic tie-breakers
-  -> configured fallback phase
-```
-
-For `latest`, the first validated result remains terminal and prevents fallback execution. Candidate
-retrieval failures within the consolidated learned phase continue to the next ordered candidate,
-preserving the useful behavior formerly supplied by separate learned trials. Contract, integrity,
-and repository conflicts still fail closed.
-
-For `first_in_date_range`, all qualifying distinct candidates continue through the existing terminal
-selection policy, which selects the earliest validated content date with the existing deterministic
-tie-breakers. No selector policy was moved into the resolver.
+`first_in_date_range` still qualifies distinct candidates and uses its existing global terminal
+policy to select the earliest validated content date. No selector moved into classification or
+resolution.
 
 ## Run-Level Resource Session
 
-`BudgetedTranscriptTransport` is the one run-local owner of:
-
-- page, byte, distinct-host, redirect, and elapsed-time accounting;
-- exact response reuse by conservative canonical URL;
-- unique admitted candidate identities; and
-- the candidate-evaluation ceiling state.
-
-The adapter resets that state at normal-run or injected-run planning, then reuses it across the
-learned and configured-fallback phases. A configured fallback cannot receive a fresh allowance.
-Canonical requested and redirect-resolved aliases share cached responses, so direct seed
-classification followed by existing retrieval does not redownload the document.
+`BudgetedTranscriptTransport` remains the one run-local owner of page, byte, distinct-host,
+redirect, elapsed-time, response-cache, and unique-candidate accounting. The adapter resets this
+state during normal or injected planning and reuses it across learned and configured-fallback
+phases. Canonical requested and redirect-resolved aliases share cached responses.
 
 Budget exhaustion is explicit. An exhausted phase with no proposal raises the existing typed
-adapter-failure path; candidate-cap exhaustion prevents fallback from starting. Neither condition is
-reported as successful empty coverage or unchanged replay.
+adapter failure; candidate-cap exhaustion prevents fallback from receiving a fresh allowance.
+Neither condition is presented as successful empty coverage or unchanged replay.
 
-## Invocation Boundaries
+## Amazon Evidence and Before/After Work
 
-- Normal acquisition has one canonical learned phase and at most the first configured HTTP(S)
-  discovery hint as fallback.
-- A fallback canonically equal to a learned seed is removed during planning.
-- Operator injection resolves exactly the supplied normalized seed and adds neither learned seeds
-  nor configured fallback.
-- Search queries are not submitted by production resolution.
-- Future recovery remains an exact temporary seed invocation; TASK-063 adds no LLM behavior.
+The original review incorrectly described all Amazon, IBM, and Western Digital tests as captured
+topologies. That claim is corrected:
 
-## Selector, Persistence, and Replay Compatibility
+- Amazon now has a checked-in sanitized fixture derived from the operator-provided failure capture.
+  It retains the public seed/archive topology and exact work counters while removing run,
+  repository-source, candidate-hash, and timestamp identifiers.
+- IBM and Western Digital remain deterministic synthetic shapes. They demonstrate the same
+  shared-archive pattern but are not represented as captures.
 
-TASK-063 introduces no repository schema, durable session, candidate identity, learning record,
-checkpoint record, or persistence branch. TASK-062 `CandidateIdentity` remains the sole stable
-candidate equivalence definition, and `DiscoveryOccurrence` remains the occurrence attribution.
+The Amazon capture contained two independent learned-seed trials, beginning at the Q3 2016 and Q4
+2016 transcript pages. Both expanded the same archive and exposed the same Q2 2026 candidate graph.
 
-Existing TASK-059 tests prove `latest` still persists exactly the first validated candidate and
-`first_in_date_range` still selects the global earliest validated date. TASK-060 tests prove
-injected/learned equivalence, mutation-free retained replay, monotonic advancement for newer
-content, and fail-closed same-position cursor conflict. TASK-061 read-only learning inspection and
-TASK-062 duplicate-conflict protections remain green.
+| Work for the two learned seeds | Before TASK-063 capture | TASK-063 sanitized regression |
+|---|---:|---:|
+| Seed/graph pages fetched | 26 | 2 seed pages |
+| Outward pages fetched | Included in the 26 | 0 |
+| Response bytes | 9,130,104 | Not compared; fixture content is sanitized |
+| Raw hyperlinks examined | 2,932 | 0 |
+| Normalized unique hyperlinks | 2,296 | 0 |
+| Eligible/traversed hyperlinks | 152 / 152 | 0 / 0 |
+| Candidate proposals | 128 | 2 direct document proposals |
+| Candidates selected under per-trial caps | 80 | 2 admitted before engine terminal behavior |
+| Search queries | 0 | 0 |
 
-## Captured Topology Evidence
+The after-state test fetches only the two learned document URLs. It does not fetch the shared
+archive or any Q2 2026/Q1 2026/Q4 2025 archive candidate. During a full engine run, a fetched direct
+document is subsequently validated from the same run-local response cache.
 
-The focused suite represents Amazon, IBM, and Western Digital with two learned transcript-document
-seeds that both link to their shared archive. Each case:
+## Invocation and Durable-State Boundaries
 
-- fetches both supplied learned documents exactly once;
-- validates and persists one `latest` artifact;
-- does not fetch the shared archive;
-- does not invoke configured fallback; and
-- does not issue a search query.
+- Normal acquisition has one learned phase and at most the first configured HTTP(S) hint as
+  fallback.
+- A configured fallback canonically equal to a learned seed is removed during planning.
+- Operator injection resolves exactly the supplied normalized seed and adds no learned or
+  configured seed.
+- Production resolution submits no search query.
+- TASK-062 `CandidateIdentity` remains the sole stable candidate equivalence definition.
+- No repository schema, durable resolver session, learning representation, checkpoint model,
+  persistence branch, or state repair was introduced.
 
-Additional focused cases prove one-hop listing behavior, configured fallback after an unsupported
-learned page, response reuse, shared page and candidate ceilings, range selection, and exact
-operator-seed isolation.
+TASK-059 regressions retain `latest` and range selection. TASK-060 retains injected/learned
+equivalence, mutation-free replay, monotonic newer-content advancement, and fail-closed checkpoint
+cursor conflict. TASK-061 inspection and TASK-062 candidate-conflict protection remain green.
 
 ## Complexity and Robustness Review
 
-- Production has one bounded page-classification implementation.
-- One transport object owns all run-level network accounting and response reuse.
+- One public structural document assessment defines page-document classification.
+- Firm/date/selector/checkpoint qualification is absent from that assessment.
+- The resolver has no dependency on the private candidate validator.
+- One transport object owns all run resource accounting and response reuse.
 - The resolver has no recursive queue, pagination loop, discovered-listing traversal, or search
   submission.
-- Learned/configured/operator origin affects planning and occurrence attribution only; it does not
-  select a persistence or checkpoint path.
-- Candidate conflict protection is unchanged and remains fail closed.
-- No second candidate identity, checkpoint model, learning representation, durable resolution
-  session, or replay-only persistence branch was introduced.
-- Exact counts are retained while URL and classification samples are bounded and redacted.
-- Consolidated candidate failure continuation is explicitly trial-controlled; malformed adapter,
-  contract, repository conflict, and integrity failures are never continued.
+- Seed origin affects planning and occurrence attribution, not persistence or checkpoints.
+- Candidate conflict protection remains unchanged and fail closed.
+- Diagnostics and fixture evidence are bounded; fixture provenance and sanitization are explicit.
+- IBM and Western Digital evidence is labeled synthetic rather than captured.
 
 ## Validation Results
 
-- `make task063-test`: PASS, 8 focused tests.
-- Resolver-specific focused regression: PASS.
+- `make task063-test`: PASS, 11 focused tests.
+- Classifier/resolver boundary regressions: PASS.
+- Sanitized Amazon before/after regression and synthetic IBM/WDC shapes: PASS.
 - `make task057-test`: PASS, 104 tests.
 - `make task058-test`: PASS, 109 tests.
 - `make task059-test`: PASS, 121 tests.
@@ -162,35 +184,35 @@ operator-seed isolation.
   PASS.
 - Full `make validate`: PASS.
 
-The review-package generator reruns and retains the complete output of every listed validation from
-the final committed branch head.
+The review-package generator reruns and retains complete output from the final committed branch
+head. Counts above reflect the final regenerated package.
 
 ## Assumptions and Limitations
 
-- The resolver intentionally does not discover transcript links hidden behind pagination or nested
-  listing pages. A configured archive must expose immediate transcript links.
-- Production resolves every distinct learned seed page in FIFO order before the engine begins
-  candidate validation; it avoids outward crawling, but it does not stop fetching later supplied
-  learned seeds merely because an earlier seed is itself a valid document.
-- The response cache is ephemeral and source-run scoped. It is never persisted or shared across
-  processes.
-- The old graph crawler remains temporarily reachable only through the documented aggregate
-  discovery compatibility entry point.
-- Company evidence is deterministic captured topology, not a live network mutation test.
-- No existing Amazon repository state is deleted, rewritten, or reinterpreted.
+- The HTML structural classifier uses bounded text extraction rather than semantic DOM roles.
+- PDF classification can verify the file signature but relies on label/final-URL attribution for
+  transcript and earnings-call terminology because PDF text extraction is not part of the current
+  retriever.
+- The resolver intentionally does not discover links behind pagination or nested listing pages.
+- Every distinct learned seed page is fetched in FIFO order before candidate validation begins.
+- The response cache is ephemeral and source-run scoped.
+- The old graph crawler remains reachable only through the legacy aggregate discovery seam.
+- Amazon evidence is sanitized from a real operator capture; IBM/WDC evidence remains synthetic.
+- No existing Amazon durable state is deleted, rewritten, or reinterpreted.
 
 ## Architectural Status Summary
 
 | Subsystem | Responsibility | Status | Limitations / next milestone |
 |---|---|---|---|
-| Transcript resolution | Classify supplied pages and admit direct documents/links | Complete | No pagination or nested-listing discovery |
-| Learned seed orchestration | Canonical FIFO consolidation into one phase | Complete | Every distinct learned seed is probed |
-| Configured fallback | One conditional configured archive phase | Complete | Only the first configured HTTP(S) hint participates |
-| Run resource control | Shared budget, response cache, and unique-candidate ceiling | Complete | State is intentionally process-local and ephemeral |
-| Candidate identity | TASK-062 stable equivalence and global engine deduplication | Complete and unchanged | Future stable metadata requires allowlist review |
-| Selector and persistence | Existing latest/range, validation, learning, checkpoint, replay | Complete and unchanged | Historical repair and backfill remain out of scope |
-| Legacy graph discovery | Compatibility for direct aggregate callers | Usable with limitations | Remove after the remaining callers migrate |
+| Structural transcript classifier | Media/signature/transcript document assessment | Complete | HTML regex/text assessment; PDF has no text extraction |
+| Durable candidate validator | Firm, date, selection, checkpoint, and content qualification | Complete and separate | Existing validation policy remains authoritative |
+| Transcript resolver | Classify supplied pages and admit direct documents/links | Complete | No pagination or nested-listing discovery |
+| Learned orchestration | Canonical FIFO consolidation | Complete | Every distinct learned seed is probed |
+| Configured fallback | One conditional archive phase | Complete | Only first configured HTTP(S) hint participates |
+| Run resource control | Shared budget, response cache, candidate ceiling | Complete | Ephemeral and process-local |
+| Candidate identity and persistence | TASK-062 equivalence and existing durable lifecycle | Complete and unchanged | No historical state repair |
+| Legacy graph discovery | Direct aggregate-caller compatibility | Usable with limitations | Remove after remaining callers migrate |
 
-The next architectural milestone should either remove the legacy aggregate crawler after caller
-migration or introduce an explicit provider adapter for sites whose archives require pagination;
-it should not expand this resolver into a general crawler.
+The next milestone should remove the legacy aggregate crawler after caller migration or add an
+explicit provider adapter for archives requiring pagination; it should not weaken the classifier
+boundary or expand this resolver into a general crawler.

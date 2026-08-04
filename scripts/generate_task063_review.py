@@ -57,6 +57,10 @@ def generate(base: str | None) -> int:
                 "test_run_budget_cannot_reset_for_configured_fallback",
                 "tests.test_task063.BoundedTranscriptResolutionTests."
                 "test_unique_candidate_ceiling_is_shared_with_fallback",
+                "tests.test_task063.BoundedTranscriptResolutionTests."
+                "test_classifier_is_structural_and_independent_of_durable_validation",
+                "tests.test_task063.BoundedTranscriptResolutionTests."
+                "test_structural_document_remains_document_when_date_is_out_of_range",
                 "-v",
             ],
         ),
@@ -67,7 +71,9 @@ def generate(base: str | None) -> int:
                 "-m",
                 "unittest",
                 "tests.test_task063.BoundedTranscriptResolutionTests."
-                "test_captured_company_topologies_do_not_expand_shared_archives",
+                "test_sanitized_amazon_capture_has_bounded_before_after_work",
+                "tests.test_task063.BoundedTranscriptResolutionTests."
+                "test_synthetic_company_shapes_do_not_expand_shared_archives",
                 "-v",
             ],
         ),
@@ -110,6 +116,10 @@ def generate(base: str | None) -> int:
         ("design/TASK-062-review.md", ROOT / "docs/TASK-062-review.md"),
         ("completion/repository-review.md", ROOT / "docs/TASK-063-review.md"),
         ("evidence/task063-tests.py", ROOT / "tests/test_task063.py"),
+        (
+            "evidence/task063-amazon-sanitized-topology.json",
+            ROOT / "fixtures/transcripts/task063-amazon-sanitized-topology.json",
+        ),
         *((f"validation/{name}.txt", VALIDATION / f"{name}.txt") for name in names),
         ("validation/results.json", VALIDATION / "results.json"),
     ]

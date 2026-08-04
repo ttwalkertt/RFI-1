@@ -92,6 +92,87 @@ class CandidateFailure:
     http_status: int | None = None
 
 
+class TranscriptDocumentStatus(str, Enum):
+    """Stable structural classification independent of durable qualification."""
+
+    TRANSCRIPT_DOCUMENT = "transcript_document"
+    EMPTY_CONTENT = "empty_content"
+    UNSUPPORTED_MEDIA_TYPE = "unsupported_media_type"
+    INVALID_DOCUMENT_SIGNATURE = "invalid_document_signature"
+    JAVASCRIPT_SHELL = "javascript_shell"
+    INSUFFICIENT_TRANSCRIPT_EVIDENCE = "insufficient_transcript_evidence"
+    INSUFFICIENT_SPEAKER_EVIDENCE = "insufficient_speaker_evidence"
+
+
+@dataclass(frozen=True)
+class TranscriptDocumentAssessment:
+    """Pure page-structure assessment; never firm-, date-, or selector-aware."""
+
+    status: TranscriptDocumentStatus
+    message: str
+
+    @property
+    def is_transcript_document(self) -> bool:
+        return self.status is TranscriptDocumentStatus.TRANSCRIPT_DOCUMENT
+
+
+def classify_transcript_document(
+    response: EarningsTranscriptHttpResponse, label: str
+) -> TranscriptDocumentAssessment:
+    """Classify only media, signature, and earnings-transcript structure evidence."""
+    media_type = response.media_type.casefold()
+    if not response.content.strip():
+        return TranscriptDocumentAssessment(
+            TranscriptDocumentStatus.EMPTY_CONTENT, "candidate content is empty"
+        )
+    if media_type in {"text/html", "application/xhtml+xml"}:
+        if not response.content.lstrip().lower().startswith((b"<!doctype html", b"<html")):
+            return TranscriptDocumentAssessment(
+                TranscriptDocumentStatus.INVALID_DOCUMENT_SIGNATURE,
+                "HTML candidate lacks an HTML document signature",
+            )
+        text = re.sub(r"<[^>]+>", " ", response.content.decode("utf-8", "replace"))
+        if re.search(r"\b(?:enable|requires?)\s+javascript\b", text, re.I) and len(text) < 500:
+            return TranscriptDocumentAssessment(
+                TranscriptDocumentStatus.JAVASCRIPT_SHELL,
+                "candidate requires JavaScript",
+            )
+        if not (_TRANSCRIPT.search(label + " " + text) and _EARNINGS_CALL.search(text)):
+            return TranscriptDocumentAssessment(
+                TranscriptDocumentStatus.INSUFFICIENT_TRANSCRIPT_EVIDENCE,
+                "HTML candidate is not identified as an earnings-call transcript",
+            )
+        if not _SPEAKER_EVIDENCE.search(text):
+            return TranscriptDocumentAssessment(
+                TranscriptDocumentStatus.INSUFFICIENT_SPEAKER_EVIDENCE,
+                "HTML candidate lacks transcript speaker/section evidence",
+            )
+        return TranscriptDocumentAssessment(
+            TranscriptDocumentStatus.TRANSCRIPT_DOCUMENT,
+            "HTML contains earnings-call transcript structure evidence",
+        )
+    if media_type == "application/pdf":
+        if not response.content.startswith(b"%PDF-"):
+            return TranscriptDocumentAssessment(
+                TranscriptDocumentStatus.INVALID_DOCUMENT_SIGNATURE,
+                "PDF candidate lacks a PDF signature",
+            )
+        evidence = urllib.parse.unquote(label + " " + response.url)
+        if not (_TRANSCRIPT.search(evidence) and _EARNINGS_CALL.search(evidence)):
+            return TranscriptDocumentAssessment(
+                TranscriptDocumentStatus.INSUFFICIENT_TRANSCRIPT_EVIDENCE,
+                "PDF link is not identified as an earnings-call transcript",
+            )
+        return TranscriptDocumentAssessment(
+            TranscriptDocumentStatus.TRANSCRIPT_DOCUMENT,
+            "PDF signature and earnings-call transcript attribution are present",
+        )
+    return TranscriptDocumentAssessment(
+        TranscriptDocumentStatus.UNSUPPORTED_MEDIA_TYPE,
+        f"unsupported transcript media type: {response.media_type}",
+    )
+
+
 @dataclass(frozen=True, order=True)
 class ReportingPeriod:
     """Recognizable calendar reporting quarter used only for deterministic ordering."""
@@ -523,51 +604,19 @@ class EarningsCallTranscriptAcquisition:
     def _transcript_validation_failure(
         response: EarningsTranscriptHttpResponse, label: str
     ) -> CandidateFailure | None:
-        media_type = response.media_type.casefold()
-        if not response.content.strip():
-            return CandidateFailure(
-                CandidateFailureCode.EMPTY_CONTENT, "candidate content is empty"
-            )
-        if media_type in {"text/html", "application/xhtml+xml"}:
-            if not response.content.lstrip().lower().startswith((b"<!doctype html", b"<html")):
-                return CandidateFailure(
-                    CandidateFailureCode.VALIDATION_MISMATCH,
-                    "HTML candidate lacks an HTML document signature",
-                )
-            text = re.sub(r"<[^>]+>", " ", response.content.decode("utf-8", "replace"))
-            if re.search(r"\b(?:enable|requires?)\s+javascript\b", text, re.I) and len(text) < 500:
-                return CandidateFailure(
-                    CandidateFailureCode.JAVASCRIPT_REQUIRED,
-                    "candidate requires JavaScript",
-                )
-            if not (_TRANSCRIPT.search(label + " " + text) and _EARNINGS_CALL.search(text)):
-                return CandidateFailure(
-                    CandidateFailureCode.VALIDATION_MISMATCH,
-                    "HTML candidate is not identified as an earnings-call transcript",
-                )
-            if not _SPEAKER_EVIDENCE.search(text):
-                return CandidateFailure(
-                    CandidateFailureCode.VALIDATION_MISMATCH,
-                    "HTML candidate lacks transcript speaker/section evidence",
-                )
+        assessment = classify_transcript_document(response, label)
+        if assessment.is_transcript_document:
             return None
-        if media_type == "application/pdf":
-            if not response.content.startswith(b"%PDF-"):
-                return CandidateFailure(
-                    CandidateFailureCode.VALIDATION_MISMATCH,
-                    "PDF candidate lacks a PDF signature",
-                )
-            evidence = urllib.parse.unquote(label + " " + response.url)
-            if not (_TRANSCRIPT.search(evidence) and _EARNINGS_CALL.search(evidence)):
-                return CandidateFailure(
-                    CandidateFailureCode.VALIDATION_MISMATCH,
-                    "PDF link is not identified as an earnings-call transcript",
-                )
-            return None
-        return CandidateFailure(
-            CandidateFailureCode.UNSUPPORTED_CONTENT_TYPE,
-            f"unsupported transcript media type: {response.media_type}",
-        )
+        code = {
+            TranscriptDocumentStatus.EMPTY_CONTENT: CandidateFailureCode.EMPTY_CONTENT,
+            TranscriptDocumentStatus.UNSUPPORTED_MEDIA_TYPE: (
+                CandidateFailureCode.UNSUPPORTED_CONTENT_TYPE
+            ),
+            TranscriptDocumentStatus.JAVASCRIPT_SHELL: (
+                CandidateFailureCode.JAVASCRIPT_REQUIRED
+            ),
+        }.get(assessment.status, CandidateFailureCode.VALIDATION_MISMATCH)
+        return CandidateFailure(code, assessment.message)
 
     @staticmethod
     def _candidate_retrieval_failure(error: Exception) -> CandidateFailure:

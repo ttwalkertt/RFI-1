@@ -1,0 +1,58 @@
+{
+  "fixture_version": 1,
+  "provenance": {
+    "basis": "sanitized operator-provided Amazon failure capture",
+    "captured_behavior": "pre-TASK-063 learned-seed graph traversal",
+    "removed": [
+      "run identifiers",
+      "repository source identifiers",
+      "candidate hashes",
+      "timestamps"
+    ]
+  },
+  "firm": "amazon",
+  "learned_seeds": [
+    {
+      "url": "https://stockanalysis.com/stocks/amzn/transcripts/63594-q3-2016/",
+      "event_date": "October 27, 2016",
+      "legacy_work": {
+        "pages_fetched": 13,
+        "response_bytes": 4559336,
+        "raw_hyperlinks": 1466,
+        "normalized_unique_hyperlinks": 1148,
+        "eligible_hyperlinks": 76,
+        "traversed_hyperlinks": 76,
+        "candidate_proposals": 64,
+        "selected_candidates": 40
+      }
+    },
+    {
+      "url": "https://stockanalysis.com/stocks/amzn/transcripts/63591-q4-2016/",
+      "event_date": "February 2, 2017",
+      "legacy_work": {
+        "pages_fetched": 13,
+        "response_bytes": 4570768,
+        "raw_hyperlinks": 1466,
+        "normalized_unique_hyperlinks": 1148,
+        "eligible_hyperlinks": 76,
+        "traversed_hyperlinks": 76,
+        "candidate_proposals": 64,
+        "selected_candidates": 40
+      }
+    }
+  ],
+  "shared_archive": "https://stockanalysis.com/stocks/amzn/transcripts/",
+  "shared_archive_candidates": [
+    "https://stockanalysis.com/stocks/amzn/transcripts/657334-q2-2026/",
+    "https://stockanalysis.com/stocks/amzn/transcripts/552741-q1-2026/",
+    "https://stockanalysis.com/stocks/amzn/transcripts/406163-q4-2025/"
+  ],
+  "expected_task063_work": {
+    "seed_pages_fetched": 2,
+    "outward_pages_fetched": 0,
+    "raw_hyperlinks_examined": 0,
+    "traversed_hyperlinks": 0,
+    "direct_document_proposals": 2,
+    "search_queries": 0
+  }
+}

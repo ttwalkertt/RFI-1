@@ -29,6 +29,7 @@ from rfi.acquisition.earnings_transcripts import (
     EarningsTranscriptTransport,
     ReportingPeriod,
     UrllibEarningsTranscriptTransport,
+    classify_transcript_document,
     normalize_transcript_url,
     reporting_period_from_evidence,
     transcript_request_headers,
@@ -1145,12 +1146,8 @@ class BoundedTranscriptResolver:
                 )
                 continue
 
-            transcript_failure = (
-                EarningsCallTranscriptAcquisition._transcript_validation_failure(
-                    response, seed
-                )
-            )
-            if transcript_failure is None:
+            document_assessment = classify_transcript_document(response, seed)
+            if document_assessment.is_transcript_document:
                 classification = TranscriptPageClassification.TRANSCRIPT_DOCUMENT
                 proposals.append(self._proposal(
                     response.url, seed, seed, seed_position, phase, seed_kind, seed_source,

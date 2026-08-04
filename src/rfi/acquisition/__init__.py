@@ -52,7 +52,10 @@ from rfi.acquisition.earnings_transcripts import (
     EarningsCallTranscriptAcquisition,
     EarningsTranscriptHttpResponse,
     EarningsTranscriptTransport,
+    TranscriptDocumentAssessment,
+    TranscriptDocumentStatus,
     UrllibEarningsTranscriptTransport,
+    classify_transcript_document,
 )
 from rfi.acquisition.runtime_config import load_runtime_configuration
 from rfi.acquisition.sec_form_10k import SecForm10KAdapter
@@ -130,9 +133,12 @@ __all__ = [
     "SourceProfile",
     "TranscriptAcquisitionSelection",
     "TranscriptAcquisitionTarget",
+    "TranscriptDocumentAssessment",
+    "TranscriptDocumentStatus",
     "TranscriptSelectionMode",
     "UrllibEarningsTranscriptTransport",
     "credential_from_environment",
+    "classify_transcript_document",
     "fixture_profiles",
     "load_live_profiles",
     "load_edgar_profiles",
