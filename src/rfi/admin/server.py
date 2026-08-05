@@ -919,23 +919,31 @@ class AdminHandler(BaseHTTPRequestHandler):
                 raise PullError("transcript seed acquisition does not accept query parameters")
             body = self._body(reject_duplicate_fields=True)
             allowed = {
-                "firm_id", "canonical_artifact_id", "selection", "starting_seed"
+                "firm_id", "canonical_artifact_id", "provider", "selection",
+                "starting_seed",
             }
-            required = {"firm_id", "canonical_artifact_id", "starting_seed"}
+            required = {
+                "firm_id", "canonical_artifact_id", "provider", "starting_seed"
+            }
             if set(body) - allowed:
                 raise PullError("transcript seed acquisition contains unsupported fields")
             if required - set(body):
                 raise PullError("transcript seed acquisition is missing required fields")
             firm_id = body["firm_id"]
             artifact_id = body["canonical_artifact_id"]
+            provider = body["provider"]
             starting_seed = body["starting_seed"]
             if not all(isinstance(value, str) for value in (
-                firm_id, artifact_id, starting_seed
+                firm_id, artifact_id, provider, starting_seed
             )):
                 raise PullError("transcript seed fields must be strings")
+            if not provider.strip():
+                raise PullError("transcript provider must be a non-empty string")
             selection = self._transcript_selection(body.get("selection"))
             target = TranscriptAcquisitionTarget(firm_id, artifact_id, selection)
-            result = pull_workflow.acquire_transcript_from_seed(target, starting_seed)
+            result = pull_workflow.acquire_transcript_from_seed(
+                target, provider, starting_seed
+            )
             self._send_json(HTTPStatus.OK, result.to_dict())
             return
         if method == "POST" and parts == ["api", "pulls"]:

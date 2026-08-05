@@ -46,10 +46,17 @@ class TranscriptProviderRegistry:
         transport: EarningsTranscriptTransport,
         clock: Callable[[], str],
     ) -> TranscriptProvider:
+        implementation = self.resolve(name)
+        return implementation(transport, clock)
+
+    def resolve(self, name: str) -> TranscriptProviderFactory:
+        """Resolve one explicit provider name without consulting seed content."""
+        if not isinstance(name, str) or not name.strip():
+            raise ContractError("transcript provider must be a non-empty string")
         implementation = self._providers.get(name)
         if implementation is None:
             raise ContractError(f"unknown transcript provider: {name}")
-        return implementation(transport, clock)
+        return implementation
 
     def registrations(self) -> dict[str, str]:
         return {

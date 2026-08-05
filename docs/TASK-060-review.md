@@ -47,8 +47,14 @@ No query parameters are accepted. The JSON body accepts only:
 
 - `firm_id`: required string;
 - `canonical_artifact_id`: required string and currently exactly `earnings_transcript`;
+- `provider`: required non-blank name resolved through the existing transcript provider registry;
 - `starting_seed`: required single absolute HTTP(S) URL string;
 - `selection`: optional existing selection object.
+
+TASK-065 made provider selection explicit. Orchestration carries only the request-body provider
+into `AdapterAcquisitionTrial.provider`; registry dispatch uses that field, and the selected
+provider alone validates the URL. URL shape, query parameters, and firm configuration never select
+the provider for an injected request.
 
 The server detects a query component from the raw request target before parsed query values are
 constructed and before the JSON body is read. Therefore every literal query delimiter is rejected,
@@ -63,7 +69,8 @@ Omitted selection request:
 {
   "firm_id": "seagate",
   "canonical_artifact_id": "earnings_transcript",
-  "starting_seed": "https://investors.example.com/events/archive"
+  "provider": "stockanalysis",
+  "starting_seed": "https://stockanalysis.com/stocks/stx/transcripts/12345-q4-2026/"
 }
 ```
 
@@ -73,12 +80,13 @@ Date-range request:
 {
   "firm_id": "seagate",
   "canonical_artifact_id": "earnings_transcript",
+  "provider": "stockanalysis",
   "selection": {
     "mode": "first_in_date_range",
     "start_date": "2025-01-01",
     "end_date": "2025-12-31"
   },
-  "starting_seed": "https://investors.example.com/events/archive"
+  "starting_seed": "https://stockanalysis.com/stocks/stx/transcripts/12345-q4-2026/"
 }
 ```
 

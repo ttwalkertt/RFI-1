@@ -12,6 +12,7 @@ from unittest.mock import patch
 from rfi.acquisition import (
     AcquisitionEngine,
     AcquisitionRepository,
+    AdapterAcquisitionTrial,
     AdapterRegistry,
     RunStatus,
     SourceProfile,
@@ -385,7 +386,10 @@ class BoundedTranscriptResolutionTests(unittest.TestCase):
             ).run_source_trial(
                 configured.source_id,
                 "operator-only",
-                adapter.injected_trial(configured, target, supplied),
+                AdapterAcquisitionTrial(
+                    "transcript-trial-1", supplied, "single_seed", target,
+                    "operator_supplied", (supplied,),
+                ),
             )
 
         self.assertEqual(result.durable_acquisitions, 1)

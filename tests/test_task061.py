@@ -12,19 +12,23 @@ from pathlib import Path
 
 from rfi.acquisition import (
     AcquisitionRepository,
+    AdapterAcquisitionTrial,
     CandidateDocument,
     DiscoveryProvenance,
     EarningsTranscriptHttpResponse,
     RetrievalResult,
     SourceProfile,
+    TranscriptAcquisitionSelection,
+    TranscriptAcquisitionTarget,
 )
+from rfi.acquisition.earnings_transcripts import normalize_transcript_url
 from rfi.admin import create_admin_server
 from rfi.concepts import ConceptRepository
 from rfi.discovery import (
     DiscoveryPolicy,
     DiscoveryPolicyCatalog,
     DiscoverySearchResponse,
-    EarningsTranscriptPullAdapter,
+    EarningsTranscriptPullAdapter as ProductionEarningsTranscriptPullAdapter,
 )
 from rfi.firms import FirmRepository
 from rfi.firms.contracts import FirmDraft, FirmStatus
@@ -64,6 +68,33 @@ def response(url: str, body: str) -> EarningsTranscriptHttpResponse:
     return EarningsTranscriptHttpResponse(
         url, 200, "text/html", f"<html>{body}</html>".encode()
     )
+
+
+class EarningsTranscriptPullAdapter(ProductionEarningsTranscriptPullAdapter):
+    """Keep TASK-061's generic learning fixture independent of provider dispatch."""
+
+    def with_selection(
+        self, selection: TranscriptAcquisitionSelection
+    ) -> EarningsTranscriptPullAdapter:
+        return EarningsTranscriptPullAdapter(
+            self._policies, self._search, self._transport, self._clock,
+            self._monotonic, self._repository, selection,
+        )
+
+    def injected_trial(
+        self,
+        profile: SourceProfile,
+        target: TranscriptAcquisitionTarget,
+        provider: str,
+        starting_seed: str,
+    ) -> AdapterAcquisitionTrial:
+        if provider != "generic-test":
+            return super().injected_trial(profile, target, provider, starting_seed)
+        normalized = normalize_transcript_url(starting_seed)
+        return AdapterAcquisitionTrial(
+            "transcript-trial-1", normalized, "single_seed", target,
+            "operator_supplied", (normalized,),
+        )
 
 
 class TranscriptLearningInspectionTests(unittest.TestCase):
@@ -315,6 +346,7 @@ class TranscriptLearningInspectionTests(unittest.TestCase):
                 {
                     "firm_id": "firm-a",
                     "canonical_artifact_id": "earnings_transcript",
+                    "provider": "generic-test",
                     "starting_seed": seed,
                 },
             )
@@ -333,6 +365,7 @@ class TranscriptLearningInspectionTests(unittest.TestCase):
                 {
                     "firm_id": "firm-a",
                     "canonical_artifact_id": "earnings_transcript",
+                    "provider": "generic-test",
                     "starting_seed": seed,
                 },
             )

@@ -264,9 +264,9 @@ class PullWorkflow:
         return self._runs.get(run_id)
 
     def acquire_transcript_from_seed(
-        self, target: TranscriptAcquisitionTarget, starting_seed: str
+        self, target: TranscriptAcquisitionTarget, provider: str, starting_seed: str
     ) -> AcquisitionRunResult:
-        """Run one advisory seed through the configured transcript acquisition path."""
+        """Run one explicitly selected provider seed through transcript acquisition."""
         if not isinstance(target, TranscriptAcquisitionTarget):
             raise PullError("transcript acquisition target is required")
         with self._execution_lock:
@@ -299,7 +299,7 @@ class PullWorkflow:
             if not callable(injected_trial):
                 raise PullError("configured transcript adapter does not accept an injected seed")
             self._acquisition.register_source(source)
-            trial = injected_trial(source, target, starting_seed)
+            trial = injected_trial(source, target, provider, starting_seed)
             engine = AcquisitionEngine(
                 self._acquisition, AdapterRegistry((invocation_adapter,)), self._clock
             )

@@ -131,6 +131,14 @@ request state exits two.
   the existing persisted discovery-anchor records in repository execution order when populated.
   The request performs no acquisition, discovery, learning, checkpoint advancement, or source
   registration. Unknown firms use the existing API error envelope.
+- `POST /api/transcript-acquisitions/seed` accepts one explicit transcript-provider request:
+  `{"firm_id":"oracle","canonical_artifact_id":"earnings_transcript",`
+  `"provider":"stockanalysis","starting_seed":"https://stockanalysis.com/stocks/`
+  `orcl/transcripts/592465-q4-2026/"}`. `provider` is required, non-blank, resolved only through
+  the existing transcript provider registry, and accepted only in the JSON body. The HTTP adapter
+  performs no provider-specific branching or URL-based provider inference. The selected provider
+  owns URL validation; unknown providers and all query parameters use the existing invalid-request
+  client-error envelope.
 
 The local HTTP adapter starts the workflow in a background thread so the browser can poll durable
 stage progress. It contains no retrieval planning or repository calls.

@@ -58,8 +58,9 @@ The following invariants are mandatory.
     seed.
 
 4.  Every temporary seed SHALL execute the same exact-seed deterministic resolver used by
-    operator seed injection. It SHALL NOT activate normal learned seeds or the configured
-    fallback.
+    operator seed injection with an explicitly selected registered provider. It SHALL NOT
+    activate normal learned seeds or the configured fallback, infer a provider from URL shape, or
+    silently use firm configuration to select one.
 
 5.  Validation SHALL determine success. A supplied seed URL is never
     considered authoritative.
@@ -76,8 +77,9 @@ The following invariants are mandatory.
 9.  Acquisition SHALL terminate after successful validation or after the
     configured temporary-seed trial limit.
 
-10. The acquisition target (firm, canonical artifact, and selection criteria)
-    SHALL remain constant for every trial. Only the starting seed may vary.
+10. The acquisition target (firm, canonical artifact, and selection criteria) and explicitly
+    selected provider SHALL remain constant for every recovery invocation. Only the starting seed
+    may vary between its deterministic trials.
 
 11. Selection criteria SHALL default to the existing "latest" behavior until
     explicitly supplied by future callers.

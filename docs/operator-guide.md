@@ -303,6 +303,23 @@ records results, and summarizes execution. One artifact failure does not erase a
 success. Outcomes include success, duplicate, no change, skipped, configuration problem, and
 retrieval failure. A completed-results URL retains `run_id` for browser Back/reload inspection.
 
+### Explicit transcript seed injection
+
+`POST /api/transcript-acquisitions/seed` runs one operator-supplied transcript seed through the
+existing `earnings-call-transcript` adapter. The JSON body must select the transcript provider
+explicitly; provider names are resolved by the transcript provider registry, never inferred from
+the URL and never taken from a query parameter or the firm's configured provider.
+
+```sh
+curl -X POST http://127.0.0.1:8765/api/transcript-acquisitions/seed \
+  -H 'Content-Type: application/json' \
+  -d '{"firm_id":"oracle","canonical_artifact_id":"earnings_transcript","provider":"stockanalysis","starting_seed":"https://stockanalysis.com/stocks/orcl/transcripts/592465-q4-2026/"}'
+```
+
+`provider` must be a non-blank registered provider name. The selected provider owns all
+provider-specific URL validation. The optional `selection` object retains the existing transcript
+selection contract. Query parameters, including `?provider=stockanalysis`, are rejected.
+
 ### What changes state
 
 Selecting firms, refreshing, reading readiness, and viewing results do not mutate configuration.

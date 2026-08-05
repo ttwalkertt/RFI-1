@@ -10,6 +10,7 @@ from pathlib import Path
 from rfi.acquisition import (
     AcquisitionEngine,
     AcquisitionRepository,
+    AdapterAcquisitionTrial,
     AdapterRegistry,
     EarningsTranscriptHttpResponse,
     SourceProfile,
@@ -41,6 +42,16 @@ class FixtureTransport:
     def get(self, url: str) -> EarningsTranscriptHttpResponse:
         self.requests.append(url)
         return self.responses[url]
+
+
+def historical_generic_trial(
+    target: TranscriptAcquisitionTarget, seed: str
+) -> AdapterAcquisitionTrial:
+    """Retain TASK-060 resolver evidence outside TASK-065's provider API contract."""
+    return AdapterAcquisitionTrial(
+        "transcript-trial-1", seed, "single_seed", target,
+        "operator_supplied", (seed,),
+    )
 
 
 def proof() -> dict[str, object]:
@@ -93,7 +104,7 @@ def proof() -> dict[str, object]:
         )
         target = TranscriptAcquisitionTarget("firm-a")
         ordinary_before = engine.run_source("source-a", "ordinary-before")
-        trial = adapter.injected_trial(profile, target, seed)
+        trial = historical_generic_trial(target, seed)
         result = engine.run_source_trial("source-a", "manual-proof", trial)
         successful = [
             item for item in repository.history()
@@ -108,7 +119,7 @@ def proof() -> dict[str, object]:
         checkpoint = result.checkpoint_after
         learned_replay = engine.run_source("source-a", "ordinary-learned")
         injected_replay = engine.run_source_trial(
-            "source-a", "injected-replay", adapter.injected_trial(profile, target, seed)
+            "source-a", "injected-replay", historical_generic_trial(target, seed)
         )
         trial_diagnostics = [
             item for item in result.diagnostics if item.get("trial_id")

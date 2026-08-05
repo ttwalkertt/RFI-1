@@ -17,6 +17,7 @@ from unittest.mock import Mock, patch
 from rfi.acquisition import (
     AcquisitionEngine,
     AcquisitionRepository,
+    AdapterAcquisitionTrial,
     AdapterRegistry,
     Checkpoint,
     EngineFailurePoint,
@@ -28,13 +29,14 @@ from rfi.acquisition import (
     TranscriptSelectionMode,
 )
 from rfi.acquisition.contracts import ConflictError, ContractError
+from rfi.acquisition.earnings_transcripts import normalize_transcript_url
 from rfi.admin import create_admin_server
 from rfi.concepts import ConceptRepository
 from rfi.discovery import (
     DiscoveryPolicy,
     DiscoveryPolicyCatalog,
     DiscoverySearchResponse,
-    EarningsTranscriptPullAdapter,
+    EarningsTranscriptPullAdapter as ProductionEarningsTranscriptPullAdapter,
 )
 from rfi.firms import FirmRepository, sample_firms
 from rfi.firms.contracts import FirmDraft, FirmStatus
@@ -106,6 +108,40 @@ def source(*hints: str) -> SourceProfile:
             "retrieval_adapter_id": "earnings-call-transcript",
         },
     )
+
+
+class EarningsTranscriptPullAdapter(ProductionEarningsTranscriptPullAdapter):
+    """Retain TASK-060 generic-resolver regressions outside the new public dispatch path."""
+
+    def with_selection(
+        self, selection: TranscriptAcquisitionSelection
+    ) -> EarningsTranscriptPullAdapter:
+        return EarningsTranscriptPullAdapter(
+            self._policies, self._search, self._transport, self._clock,
+            self._monotonic, self._repository, selection,
+        )
+
+    def injected_trial(
+        self,
+        profile: SourceProfile,
+        target: TranscriptAcquisitionTarget,
+        provider_or_seed: str,
+        starting_seed: str | None = None,
+    ) -> AdapterAcquisitionTrial:
+        if starting_seed is not None and provider_or_seed != "generic-test":
+            return super().injected_trial(
+                profile, target, provider_or_seed, starting_seed
+            )
+        seed = provider_or_seed if starting_seed is None else starting_seed
+        self._validate_profile(profile)
+        normalized = normalize_transcript_url(seed)
+        self._budgets.pop(profile.source_id, None)
+        self._provider_adapters.clear()
+        self._validated_expected.discard(profile.source_id)
+        return AdapterAcquisitionTrial(
+            "transcript-trial-1", normalized, "single_seed", target,
+            "operator_supplied", (normalized,),
+        )
 
 
 class TranscriptSeedAcquisitionTests(unittest.TestCase):
@@ -754,7 +790,7 @@ class TranscriptSeedAcquisitionTests(unittest.TestCase):
             )
             before = profiles.get("firm-a")
             result = workflow.acquire_transcript_from_seed(
-                TranscriptAcquisitionTarget("firm-a"), seed
+                TranscriptAcquisitionTarget("firm-a"), "generic-test", seed
             )
             after = profiles.get("firm-a")
 
@@ -836,12 +872,16 @@ class TranscriptSeedApiTests(unittest.TestCase):
             valid = {
                 "firm_id": "seagate",
                 "canonical_artifact_id": "earnings_transcript",
+                "provider": "stockanalysis",
                 "starting_seed": "https://ir.example.com/archive",
             }
             try:
                 self.assertEqual(post(valid)[0], 200)
-                target, seed = server.pull_workflow.acquire_transcript_from_seed.call_args.args
+                target, provider, seed = (
+                    server.pull_workflow.acquire_transcript_from_seed.call_args.args
+                )
                 self.assertEqual(target.selection.mode, TranscriptSelectionMode.LATEST)
+                self.assertEqual(provider, valid["provider"])
                 self.assertEqual(seed, valid["starting_seed"])
                 server.pull_workflow.acquire_transcript_from_seed.reset_mock()
                 for query in (

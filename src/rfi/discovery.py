@@ -1694,9 +1694,10 @@ class EarningsTranscriptPullAdapter:
         self,
         profile: SourceProfile,
         target: TranscriptAcquisitionTarget,
+        provider: str,
         starting_seed: str,
     ) -> AdapterAcquisitionTrial:
-        """Validate one advisory operator seed and bind it to the immutable target."""
+        """Bind one explicitly selected provider and advisory seed to the target."""
         self._validate_profile(profile)
         if not isinstance(target, TranscriptAcquisitionTarget):
             raise ContractError("injected transcript acquisition target is malformed")
@@ -1704,16 +1705,14 @@ class EarningsTranscriptPullAdapter:
             raise ContractError("injected transcript target firm differs from source profile")
         if target.selection != self._selection:
             raise ContractError("injected transcript trial selection changed")
+        self._provider_registry.resolve(provider)
         normalized = normalize_transcript_url(starting_seed)
         self._budgets.pop(profile.source_id, None)
         self._provider_adapters.clear()
         self._validated_expected.discard(profile.source_id)
-        provider = profile.configuration.get("provider")
         return AdapterAcquisitionTrial(
             "transcript-trial-1", normalized, "single_seed", target,
-            "operator_supplied", (normalized,), provider=(
-                str(provider) if isinstance(provider, str) else ""
-            ),
+            "operator_supplied", (normalized,), provider=provider,
         )
 
     def terminal_selection_policy(
@@ -1783,6 +1782,13 @@ class EarningsTranscriptPullAdapter:
             policy.max_candidate_evaluations - len(budgeted.candidate_identities),
         )
         for candidate in page.candidates:
+            candidate = replace(candidate, provenance=replace(
+                candidate.provenance,
+                metadata={
+                    **candidate.provenance.metadata,
+                    "seed_source": trial.seed_source,
+                },
+            ))
             requested_url = candidate.provenance.metadata.get("requested_url")
             if not isinstance(requested_url, str):
                 raise ContractError("provider candidate lacks a requested URL identity")
@@ -2339,7 +2345,11 @@ class EarningsTranscriptPullAdapter:
         metadata = candidate.provenance.metadata
         provider_name = candidate.provenance.provider_identifiers.get("provider")
         if isinstance(provider_name, str) and provider_name:
-            if provider_name != profile.configuration.get("provider"):
+            trial_source = candidate.provenance.metadata.get("seed_source")
+            if (
+                trial_source != "operator_supplied"
+                and provider_name != profile.configuration.get("provider")
+            ):
                 raise ContractError("transcript candidate provider changed")
             provider = self._provider_adapters.get((profile.source_id, provider_name))
             if provider is None:
