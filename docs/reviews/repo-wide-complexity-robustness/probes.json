@@ -1,0 +1,24 @@
+{
+  "backup_overlap_probe": {
+    "backup_reported_result": "PASS",
+    "contract_result": "FAIL",
+    "restore_error": "content inventory contains missing or orphaned objects",
+    "restore_succeeded": false,
+    "write_injected_after_database_snapshot": true
+  },
+  "interrupted_pull_probe": {
+    "automatic_reconciliation": false,
+    "contract_result": "LIMITATION",
+    "documented_limitation": true,
+    "status_after_repository_reopen": "running"
+  },
+  "profile_revision_anchor_probe": {
+    "contract_result": "FAIL",
+    "first_revision_anchor_count": 1,
+    "first_source_id": "source-pull-review-firm-earnings_transcript-756115046c5a947255c2",
+    "second_revision_anchor_count": 0,
+    "second_source_id": "source-pull-review-firm-earnings_transcript-3a818c04496a640b3deb",
+    "source_identity_changed": true
+  },
+  "schema_version": 1
+}

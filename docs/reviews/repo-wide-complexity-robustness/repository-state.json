@@ -1,0 +1,8 @@
+{
+  "branch": "main",
+  "package_commit_resolution": "git log -1 --format=%H -- docs/reviews/repo-wide-complexity-robustness",
+  "review_basis_commit": "45966d528cec1d49e42037c59f57eec5f3a61a29",
+  "review_basis_upstream": "origin/main",
+  "review_date": "2026-08-05",
+  "working_tree_at_start": "clean"
+}

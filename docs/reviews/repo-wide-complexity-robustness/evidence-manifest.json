@@ -1,0 +1,193 @@
+{
+  "findings": [
+    {
+      "classification": "Confirmed defect",
+      "confidence": "High",
+      "contract": [
+        "docs/sqlite-structured-state-repository.md:106",
+        "docs/sqlite-structured-state-repository.md:118"
+      ],
+      "detection": "No overlapping-writer test; deterministic review probe fails",
+      "evidence": [
+        "src/rfi/storage/backup.py:50",
+        "src/rfi/storage/backup.py:61",
+        "src/rfi/storage/backup.py:74",
+        "docs/reviews/repo-wide-complexity-robustness/probes.json#/backup_overlap_probe"
+      ],
+      "horizon": "immediate",
+      "id": "RCR-001",
+      "scope": "subsystem",
+      "severity": "High",
+      "title": "Hybrid backup can report success for an unrestorable archive"
+    },
+    {
+      "classification": "Confirmed defect",
+      "confidence": "High",
+      "contract": [
+        "tasks/TASK-056-persistent-discovery-anchor-history.md:24",
+        "tasks/TASK-056-persistent-discovery-anchor-history.md:49"
+      ],
+      "detection": "TASK-056 test keeps a synthetic source ID constant; integrated review probe fails",
+      "evidence": [
+        "src/rfi/pull/workflow.py:451",
+        "src/rfi/pull/workflow.py:749",
+        "src/rfi/discovery.py:1413",
+        "src/rfi/acquisition/repository.py:326",
+        "tests/test_task056.py:225",
+        "docs/reviews/repo-wide-complexity-robustness/probes.json#/profile_revision_anchor_probe"
+      ],
+      "horizon": "near-term",
+      "id": "RCR-002",
+      "scope": "subsystem",
+      "severity": "Medium",
+      "title": "Transcript learning is partitioned by source-profile revision"
+    },
+    {
+      "classification": "Robustness gap",
+      "confidence": "High",
+      "contract": [
+        "docs/pull-workflow.md:152",
+        "docs/pull-workflow.md:178"
+      ],
+      "detection": "In-process progress is tested; restart, overlap, cancellation, and partial-exception truthfulness are not",
+      "evidence": [
+        "src/rfi/admin/server.py:949",
+        "src/rfi/pull/workflow.py:73",
+        "src/rfi/pull/workflow.py:140",
+        "src/rfi/pull/workflow.py:203",
+        "src/rfi/pull/repository.py:14",
+        "docs/reviews/repo-wide-complexity-robustness/probes.json#/interrupted_pull_probe"
+      ],
+      "horizon": "near-term",
+      "id": "RCR-003",
+      "scope": "subsystem",
+      "severity": "Medium",
+      "title": "Pull execution has no truthful interruption/queue lifecycle"
+    },
+    {
+      "classification": "Robustness gap",
+      "confidence": "High",
+      "contract": [
+        "docs/operator-guide.md:411",
+        "docs/operator-guide.md:429"
+      ],
+      "detection": "Successful persistence is tested; failing history-store negative control is absent",
+      "evidence": [
+        "src/rfi/mailing_lists/queue.py:453",
+        "src/rfi/mailing_lists/queue.py:464",
+        "src/rfi/mailing_lists/queue.py:476",
+        "tests/test_task032.py:660"
+      ],
+      "horizon": "near-term",
+      "id": "RCR-004",
+      "scope": "local",
+      "severity": "Medium",
+      "title": "Mailing-list queue silently loses promised durable history"
+    },
+    {
+      "classification": "Complexity hotspot",
+      "confidence": "High",
+      "contract": [
+        "DESIGN_PRINCIPLES.md:70",
+        "tasks/TASK-065-Require-Explicit-Transcript-Provider-for-Seed-Injection.md:56"
+      ],
+      "detection": "Broad task suites cover behavior; no owner/dependency architectural check",
+      "evidence": [
+        "src/rfi/discovery.py:519",
+        "src/rfi/discovery.py:1404",
+        "src/rfi/discovery.py:1624",
+        "src/rfi/acquisition/engine.py:604",
+        "docs/reviews/repo-wide-complexity-robustness/metrics.json#/largest_production_modules",
+        "docs/reviews/repo-wide-complexity-robustness/metrics.json#/git_change_concentration"
+      ],
+      "horizon": "near-term",
+      "id": "RCR-005",
+      "scope": "subsystem",
+      "severity": "Medium",
+      "title": "Transcript behavior is concentrated in a stateful multi-generation orchestration module"
+    },
+    {
+      "classification": "Architectural debt",
+      "confidence": "High",
+      "contract": [
+        "docs/sqlite-structured-state-repository.md:15",
+        "docs/sqlite-structured-state-repository.md:125"
+      ],
+      "detection": "Current SQLite query behavior is tested; storage-independent contract fixtures are absent",
+      "evidence": [
+        "src/rfi/mailing_lists/repository.py:1217",
+        "src/rfi/mailing_lists/service.py:943",
+        "src/rfi/mailing_lists/service.py:989",
+        "src/rfi/streams/registry.py:38"
+      ],
+      "horizon": "defer",
+      "id": "RCR-006",
+      "scope": "subsystem",
+      "severity": "Medium",
+      "title": "Mailing-list consumers depend on repository SQL rather than complete fact contracts"
+    },
+    {
+      "classification": "Complexity hotspot",
+      "confidence": "High",
+      "contract": [
+        "docs/pull-workflow.md:152",
+        "docs/framework-task-operating-model.md:37"
+      ],
+      "detection": "Scattered endpoint tests; no route-table or error-vocabulary completeness check",
+      "evidence": [
+        "src/rfi/admin/server.py:312",
+        "src/rfi/admin/server.py:387",
+        "src/rfi/admin/server.py:533",
+        "src/rfi/admin/server.py:1191",
+        "docs/reviews/repo-wide-complexity-robustness/metrics.json#/most_branched_functions"
+      ],
+      "horizon": "defer",
+      "id": "RCR-007",
+      "scope": "local",
+      "severity": "Low",
+      "title": "HTTP routing and error normalization are one growing decision table"
+    },
+    {
+      "classification": "Documentation or test mismatch",
+      "confidence": "High",
+      "contract": [
+        "docs/framework-task-operating-model.md:12",
+        "docs/framework-task-operating-model.md:31"
+      ],
+      "detection": "Full validation misses RCR-001 and RCR-002",
+      "evidence": [
+        "tests/test_task056.py:225",
+        "scripts/quality.py:19",
+        "scripts/check_baseline.py:1",
+        "docs/reviews/repo-wide-complexity-robustness/metrics.json#/largest_test_modules"
+      ],
+      "horizon": "near-term",
+      "id": "RCR-008",
+      "scope": "subsystem",
+      "severity": "Medium",
+      "title": "Validation does not detect architectural or cross-task contract drift"
+    },
+    {
+      "classification": "Documentation or test mismatch",
+      "confidence": "High",
+      "contract": [
+        "docs/framework-task-operating-model.md:18",
+        "docs/framework-task-operating-model.md:25"
+      ],
+      "detection": "Docs check validates local links and help anchors only",
+      "evidence": [
+        "docs/operator-guide.md:1",
+        "docs/sqlite-structured-state-repository.md:32",
+        "TASKS.md:65",
+        "scripts/check_docs.py:1"
+      ],
+      "horizon": "immediate",
+      "id": "RCR-009",
+      "scope": "local",
+      "severity": "Low",
+      "title": "Governing documentation and task status have drifted"
+    }
+  ],
+  "review_basis_commit": "45966d528cec1d49e42037c59f57eec5f3a61a29",
+  "schema_version": 1
+}

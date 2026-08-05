@@ -1,0 +1,3581 @@
+{
+  "git_change_concentration": [
+    {
+      "commits_touching": 38,
+      "path": "tests/test_foundation.py"
+    },
+    {
+      "commits_touching": 33,
+      "path": "tests/test_acquisition.py"
+    },
+    {
+      "commits_touching": 31,
+      "path": "src/rfi/admin/server.py"
+    },
+    {
+      "commits_touching": 27,
+      "path": "src/rfi/acquisition/engine.py"
+    },
+    {
+      "commits_touching": 26,
+      "path": "src/rfi/discovery.py"
+    },
+    {
+      "commits_touching": 18,
+      "path": "src/rfi/acquisition/__init__.py"
+    },
+    {
+      "commits_touching": 17,
+      "path": "src/rfi/acquisition/repository.py"
+    },
+    {
+      "commits_touching": 16,
+      "path": "tests/test_task023.py"
+    },
+    {
+      "commits_touching": 16,
+      "path": "tests/test_task025.py"
+    },
+    {
+      "commits_touching": 16,
+      "path": "tests/test_task025_hardening.py"
+    },
+    {
+      "commits_touching": 16,
+      "path": "src/rfi/cli.py"
+    },
+    {
+      "commits_touching": 14,
+      "path": "src/rfi/storage/sqlite.py"
+    },
+    {
+      "commits_touching": 14,
+      "path": "src/rfi/admin/firms.html"
+    },
+    {
+      "commits_touching": 14,
+      "path": "src/rfi/mailing_lists/service.py"
+    },
+    {
+      "commits_touching": 12,
+      "path": "src/rfi/acquisition/earnings_transcripts.py"
+    },
+    {
+      "commits_touching": 12,
+      "path": "tests/test_task028.py"
+    },
+    {
+      "commits_touching": 12,
+      "path": "tests/test_task032.py"
+    },
+    {
+      "commits_touching": 12,
+      "path": "src/rfi/mailing_lists/contracts.py"
+    },
+    {
+      "commits_touching": 12,
+      "path": "src/rfi/mailing_lists/repository.py"
+    },
+    {
+      "commits_touching": 12,
+      "path": "src/rfi/admin/source_profiles.html"
+    },
+    {
+      "commits_touching": 11,
+      "path": "src/rfi/pull/workflow.py"
+    },
+    {
+      "commits_touching": 11,
+      "path": "src/rfi/admin/pull_sources.html"
+    },
+    {
+      "commits_touching": 10,
+      "path": "src/rfi/firm_configuration.py"
+    },
+    {
+      "commits_touching": 10,
+      "path": "src/rfi/mailing_lists/workflow.py"
+    },
+    {
+      "commits_touching": 9,
+      "path": "src/rfi/acquisition/contracts.py"
+    },
+    {
+      "commits_touching": 9,
+      "path": "tests/test_task057.py"
+    },
+    {
+      "commits_touching": 9,
+      "path": "tests/test_task035.py"
+    },
+    {
+      "commits_touching": 9,
+      "path": "src/rfi/admin/linux_mailing_lists.html"
+    },
+    {
+      "commits_touching": 8,
+      "path": "tests/test_task048a.py"
+    },
+    {
+      "commits_touching": 8,
+      "path": "tests/test_task011.py"
+    },
+    {
+      "commits_touching": 8,
+      "path": "src/rfi/admin/console.html"
+    },
+    {
+      "commits_touching": 7,
+      "path": "tests/test_task064.py"
+    },
+    {
+      "commits_touching": 7,
+      "path": "tests/test_task060.py"
+    },
+    {
+      "commits_touching": 7,
+      "path": "src/rfi/source_profiles/repository.py"
+    },
+    {
+      "commits_touching": 7,
+      "path": "tests/test_task041.py"
+    },
+    {
+      "commits_touching": 7,
+      "path": "src/rfi/firms/repository.py"
+    },
+    {
+      "commits_touching": 7,
+      "path": "src/rfi/mailing_lists/__init__.py"
+    },
+    {
+      "commits_touching": 7,
+      "path": "tests/test_task029.py"
+    },
+    {
+      "commits_touching": 7,
+      "path": "src/rfi/mailing_lists/provider.py"
+    },
+    {
+      "commits_touching": 7,
+      "path": "src/rfi/admin/artifact_browser.html"
+    },
+    {
+      "commits_touching": 6,
+      "path": "src/rfi/acquisition/providers/stockanalysis.py"
+    },
+    {
+      "commits_touching": 6,
+      "path": "tests/test_task027.py"
+    },
+    {
+      "commits_touching": 6,
+      "path": "src/rfi/resources/firm-config-v1.schema.json"
+    },
+    {
+      "commits_touching": 6,
+      "path": "src/rfi/source_profiles/contracts.py"
+    },
+    {
+      "commits_touching": 6,
+      "path": "tests/test_task053.py"
+    },
+    {
+      "commits_touching": 6,
+      "path": "tests/test_task015.py"
+    },
+    {
+      "commits_touching": 6,
+      "path": "src/rfi/pull/__init__.py"
+    },
+    {
+      "commits_touching": 5,
+      "path": "src/rfi/source_profiles/service.py"
+    },
+    {
+      "commits_touching": 5,
+      "path": "src/rfi/admin/help.py"
+    },
+    {
+      "commits_touching": 5,
+      "path": "src/rfi/admin/streams.html"
+    }
+  ],
+  "highest_parameter_functions": [
+    {
+      "branches": 9,
+      "except_handlers": 0,
+      "line": 363,
+      "lines": 30,
+      "name": "IntelligenceOrchestrator._terminal_record",
+      "parameters": 16,
+      "path": "src/rfi/intelligence/orchestration.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 312,
+      "lines": 30,
+      "name": "AdminConsole.__init__",
+      "parameters": 14,
+      "path": "src/rfi/admin/server.py",
+      "raises": 0,
+      "returns": 0
+    },
+    {
+      "branches": 3,
+      "except_handlers": 0,
+      "line": 34,
+      "lines": 46,
+      "name": "ObservationService.observe",
+      "parameters": 13,
+      "path": "src/rfi/concepts/derivation.py",
+      "raises": 3,
+      "returns": 1
+    },
+    {
+      "branches": 2,
+      "except_handlers": 0,
+      "line": 1371,
+      "lines": 31,
+      "name": "BoundedTranscriptResolver._proposal",
+      "parameters": 13,
+      "path": "src/rfi/discovery.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 4,
+      "except_handlers": 0,
+      "line": 670,
+      "lines": 40,
+      "name": "AcquisitionRepository._record_discovery_anchor_values",
+      "parameters": 11,
+      "path": "src/rfi/acquisition/repository.py",
+      "raises": 0,
+      "returns": 0
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 78,
+      "lines": 38,
+      "name": "MailingListFetchQueue.__init__",
+      "parameters": 11,
+      "path": "src/rfi/mailing_lists/queue.py",
+      "raises": 0,
+      "returns": 0
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 916,
+      "lines": 37,
+      "name": "StockAnalysisTranscriptProvider._candidate",
+      "parameters": 11,
+      "path": "src/rfi/acquisition/providers/stockanalysis.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 3,
+      "except_handlers": 0,
+      "line": 394,
+      "lines": 20,
+      "name": "IntelligenceOrchestrator._failure_record",
+      "parameters": 11,
+      "path": "src/rfi/intelligence/orchestration.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 5,
+      "except_handlers": 1,
+      "line": 217,
+      "lines": 122,
+      "name": "MailingListRepository.retain_message",
+      "parameters": 10,
+      "path": "src/rfi/mailing_lists/repository.py",
+      "raises": 2,
+      "returns": 2
+    },
+    {
+      "branches": 2,
+      "except_handlers": 1,
+      "line": 340,
+      "lines": 44,
+      "name": "MailingListRepository._retain_conflict_candidate",
+      "parameters": 10,
+      "path": "src/rfi/mailing_lists/repository.py",
+      "raises": 1,
+      "returns": 2
+    },
+    {
+      "branches": 4,
+      "except_handlers": 0,
+      "line": 214,
+      "lines": 33,
+      "name": "SecProviderClient.__init__",
+      "parameters": 10,
+      "path": "src/rfi/acquisition/sec_provider.py",
+      "raises": 4,
+      "returns": 0
+    },
+    {
+      "branches": 2,
+      "except_handlers": 1,
+      "line": 1253,
+      "lines": 20,
+      "name": "MailingListRepository.record_fetch_history",
+      "parameters": 10,
+      "path": "src/rfi/mailing_lists/repository.py",
+      "raises": 1,
+      "returns": 0
+    },
+    {
+      "branches": 3,
+      "except_handlers": 0,
+      "line": 184,
+      "lines": 16,
+      "name": "SourceProfileService._view_effective",
+      "parameters": 10,
+      "path": "src/rfi/source_profiles/service.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 22,
+      "lines": 5,
+      "name": "FetchHistoryStore.record_fetch_history",
+      "parameters": 10,
+      "path": "src/rfi/mailing_lists/queue.py",
+      "raises": 0,
+      "returns": 0
+    },
+    {
+      "branches": 10,
+      "except_handlers": 0,
+      "line": 105,
+      "lines": 270,
+      "name": "records",
+      "parameters": 9,
+      "path": "scripts/generate_task028_review.py",
+      "raises": 2,
+      "returns": 0
+    },
+    {
+      "branches": 22,
+      "except_handlers": 2,
+      "line": 330,
+      "lines": 165,
+      "name": "MailingListAcquisitionService.acquire",
+      "parameters": 9,
+      "path": "src/rfi/mailing_lists/service.py",
+      "raises": 3,
+      "returns": 1
+    },
+    {
+      "branches": 21,
+      "except_handlers": 0,
+      "line": 138,
+      "lines": 110,
+      "name": "compare_evidence_packages",
+      "parameters": 9,
+      "path": "src/rfi/retrieval/replaceability.py",
+      "raises": 9,
+      "returns": 1
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 54,
+      "lines": 20,
+      "name": "PullWorkflow.__init__",
+      "parameters": 9,
+      "path": "src/rfi/pull/workflow.py",
+      "raises": 0,
+      "returns": 0
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 28,
+      "lines": 15,
+      "name": "SecRetrievalWorkflow.__init__",
+      "parameters": 9,
+      "path": "src/rfi/sec/workflow.py",
+      "raises": 0,
+      "returns": 0
+    },
+    {
+      "branches": 79,
+      "except_handlers": 5,
+      "line": 506,
+      "lines": 428,
+      "name": "MailingListAcquisitionService._plan",
+      "parameters": 8,
+      "path": "src/rfi/mailing_lists/service.py",
+      "raises": 7,
+      "returns": 5
+    },
+    {
+      "branches": 35,
+      "except_handlers": 4,
+      "line": 1053,
+      "lines": 256,
+      "name": "BoundedTranscriptResolver.resolve",
+      "parameters": 8,
+      "path": "src/rfi/discovery.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 5,
+      "except_handlers": 0,
+      "line": 185,
+      "lines": 71,
+      "name": "build_package",
+      "parameters": 8,
+      "path": "scripts/review_package.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 52,
+      "lines": 69,
+      "name": "ArtifactRepositoryCase.ingest",
+      "parameters": 8,
+      "path": "tests/test_task018.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 1,
+      "except_handlers": 0,
+      "line": 1632,
+      "lines": 28,
+      "name": "EarningsTranscriptPullAdapter.__init__",
+      "parameters": 8,
+      "path": "src/rfi/discovery.py",
+      "raises": 1,
+      "returns": 0
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 39,
+      "lines": 24,
+      "name": "_object",
+      "parameters": 8,
+      "path": "src/rfi/source_objects/parser.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 52,
+      "lines": 18,
+      "name": "DiscoveryAnchorHistoryCase.success",
+      "parameters": 8,
+      "path": "tests/test_task056.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 18,
+      "except_handlers": 0,
+      "line": 492,
+      "lines": 87,
+      "name": "StreamService._validate_policy",
+      "parameters": 7,
+      "path": "src/rfi/streams/service.py",
+      "raises": 0,
+      "returns": 5
+    },
+    {
+      "branches": 5,
+      "except_handlers": 1,
+      "line": 764,
+      "lines": 65,
+      "name": "AcquisitionRepository.record_outcome",
+      "parameters": 7,
+      "path": "src/rfi/acquisition/repository.py",
+      "raises": 4,
+      "returns": 2
+    },
+    {
+      "branches": 13,
+      "except_handlers": 0,
+      "line": 345,
+      "lines": 53,
+      "name": "SourceProfileRepository._revision",
+      "parameters": 7,
+      "path": "src/rfi/source_profiles/repository.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 385,
+      "lines": 49,
+      "name": "MailingListRepository._record_message_conflict",
+      "parameters": 7,
+      "path": "src/rfi/mailing_lists/repository.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 56,
+      "lines": 46,
+      "name": "candidate",
+      "parameters": 7,
+      "path": "tests/test_task062.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 5,
+      "except_handlers": 0,
+      "line": 39,
+      "lines": 43,
+      "name": "FixtureTransport.request",
+      "parameters": 7,
+      "path": "tests/test_sec_api.py",
+      "raises": 1,
+      "returns": 3
+    },
+    {
+      "branches": 2,
+      "except_handlers": 1,
+      "line": 683,
+      "lines": 40,
+      "name": "MailingListRepository.record_failure",
+      "parameters": 7,
+      "path": "src/rfi/mailing_lists/repository.py",
+      "raises": 1,
+      "returns": 0
+    },
+    {
+      "branches": 2,
+      "except_handlers": 0,
+      "line": 178,
+      "lines": 37,
+      "name": "ArtifactQueryService._detail",
+      "parameters": 7,
+      "path": "src/rfi/artifacts/service.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 4,
+      "except_handlers": 1,
+      "line": 60,
+      "lines": 27,
+      "name": "UrllibTransport.request",
+      "parameters": 7,
+      "path": "src/rfi/acquisition/sec_api.py",
+      "raises": 1,
+      "returns": 2
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 162,
+      "lines": 21,
+      "name": "OverlappingLearnedTrialAdapter._candidate",
+      "parameters": 7,
+      "path": "tests/test_task058.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 4,
+      "except_handlers": 0,
+      "line": 649,
+      "lines": 20,
+      "name": "AcquisitionRepository._record_discovery_anchor",
+      "parameters": 7,
+      "path": "src/rfi/acquisition/repository.py",
+      "raises": 0,
+      "returns": 2
+    },
+    {
+      "branches": 1,
+      "except_handlers": 0,
+      "line": 680,
+      "lines": 19,
+      "name": "PullWorkflow._set_progress",
+      "parameters": 7,
+      "path": "src/rfi/pull/workflow.py",
+      "raises": 0,
+      "returns": 0
+    },
+    {
+      "branches": 1,
+      "except_handlers": 1,
+      "line": 1274,
+      "lines": 16,
+      "name": "MailingListRepository.record_fetch_event",
+      "parameters": 7,
+      "path": "src/rfi/mailing_lists/repository.py",
+      "raises": 1,
+      "returns": 0
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 163,
+      "lines": 16,
+      "name": "LinuxMailingListWorkflowService.__init__",
+      "parameters": 7,
+      "path": "src/rfi/mailing_lists/workflow.py",
+      "raises": 0,
+      "returns": 0
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 297,
+      "lines": 15,
+      "name": "DeterministicReasoner._claim",
+      "parameters": 7,
+      "path": "src/rfi/intelligence/deterministic.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 45,
+      "lines": 10,
+      "name": "HttpTransport.request",
+      "parameters": 7,
+      "path": "src/rfi/acquisition/sec_api.py",
+      "raises": 0,
+      "returns": 0
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 28,
+      "lines": 4,
+      "name": "FetchHistoryStore.record_fetch_event",
+      "parameters": 7,
+      "path": "src/rfi/mailing_lists/queue.py",
+      "raises": 0,
+      "returns": 0
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 10,
+      "lines": 2,
+      "name": "_NoRedirect.redirect_request",
+      "parameters": 7,
+      "path": "tests/test_task044.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 98,
+      "except_handlers": 6,
+      "line": 535,
+      "lines": 468,
+      "name": "BoundedTranscriptDiscovery.discover",
+      "parameters": 6,
+      "path": "src/rfi/discovery.py",
+      "raises": 2,
+      "returns": 8
+    },
+    {
+      "branches": 15,
+      "except_handlers": 2,
+      "line": 140,
+      "lines": 185,
+      "name": "AcquisitionRepository.record_success",
+      "parameters": 6,
+      "path": "src/rfi/acquisition/repository.py",
+      "raises": 6,
+      "returns": 3
+    },
+    {
+      "branches": 10,
+      "except_handlers": 1,
+      "line": 842,
+      "lines": 114,
+      "name": "AcquisitionRepository.record_interval_outcome",
+      "parameters": 6,
+      "path": "src/rfi/acquisition/repository.py",
+      "raises": 4,
+      "returns": 2
+    },
+    {
+      "branches": 7,
+      "except_handlers": 1,
+      "line": 452,
+      "lines": 95,
+      "name": "MailingListRepository.retain_unavailable_ancestor",
+      "parameters": 6,
+      "path": "src/rfi/mailing_lists/repository.py",
+      "raises": 2,
+      "returns": 2
+    },
+    {
+      "branches": 6,
+      "except_handlers": 0,
+      "line": 691,
+      "lines": 72,
+      "name": "StockAnalysisTranscriptProvider._discover_archive",
+      "parameters": 6,
+      "path": "src/rfi/acquisition/providers/stockanalysis.py",
+      "raises": 3,
+      "returns": 1
+    },
+    {
+      "branches": 5,
+      "except_handlers": 1,
+      "line": 21,
+      "lines": 51,
+      "name": "WorkspaceService.execute",
+      "parameters": 6,
+      "path": "src/rfi/workspace/service.py",
+      "raises": 1,
+      "returns": 2
+    }
+  ],
+  "largest_functions": [
+    {
+      "branches": 118,
+      "except_handlers": 12,
+      "line": 604,
+      "lines": 1030,
+      "name": "AcquisitionEngine._run_source",
+      "parameters": 5,
+      "path": "src/rfi/acquisition/engine.py",
+      "raises": 12,
+      "returns": 2
+    },
+    {
+      "branches": 137,
+      "except_handlers": 1,
+      "line": 533,
+      "lines": 582,
+      "name": "AdminHandler._api",
+      "parameters": 4,
+      "path": "src/rfi/admin/server.py",
+      "raises": 21,
+      "returns": 80
+    },
+    {
+      "branches": 98,
+      "except_handlers": 6,
+      "line": 535,
+      "lines": 468,
+      "name": "BoundedTranscriptDiscovery.discover",
+      "parameters": 6,
+      "path": "src/rfi/discovery.py",
+      "raises": 2,
+      "returns": 8
+    },
+    {
+      "branches": 79,
+      "except_handlers": 5,
+      "line": 506,
+      "lines": 428,
+      "name": "MailingListAcquisitionService._plan",
+      "parameters": 8,
+      "path": "src/rfi/mailing_lists/service.py",
+      "raises": 7,
+      "returns": 5
+    },
+    {
+      "branches": 35,
+      "except_handlers": 0,
+      "line": 330,
+      "lines": 357,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/generate_task004_review.py",
+      "raises": 7,
+      "returns": 3
+    },
+    {
+      "branches": 38,
+      "except_handlers": 1,
+      "line": 1824,
+      "lines": 293,
+      "name": "EarningsTranscriptPullAdapter._discover",
+      "parameters": 4,
+      "path": "src/rfi/discovery.py",
+      "raises": 6,
+      "returns": 2
+    },
+    {
+      "branches": 20,
+      "except_handlers": 1,
+      "line": 97,
+      "lines": 289,
+      "name": "proof",
+      "parameters": 3,
+      "path": "scripts/task006_browser.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 10,
+      "except_handlers": 0,
+      "line": 105,
+      "lines": 270,
+      "name": "records",
+      "parameters": 9,
+      "path": "scripts/generate_task028_review.py",
+      "raises": 2,
+      "returns": 0
+    },
+    {
+      "branches": 5,
+      "except_handlers": 0,
+      "line": 87,
+      "lines": 262,
+      "name": "parser",
+      "parameters": 0,
+      "path": "src/rfi/cli.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 35,
+      "except_handlers": 4,
+      "line": 1053,
+      "lines": 256,
+      "name": "BoundedTranscriptResolver.resolve",
+      "parameters": 8,
+      "path": "src/rfi/discovery.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 11,
+      "except_handlers": 0,
+      "line": 214,
+      "lines": 231,
+      "name": "proof",
+      "parameters": 1,
+      "path": "scripts/task009_concepts.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 0,
+      "except_handlers": 0,
+      "line": 32,
+      "lines": 225,
+      "name": "sample_concepts",
+      "parameters": 0,
+      "path": "src/rfi/concepts/samples.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 8,
+      "except_handlers": 4,
+      "line": 135,
+      "lines": 219,
+      "name": "fixture_proof",
+      "parameters": 1,
+      "path": "scripts/task008_workspace.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 47,
+      "except_handlers": 5,
+      "line": 629,
+      "lines": 217,
+      "name": "BoundedTranscriptDiscovery.discover.traverse",
+      "parameters": 3,
+      "path": "src/rfi/discovery.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 33,
+      "except_handlers": 5,
+      "line": 352,
+      "lines": 205,
+      "name": "EarningsCallTranscriptAcquisition.acquire",
+      "parameters": 2,
+      "path": "src/rfi/acquisition/earnings_transcripts.py",
+      "raises": 4,
+      "returns": 2
+    },
+    {
+      "branches": 27,
+      "except_handlers": 4,
+      "line": 522,
+      "lines": 193,
+      "name": "LinuxMailingListWorkflowService.fetch_up_to_date",
+      "parameters": 5,
+      "path": "src/rfi/mailing_lists/workflow.py",
+      "raises": 6,
+      "returns": 3
+    },
+    {
+      "branches": 27,
+      "except_handlers": 0,
+      "line": 2343,
+      "lines": 187,
+      "name": "EarningsTranscriptPullAdapter.retrieve",
+      "parameters": 3,
+      "path": "src/rfi/discovery.py",
+      "raises": 12,
+      "returns": 2
+    },
+    {
+      "branches": 24,
+      "except_handlers": 1,
+      "line": 239,
+      "lines": 186,
+      "name": "MailingListFetchQueue._work",
+      "parameters": 1,
+      "path": "src/rfi/mailing_lists/queue.py",
+      "raises": 0,
+      "returns": 6
+    },
+    {
+      "branches": 15,
+      "except_handlers": 2,
+      "line": 140,
+      "lines": 185,
+      "name": "AcquisitionRepository.record_success",
+      "parameters": 6,
+      "path": "src/rfi/acquisition/repository.py",
+      "raises": 6,
+      "returns": 3
+    },
+    {
+      "branches": 11,
+      "except_handlers": 0,
+      "line": 20,
+      "lines": 174,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/check_baseline.py",
+      "raises": 0,
+      "returns": 2
+    },
+    {
+      "branches": 7,
+      "except_handlers": 0,
+      "line": 60,
+      "lines": 169,
+      "name": "generate",
+      "parameters": 1,
+      "path": "scripts/generate_task064_review.py",
+      "raises": 4,
+      "returns": 1
+    },
+    {
+      "branches": 13,
+      "except_handlers": 0,
+      "line": 75,
+      "lines": 166,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/generate_task029_review.py",
+      "raises": 1,
+      "returns": 2
+    },
+    {
+      "branches": 22,
+      "except_handlers": 2,
+      "line": 330,
+      "lines": 165,
+      "name": "MailingListAcquisitionService.acquire",
+      "parameters": 9,
+      "path": "src/rfi/mailing_lists/service.py",
+      "raises": 3,
+      "returns": 1
+    },
+    {
+      "branches": 12,
+      "except_handlers": 1,
+      "line": 56,
+      "lines": 162,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/task064_live_validation.py",
+      "raises": 0,
+      "returns": 2
+    },
+    {
+      "branches": 34,
+      "except_handlers": 0,
+      "line": 137,
+      "lines": 161,
+      "name": "derive_projection",
+      "parameters": 1,
+      "path": "src/rfi/mailing_lists/service.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 18,
+      "except_handlers": 1,
+      "line": 462,
+      "lines": 153,
+      "name": "materialize_firm_configurations",
+      "parameters": 5,
+      "path": "src/rfi/firm_configuration.py",
+      "raises": 3,
+      "returns": 2
+    },
+    {
+      "branches": 20,
+      "except_handlers": 0,
+      "line": 764,
+      "lines": 151,
+      "name": "StockAnalysisTranscriptProvider.retrieve",
+      "parameters": 3,
+      "path": "src/rfi/acquisition/providers/stockanalysis.py",
+      "raises": 8,
+      "returns": 1
+    },
+    {
+      "branches": 34,
+      "except_handlers": 0,
+      "line": 145,
+      "lines": 151,
+      "name": "DeterministicReasoner.reason",
+      "parameters": 4,
+      "path": "src/rfi/intelligence/deterministic.py",
+      "raises": 0,
+      "returns": 2
+    },
+    {
+      "branches": 8,
+      "except_handlers": 0,
+      "line": 223,
+      "lines": 148,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/generate_task006_review.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 2,
+      "except_handlers": 0,
+      "line": 189,
+      "lines": 146,
+      "name": "completion_report",
+      "parameters": 3,
+      "path": "scripts/generate_task032_review.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 30,
+      "except_handlers": 0,
+      "line": 2151,
+      "lines": 146,
+      "name": "EarningsTranscriptPullAdapter._classify_outcome",
+      "parameters": 2,
+      "path": "src/rfi/discovery.py",
+      "raises": 0,
+      "returns": 13
+    },
+    {
+      "branches": 8,
+      "except_handlers": 0,
+      "line": 205,
+      "lines": 146,
+      "name": "MailingListCase.test_partial_run_projects_connectivity_per_component_and_rebuilds_identically",
+      "parameters": 1,
+      "path": "tests/test_task023.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 9,
+      "except_handlers": 0,
+      "line": 256,
+      "lines": 145,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/generate_task022_review.py",
+      "raises": 0,
+      "returns": 2
+    },
+    {
+      "branches": 28,
+      "except_handlers": 4,
+      "line": 387,
+      "lines": 145,
+      "name": "AdminHandler._dispatch",
+      "parameters": 2,
+      "path": "src/rfi/admin/server.py",
+      "raises": 1,
+      "returns": 13
+    },
+    {
+      "branches": 4,
+      "except_handlers": 0,
+      "line": 47,
+      "lines": 143,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/generate_task035_review.py",
+      "raises": 0,
+      "returns": 2
+    },
+    {
+      "branches": 26,
+      "except_handlers": 0,
+      "line": 455,
+      "lines": 141,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/task006_browser.py",
+      "raises": 0,
+      "returns": 3
+    },
+    {
+      "branches": 16,
+      "except_handlers": 0,
+      "line": 360,
+      "lines": 140,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/generate_review_package.py",
+      "raises": 1,
+      "returns": 2
+    },
+    {
+      "branches": 15,
+      "except_handlers": 0,
+      "line": 337,
+      "lines": 140,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/generate_task032_review.py",
+      "raises": 0,
+      "returns": 2
+    },
+    {
+      "branches": 8,
+      "except_handlers": 0,
+      "line": 54,
+      "lines": 139,
+      "name": "cli_proof",
+      "parameters": 0,
+      "path": "scripts/generate_task026_review.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 6,
+      "except_handlers": 0,
+      "line": 954,
+      "lines": 136,
+      "name": "MailingListRepository.repair_cross_source_conflicts",
+      "parameters": 3,
+      "path": "src/rfi/mailing_lists/repository.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 8,
+      "except_handlers": 2,
+      "line": 802,
+      "lines": 135,
+      "name": "TranscriptSeedApiTests.test_rest_contract_defaults_latest_and_rejects_extra_or_multiple_seeds",
+      "parameters": 1,
+      "path": "tests/test_task060.py",
+      "raises": 0,
+      "returns": 5
+    },
+    {
+      "branches": 3,
+      "except_handlers": 0,
+      "line": 265,
+      "lines": 135,
+      "name": "TranscriptLearningInspectionTests.test_injected_acquisition_is_visible_through_learning_endpoint",
+      "parameters": 1,
+      "path": "tests/test_task061.py",
+      "raises": 0,
+      "returns": 0
+    },
+    {
+      "branches": 14,
+      "except_handlers": 0,
+      "line": 121,
+      "lines": 131,
+      "name": "execute",
+      "parameters": 2,
+      "path": "scripts/task022_sec_forms.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 1,
+      "except_handlers": 0,
+      "line": 153,
+      "lines": 130,
+      "name": "narratives",
+      "parameters": 4,
+      "path": "scripts/generate_task004_review.py",
+      "raises": 0,
+      "returns": 0
+    },
+    {
+      "branches": 8,
+      "except_handlers": 0,
+      "line": 129,
+      "lines": 130,
+      "name": "fixture_proof",
+      "parameters": 0,
+      "path": "scripts/task015_pull_workflow.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 12,
+      "except_handlers": 0,
+      "line": 242,
+      "lines": 129,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/generate_task031_review.py",
+      "raises": 0,
+      "returns": 2
+    },
+    {
+      "branches": 3,
+      "except_handlers": 0,
+      "line": 57,
+      "lines": 129,
+      "name": "proof",
+      "parameters": 0,
+      "path": "scripts/task060_seed_injection.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 27,
+      "except_handlers": 1,
+      "line": 331,
+      "lines": 129,
+      "name": "load_firm_configurations",
+      "parameters": 2,
+      "path": "src/rfi/firm_configuration.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 1,
+      "except_handlers": 0,
+      "line": 29,
+      "lines": 129,
+      "name": "FoundationTests.test_product_scope_matches_completed_architectural_milestones",
+      "parameters": 1,
+      "path": "tests/test_foundation.py",
+      "raises": 0,
+      "returns": 0
+    },
+    {
+      "branches": 5,
+      "except_handlers": 0,
+      "line": 46,
+      "lines": 128,
+      "name": "write_records",
+      "parameters": 3,
+      "path": "scripts/generate_task027_review.py",
+      "raises": 3,
+      "returns": 1
+    }
+  ],
+  "largest_production_modules": [
+    {
+      "broad_exception_handlers": 0,
+      "classes": 27,
+      "except_handlers": 17,
+      "functions": 60,
+      "imports": [
+        "__future__",
+        "collections",
+        "dataclasses",
+        "datetime",
+        "enum",
+        "hashlib",
+        "heapq",
+        "html",
+        "json",
+        "jsonschema",
+        "pathlib",
+        "re",
+        "rfi",
+        "socket",
+        "time",
+        "typing",
+        "urllib"
+      ],
+      "lines": 2573,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 2,
+        "fallback": 9,
+        "legacy": 8,
+        "migration": 0
+      },
+      "path": "src/rfi/discovery.py"
+    },
+    {
+      "broad_exception_handlers": 3,
+      "classes": 19,
+      "except_handlers": 12,
+      "functions": 45,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "enum",
+        "hashlib",
+        "json",
+        "rfi",
+        "typing"
+      ],
+      "lines": 1869,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 1,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/acquisition/engine.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 3,
+      "except_handlers": 11,
+      "functions": 19,
+      "imports": [
+        "__future__",
+        "contextlib",
+        "datetime",
+        "hashlib",
+        "json",
+        "pathlib",
+        "rfi",
+        "sqlite3",
+        "typing"
+      ],
+      "lines": 1512,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 2,
+        "fallback": 13,
+        "legacy": 20,
+        "migration": 4
+      },
+      "path": "src/rfi/storage/sqlite.py"
+    },
+    {
+      "broad_exception_handlers": 1,
+      "classes": 1,
+      "except_handlers": 17,
+      "functions": 46,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "hashlib",
+        "json",
+        "pathlib",
+        "rfi",
+        "sqlite3",
+        "typing"
+      ],
+      "lines": 1414,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 2,
+        "fallback": 16,
+        "legacy": 4,
+        "migration": 0
+      },
+      "path": "src/rfi/mailing_lists/repository.py"
+    },
+    {
+      "broad_exception_handlers": 1,
+      "classes": 3,
+      "except_handlers": 8,
+      "functions": 23,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "http",
+        "json",
+        "pathlib",
+        "rfi",
+        "threading",
+        "typing",
+        "urllib"
+      ],
+      "lines": 1324,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 1,
+        "fallback": 1,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/admin/server.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 1,
+      "except_handlers": 18,
+      "functions": 44,
+      "imports": [
+        "__future__",
+        "contextlib",
+        "datetime",
+        "hashlib",
+        "json",
+        "pathlib",
+        "rfi",
+        "threading",
+        "typing"
+      ],
+      "lines": 1251,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/acquisition/repository.py"
+    },
+    {
+      "broad_exception_handlers": 1,
+      "classes": 3,
+      "except_handlers": 9,
+      "functions": 33,
+      "imports": [
+        "__future__",
+        "collections",
+        "dataclasses",
+        "datetime",
+        "hashlib",
+        "json",
+        "rfi",
+        "typing",
+        "urllib",
+        "uuid"
+      ],
+      "lines": 1200,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 16,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/mailing_lists/service.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 7,
+      "except_handlers": 8,
+      "functions": 30,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "hashlib",
+        "html",
+        "json",
+        "re",
+        "rfi",
+        "typing",
+        "urllib"
+      ],
+      "lines": 1021,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 11,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/acquisition/providers/stockanalysis.py"
+    },
+    {
+      "broad_exception_handlers": 2,
+      "classes": 9,
+      "except_handlers": 14,
+      "functions": 29,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "hashlib",
+        "re",
+        "rfi",
+        "typing"
+      ],
+      "lines": 988,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 5,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 1
+      },
+      "path": "src/rfi/mailing_lists/workflow.py"
+    },
+    {
+      "broad_exception_handlers": 2,
+      "classes": 1,
+      "except_handlers": 2,
+      "functions": 37,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "hashlib",
+        "json",
+        "rfi",
+        "threading",
+        "typing",
+        "uuid"
+      ],
+      "lines": 862,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 1,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/pull/workflow.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 1,
+      "except_handlers": 6,
+      "functions": 36,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "hashlib",
+        "json",
+        "os",
+        "pathlib",
+        "rfi",
+        "shutil",
+        "tempfile",
+        "typing",
+        "uuid",
+        "zipfile"
+      ],
+      "lines": 797,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/workspace/repository.py"
+    },
+    {
+      "broad_exception_handlers": 1,
+      "classes": 1,
+      "except_handlers": 6,
+      "functions": 36,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "hashlib",
+        "re",
+        "rfi",
+        "typing",
+        "uuid"
+      ],
+      "lines": 757,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 1,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/streams/service.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 13,
+      "except_handlers": 10,
+      "functions": 34,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "enum",
+        "hashlib",
+        "html",
+        "re",
+        "rfi",
+        "socket",
+        "typing",
+        "urllib"
+      ],
+      "lines": 743,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/acquisition/earnings_transcripts.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 1,
+      "except_handlers": 8,
+      "functions": 14,
+      "imports": [
+        "__future__",
+        "argparse",
+        "dataclasses",
+        "datetime",
+        "json",
+        "pathlib",
+        "rfi",
+        "sys",
+        "typing"
+      ],
+      "lines": 685,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 1,
+        "fallback": 0,
+        "legacy": 1,
+        "migration": 0
+      },
+      "path": "src/rfi/cli.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 5,
+      "except_handlers": 6,
+      "functions": 19,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "hashlib",
+        "importlib",
+        "json",
+        "jsonschema",
+        "pathlib",
+        "rfi",
+        "typing"
+      ],
+      "lines": 640,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/firm_configuration.py"
+    },
+    {
+      "broad_exception_handlers": 2,
+      "classes": 1,
+      "except_handlers": 9,
+      "functions": 31,
+      "imports": [
+        "__future__",
+        "base64",
+        "dataclasses",
+        "datetime",
+        "hashlib",
+        "json",
+        "rfi",
+        "typing"
+      ],
+      "lines": 628,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 2,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/artifacts/service.py"
+    },
+    {
+      "broad_exception_handlers": 1,
+      "classes": 1,
+      "except_handlers": 7,
+      "functions": 31,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "hashlib",
+        "importlib",
+        "json",
+        "math",
+        "pathlib",
+        "re",
+        "rfi",
+        "typing"
+      ],
+      "lines": 624,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 4,
+        "migration": 0
+      },
+      "path": "src/rfi/firms/repository.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 30,
+      "except_handlers": 0,
+      "functions": 36,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "enum",
+        "re",
+        "typing"
+      ],
+      "lines": 622,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 4,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/acquisition/contracts.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 4,
+      "except_handlers": 5,
+      "functions": 17,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "json",
+        "os",
+        "pathlib",
+        "re",
+        "rfi",
+        "socket",
+        "time",
+        "typing",
+        "urllib"
+      ],
+      "lines": 620,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/acquisition/edgar.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 1,
+      "except_handlers": 4,
+      "functions": 23,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "hashlib",
+        "json",
+        "pathlib",
+        "re",
+        "rfi",
+        "typing",
+        "urllib"
+      ],
+      "lines": 601,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 7,
+        "migration": 0
+      },
+      "path": "src/rfi/source_profiles/repository.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 3,
+      "except_handlers": 14,
+      "functions": 26,
+      "imports": [
+        "__future__",
+        "contextlib",
+        "dataclasses",
+        "datetime",
+        "email",
+        "rfi",
+        "threading",
+        "time",
+        "typing",
+        "urllib",
+        "xml"
+      ],
+      "lines": 565,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 1,
+        "fallback": 19,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/mailing_lists/provider.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 8,
+      "except_handlers": 9,
+      "functions": 17,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "json",
+        "re",
+        "rfi",
+        "socket",
+        "time",
+        "typing",
+        "urllib"
+      ],
+      "lines": 563,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/acquisition/sec_provider.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 4,
+      "except_handlers": 5,
+      "functions": 14,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "json",
+        "os",
+        "pathlib",
+        "rfi",
+        "socket",
+        "time",
+        "typing",
+        "urllib"
+      ],
+      "lines": 527,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/acquisition/sec_api.py"
+    },
+    {
+      "broad_exception_handlers": 4,
+      "classes": 1,
+      "except_handlers": 8,
+      "functions": 19,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "hashlib",
+        "json",
+        "os",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "typing"
+      ],
+      "lines": 526,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/retrieval/repository.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 2,
+      "except_handlers": 5,
+      "functions": 29,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "hashlib",
+        "json",
+        "pathlib",
+        "re",
+        "rfi",
+        "typing"
+      ],
+      "lines": 511,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/concepts/repository.py"
+    },
+    {
+      "broad_exception_handlers": 2,
+      "classes": 4,
+      "except_handlers": 4,
+      "functions": 22,
+      "imports": [
+        "__future__",
+        "collections",
+        "dataclasses",
+        "datetime",
+        "rfi",
+        "threading",
+        "typing",
+        "uuid"
+      ],
+      "lines": 499,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/mailing_lists/queue.py"
+    },
+    {
+      "broad_exception_handlers": 1,
+      "classes": 1,
+      "except_handlers": 11,
+      "functions": 28,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "hashlib",
+        "json",
+        "pathlib",
+        "rfi",
+        "typing"
+      ],
+      "lines": 490,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/streams/repository.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 1,
+      "except_handlers": 1,
+      "functions": 20,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "hashlib",
+        "rfi",
+        "typing",
+        "yaml"
+      ],
+      "lines": 446,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/streams/definition.py"
+    },
+    {
+      "broad_exception_handlers": 1,
+      "classes": 0,
+      "except_handlers": 1,
+      "functions": 12,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "hashlib",
+        "rfi",
+        "typing"
+      ],
+      "lines": 428,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/retrieval/replaceability.py"
+    },
+    {
+      "broad_exception_handlers": 3,
+      "classes": 2,
+      "except_handlers": 4,
+      "functions": 15,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "hashlib",
+        "json",
+        "rfi",
+        "typing"
+      ],
+      "lines": 413,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "src/rfi/intelligence/orchestration.py"
+    }
+  ],
+  "largest_test_modules": [
+    {
+      "broad_exception_handlers": 0,
+      "classes": 6,
+      "except_handlers": 0,
+      "functions": 48,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "json",
+        "jsonschema",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "unittest"
+      ],
+      "lines": 1337,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 4,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task064.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 9,
+      "except_handlers": 0,
+      "functions": 48,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "json",
+        "pathlib",
+        "rfi",
+        "scripts",
+        "tempfile",
+        "unittest"
+      ],
+      "lines": 1225,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 16,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task057.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 5,
+      "except_handlers": 2,
+      "functions": 26,
+      "imports": [
+        "__future__",
+        "datetime",
+        "http",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "threading",
+        "typing",
+        "unittest",
+        "urllib"
+      ],
+      "lines": 940,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task060.py"
+    },
+    {
+      "broad_exception_handlers": 1,
+      "classes": 16,
+      "except_handlers": 1,
+      "functions": 82,
+      "imports": [
+        "__future__",
+        "datetime",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "tests",
+        "threading",
+        "types",
+        "typing",
+        "unittest"
+      ],
+      "lines": 874,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 2,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 2
+      },
+      "path": "tests/test_task032.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 2,
+      "except_handlers": 0,
+      "functions": 32,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "hashlib",
+        "http",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "threading",
+        "unittest"
+      ],
+      "lines": 792,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task041.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 3,
+      "except_handlers": 0,
+      "functions": 28,
+      "imports": [
+        "__future__",
+        "hashlib",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "threading",
+        "unittest",
+        "urllib"
+      ],
+      "lines": 721,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task023.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 5,
+      "except_handlers": 0,
+      "functions": 29,
+      "imports": [
+        "__future__",
+        "email",
+        "hashlib",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "threading",
+        "time",
+        "types",
+        "unittest",
+        "urllib"
+      ],
+      "lines": 661,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task015.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 6,
+      "except_handlers": 0,
+      "functions": 30,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "json",
+        "pathlib",
+        "rfi",
+        "socket",
+        "tempfile",
+        "unittest"
+      ],
+      "lines": 650,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 1,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task016.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 3,
+      "except_handlers": 0,
+      "functions": 22,
+      "imports": [
+        "__future__",
+        "datetime",
+        "hashlib",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "unittest"
+      ],
+      "lines": 595,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task059.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 3,
+      "except_handlers": 0,
+      "functions": 21,
+      "imports": [
+        "__future__",
+        "datetime",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "unittest"
+      ],
+      "lines": 561,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 33,
+        "legacy": 5,
+        "migration": 0
+      },
+      "path": "tests/test_task063.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 4,
+      "except_handlers": 0,
+      "functions": 19,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "hashlib",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "unittest"
+      ],
+      "lines": 541,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task062.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 4,
+      "except_handlers": 1,
+      "functions": 21,
+      "imports": [
+        "__future__",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "threading",
+        "unittest",
+        "urllib"
+      ],
+      "lines": 538,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 1,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task065.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 6,
+      "except_handlers": 0,
+      "functions": 30,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "datetime",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "threading",
+        "typing",
+        "unittest",
+        "urllib"
+      ],
+      "lines": 533,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 10,
+        "migration": 0
+      },
+      "path": "tests/test_task028.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 1,
+      "except_handlers": 0,
+      "functions": 21,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "hashlib",
+        "json",
+        "pathlib",
+        "re",
+        "rfi",
+        "tempfile",
+        "threading",
+        "unittest",
+        "urllib"
+      ],
+      "lines": 457,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 1
+      },
+      "path": "tests/test_task025.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 6,
+      "except_handlers": 0,
+      "functions": 27,
+      "imports": [
+        "__future__",
+        "json",
+        "pathlib",
+        "rfi",
+        "socket",
+        "sys",
+        "tempfile",
+        "unittest"
+      ],
+      "lines": 454,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_acquisition.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 4,
+      "except_handlers": 0,
+      "functions": 19,
+      "imports": [
+        "__future__",
+        "hashlib",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "unittest"
+      ],
+      "lines": 453,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 2,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task058.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 6,
+      "except_handlers": 0,
+      "functions": 26,
+      "imports": [
+        "__future__",
+        "datetime",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "tests",
+        "unittest",
+        "urllib"
+      ],
+      "lines": 448,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task031.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 2,
+      "except_handlers": 0,
+      "functions": 17,
+      "imports": [
+        "__future__",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "unittest"
+      ],
+      "lines": 441,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 1,
+        "migration": 4
+      },
+      "path": "tests/test_task045.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 1,
+      "except_handlers": 0,
+      "functions": 15,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "hashlib",
+        "json",
+        "pathlib",
+        "rfi",
+        "sys",
+        "tempfile",
+        "unittest"
+      ],
+      "lines": 435,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 2,
+        "fallback": 0,
+        "legacy": 18,
+        "migration": 0
+      },
+      "path": "tests/test_source_profile_digest_compatibility.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 3,
+      "except_handlers": 1,
+      "functions": 14,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "json",
+        "pathlib",
+        "rfi",
+        "sys",
+        "tempfile",
+        "threading",
+        "unittest",
+        "urllib",
+        "yaml"
+      ],
+      "lines": 430,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 1,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task014.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 2,
+      "except_handlers": 1,
+      "functions": 23,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "hashlib",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "threading",
+        "unittest",
+        "urllib"
+      ],
+      "lines": 425,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task054.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 2,
+      "except_handlers": 1,
+      "functions": 21,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "json",
+        "pathlib",
+        "rfi",
+        "shutil",
+        "socket",
+        "sys",
+        "tempfile",
+        "threading",
+        "unittest",
+        "urllib"
+      ],
+      "lines": 420,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 2,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task009.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 7,
+      "except_handlers": 0,
+      "functions": 32,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "io",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "tests",
+        "threading",
+        "time",
+        "unittest",
+        "urllib"
+      ],
+      "lines": 419,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 6,
+        "legacy": 0,
+        "migration": 3
+      },
+      "path": "tests/test_task025_hardening.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 4,
+      "except_handlers": 1,
+      "functions": 15,
+      "imports": [
+        "__future__",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "threading",
+        "unittest",
+        "urllib"
+      ],
+      "lines": 403,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task061.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 4,
+      "except_handlers": 0,
+      "functions": 19,
+      "imports": [
+        "__future__",
+        "datetime",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "tests",
+        "threading",
+        "types",
+        "typing",
+        "unittest"
+      ],
+      "lines": 397,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task029.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 6,
+      "except_handlers": 0,
+      "functions": 20,
+      "imports": [
+        "__future__",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "unittest"
+      ],
+      "lines": 383,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 1
+      },
+      "path": "tests/test_task056.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 2,
+      "except_handlers": 0,
+      "functions": 16,
+      "imports": [
+        "__future__",
+        "contextlib",
+        "dataclasses",
+        "io",
+        "json",
+        "pathlib",
+        "rfi",
+        "tempfile",
+        "threading",
+        "unittest",
+        "urllib",
+        "yaml"
+      ],
+      "lines": 372,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task026.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 5,
+      "except_handlers": 0,
+      "functions": 25,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "json",
+        "pathlib",
+        "rfi",
+        "socket",
+        "sys",
+        "tempfile",
+        "unittest"
+      ],
+      "lines": 370,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_engine.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 3,
+      "except_handlers": 0,
+      "functions": 14,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "inspect",
+        "json",
+        "pathlib",
+        "rfi",
+        "socket",
+        "tempfile",
+        "tests",
+        "unittest"
+      ],
+      "lines": 367,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 2,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task022.py"
+    },
+    {
+      "broad_exception_handlers": 0,
+      "classes": 3,
+      "except_handlers": 0,
+      "functions": 17,
+      "imports": [
+        "__future__",
+        "hashlib",
+        "json",
+        "pathlib",
+        "rfi",
+        "sys",
+        "tempfile",
+        "unittest"
+      ],
+      "lines": 360,
+      "marker_counts": {
+        "FIXME": 0,
+        "HACK": 0,
+        "TODO": 0,
+        "compatib": 0,
+        "fallback": 0,
+        "legacy": 0,
+        "migration": 0
+      },
+      "path": "tests/test_task006.py"
+    }
+  ],
+  "most_branched_functions": [
+    {
+      "branches": 137,
+      "except_handlers": 1,
+      "line": 533,
+      "lines": 582,
+      "name": "AdminHandler._api",
+      "parameters": 4,
+      "path": "src/rfi/admin/server.py",
+      "raises": 21,
+      "returns": 80
+    },
+    {
+      "branches": 118,
+      "except_handlers": 12,
+      "line": 604,
+      "lines": 1030,
+      "name": "AcquisitionEngine._run_source",
+      "parameters": 5,
+      "path": "src/rfi/acquisition/engine.py",
+      "raises": 12,
+      "returns": 2
+    },
+    {
+      "branches": 98,
+      "except_handlers": 6,
+      "line": 535,
+      "lines": 468,
+      "name": "BoundedTranscriptDiscovery.discover",
+      "parameters": 6,
+      "path": "src/rfi/discovery.py",
+      "raises": 2,
+      "returns": 8
+    },
+    {
+      "branches": 79,
+      "except_handlers": 5,
+      "line": 506,
+      "lines": 428,
+      "name": "MailingListAcquisitionService._plan",
+      "parameters": 8,
+      "path": "src/rfi/mailing_lists/service.py",
+      "raises": 7,
+      "returns": 5
+    },
+    {
+      "branches": 47,
+      "except_handlers": 5,
+      "line": 629,
+      "lines": 217,
+      "name": "BoundedTranscriptDiscovery.discover.traverse",
+      "parameters": 3,
+      "path": "src/rfi/discovery.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 38,
+      "except_handlers": 1,
+      "line": 1824,
+      "lines": 293,
+      "name": "EarningsTranscriptPullAdapter._discover",
+      "parameters": 4,
+      "path": "src/rfi/discovery.py",
+      "raises": 6,
+      "returns": 2
+    },
+    {
+      "branches": 35,
+      "except_handlers": 0,
+      "line": 330,
+      "lines": 357,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/generate_task004_review.py",
+      "raises": 7,
+      "returns": 3
+    },
+    {
+      "branches": 35,
+      "except_handlers": 4,
+      "line": 1053,
+      "lines": 256,
+      "name": "BoundedTranscriptResolver.resolve",
+      "parameters": 8,
+      "path": "src/rfi/discovery.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 34,
+      "except_handlers": 0,
+      "line": 137,
+      "lines": 161,
+      "name": "derive_projection",
+      "parameters": 1,
+      "path": "src/rfi/mailing_lists/service.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 34,
+      "except_handlers": 0,
+      "line": 145,
+      "lines": 151,
+      "name": "DeterministicReasoner.reason",
+      "parameters": 4,
+      "path": "src/rfi/intelligence/deterministic.py",
+      "raises": 0,
+      "returns": 2
+    },
+    {
+      "branches": 33,
+      "except_handlers": 5,
+      "line": 352,
+      "lines": 205,
+      "name": "EarningsCallTranscriptAcquisition.acquire",
+      "parameters": 2,
+      "path": "src/rfi/acquisition/earnings_transcripts.py",
+      "raises": 4,
+      "returns": 2
+    },
+    {
+      "branches": 33,
+      "except_handlers": 2,
+      "line": 1198,
+      "lines": 118,
+      "name": "RepositoryDatabase.migrate",
+      "parameters": 1,
+      "path": "src/rfi/storage/sqlite.py",
+      "raises": 4,
+      "returns": 2
+    },
+    {
+      "branches": 31,
+      "except_handlers": 0,
+      "line": 309,
+      "lines": 122,
+      "name": "_TranscriptParser.handle_starttag",
+      "parameters": 3,
+      "path": "src/rfi/acquisition/providers/stockanalysis.py",
+      "raises": 0,
+      "returns": 2
+    },
+    {
+      "branches": 30,
+      "except_handlers": 0,
+      "line": 2151,
+      "lines": 146,
+      "name": "EarningsTranscriptPullAdapter._classify_outcome",
+      "parameters": 2,
+      "path": "src/rfi/discovery.py",
+      "raises": 0,
+      "returns": 13
+    },
+    {
+      "branches": 28,
+      "except_handlers": 4,
+      "line": 387,
+      "lines": 145,
+      "name": "AdminHandler._dispatch",
+      "parameters": 2,
+      "path": "src/rfi/admin/server.py",
+      "raises": 1,
+      "returns": 13
+    },
+    {
+      "branches": 27,
+      "except_handlers": 4,
+      "line": 522,
+      "lines": 193,
+      "name": "LinuxMailingListWorkflowService.fetch_up_to_date",
+      "parameters": 5,
+      "path": "src/rfi/mailing_lists/workflow.py",
+      "raises": 6,
+      "returns": 3
+    },
+    {
+      "branches": 27,
+      "except_handlers": 0,
+      "line": 2343,
+      "lines": 187,
+      "name": "EarningsTranscriptPullAdapter.retrieve",
+      "parameters": 3,
+      "path": "src/rfi/discovery.py",
+      "raises": 12,
+      "returns": 2
+    },
+    {
+      "branches": 27,
+      "except_handlers": 1,
+      "line": 331,
+      "lines": 129,
+      "name": "load_firm_configurations",
+      "parameters": 2,
+      "path": "src/rfi/firm_configuration.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 27,
+      "except_handlers": 0,
+      "line": 704,
+      "lines": 50,
+      "name": "StreamService._matches",
+      "parameters": 3,
+      "path": "src/rfi/streams/service.py",
+      "raises": 0,
+      "returns": 9
+    },
+    {
+      "branches": 26,
+      "except_handlers": 0,
+      "line": 455,
+      "lines": 141,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/task006_browser.py",
+      "raises": 0,
+      "returns": 3
+    },
+    {
+      "branches": 25,
+      "except_handlers": 1,
+      "line": 449,
+      "lines": 91,
+      "name": "_TranscriptParser.handle_endtag",
+      "parameters": 2,
+      "path": "src/rfi/acquisition/providers/stockanalysis.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 24,
+      "except_handlers": 1,
+      "line": 239,
+      "lines": 186,
+      "name": "MailingListFetchQueue._work",
+      "parameters": 1,
+      "path": "src/rfi/mailing_lists/queue.py",
+      "raises": 0,
+      "returns": 6
+    },
+    {
+      "branches": 23,
+      "except_handlers": 3,
+      "line": 568,
+      "lines": 61,
+      "name": "stream_operation",
+      "parameters": 1,
+      "path": "src/rfi/cli.py",
+      "raises": 5,
+      "returns": 2
+    },
+    {
+      "branches": 22,
+      "except_handlers": 2,
+      "line": 330,
+      "lines": 165,
+      "name": "MailingListAcquisitionService.acquire",
+      "parameters": 9,
+      "path": "src/rfi/mailing_lists/service.py",
+      "raises": 3,
+      "returns": 1
+    },
+    {
+      "branches": 22,
+      "except_handlers": 0,
+      "line": 1413,
+      "lines": 103,
+      "name": "TranscriptAcquisitionOrchestrator.plan",
+      "parameters": 3,
+      "path": "src/rfi/discovery.py",
+      "raises": 1,
+      "returns": 2
+    },
+    {
+      "branches": 21,
+      "except_handlers": 0,
+      "line": 138,
+      "lines": 110,
+      "name": "compare_evidence_packages",
+      "parameters": 9,
+      "path": "src/rfi/retrieval/replaceability.py",
+      "raises": 9,
+      "returns": 1
+    },
+    {
+      "branches": 21,
+      "except_handlers": 1,
+      "line": 440,
+      "lines": 97,
+      "name": "SourceProfileRepository._load_revision",
+      "parameters": 2,
+      "path": "src/rfi/source_profiles/repository.py",
+      "raises": 10,
+      "returns": 2
+    },
+    {
+      "branches": 21,
+      "except_handlers": 1,
+      "line": 64,
+      "lines": 91,
+      "name": "SecRetrievalWorkflow.execute",
+      "parameters": 2,
+      "path": "src/rfi/sec/workflow.py",
+      "raises": 0,
+      "returns": 11
+    },
+    {
+      "branches": 20,
+      "except_handlers": 1,
+      "line": 97,
+      "lines": 289,
+      "name": "proof",
+      "parameters": 3,
+      "path": "scripts/task006_browser.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 20,
+      "except_handlers": 0,
+      "line": 764,
+      "lines": 151,
+      "name": "StockAnalysisTranscriptProvider.retrieve",
+      "parameters": 3,
+      "path": "src/rfi/acquisition/providers/stockanalysis.py",
+      "raises": 8,
+      "returns": 1
+    },
+    {
+      "branches": 19,
+      "except_handlers": 1,
+      "line": 118,
+      "lines": 61,
+      "name": "validate_edgar_profile",
+      "parameters": 1,
+      "path": "src/rfi/acquisition/edgar.py",
+      "raises": 17,
+      "returns": 0
+    },
+    {
+      "branches": 19,
+      "except_handlers": 0,
+      "line": 457,
+      "lines": 61,
+      "name": "LinuxMailingListWorkflowService.saved",
+      "parameters": 1,
+      "path": "src/rfi/mailing_lists/workflow.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 18,
+      "except_handlers": 1,
+      "line": 462,
+      "lines": 153,
+      "name": "materialize_firm_configurations",
+      "parameters": 5,
+      "path": "src/rfi/firm_configuration.py",
+      "raises": 3,
+      "returns": 2
+    },
+    {
+      "branches": 18,
+      "except_handlers": 1,
+      "line": 163,
+      "lines": 128,
+      "name": "RetrievalRepository.search",
+      "parameters": 2,
+      "path": "src/rfi/retrieval/repository.py",
+      "raises": 2,
+      "returns": 1
+    },
+    {
+      "branches": 18,
+      "except_handlers": 4,
+      "line": 64,
+      "lines": 126,
+      "name": "IntelligenceOrchestrator.execute",
+      "parameters": 3,
+      "path": "src/rfi/intelligence/orchestration.py",
+      "raises": 0,
+      "returns": 4
+    },
+    {
+      "branches": 18,
+      "except_handlers": 0,
+      "line": 73,
+      "lines": 124,
+      "name": "DeterministicSecDeriver.derive",
+      "parameters": 2,
+      "path": "src/rfi/knowledge/derivation.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 18,
+      "except_handlers": 0,
+      "line": 840,
+      "lines": 113,
+      "name": "MailingListRepository.canonical_lineage",
+      "parameters": 4,
+      "path": "src/rfi/mailing_lists/repository.py",
+      "raises": 2,
+      "returns": 1
+    },
+    {
+      "branches": 18,
+      "except_handlers": 0,
+      "line": 492,
+      "lines": 87,
+      "name": "StreamService._validate_policy",
+      "parameters": 7,
+      "path": "src/rfi/streams/service.py",
+      "raises": 0,
+      "returns": 5
+    },
+    {
+      "branches": 18,
+      "except_handlers": 0,
+      "line": 104,
+      "lines": 82,
+      "name": "render_guide_markdown",
+      "parameters": 1,
+      "path": "src/rfi/admin/help.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 18,
+      "except_handlers": 0,
+      "line": 60,
+      "lines": 76,
+      "name": "inspect_evidence_package",
+      "parameters": 3,
+      "path": "src/rfi/retrieval/replaceability.py",
+      "raises": 7,
+      "returns": 1
+    },
+    {
+      "branches": 18,
+      "except_handlers": 1,
+      "line": 119,
+      "lines": 66,
+      "name": "validate_live_profile",
+      "parameters": 1,
+      "path": "src/rfi/acquisition/sec_api.py",
+      "raises": 16,
+      "returns": 0
+    },
+    {
+      "branches": 17,
+      "except_handlers": 1,
+      "line": 282,
+      "lines": 74,
+      "name": "StreamService.validate",
+      "parameters": 3,
+      "path": "src/rfi/streams/service.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 17,
+      "except_handlers": 2,
+      "line": 500,
+      "lines": 66,
+      "name": "LoreArchive.direct_children_page",
+      "parameters": 4,
+      "path": "src/rfi/mailing_lists/provider.py",
+      "raises": 4,
+      "returns": 2
+    },
+    {
+      "branches": 17,
+      "except_handlers": 2,
+      "line": 715,
+      "lines": 62,
+      "name": "WorkspaceRepository.verify",
+      "parameters": 1,
+      "path": "src/rfi/workspace/repository.py",
+      "raises": 0,
+      "returns": 1
+    },
+    {
+      "branches": 17,
+      "except_handlers": 4,
+      "line": 39,
+      "lines": 53,
+      "name": "parse_message",
+      "parameters": 1,
+      "path": "src/rfi/mailing_lists/parser.py",
+      "raises": 1,
+      "returns": 1
+    },
+    {
+      "branches": 17,
+      "except_handlers": 0,
+      "line": 258,
+      "lines": 52,
+      "name": "verify_package",
+      "parameters": 2,
+      "path": "scripts/review_package.py",
+      "raises": 12,
+      "returns": 1
+    },
+    {
+      "branches": 16,
+      "except_handlers": 0,
+      "line": 360,
+      "lines": 140,
+      "name": "main",
+      "parameters": 0,
+      "path": "scripts/generate_review_package.py",
+      "raises": 1,
+      "returns": 2
+    },
+    {
+      "branches": 16,
+      "except_handlers": 2,
+      "line": 1387,
+      "lines": 115,
+      "name": "RepositoryDatabase.validate",
+      "parameters": 1,
+      "path": "src/rfi/storage/sqlite.py",
+      "raises": 12,
+      "returns": 1
+    },
+    {
+      "branches": 16,
+      "except_handlers": 0,
+      "line": 256,
+      "lines": 81,
+      "name": "SourceProfileRepository._candidate",
+      "parameters": 3,
+      "path": "src/rfi/source_profiles/repository.py",
+      "raises": 11,
+      "returns": 1
+    },
+    {
+      "branches": 16,
+      "except_handlers": 3,
+      "line": 549,
+      "lines": 78,
+      "name": "AcquisitionRepository._retained_transcript_observations",
+      "parameters": 3,
+      "path": "src/rfi/acquisition/repository.py",
+      "raises": 7,
+      "returns": 4
+    }
+  ],
+  "schema_version": 1,
+  "scope": {
+    "marker_terms": [
+      "TODO",
+      "FIXME",
+      "HACK",
+      "legacy",
+      "compatib",
+      "migration",
+      "fallback"
+    ],
+    "python_roots": [
+      "src",
+      "tests",
+      "scripts"
+    ]
+  },
+  "totals": {
+    "broad_exception_handlers": 36,
+    "functions": 2959,
+    "internal_import_statements": 92,
+    "production_python_files": 105,
+    "production_python_lines": 35087,
+    "python_files": 271,
+    "test_python_files": 64,
+    "test_python_lines": 23747
+  }
+}
