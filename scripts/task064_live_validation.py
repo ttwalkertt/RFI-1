@@ -12,6 +12,7 @@ from rfi.acquisition import (
     SourceProfile,
     TranscriptAcquisitionSelection,
     TranscriptAcquisitionTarget,
+    TranscriptEventDisposition,
     TranscriptSeed,
 )
 from rfi.acquisition.earnings_transcripts import UrllibEarningsTranscriptTransport
@@ -27,6 +28,7 @@ IDENTITY_PATHS = {
     "provider": ROOT / "src/rfi/acquisition/providers/stockanalysis.py",
     "contracts": ROOT / "src/rfi/acquisition/contracts.py",
     "orchestrator": ROOT / "src/rfi/discovery.py",
+    "engine": ROOT / "src/rfi/acquisition/engine.py",
     "live_validator": Path(__file__).resolve(),
 }
 
@@ -61,7 +63,7 @@ def main() -> int:
         return 0
     configured_provider = "stockanalysis"
     hint_kind = "provider_identifier"
-    hint_value = "ORCL"
+    hint_value = "WDC"
     policy = DiscoveryPolicy(
         max_search_queries=0,
         max_results_per_query=1,
@@ -80,25 +82,26 @@ def main() -> int:
     )
     provider = StockAnalysisTranscriptProvider(transport)
     profile = SourceProfile(
-        "source-task064-live", "Oracle StockAnalysis live acceptance", True,
+        "source-task064-live", "Western Digital StockAnalysis live acceptance", True,
         "earnings_transcript",
         {
             "mode": "discovery", "provider": configured_provider,
             "discovery_hint_kind": hint_kind, "discovery_hint_value": hint_value,
             "discovery_class": "task064-live", "discovery_hints": [],
         },
-        {"firm_id": "oracle", "artifact_id": "earnings_transcript",
+        {"firm_id": "western-digital", "artifact_id": "earnings_transcript",
          "retrieval_adapter_id": "earnings-call-transcript"},
     )
     page = provider.discover(
         profile,
         TranscriptSeed(configured_provider, hint_kind, hint_value, "configured"),
-        TranscriptAcquisitionTarget("oracle"),
+        TranscriptAcquisitionTarget("western-digital"),
     )
     representative = next((
         item for item in page.candidates
-        if item.provenance.metadata.get("resolved_url")
-        == "https://stockanalysis.com/stocks/orcl/transcripts/592465-q4-2026/"
+        if item.transcript_metadata_observation is not None
+        and item.transcript_metadata_observation.event_disposition
+        is TranscriptEventDisposition.EXPLICIT_EARNINGS
     ), None)
     direct: dict[str, object]
     if representative is None:
@@ -116,6 +119,16 @@ def main() -> int:
                 "event_date": (
                     result.trusted_event_date.isoformat()
                     if result.trusted_event_date else None
+                ),
+                "event_label": result.transcript_metadata_observation.event_label,
+                "event_disposition": (
+                    result.transcript_metadata_observation.event_disposition.value
+                ),
+                "substantial_transcript": result.diagnostics.get(
+                    "substantial_transcript"
+                ),
+                "transcript_word_count": result.diagnostics.get(
+                    "transcript_word_count"
                 ),
                 "speaker_turn_count": result.diagnostics.get("speaker_turn_count"),
                 "speaker_turn_content_sha256": result.diagnostics.get(
@@ -147,7 +160,14 @@ def main() -> int:
         "archive_requested_url": page.diagnostics.get("requested_url"),
         "archive_resolved_url": page.diagnostics.get("resolved_url"),
         "candidate_order": [
-            item.provenance.metadata.get("resolved_url") for item in page.candidates
+            {
+                "url": item.provenance.metadata.get("resolved_url"),
+                "event_disposition": (
+                    item.transcript_metadata_observation.event_disposition.value
+                    if item.transcript_metadata_observation is not None else "unknown"
+                ),
+            }
+            for item in page.candidates
         ],
         "representative_discovered": representative is not None,
         "direct_document": direct,

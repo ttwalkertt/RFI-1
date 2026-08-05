@@ -43,6 +43,7 @@ from rfi.acquisition.contracts import (
     SourceProfile,
     TranscriptAcquisitionSelection,
     TranscriptAcquisitionTarget,
+    TranscriptEventDisposition,
     TranscriptSeed,
     TranscriptSelectionMode,
 )
@@ -1523,6 +1524,25 @@ class TranscriptTerminalSelectionPolicy:
     def qualify(
         self, candidate: AdapterCandidate, retrieval: RetrievalResult
     ) -> AdapterSelectionDecision:
+        observation = retrieval.transcript_metadata_observation
+        if (
+            observation is not None
+            and observation.event_disposition
+            is TranscriptEventDisposition.EXPLICIT_NON_EARNINGS
+        ):
+            return AdapterSelectionDecision(
+                False,
+                "validation_rejected",
+                "explicit_non_earnings_event",
+                {
+                    "event_disposition": (
+                        TranscriptEventDisposition.EXPLICIT_NON_EARNINGS.value
+                    ),
+                    "trusted_event_date_available": (
+                        observation.trusted_event_date is not None
+                    ),
+                },
+            )
         event_date = retrieval.trusted_event_date
         if event_date is None:
             existing_value = retrieval.diagnostics.get("validated_event_date")
@@ -1756,8 +1776,12 @@ class EarningsTranscriptPullAdapter:
         )
         page = provider.discover(profile, seed, trial.acquisition_target)
         admitted: list[AdapterCandidate] = []
-        newly_admitted = 0
         candidate_limit_reached = False
+        unevaluated_admitted: set[str] = set()
+        remaining = max(
+            0,
+            policy.max_candidate_evaluations - len(budgeted.candidate_identities),
+        )
         for candidate in page.candidates:
             requested_url = candidate.provenance.metadata.get("requested_url")
             if not isinstance(requested_url, str):
@@ -1766,16 +1790,14 @@ class EarningsTranscriptPullAdapter:
             if identity in budgeted.candidate_identities:
                 admitted.append(candidate)
                 continue
-            if len(budgeted.candidate_identities) >= policy.max_candidate_evaluations:
-                candidate_limit_reached = True
-                budgeted.candidate_capacity_exhausted = True
+            if identity in unevaluated_admitted:
+                admitted.append(candidate)
                 continue
-            budgeted.candidate_identities.add(identity)
-            newly_admitted += 1
+            if len(unevaluated_admitted) >= remaining:
+                candidate_limit_reached = True
+                continue
+            unevaluated_admitted.add(identity)
             admitted.append(candidate)
-        if candidate_limit_reached:
-            budgeted.exhausted = True
-            budgeted.exhausted_budget = "max_candidate_evaluations"
         return DiscoveryPage(tuple(admitted), None, {
             **page.diagnostics,
             "adapter_id": self.adapter_id,
@@ -1790,7 +1812,7 @@ class EarningsTranscriptPullAdapter:
             "candidate_admitted_count": len(admitted),
             "candidate_bound_exhausted": candidate_limit_reached,
             "run_unique_candidate_count": len(budgeted.candidate_identities),
-            "candidate_evaluated_count": newly_admitted,
+            "candidate_evaluated_count": 0,
         })
 
     def _discover(
@@ -2327,6 +2349,29 @@ class EarningsTranscriptPullAdapter:
                     False,
                     "missing_provider_context",
                 )
+            budgeted = self._budgets.get(profile.source_id)
+            if budgeted is None:
+                raise AdapterFailure(
+                    FailureClass.MALFORMED_ADAPTER,
+                    "provider retrieval requires a shared run budget",
+                    False,
+                    "missing_provider_budget",
+                )
+            if candidate.candidate_id not in budgeted.candidate_identities:
+                if (
+                    len(budgeted.candidate_identities)
+                    >= budgeted.policy.max_candidate_evaluations
+                ):
+                    budgeted.exhausted = True
+                    budgeted.candidate_capacity_exhausted = True
+                    budgeted.exhausted_budget = "max_candidate_evaluations"
+                    raise AdapterFailure(
+                        FailureClass.POLICY_REJECTION,
+                        "Transcript candidate evaluation budget is exhausted.",
+                        False,
+                        "max_candidate_evaluations",
+                    )
+                budgeted.candidate_identities.add(candidate.candidate_id)
             return provider.retrieve(profile, candidate)
         url = metadata.get("resolved_url")
         label = metadata.get("link_label")

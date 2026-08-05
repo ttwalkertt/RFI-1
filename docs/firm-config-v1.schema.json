@@ -110,6 +110,27 @@
       }
     },
     "transcript_discovery_source": {
+      "oneOf": [
+        {"$ref": "#/$defs/generic_transcript_discovery_source"},
+        {"$ref": "#/$defs/provider_transcript_discovery_source"}
+      ]
+    },
+    "generic_transcript_discovery_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["discovery_class", "discovery_hints"],
+      "properties": {
+        "discovery_class": {"enum": ["shallow", "standard", "extended"]},
+        "discovery_hints": {
+          "type": "array", "uniqueItems": true, "minItems": 1, "maxItems": 8,
+          "items": {
+            "type": "string", "format": "uri",
+            "pattern": "^https?://[^/?#@]+(?:[/?#].*)?$"
+          }
+        }
+      }
+    },
+    "provider_transcript_discovery_source": {
       "type": "object",
       "additionalProperties": false,
       "required": ["provider", "discovery_hint", "discovery_class"],

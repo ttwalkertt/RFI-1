@@ -47,6 +47,32 @@ Reference material:
 - representative archive: `https://stockanalysis.com/stocks/orcl/transcripts/`
 - representative transcript: `https://stockanalysis.com/stocks/orcl/transcripts/592465-q4-2026/`
 
+### Bounded post-completion corrective repair
+
+The StockAnalysis archive also contains conference, investor-day, and other event transcripts.
+The provider therefore emits one provider-neutral `TranscriptMetadataObservation` containing an
+opaque event label, optional trusted artifact-local date, event disposition, related-artifact
+observations, and parsed speaker-turn observations. `event_disposition` is exactly one of
+`explicit_earnings`, `explicit_non_earnings`, or `unknown`.
+
+Disposition is populated only from fixture-covered provider-explicit candidate or artifact
+metadata. A directly associated earnings release, quarterly report, or annual report establishes
+`explicit_earnings`; only a dedicated StockAnalysis event classification establishes
+`explicit_non_earnings`; all incomplete or questionable evidence remains `unknown`. The mere
+presence or absence of a relationship container is not evidence. Titles, headings, URLs, slugs,
+fiscal-period text, archive position, and global link labels are never classification inputs.
+
+Earnings acquisition ranks `explicit_earnings` before `unknown`, preserves archive order inside
+each class, and excludes only `explicit_non_earnings`. The transcript-substance gate is separate
+from event disposition and uses only already-parsed transcript structure: minimum turn count,
+content-bearing turn count, normalized-text word count, and distinct opaque speaker-label count.
+Questionable events remain eligible when they expose substantial transcript structure.
+
+Candidate-evaluation accounting begins only immediately before a unique document is retrieved
+and evaluated. Entries excluded during metadata admission consume no evaluation capacity.
+Duplicate discovery occurrences retain trial-local provenance and do not become ambiguous
+candidate identities.
+
 ---
 
 ## Objective
@@ -109,6 +135,18 @@ https://stockanalysis.com/stocks/{ticker}/transcripts/{transcript-document}/
 
 A direct transcript URL seed shall be resolved directly and shall not require an archive fetch first.
 
+### Retained generic transcript discovery
+
+An earnings-transcript source without `provider` remains a provider-neutral generic discovery
+configuration. It shall supply one or more string URL `discovery_hints`; those hints remain generic
+seeds and shall not be coerced into typed provider hints or dispatched to the StockAnalysis
+adapter. This branch supports StockAnalysis quote namespaces, including `/quote/tyo/...`, that are
+outside the strict adapter's `/stocks/{ticker}/transcripts/` boundary.
+
+The generic and provider-backed forms are mutually exclusive. A provider-backed configuration
+shall not fall through to generic discovery, and generic configuration shall not infer a provider
+from URL shape.
+
 ### Schema and validation
 
 The task may extend firm configuration to represent:
@@ -119,7 +157,7 @@ The task may extend firm configuration to represent:
 
 Configuration loading shall fail closed when:
 
-- provider is missing;
+- any provider-backed field is supplied but provider is missing;
 - hint kind is missing;
 - hint value is empty;
 - the provider name is unknown;

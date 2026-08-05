@@ -1,5 +1,15 @@
 # TASK-064 Architectural Review — StockAnalysis Transcript Provider
 
+## Post-completion generic-routing compatibility correction
+
+The firm-configuration schema retains two mutually exclusive transcript forms. Provider-neutral
+generic discovery accepts `discovery_class` plus string URL `discovery_hints`; provider-backed
+discovery requires `provider=stockanalysis` plus a typed `provider_identifier`. Projection does not
+coerce generic URLs into typed hints, provider-backed trials do not fall through to generic
+discovery, and `/quote/tyo/...` or `/quote/hkg/...` hints remain outside the strict StockAnalysis
+adapter. Legacy generic source-profile revisions continue authenticating under their historical
+digest schemas, while provider-backed revisions continue using digest schema 4.
+
 ## Result
 
 TASK-064 is complete after a bounded corrective repair. Transcript acquisition retains its
@@ -7,11 +17,20 @@ explicit provider boundary: firm configuration selects `provider=stockanalysis`,
 orchestrator dispatches typed configured and learned seeds, and the StockAnalysis adapter owns
 only provider-specific identifier resolution, HTTP recovery, parsing, and observations.
 
-The correction moves full speaker turns, related-artifact observations, learning feedback, and
-the optional trusted artifact date onto explicit provider-neutral `RetrievalResult` fields.
+The correction adds a provider-neutral `TranscriptMetadataObservation` carrying an opaque event
+label, optional trusted artifact date, event disposition, related-artifact observations, and
+speaker-turn observations. Full turns, relationships, learning feedback, and trusted date remain
+available through the compatible typed `RetrievalResult` fields.
 Diagnostics now retain only bounded operational summaries. No transcript paragraph, complete
 turn, document body, or provider summary is serialized into diagnostics, logs, failure messages,
 live evidence, or this review package.
+
+StockAnalysis archives contain earnings calls and other event transcripts. The repaired provider
+ranks `explicit_earnings` before `unknown`, preserves archive order inside each class, excludes
+only provider-explicit `explicit_non_earnings`, and never derives disposition from titles, URLs,
+slugs, periods, archive position, or global link labels. A separate recall-oriented substance
+gate uses only parsed turns and normalized artifact text; uncertain event classification remains
+eligible when the artifact is structurally a substantial transcript.
 
 ## Configuration, Dispatch, and Seed Contract
 
@@ -55,17 +74,31 @@ longer requires changing a StockAnalysis-specific tuple annotation or registry i
 
 ## Provider-Neutral Result Contract
 
-`RetrievalResult` now has four explicit optional fields:
+`RetrievalResult` has five explicit transcript observation surfaces:
 
 - `trusted_event_date`;
 - `speaker_turn_observations`;
-- `related_artifact_observations`; and
-- `transcript_learning_feedback`.
+- `related_artifact_observations`;
+- `transcript_learning_feedback`;
+- `transcript_metadata_observation`.
+
+`TranscriptEventDisposition` is closed over `explicit_earnings`,
+`explicit_non_earnings`, and `unknown`. `TranscriptMetadataObservation` groups the opaque event
+label, trusted date, disposition, related artifacts, and speaker turns without adding a
+StockAnalysis-only side channel. Related-link labels are retained as opaque provider text after
+bounded whitespace normalization.
 
 `TranscriptTurnObservation` still preserves ordinal, provider speaker label, optional provider
 role, optional explicit section, and ordered paragraphs. Adjacent turns from the same speaker are
-not merged. The fixture retains four turns, including two adjacent Safra Catz turns, and the live
-artifact emitted 36 turns. No generic segmentation or canonical person identity was introduced.
+not merged. The Oracle fixture retains four turns, including two adjacent Safra Catz turns, and
+the live WDC artifact emitted 75 turns. No generic segmentation or canonical person identity was
+introduced.
+
+Transcript substance is established only from the extracted structure: at least two turns, two
+content-bearing turns, eight normalized words, and two distinct opaque speaker labels. Tests prove
+that an earnings-looking title cannot rescue an insubstantial artifact and that a substantial
+`unknown` event remains eligible. These deliberately conservative thresholds minimize false
+negatives without title, URL, fiscal-period, or keyword semantics.
 
 `RelatedArtifactObservation` retains the typed artifact kind, exact observed URL, relationship
 kind, and source-page provenance. The fixture exposes earnings release, slides, annual report,
@@ -155,28 +188,34 @@ Firm-configuration import and reload code was not modified.
 https://stockanalysis.com/stocks/orcl/transcripts/
 ```
 
-Archive extraction remains same-firm, transcript-only, observed-order, and first-occurrence
-deduplicated. A direct provider-associated transcript URL skips the archive fetch and converges
-on the same candidate identity. Deceptive hosts, unrelated firms, invalid paths, credentials,
-queries, and fragments fail closed.
+Archive extraction remains same-firm, transcript-only, first-occurrence deduplicated, and retains
+the opaque label plus original archive position. Admission deterministically groups explicit
+earnings first and unknown fallback second while preserving archive order within each group. A
+direct provider-associated transcript URL skips the archive fetch and converges on the same
+candidate identity. Deceptive hosts, unrelated firms, invalid paths, credentials, queries, and
+fragments fail closed.
 
 One `BudgetedTranscriptTransport` still spans archive retrieval, document retrieval, redirects,
 provider-local retries, and response caching. Page, byte, host, elapsed, redirect, retry,
-candidate, and diagnostic bounds remain shared and named. Provider candidates are admitted
-through that transport's run-level candidate-identity ledger, so a later learned seed can reuse
-an already admitted identity but cannot introduce an eleventh identity after a ten-candidate
-configured attempt. No search request occurs.
+candidate, and diagnostic bounds remain shared and named. The candidate ledger is updated only
+immediately before the engine evaluates a unique document. Archive entries rejected as
+`explicit_non_earnings` and candidates outside remaining admission capacity consume no evaluation
+budget. Duplicate archive and learned occurrences converge on one identity and remain bounded
+trial-local provenance rather than an ambiguous-candidate failure. No search request occurs.
 
-Label-based related-artifact fallback is scoped to an explicit provider relationship container.
-Links in navigation, footers, or the transcript body cannot become relationship observations;
-provider-explicit `data-related-kind` links remain accepted and typed.
+Relationship labels are read only from actual candidate- or transcript-associated relationship
+records inside a tested `Downloads` surface, or from an explicit provider relationship
+attribute. The container's presence or absence is not itself classification evidence. Links in
+navigation, footers, or other global page regions cannot become observations; false-positive
+global “Slides” and “Annual Report” fixtures are ignored.
 
 ## Live Acceptance and Byte Authority
 
 The bounded live validation used `provider=stockanalysis`, hint
-`provider_identifier=ORCL`, and the zero-search policy. It constructed the Oracle archive,
-selected the representative Q4 2026 transcript, retrieved the direct document, and validated the
-artifact-local date `2026-06-10` through the neutral selection policy.
+`provider_identifier=WDC`, and the zero-search policy. It constructed the Western Digital
+archive, ranked the archive-position-5 Q3 2026 earnings call ahead of preceding conference
+transcripts, retrieved it, established substantial parsed structure, and validated the
+artifact-local date `2026-04-30` through the neutral selection policy.
 
 Observed bounded evidence:
 
@@ -184,25 +223,27 @@ Observed bounded evidence:
 - host count: 1;
 - redirects: 0;
 - provider retries: 0;
-- speaker turns: 36;
-- related-artifact observations: 0 (the current live page exposes no tested explicit relationship
-  surface; fixture-covered explicit links still emit all four typed kinds);
+- speaker turns: 75;
+- normalized transcript words: 7,014;
+- related-artifact observations: 3 (quarterly report, earnings release, and slides from the
+  transcript-associated `Downloads` surface);
+- event disposition: `explicit_earnings`;
 - search-engine calls: 0; and
 - bounds exhausted: false.
 
-Authoritative live transport bytes: `772879`.
+Authoritative live transport bytes: `645661`.
 
 The live evidence file is the single byte-count authority. It records SHA-256 identities for the
-provider, neutral contracts, orchestrator, and live validator. Package generation verifies those
-identities and refuses stale evidence; it also refuses a review whose byte marker differs from
-the live JSON. The package report copies the same byte value.
+provider, neutral contracts, engine, orchestrator, and live validator. Package generation verifies
+those identities and refuses stale evidence; it also refuses a review whose byte marker differs
+from the live JSON. The package report copies the same byte value.
 
 ## Package Counting and Verification
 
-31 manifested members verified; 32 total ZIP entries including `manifest.json`.
+34 manifested members verified; 35 total ZIP entries including `manifest.json`.
 
 The verifier now reports these as separate fields: `manifested_members_verified` and
-`total_zip_entries`. The manifest's `members` map covers the 31 hashed package members, while the
+`total_zip_entries`. The manifest's `members` map covers the 34 hashed package members, while the
 manifest is the additional ZIP entry and cannot hash itself. The generated package report,
 review text, verifier output, and final implementation report use the same wording and counts.
 
@@ -225,7 +266,7 @@ review text, verifier output, and final implementation report use the same wordi
 
 ## Validation Results
 
-- Focused TASK-064 suite: PASS (20 tests).
+- Focused TASK-064 suite: PASS (28 tests).
 - Source-profile digest compatibility: PASS (6 tests).
 - CLI startup and firm-configuration regressions: PASS (24 tests).
 - TASK-059 through TASK-063 transcript regressions: PASS (45 tests).
@@ -246,8 +287,8 @@ inventory, live evidence, and SHA-256 manifest.
 - The authoritative retained artifact remains normalized transcript text rather than full page UI.
 - Typed turn and relationship observations are not yet projected into a separate durable
   relationship schema; transcript bytes remain authoritative.
-- The current live page does not expose a tested explicit relationship container, so live related
-  observations are empty instead of being guessed from global link labels.
+- Event disposition remains `unknown` whenever explicit candidate/artifact metadata is absent;
+  this is an intentional recall-preserving fallback rather than a provider-classification guess.
 - Legacy non-provider transcript paths remain intentionally unchanged.
 - Digest schemas 1–3 remain explicit compatibility code and must be preserved while their
   immutable revisions remain retained; new publications use schema 4 only.
@@ -261,6 +302,7 @@ inventory, live evidence, and SHA-256 manifest.
 | Transcript provider registry | Explicit name-based dispatch through neutral factories | Complete | One concrete provider |
 | Transcript orchestrator | Seed order, escalation, budgets, lifecycle | Complete | Legacy generic path remains |
 | StockAnalysis adapter | Identifier, HTTP, parsing, typed observations | Complete | Known static layouts only |
+| Transcript substance gate | Recall-oriented validation from parsed turns and normalized text | Complete | Conservative fixed thresholds |
 | Neutral retrieval envelope | Artifact, optional date, turns, relations, feedback | Complete | No separate durable projection |
 | Trusted-date qualification | Repository-owned acceptance and selection | Complete | Unknown provider forms remain unset |
 | Diagnostic boundary | Bounded operational summaries without bodies | Complete | Counts and digests only |

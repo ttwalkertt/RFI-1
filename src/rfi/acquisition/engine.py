@@ -19,6 +19,7 @@ from rfi.acquisition.contracts import (
     RetrievalOutcome,
     RetrievalResult,
     SourceProfile,
+    TranscriptMetadataObservation,
     require_identifier,
     validate_json,
 )
@@ -107,7 +108,9 @@ _CANDIDATE_IDENTITY_METADATA_FIELDS = frozenset({
 })
 
 _DISCOVERY_OCCURRENCE_METADATA_FIELDS = frozenset({
+    "archive_position",
     "deterministic_selection_rank",
+    "event_disposition",
     "link_label",
     "observed_aliases",
     "parent_path",
@@ -239,6 +242,7 @@ class AdapterCandidate:
     acquisition_target: AdapterAcquisitionTarget | None = None
     disposition: str = "acquire"
     disposition_reason: str | None = None
+    transcript_metadata_observation: TranscriptMetadataObservation | None = None
 
     def __post_init__(self) -> None:
         require_identifier(self.candidate_id, "candidate_id")
@@ -250,6 +254,13 @@ class AdapterCandidate:
             raise ContractError("adapter candidate disposition must be acquire or skip")
         if self.disposition == "skip" and not self.disposition_reason:
             raise ContractError("skipped adapter candidate requires a reason")
+        if (
+            self.transcript_metadata_observation is not None
+            and not isinstance(
+                self.transcript_metadata_observation, TranscriptMetadataObservation
+            )
+        ):
+            raise ContractError("candidate transcript metadata observation is malformed")
 
     def canonical(self) -> dict[str, Any]:
         """Return the complete candidate representation used for persistence."""
@@ -264,6 +275,10 @@ class AdapterCandidate:
         }
         if self.acquisition_target is not None:
             value["acquisition_target"] = self.acquisition_target.to_dict()
+        if self.transcript_metadata_observation is not None:
+            value["transcript_metadata_observation"] = (
+                self.transcript_metadata_observation.to_dict()
+            )
         return value
 
     def identity(self) -> CandidateIdentity:
@@ -887,9 +902,15 @@ class AcquisitionEngine:
                     continue
                 retrievals += 1
                 try:
+                    self._record_candidate_evaluation(
+                        diagnostics[trial_diagnostic_index]
+                    )
                     result = adapter.retrieve(profile, candidate)
                     if not isinstance(result, RetrievalResult):
                         raise ContractError("adapter retrieval did not return RetrievalResult")
+                    self._record_transcript_observation_diagnostic(
+                        diagnostics[trial_diagnostic_index], result
+                    )
                     if selection_policy is not None:
                         decision = selection_policy.qualify(candidate, result)
                         if not isinstance(decision, AdapterSelectionDecision):
@@ -1557,10 +1578,6 @@ class AcquisitionEngine:
         retrieval_failure: bool = False,
     ) -> None:
         """Fold policy qualification into the existing bounded diagnostic model."""
-        evaluated = page.get("candidate_evaluated_count", 0)
-        page["candidate_evaluated_count"] = (
-            evaluated + 1 if isinstance(evaluated, int) else 1
-        )
         dispositions = page.get("candidate_disposition_counts")
         if not isinstance(dispositions, dict):
             dispositions = {}
@@ -1604,6 +1621,32 @@ class AcquisitionEngine:
                     page["candidate_failure_samples"] = failure_samples
                 if len(failure_samples) < 20:
                     failure_samples.append(dict(sample))
+
+    @staticmethod
+    def _record_candidate_evaluation(page: dict[str, JsonValue]) -> None:
+        """Count only the unique document about to enter adapter evaluation."""
+        evaluated = page.get("candidate_evaluated_count", 0)
+        page["candidate_evaluated_count"] = (
+            evaluated + 1 if isinstance(evaluated, int) else 1
+        )
+        if isinstance(page.get("provider"), str) and page.get("provider"):
+            unique = page.get("run_unique_candidate_count", 0)
+            page["run_unique_candidate_count"] = (
+                unique + 1 if isinstance(unique, int) else 1
+            )
+
+    @staticmethod
+    def _record_transcript_observation_diagnostic(
+        page: dict[str, JsonValue], result: RetrievalResult
+    ) -> None:
+        """Project only bounded transcript classifications into run diagnostics."""
+        observation = result.transcript_metadata_observation
+        if observation is None:
+            return
+        page["evaluated_event_disposition"] = observation.event_disposition.value
+        page["evaluated_trusted_event_date_available"] = (
+            observation.trusted_event_date is not None
+        )
 
     @staticmethod
     def _repository_candidate(

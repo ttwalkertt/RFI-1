@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "provider": "stockanalysis",
-  "firm": "Oracle Corporation",
-  "provider_identifier": "ORCL",
+  "firm": "Oracle Corporation and Western Digital Corporation",
+  "provider_identifier": "ORCL and WDC",
   "sanitized": true,
   "fixtures": [
     {
       "path": "stockanalysis-orcl-archive.html",
-      "sha256": "7b91946a7335880371c51ee126968e3d34e152dd2cedcd4a4064be3f9160661d",
+      "sha256": "5921bd76a5b69964a234981b049a8a32560f9e55aad64a78792673e99fe1ccf7",
       "source_surface": "https://stockanalysis.com/stocks/orcl/transcripts/",
       "notes": "Sanitized representative archive topology; no transcript body."
     },
@@ -16,6 +16,18 @@
       "sha256": "88d2ed5f203fbe6460141e40ebb94dd07153afac9d9c6e2a36ed6fcb582811d7",
       "source_surface": "https://stockanalysis.com/stocks/orcl/transcripts/592465-q4-2026/",
       "notes": "Sanitized representative metadata, turn, and related-link topology; synthetic transcript sentences replace captured text."
+    },
+    {
+      "path": "stockanalysis-wdc-archive.html",
+      "sha256": "f9b6538fe0ebee24bd8201b55c162e56e98dddf9dc5d59ee7f3ae67197d00d49",
+      "source_surface": "https://stockanalysis.com/stocks/wdc/transcripts/",
+      "notes": "Sanitized entry-local relationship topology with explicit-earnings, explicit-non-earnings, and unknown ordering evidence; no transcript body."
+    },
+    {
+      "path": "stockanalysis-wdc-q3-2026.html",
+      "sha256": "d7a97900ff7b6131a03181be494c3e74dc81af1886da89730f8f101cf2dd9d71",
+      "source_surface": "https://stockanalysis.com/stocks/wdc/transcripts/548617-q3-2026/",
+      "notes": "Sanitized artifact-local header, trusted-date, relationship, and parsed-turn topology; synthetic transcript sentences replace captured text."
     }
   ]
 }

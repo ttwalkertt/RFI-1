@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 from jsonschema import Draft202012Validator
 
 from rfi.acquisition import (
@@ -18,11 +19,13 @@ from rfi.acquisition import (
     TranscriptAcquisitionSelection,
     TranscriptAcquisitionTarget,
     TranscriptSeed,
+    TranscriptEventDisposition,
 )
 from rfi.acquisition.earnings_transcripts import EarningsTranscriptHttpResponse
 from rfi.acquisition.providers.stockanalysis import (
     StockAnalysisTranscriptProvider,
     archive_url,
+    is_substantial_transcript,
     normalize_provider_identifier,
     validate_document_url,
 )
@@ -44,12 +47,22 @@ from rfi.source_profiles import (
 from rfi.source_profiles.contracts import SourceProfileError
 from rfi.firms import FirmDraft, FirmRepository
 from rfi.firms.contracts import FirmStatus
+from rfi.firm_configuration import validate_firm_configuration
+from rfi.storage import RepositoryDatabase
 
 ROOT = Path(__file__).resolve().parents[1]
 ARCHIVE_URL = "https://stockanalysis.com/stocks/orcl/transcripts/"
 DOCUMENT_URL = "https://stockanalysis.com/stocks/orcl/transcripts/592465-q4-2026/"
 ARCHIVE = (ROOT / "fixtures/transcripts/stockanalysis-orcl-archive.html").read_bytes()
 DOCUMENT = (ROOT / "fixtures/transcripts/stockanalysis-orcl-q4-2026.html").read_bytes()
+WDC_ARCHIVE_URL = "https://stockanalysis.com/stocks/wdc/transcripts/"
+WDC_DOCUMENT_URL = "https://stockanalysis.com/stocks/wdc/transcripts/548617-q3-2026/"
+WDC_UNKNOWN_URL = (
+    "https://stockanalysis.com/stocks/wdc/transcripts/"
+    "653281-2026-evercore-global-tmt-conference/"
+)
+WDC_ARCHIVE = (ROOT / "fixtures/transcripts/stockanalysis-wdc-archive.html").read_bytes()
+WDC_DOCUMENT = (ROOT / "fixtures/transcripts/stockanalysis-wdc-q3-2026.html").read_bytes()
 
 
 class Transport:
@@ -87,6 +100,24 @@ def profile() -> SourceProfile:
             "firm_id": "oracle",
             "artifact_id": "earnings_transcript",
             "retrieval_adapter_id": "earnings-call-transcript",
+        },
+    )
+
+
+def wdc_profile() -> SourceProfile:
+    configured = profile()
+    return SourceProfile(
+        "source-wdc-transcript",
+        "Western Digital transcripts",
+        True,
+        configured.mechanism,
+        {
+            **configured.configuration,
+            "discovery_hint_value": "WDC",
+        },
+        {
+            **configured.policy,
+            "firm_id": "western-digital",
         },
     )
 
@@ -142,6 +173,152 @@ class StockAnalysisProviderTests(unittest.TestCase):
             page.candidates[0].provenance.provider_identifiers["provider"],
             "stockanalysis",
         )
+
+    def test_wdc_archive_ranks_artifact_metadata_without_title_semantics(self) -> None:
+        provider = StockAnalysisTranscriptProvider(
+            Transport({WDC_ARCHIVE_URL: response(WDC_ARCHIVE_URL, WDC_ARCHIVE)}),
+            lambda: "2026-08-05T00:00:00+00:00",
+        )
+        page = provider.discover(
+            wdc_profile(),
+            TranscriptSeed("stockanalysis", "provider_identifier", "WDC", "configured"),
+            TranscriptAcquisitionTarget("western-digital"),
+        )
+        observations = [
+            candidate.transcript_metadata_observation for candidate in page.candidates
+        ]
+        self.assertEqual(
+            [candidate.provenance.metadata["link_label"] for candidate in page.candidates],
+            [
+                "Earnings Call: Q3 2026",
+                "2026 Evercore Global TMT Conference",
+                "Investor Day",
+            ],
+        )
+        self.assertEqual(
+            [item.event_disposition for item in observations if item is not None],
+            [
+                TranscriptEventDisposition.EXPLICIT_EARNINGS,
+                TranscriptEventDisposition.UNKNOWN,
+                TranscriptEventDisposition.UNKNOWN,
+            ],
+        )
+        self.assertEqual(page.diagnostics["candidate_excluded_count"], 1)
+        self.assertEqual(page.candidates[0].provenance.metadata["archive_position"], 2)
+        related = observations[0].related_artifact_observations  # type: ignore[union-attr]
+        self.assertEqual(
+            [item.provider_label for item in related],
+            ["Slides", "Earnings release", "Quarterly report"],
+        )
+        self.assertNotIn(
+            "/global-slides.pdf", [item.observed_url for item in related]
+        )
+        self.assertNotIn(
+            "/global-annual-report.pdf", [item.observed_url for item in related]
+        )
+
+    def test_unknown_archive_entry_remains_an_eligible_fallback(self) -> None:
+        unknown_only = WDC_ARCHIVE.replace(
+            b'<li class="rounded-lg border border-sharp bg-contrast">\n'
+            b'      <a href="/stocks/wdc/transcripts/548617-q3-2026/"',
+            b'<li data-removed="true"><a href="/not-a-transcript/"',
+        )
+        provider = StockAnalysisTranscriptProvider(
+            Transport({WDC_ARCHIVE_URL: response(WDC_ARCHIVE_URL, unknown_only)}),
+            lambda: "2026-08-05T00:00:00+00:00",
+        )
+        page = provider.discover(
+            wdc_profile(),
+            TranscriptSeed("stockanalysis", "provider_identifier", "WDC", "configured"),
+            TranscriptAcquisitionTarget("western-digital"),
+        )
+        self.assertEqual(page.candidates[0].provenance.metadata["link_label"],
+                         "2026 Evercore Global TMT Conference")
+        self.assertEqual(
+            page.candidates[0].transcript_metadata_observation.event_disposition,
+            TranscriptEventDisposition.UNKNOWN,
+        )
+
+    def test_substantial_transcript_gate_uses_turns_and_text_not_event_label(self) -> None:
+        provider = StockAnalysisTranscriptProvider(
+            Transport({WDC_DOCUMENT_URL: response(WDC_DOCUMENT_URL, WDC_DOCUMENT)}),
+            lambda: "2026-08-05T00:00:00+00:00",
+        )
+        candidate = provider.discover(
+            wdc_profile(),
+            TranscriptSeed("stockanalysis", "url", WDC_DOCUMENT_URL, "learned"),
+            TranscriptAcquisitionTarget("western-digital"),
+        ).candidates[0]
+        result = provider.retrieve(wdc_profile(), candidate)
+        observation = result.transcript_metadata_observation
+        self.assertIsNotNone(observation)
+        self.assertEqual(observation.event_label, "Earnings Call: Q3 2026")
+        self.assertEqual(result.diagnostics["substantial_transcript"], True)
+        self.assertTrue(is_substantial_transcript(
+            turns=result.speaker_turn_observations,
+            normalized_text="\n".join(
+                paragraph
+                for turn in result.speaker_turn_observations
+                for paragraph in turn.paragraphs
+            ),
+        ))
+        no_semantic_fields = WDC_DOCUMENT.replace(
+            b' data-event-type="Earnings Call" data-fiscal-period="Q3 2026"', b""
+        )
+        provider = StockAnalysisTranscriptProvider(
+            Transport({WDC_DOCUMENT_URL: response(WDC_DOCUMENT_URL, no_semantic_fields)}),
+            lambda: "2026-08-05T00:00:00+00:00",
+        )
+        candidate = provider.discover(
+            wdc_profile(),
+            TranscriptSeed("stockanalysis", "url", WDC_DOCUMENT_URL, "learned"),
+            TranscriptAcquisitionTarget("western-digital"),
+        ).candidates[0]
+        result = provider.retrieve(wdc_profile(), candidate)
+        self.assertEqual(result.transcript_metadata_observation.event_label,
+                         "Earnings Call: Q3 2026")
+        self.assertNotIn("event_type_label", result.diagnostics["provider_metadata"])
+        self.assertNotIn("fiscal_period_label", result.diagnostics["provider_metadata"])
+
+        insubstantial = WDC_DOCUMENT.replace(
+            b'<div data-speaker="Management" data-role="Provider role label" '
+            b'data-section="Prepared Remarks"><p>These are the complete captured fixture '
+            b'remarks, preserved exactly as provider text for deterministic validation.'
+            b'</p></div>',
+            b"",
+        )
+        provider = StockAnalysisTranscriptProvider(
+            Transport({WDC_DOCUMENT_URL: response(WDC_DOCUMENT_URL, insubstantial)}),
+            lambda: "2026-08-05T00:00:00+00:00",
+        )
+        candidate = provider.discover(
+            wdc_profile(),
+            TranscriptSeed("stockanalysis", "url", WDC_DOCUMENT_URL, "learned"),
+            TranscriptAcquisitionTarget("western-digital"),
+        ).candidates[0]
+        with self.assertRaisesRegex(AdapterFailure, "substantial parsed transcript"):
+            provider.retrieve(wdc_profile(), candidate)
+
+    def test_questionable_unknown_artifact_is_allowed_when_transcript_is_substantial(self) -> None:
+        without_relationships = WDC_DOCUMENT.replace(
+            b'<aside id="related-artifacts">',
+            b'<aside id="provider-summary" data-provider-summary="true">',
+        ).replace(b"data-related-kind", b"data-untrusted-kind")
+        provider = StockAnalysisTranscriptProvider(
+            Transport({WDC_DOCUMENT_URL: response(WDC_DOCUMENT_URL, without_relationships)}),
+            lambda: "2026-08-05T00:00:00+00:00",
+        )
+        candidate = provider.discover(
+            wdc_profile(),
+            TranscriptSeed("stockanalysis", "url", WDC_DOCUMENT_URL, "learned"),
+            TranscriptAcquisitionTarget("western-digital"),
+        ).candidates[0]
+        result = provider.retrieve(wdc_profile(), candidate)
+        self.assertEqual(
+            result.transcript_metadata_observation.event_disposition,
+            TranscriptEventDisposition.UNKNOWN,
+        )
+        self.assertTrue(result.diagnostics["substantial_transcript"])
 
     def test_direct_document_skips_archive_and_converges_on_candidate_identity(self) -> None:
         transport = Transport({
@@ -432,6 +609,75 @@ class ProviderOrchestrationTests(unittest.TestCase):
             with self.subTest(missing=missing):
                 self.assertTrue(tuple(Draft202012Validator(schema).iter_errors(malformed)))
 
+    def test_generic_transcript_hint_remains_provider_neutral(self) -> None:
+        hint = "https://stockanalysis.com/quote/tyo/7741/transcripts/"
+        configured = json.loads(
+            (ROOT / "docs/microsoft.firm-config.example.json").read_text()
+        )
+        configured["sources"]["earnings_transcript"] = {
+            "discovery_class": "extended",
+            "discovery_hints": [hint],
+        }
+        schema = json.loads(
+            (ROOT / "src/rfi/resources/firm-config-v1.schema.json").read_text()
+        )
+        self.assertEqual(tuple(Draft202012Validator(schema).iter_errors(configured)), ())
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            RepositoryDatabase.initialize(state)
+            target = state / "firm-config"
+            target.mkdir()
+            target.joinpath("microsoft.firm-config.json").write_text(
+                json.dumps(configured), encoding="utf-8"
+            )
+            loaded = validate_firm_configuration(state)
+
+        transcript = next(
+            item for item in loaded[0].profile.items
+            if item.artifact_id == "earnings_transcript"
+        )
+        candidate = transcript.retrieval_candidates[0]
+        self.assertEqual(candidate.provider, "")
+        self.assertEqual(candidate.discovery_hint_kind, "")
+        self.assertEqual(candidate.discovery_hint_value, "")
+        self.assertEqual(candidate.discovery_hints[0], hint)
+
+        generic = SourceProfile(
+            "source-hoya-transcript", "HOYA transcripts", True,
+            "earnings_transcript",
+            {
+                "mode": "discovery",
+                "discovery_class": candidate.discovery_class,
+                "discovery_hints": list(candidate.discovery_hints),
+            },
+            {"firm_id": "hoya", "artifact_id": "earnings_transcript"},
+        )
+        trials = TranscriptAcquisitionOrchestrator(
+            None, "earnings-call-transcript"
+        ).plan(generic, TranscriptAcquisitionTarget("hoya"))
+        self.assertEqual(trials[0].provider, "")
+        self.assertEqual(trials[0].seed_kind, "configured_fallback")
+        self.assertEqual(trials[0].starting_seed, hint)
+        adapter_trials = EarningsTranscriptPullAdapter(
+            policies(), transport=Transport({})
+        ).acquisition_trials(generic)
+        self.assertEqual(adapter_trials[0].provider, "")
+        self.assertEqual(adapter_trials[0].starting_seed, hint)
+
+    def test_provider_backed_configuration_does_not_route_generic_hints(self) -> None:
+        quote_hint = "https://stockanalysis.com/quote/tyo/7741/transcripts/"
+        configured = profile()
+        configured.configuration["discovery_hints"] = [quote_hint]
+        trials = TranscriptAcquisitionOrchestrator(
+            None, "earnings-call-transcript"
+        ).plan(configured, TranscriptAcquisitionTarget("oracle"))
+        self.assertEqual(len(trials), 1)
+        self.assertEqual(trials[0].provider, "stockanalysis")
+        self.assertEqual(trials[0].seed_kind, "provider_identifier")
+        self.assertEqual(trials[0].starting_seed, "ORCL")
+        self.assertNotIn(quote_hint, trials[0].starting_seeds)
+
     def test_engine_preserves_persistence_checkpoint_and_learning_ownership(
         self,
     ) -> None:
@@ -507,18 +753,114 @@ class ProviderOrchestrationTests(unittest.TestCase):
 
         adapter = EarningsTranscriptPullAdapter(
             policies(max_candidate_evaluations=1),
-            transport=Transport({ARCHIVE_URL: response(ARCHIVE_URL, ARCHIVE)}),
+            transport=Transport({
+                ARCHIVE_URL: response(ARCHIVE_URL, ARCHIVE),
+                DOCUMENT_URL: response(DOCUMENT_URL, DOCUMENT),
+            }),
             repository=Repository(),  # type: ignore[arg-type]
             clock=lambda: "2026-08-04T00:00:00+00:00",
         )
         trials = adapter.acquisition_trials(profile())
         configured = adapter.discover_trial(profile(), trials[0])
+        self.assertEqual(configured.diagnostics["candidate_evaluated_count"], 0)
+        adapter.retrieve(profile(), configured.candidates[0])
         learned = adapter.discover_trial(profile(), trials[1])
         self.assertEqual(len(configured.candidates), 1)
         self.assertEqual(learned.candidates, ())
         self.assertEqual(learned.diagnostics["run_unique_candidate_count"], 1)
         self.assertEqual(learned.diagnostics["exhausted_budget"],
-                         "max_candidate_evaluations")
+                         "")
+
+    def test_wdc_configured_acquisition_succeeds_before_learned_duplicate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            firms = FirmRepository.initialize(root / "firms")
+            firms.create(FirmDraft(
+                "western-digital", "Western Digital Corporation", "2026-01-01",
+                status=FirmStatus.ACTIVE,
+            ))
+            repository = AcquisitionRepository(root / "acquisition")
+            configured = wdc_profile()
+            repository.register_source(configured)
+            transport = Transport({
+                WDC_ARCHIVE_URL: response(WDC_ARCHIVE_URL, WDC_ARCHIVE),
+                WDC_DOCUMENT_URL: response(WDC_DOCUMENT_URL, WDC_DOCUMENT),
+            })
+            adapter = EarningsTranscriptPullAdapter(
+                policies(max_candidate_evaluations=1),
+                transport=transport,
+                repository=repository,
+                clock=lambda: "2026-08-05T00:00:00+00:00",
+            )
+            with patch.object(
+                repository,
+                "discovery_anchors",
+                return_value=({
+                    "provider": "stockanalysis",
+                    "requested_url": WDC_UNKNOWN_URL,
+                },),
+            ):
+                result = AcquisitionEngine(
+                    repository,
+                    AdapterRegistry((adapter,)),
+                    lambda: "2026-08-05T00:00:00+00:00",
+                ).run_source(configured.source_id, "task064-wdc-correction")
+        self.assertEqual(result.durable_acquisitions, 1)
+        self.assertEqual(transport.requests, [WDC_ARCHIVE_URL, WDC_DOCUMENT_URL])
+        rendered = json.dumps(result.diagnostics, sort_keys=True)
+        self.assertIn('"evaluated_event_disposition": "explicit_earnings"', rendered)
+        self.assertIn('"candidate_evaluated_count": 1', rendered)
+        self.assertNotIn(WDC_UNKNOWN_URL, rendered)
+
+    def test_duplicate_archive_and_learned_occurrences_are_not_ambiguous(self) -> None:
+        archive = f'''<!doctype html><ul>
+          <li class="rounded-lg border border-sharp bg-contrast">
+            <a href="{WDC_UNKNOWN_URL}">Opaque provider event label</a>
+          </li></ul>'''.encode()
+        artifact = WDC_DOCUMENT.replace(
+            WDC_DOCUMENT_URL.encode(), WDC_UNKNOWN_URL.encode()
+        ).replace(
+            b' data-event-date="April 30, 2026"', b""
+        ).replace(
+            b'<time datetime="2026-04-30">April 30, 2026</time>', b""
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            firms = FirmRepository.initialize(root / "firms")
+            firms.create(FirmDraft(
+                "western-digital", "Western Digital Corporation", "2026-01-01",
+                status=FirmStatus.ACTIVE,
+            ))
+            repository = AcquisitionRepository(root / "acquisition")
+            configured = wdc_profile()
+            repository.register_source(configured)
+            adapter = EarningsTranscriptPullAdapter(
+                policies(max_candidate_evaluations=2),
+                transport=Transport({
+                    WDC_ARCHIVE_URL: response(WDC_ARCHIVE_URL, archive),
+                    WDC_UNKNOWN_URL: response(WDC_UNKNOWN_URL, artifact),
+                }),
+                repository=repository,
+                clock=lambda: "2026-08-05T00:00:00+00:00",
+            )
+            with patch.object(
+                repository,
+                "discovery_anchors",
+                return_value=({
+                    "provider": "stockanalysis",
+                    "requested_url": WDC_UNKNOWN_URL,
+                },),
+            ):
+                result = AcquisitionEngine(
+                    repository,
+                    AdapterRegistry((adapter,)),
+                    lambda: "2026-08-05T00:00:00+00:00",
+                ).run_source(configured.source_id, "task064-duplicate-occurrence")
+        rendered = json.dumps(result.diagnostics, sort_keys=True)
+        self.assertEqual(result.failures, 0)
+        self.assertEqual(result.duplicates, 1)
+        self.assertIn('"duplicate_occurrence_count": 1', rendered)
+        self.assertNotIn("ambiguous duplicate candidate", rendered)
 
     def test_latest_missing_date_is_neutrally_rejected_by_durable_validation(self) -> None:
         without_date = DOCUMENT.replace(

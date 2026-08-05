@@ -7,7 +7,7 @@ import json
 import re
 import urllib.error
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from html.parser import HTMLParser
 from typing import Callable, Protocol
@@ -19,7 +19,9 @@ from rfi.acquisition.contracts import (
     RelatedArtifactObservation,
     RetrievalResult,
     SourceProfile,
+    TranscriptEventDisposition,
     TranscriptLearningFeedback,
+    TranscriptMetadataObservation,
     TranscriptSeed,
     TranscriptTurnObservation,
 )
@@ -40,12 +42,6 @@ _DOCUMENT_PATH = re.compile(
 )
 _ARCHIVE_PATH = re.compile(r"^/stocks/(?P<ticker>[a-z0-9.-]+)/transcripts/$")
 _TRUSTED_DATE_FORMATS = ("%Y-%m-%d", "%B %d, %Y", "%B %d %Y", "%b %d, %Y")
-_DATE_LIKE = re.compile(
-    r"^(?:20\d{2}[-_/]|Jan(?:uary)?\b|Feb(?:ruary)?\b|Mar(?:ch)?\b|"
-    r"Apr(?:il)?\b|May\b|Jun(?:e)?\b|Jul(?:y)?\b|Aug(?:ust)?\b|"
-    r"Sep(?:tember)?\b|Oct(?:ober)?\b|Nov(?:ember)?\b|Dec(?:ember)?\b)",
-    re.IGNORECASE,
-)
 _RELATED_KINDS = {
     "annual-report": "annual_report",
     "annual_report": "annual_report",
@@ -53,6 +49,8 @@ _RELATED_KINDS = {
     "presentation-slides": "presentation_slides",
     "earnings-release": "earnings_release",
     "earnings_release": "earnings_release",
+    "quarterly-report": "quarterly_report",
+    "quarterly_report": "quarterly_report",
     "audio": "audio",
     "transcript-download": "transcript_download",
 }
@@ -64,6 +62,41 @@ _DIAGNOSTIC_METADATA_KEYS = (
     "ticker_label",
 )
 _MAX_DIAGNOSTIC_METADATA_VALUE_CHARS = 256
+MIN_TURN_COUNT = 2
+MIN_CONTENT_TURNS = 2
+MIN_TRANSCRIPT_WORDS = 8
+MIN_SPEAKER_LABELS = 2
+
+
+def _normalize_opaque_text(value: str) -> str:
+    """Bounded representation normalization without semantic interpretation."""
+    return " ".join(value.split())
+
+
+def word_count(normalized_text: str) -> int:
+    """Count bounded normalized text without interpreting its subject matter."""
+    return len(re.findall(r"\b\w+\b", normalized_text, flags=re.UNICODE))
+
+
+def distinct_speaker_label_count(
+    turns: tuple[TranscriptTurnObservation, ...],
+) -> int:
+    """Count exact opaque speaker labels after representation normalization."""
+    return len({turn.speaker_label for turn in turns})
+
+
+def is_substantial_transcript(
+    *,
+    turns: tuple[TranscriptTurnObservation, ...],
+    normalized_text: str,
+) -> bool:
+    """Reject only artifacts lacking the already-parsed transcript structure."""
+    return (
+        len(turns) >= MIN_TURN_COUNT
+        and sum(bool(turn.paragraphs) for turn in turns) >= MIN_CONTENT_TURNS
+        and word_count(normalized_text) >= MIN_TRANSCRIPT_WORDS
+        and distinct_speaker_label_count(turns) >= MIN_SPEAKER_LABELS
+    )
 
 
 class TranscriptProviderTransport(Protocol):
@@ -76,6 +109,17 @@ class _ArchiveEntry:
     normalized_url: str
     label: str
     position: int
+    event_disposition: TranscriptEventDisposition
+    related: tuple[RelatedArtifactObservation, ...]
+
+
+@dataclass
+class _ArchiveEntryBuilder:
+    observed_url: str = ""
+    normalized_url: str = ""
+    label: str = ""
+    provider_classification: str = ""
+    related: list[RelatedArtifactObservation] = field(default_factory=list)
 
 
 class _ArchiveParser(HTMLParser):
@@ -85,35 +129,137 @@ class _ArchiveParser(HTMLParser):
         self.parent_url = parent_url
         self.entries: list[_ArchiveEntry] = []
         self._seen: set[str] = set()
+        self._entry: _ArchiveEntryBuilder | None = None
+        self._entry_depth = 0
+        self._relationship_depth = 0
         self._href: str | None = None
         self._text: list[str] = []
+        self._fallback_href: str | None = None
+        self._fallback_text: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        classes = set((values.get("class") or "").casefold().split())
+        if self._entry is not None:
+            self._entry_depth += 1
+        elif tag.casefold() == "li" and {
+            "rounded-lg", "border", "border-sharp", "bg-contrast"
+        }.issubset(classes):
+            self._entry = _ArchiveEntryBuilder(
+                provider_classification=(
+                    values.get("data-event-classification") or ""
+                ).strip().casefold()
+            )
+            self._entry_depth = 1
+        if self._entry is None:
+            if tag.casefold() == "a":
+                self._fallback_href = values.get("href")
+                self._fallback_text = []
+            return
+        if self._relationship_depth:
+            self._relationship_depth += 1
+        elif (
+            tag.casefold() == "ul"
+            and values.get("role") == "group"
+            and values.get("aria-label") == "Downloads"
+        ):
+            self._relationship_depth = 1
         if tag.casefold() == "a":
             self._href = dict(attrs).get("href")
             self._text = []
 
     def handle_data(self, data: str) -> None:
-        if self._href is not None:
+        if self._entry is not None and self._href is not None:
             self._text.append(data)
+        elif self._fallback_href is not None:
+            self._fallback_text.append(data)
 
     def handle_endtag(self, tag: str) -> None:
-        if tag.casefold() != "a" or self._href is None:
+        if self._entry is None:
+            if tag.casefold() == "a" and self._fallback_href is not None:
+                observed = urllib.parse.urljoin(self.parent_url, self._fallback_href)
+                label = _normalize_opaque_text(" ".join(self._fallback_text))
+                try:
+                    normalized, ticker, _slug = validate_document_url(observed)
+                except ValueError:
+                    normalized = ""
+                    ticker = ""
+                if (
+                    normalized
+                    and ticker == self.ticker
+                    and normalized not in self._seen
+                ):
+                    self._seen.add(normalized)
+                    self.entries.append(_ArchiveEntry(
+                        observed,
+                        normalized,
+                        label,
+                        len(self.entries) + 1,
+                        TranscriptEventDisposition.UNKNOWN,
+                        (),
+                    ))
+                self._fallback_href = None
+                self._fallback_text = []
             return
-        observed = urllib.parse.urljoin(self.parent_url, self._href)
-        try:
-            normalized, ticker, _slug = validate_document_url(observed)
-        except ValueError:
+        if tag.casefold() == "a" and self._href is not None:
+            observed = urllib.parse.urljoin(self.parent_url, self._href)
+            label = _normalize_opaque_text(" ".join(self._text))
+            try:
+                normalized, ticker, _slug = validate_document_url(observed)
+            except ValueError:
+                normalized = ""
+                ticker = ""
+            if (
+                normalized
+                and ticker == self.ticker
+                and not self._entry.normalized_url
+            ):
+                self._entry.observed_url = observed
+                self._entry.normalized_url = normalized
+                self._entry.label = label
+            elif self._relationship_depth and label:
+                kind = _RELATED_KINDS.get(label.casefold().replace(" ", "-"))
+                if kind:
+                    self._entry.related.append(RelatedArtifactObservation(
+                        kind,
+                        observed,
+                        "explicitly_related_to_transcript",
+                        self.parent_url,
+                        label,
+                    ))
             self._href = None
             self._text = []
+        if self._relationship_depth:
+            self._relationship_depth -= 1
+        self._entry_depth -= 1
+        if self._entry_depth:
             return
-        if ticker == self.ticker and normalized not in self._seen:
-            self._seen.add(normalized)
-            self.entries.append(_ArchiveEntry(
-                observed, normalized, " ".join(self._text).strip(), len(self.entries) + 1
-            ))
-        self._href = None
-        self._text = []
+        entry = self._entry
+        self._entry = None
+        if not entry.normalized_url or entry.normalized_url in self._seen:
+            return
+        self._seen.add(entry.normalized_url)
+        related = tuple(dict.fromkeys(entry.related))
+        earnings_relationship = any(
+            item.artifact_kind in {
+                "annual_report", "earnings_release", "quarterly_report"
+            }
+            for item in related
+        )
+        if entry.provider_classification == "non-earnings":
+            disposition = TranscriptEventDisposition.EXPLICIT_NON_EARNINGS
+        elif earnings_relationship:
+            disposition = TranscriptEventDisposition.EXPLICIT_EARNINGS
+        else:
+            disposition = TranscriptEventDisposition.UNKNOWN
+        self.entries.append(_ArchiveEntry(
+            entry.observed_url,
+            entry.normalized_url,
+            entry.label,
+            len(self.entries) + 1,
+            disposition,
+            related,
+        ))
 
 
 @dataclass
@@ -135,6 +281,7 @@ class _TranscriptParser(HTMLParser):
         self.paragraphs: list[str] = []
         self.turns: list[_TurnBuilder] = []
         self.related: list[RelatedArtifactObservation] = []
+        self.explicit_event_classification = ""
         self._transcript_depth = 0
         self._excluded_depth = 0
         self._paragraph_depth = 0
@@ -148,16 +295,20 @@ class _TranscriptParser(HTMLParser):
         self._live_speaker_depth = 0
         self._live_role_depth = 0
         self._live_text: list[str] = []
-        self._page_title_depth = 0
-        self._page_date_depth = 0
         self._json_ld_depth = 0
         self._json_ld_text: list[str] = []
         self._related_depth = 0
         self._related_href: str | None = None
         self._related_link_text: list[str] = []
+        self._related_explicit_kind: str | None = None
+        self._artifact_header_depth = 0
+        self._header_date_depth = 0
+        self._header_date_text: list[str] = []
+        self._header_label_depth = 0
+        self._header_label_text: list[str] = []
 
     def _observe_metadata(self, key: str, value: str) -> None:
-        observed = value.strip()
+        observed = _normalize_opaque_text(value)
         if not observed:
             return
         if key == "event_date":
@@ -172,23 +323,60 @@ class _TranscriptParser(HTMLParser):
         marker = (values.get("data-test") or values.get("id") or "").casefold()
         classes = (values.get("class") or "").casefold().split()
         classes_value = values.get("class") or ""
+        if self._artifact_header_depth:
+            self._artifact_header_depth += 1
+        elif (
+            tag.casefold() == "div"
+            and {"flex", "flex-wrap", "items-baseline", "gap-x-3"}.issubset(classes)
+        ):
+            self._artifact_header_depth = 1
+        if self._artifact_header_depth and tag.casefold() == "h1":
+            self._header_label_depth = self._artifact_header_depth
+            self._header_label_text = []
+        if (
+            self._artifact_header_depth
+            and tag.casefold() == "p"
+            and all(
+                value in classes
+                for value in ("text-sm", "font-semibold", "text-faded")
+            )
+        ):
+            self._header_date_depth = self._artifact_header_depth
+            self._header_date_text = []
+        if self._related_depth:
+            self._related_depth += 1
+        elif marker == "related-artifacts" or (
+            tag.casefold() == "ul"
+            and values.get("role") == "group"
+            and values.get("aria-label") == "Downloads"
+        ):
+            self._related_depth = 1
+        related_kind = values.get("data-related-kind")
+        explicit_kind = (
+            _RELATED_KINDS.get(related_kind.casefold()) if related_kind else None
+        )
+        if (
+            tag.casefold() == "a"
+            and values.get("href")
+            and (self._related_depth or explicit_kind)
+        ):
+            self._related_href = values["href"]
+            self._related_link_text = []
+            self._related_explicit_kind = explicit_kind
+        href = values.get("href") or values.get("data-url")
+        if explicit_kind and href and tag.casefold() != "a":
+            self.related.append(RelatedArtifactObservation(
+                explicit_kind,
+                urllib.parse.urljoin(self.page_url, href),
+                "explicitly_related_to_transcript",
+                self.page_url,
+                _normalize_opaque_text(values.get("data-related-label") or ""),
+            ))
         if tag.casefold() == "script" and values.get("type") == "application/ld+json":
             self._json_ld_depth = 1
             self._json_ld_text = []
         elif self._json_ld_depth:
             self._json_ld_depth += 1
-        if tag.casefold() == "h1" and "text-2xl" in classes_value:
-            self._page_title_depth = 1
-            self._live_text = []
-        elif self._page_title_depth:
-            self._page_title_depth += 1
-        if tag.casefold() == "p" and all(
-            value in classes_value for value in ("text-sm", "font-semibold", "text-faded")
-        ):
-            self._page_date_depth = 1
-            self._live_text = []
-        elif self._page_date_depth:
-            self._page_date_depth += 1
         if self._transcript_depth:
             self._transcript_depth += 1
         elif marker in {"transcript", "transcript-content", "transcript-body"} or (
@@ -198,6 +386,9 @@ class _TranscriptParser(HTMLParser):
             and (values.get("aria-label") or "").casefold() == "full transcript"
         ):
             self._transcript_depth = 1
+            self.explicit_event_classification = (
+                values.get("data-event-classification") or ""
+            ).strip().casefold()
             for source, target in (
                 ("data-title", "document_title"),
                 ("data-company", "company_label"),
@@ -210,17 +401,6 @@ class _TranscriptParser(HTMLParser):
                     self._observe_metadata(target, str(values[source]))
         if not self._transcript_depth:
             return
-        if self._related_depth:
-            self._related_depth += 1
-        elif marker == "related-artifacts":
-            self._related_depth = 1
-        if (
-            tag.casefold() == "a"
-            and values.get("href")
-            and self._related_depth
-        ):
-            self._related_href = values["href"]
-            self._related_link_text = []
         excluded = values.get("data-provider-summary") is not None or marker in {
             "provider-summary", "related-artifacts", "transcript-controls"
         }
@@ -228,17 +408,6 @@ class _TranscriptParser(HTMLParser):
             self._excluded_depth += 1
         elif excluded:
             self._excluded_depth = 1
-        related_kind = values.get("data-related-kind")
-        href = values.get("href") or values.get("data-url")
-        if related_kind and href:
-            kind = _RELATED_KINDS.get(related_kind.casefold())
-            if kind:
-                self.related.append(RelatedArtifactObservation(
-                    kind,
-                    urllib.parse.urljoin(self.page_url, href),
-                    "explicitly_related_to_transcript",
-                    self.page_url,
-                ))
         if self._excluded_depth:
             return
         if tag.casefold() in {"h1", "h2", "h3"}:
@@ -251,9 +420,9 @@ class _TranscriptParser(HTMLParser):
         speaker = values.get("data-speaker")
         if speaker:
             self._turn = _TurnBuilder(
-                speaker.strip(),
-                (values.get("data-role") or "").strip() or None,
-                (values.get("data-section") or "").strip() or None,
+                _normalize_opaque_text(speaker),
+                _normalize_opaque_text(values.get("data-role") or "") or None,
+                _normalize_opaque_text(values.get("data-section") or "") or None,
                 [],
             )
             self._turn_depth = self._transcript_depth
@@ -280,9 +449,10 @@ class _TranscriptParser(HTMLParser):
             self._json_ld_text.append(data)
         if self._related_href is not None:
             self._related_link_text.append(data)
-        if self._page_title_depth or self._page_date_depth:
-            self._live_text.append(data)
-            return
+        if self._header_date_depth:
+            self._header_date_text.append(data)
+        if self._header_label_depth:
+            self._header_label_text.append(data)
         if self._live_speaker_depth or self._live_role_depth:
             self._live_text.append(data)
             return
@@ -309,38 +479,43 @@ class _TranscriptParser(HTMLParser):
                 self._json_ld_text = []
             self._json_ld_depth -= 1
         if tag.casefold() == "a" and self._related_href is not None:
-            label = " ".join(" ".join(self._related_link_text).split()).casefold()
-            kind = _RELATED_KINDS.get(label.replace(" ", "-"))
+            provider_label = _normalize_opaque_text(" ".join(self._related_link_text))
+            kind = self._related_explicit_kind or _RELATED_KINDS.get(
+                provider_label.casefold().replace(" ", "-")
+            )
             if kind:
                 self.related.append(RelatedArtifactObservation(
                     kind,
                     urllib.parse.urljoin(self.page_url, self._related_href),
                     "explicitly_related_to_transcript",
                     self.page_url,
+                    provider_label,
                 ))
             self._related_href = None
             self._related_link_text = []
-        if self._page_title_depth:
-            if self._page_title_depth == 1 and tag.casefold() == "h1":
-                value = " ".join(" ".join(self._live_text).split())
-                if value:
-                    self.metadata.setdefault("document_title", value)
-                    event = re.fullmatch(
-                        r"(?P<event>Earnings Call): (?P<period>Q[1-4] 20\d{2})",
-                        value,
-                    )
-                    if event is not None:
-                        self.metadata.setdefault("event_type_label", event.group("event"))
-                        self.metadata.setdefault("fiscal_period_label", event.group("period"))
-                self._live_text = []
-            self._page_title_depth -= 1
-        if self._page_date_depth:
-            if self._page_date_depth == 1 and tag.casefold() == "p":
-                value = " ".join(" ".join(self._live_text).split())
-                if value and _DATE_LIKE.match(value):
-                    self._observe_metadata("event_date", value)
-                self._live_text = []
-            self._page_date_depth -= 1
+            self._related_explicit_kind = None
+        if (
+            tag.casefold() == "h1"
+            and self._header_label_depth == self._artifact_header_depth
+        ):
+            self._observe_metadata(
+                "document_title", " ".join(self._header_label_text)
+            )
+            self._header_label_depth = 0
+            self._header_label_text = []
+        if (
+            tag.casefold() == "p"
+            and self._header_date_depth == self._artifact_header_depth
+        ):
+            self._observe_metadata(
+                "event_date", " ".join(self._header_date_text)
+            )
+            self._header_date_depth = 0
+            self._header_date_text = []
+        if self._related_depth:
+            self._related_depth -= 1
+        if self._artifact_header_depth:
+            self._artifact_header_depth -= 1
         if not self._transcript_depth:
             return
         if self._excluded_depth:
@@ -348,16 +523,16 @@ class _TranscriptParser(HTMLParser):
         else:
             if self._turn is not None and self._live_speaker_depth:
                 if self._transcript_depth == self._live_speaker_depth:
-                    self._turn.speaker = " ".join(" ".join(self._live_text).split())
+                    self._turn.speaker = _normalize_opaque_text(" ".join(self._live_text))
                     self._live_speaker_depth = 0
                     self._live_text = []
             if self._turn is not None and self._live_role_depth:
                 if self._transcript_depth == self._live_role_depth:
-                    self._turn.role = " ".join(" ".join(self._live_text).split()) or None
+                    self._turn.role = _normalize_opaque_text(" ".join(self._live_text)) or None
                     self._live_role_depth = 0
                     self._live_text = []
             if tag.casefold() == "p" and self._paragraph_depth:
-                text = " ".join(" ".join(self._text).split())
+                text = _normalize_opaque_text(" ".join(self._text))
                 if text:
                     self.paragraphs.append(text)
                     if self._turn is not None:
@@ -365,7 +540,7 @@ class _TranscriptParser(HTMLParser):
                 self._paragraph_depth = 0
                 self._text = []
             if self._heading == tag.casefold():
-                text = " ".join(" ".join(self._text).split())
+                text = _normalize_opaque_text(" ".join(self._text))
                 if text and self._heading == "h1":
                     self.metadata.setdefault("document_title", text)
                 self._heading = None
@@ -376,8 +551,6 @@ class _TranscriptParser(HTMLParser):
                     self.turns.append(self._turn)
                 self._turn = None
                 self._turn_depth = 0
-        if self._related_depth:
-            self._related_depth -= 1
         self._transcript_depth -= 1
 
 
@@ -508,28 +681,56 @@ class StockAnalysisTranscriptProvider:
                 "max_candidate_evaluations",
                 40,
             ))
-            admitted_entries = parser.entries[:candidate_limit]
+            eligible_entries = [
+                entry for entry in parser.entries
+                if entry.event_disposition
+                is not TranscriptEventDisposition.EXPLICIT_NON_EARNINGS
+            ]
+            ranked_entries = sorted(
+                eligible_entries,
+                key=lambda entry: (
+                    0 if entry.event_disposition
+                    is TranscriptEventDisposition.EXPLICIT_EARNINGS else 1,
+                    entry.position,
+                ),
+            )
+            admitted_entries = ranked_entries[:candidate_limit]
             candidates = tuple(
                 self._candidate(
                     entry.normalized_url,
                     entry.observed_url,
                     entry.label,
                     entry.position,
+                    proposal_rank,
                     resolved,
                     exact_identifier,
                     normalized_identifier,
                     target,
+                    TranscriptMetadataObservation(
+                        entry.label,
+                        None,
+                        entry.event_disposition,
+                        entry.related,
+                    ),
                 )
-                for entry in admitted_entries
+                for proposal_rank, entry in enumerate(admitted_entries, start=1)
             )
             diagnostics = self._diagnostics(
                 seed, requested, response.url, len(candidates), "archive"
             )
             diagnostics.update({
                 "candidate_discovered_count": len(parser.entries),
+                "candidate_excluded_count": len(parser.entries) - len(eligible_entries),
                 "candidate_admitted_count": len(candidates),
-                "candidate_bound_exhausted": len(parser.entries) > candidate_limit,
+                "candidate_bound_exhausted": len(eligible_entries) > candidate_limit,
                 "candidate_budget": candidate_limit,
+                "event_disposition_counts": {
+                    disposition.value: sum(
+                        entry.event_disposition is disposition
+                        for entry in parser.entries
+                    )
+                    for disposition in TranscriptEventDisposition
+                },
             })
             return DiscoveryPage(candidates, None, diagnostics)
         requested, ticker, _slug = validate_document_url(seed.value)
@@ -544,7 +745,18 @@ class StockAnalysisTranscriptProvider:
                 "provider_identifier_conflict",
             )
         candidate = self._candidate(
-            requested, seed.value, seed.value, 1, requested, ticker, ticker, target
+            requested,
+            seed.value,
+            "",
+            1,
+            1,
+            requested,
+            configured_identifier,
+            ticker,
+            target,
+            TranscriptMetadataObservation(
+                "", None, TranscriptEventDisposition.UNKNOWN
+            ),
         )
         return DiscoveryPage((candidate,), None, self._diagnostics(
             seed, seed.value, seed.value, 1, "direct_document"
@@ -593,12 +805,48 @@ class StockAnalysisTranscriptProvider:
             )
             for index, turn in enumerate(parser.turns, start=1)
         )
+        normalized_text = "\n".join(parser.paragraphs)
+        if not is_substantial_transcript(
+            turns=turns,
+            normalized_text=normalized_text,
+        ):
+            raise self._failure(
+                "StockAnalysis artifact lacks substantial parsed transcript structure",
+                False,
+                "provider_transcript_structure_insufficient",
+            )
         related = tuple(dict.fromkeys(
             (item.artifact_kind, item.observed_url, item.relationship_kind,
-             item.source_provenance) for item in parser.related
+             item.source_provenance, item.provider_label) for item in parser.related
         ))
         related_observations = tuple(
             RelatedArtifactObservation(*item) for item in related[:16]
+        )
+        if parser.explicit_event_classification == "non-earnings":
+            event_disposition = TranscriptEventDisposition.EXPLICIT_NON_EARNINGS
+        elif any(
+            item.artifact_kind in {
+                "annual_report", "earnings_release", "quarterly_report"
+            }
+            for item in related_observations
+        ):
+            event_disposition = TranscriptEventDisposition.EXPLICIT_EARNINGS
+        else:
+            candidate_observation = candidate.transcript_metadata_observation
+            event_disposition = (
+                candidate_observation.event_disposition
+                if candidate_observation is not None
+                and candidate_observation.event_disposition
+                is TranscriptEventDisposition.EXPLICIT_EARNINGS
+                else TranscriptEventDisposition.UNKNOWN
+            )
+        event_label = parser.metadata.get("document_title", "")
+        metadata_observation = TranscriptMetadataObservation(
+            event_label,
+            event_date,
+            event_disposition,
+            related_observations,
+            turns,
         )
         metadata_lines = [
             f"{name}: {value}" for name, value in (
@@ -633,11 +881,24 @@ class StockAnalysisTranscriptProvider:
             "provider": self.provider,
             "provider_metadata": _bounded_diagnostic_metadata(parser.metadata),
             "trusted_event_date_available": event_date is not None,
+            "event_disposition": event_disposition.value,
             "speaker_turn_count": len(turns),
+            "content_turn_count": sum(bool(turn.paragraphs) for turn in turns),
+            "transcript_word_count": word_count(normalized_text),
+            "distinct_speaker_label_count": distinct_speaker_label_count(turns),
+            "substantial_transcript": True,
             "speaker_turn_content_sha256": hashlib.sha256(turn_payload).hexdigest(),
             "related_artifact_count": len(related_observations),
             "related_artifact_kinds": [
                 item.artifact_kind for item in related_observations
+            ],
+            "related_artifact_samples": [
+                {
+                    "artifact_kind": item.artifact_kind,
+                    "observed_url": item.observed_url[:512],
+                    "provider_label": item.provider_label[:128],
+                }
+                for item in related_observations[:8]
             ],
             "related_artifacts_retrieved": 0,
             "learning_feedback_count": len(feedback),
@@ -660,17 +921,20 @@ class StockAnalysisTranscriptProvider:
             speaker_turn_observations=turns,
             related_artifact_observations=related_observations,
             transcript_learning_feedback=feedback,
+            transcript_metadata_observation=metadata_observation,
         )
 
     def _candidate(
-        self, normalized: str, observed: str, label: str, position: int,
-        parent: str, exact_identifier: str, normalized_identifier: str, target: object,
+        self, normalized: str, observed: str, label: str, archive_position: int,
+        proposal_rank: int, parent: str, exact_identifier: str,
+        normalized_identifier: str, target: object,
+        observation: TranscriptMetadataObservation,
     ) -> AdapterCandidate:
         digest = hashlib.sha256(normalized.encode()).hexdigest()
         return AdapterCandidate(
             f"candidate-{digest}",
             f"document-{digest}",
-            position,
+            1,
             f"stockanalysis-{digest[:16]}",
             DiscoveryProvenance(
                 self.clock(),
@@ -687,11 +951,15 @@ class StockAnalysisTranscriptProvider:
                     "provider_identifier_exact": exact_identifier,
                     "provider_identifier_normalized": normalized_identifier,
                     "deferred_candidate_evaluation": True,
-                    "proposal_rank": position,
-                    "deterministic_selection_rank": [position, 0, 0, 0],
+                    "proposal_rank": proposal_rank,
+                    "archive_position": archive_position,
+                    "event_disposition": observation.event_disposition.value,
+                    "trusted_event_date_available": False,
+                    "deterministic_selection_rank": [proposal_rank, 0, 0, 0],
                 },
             ),
             target,  # type: ignore[arg-type]
+            transcript_metadata_observation=observation,
         )
 
     def _get(self, url: str) -> EarningsTranscriptHttpResponse:

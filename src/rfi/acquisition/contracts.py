@@ -181,15 +181,75 @@ class RelatedArtifactObservation:
     observed_url: str
     relationship_kind: str
     source_provenance: str
+    provider_label: str = ""
 
     def __post_init__(self) -> None:
         require_identifier(self.artifact_kind, "related artifact kind")
         require_identifier(self.relationship_kind, "related artifact relationship")
-        if not self.observed_url.strip() or not self.source_provenance.strip():
+        if (
+            not self.observed_url.strip()
+            or not self.source_provenance.strip()
+            or not isinstance(self.provider_label, str)
+        ):
             raise ContractError("related artifact observation is malformed")
 
     def to_dict(self) -> dict[str, JsonValue]:
         return asdict(self)
+
+
+class TranscriptEventDisposition(StrEnum):
+    """Provider-explicit event authority; unknown is deliberately admissible."""
+
+    EXPLICIT_EARNINGS = "explicit_earnings"
+    EXPLICIT_NON_EARNINGS = "explicit_non_earnings"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class TranscriptMetadataObservation:
+    """Provider-neutral, artifact-local transcript metadata observation."""
+
+    event_label: str
+    trusted_event_date: date | None
+    event_disposition: TranscriptEventDisposition
+    related_artifact_observations: tuple[RelatedArtifactObservation, ...] = ()
+    speaker_turn_observations: tuple[TranscriptTurnObservation, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.event_label, str):
+            raise ContractError("transcript event label is malformed")
+        if self.trusted_event_date is not None and not isinstance(
+            self.trusted_event_date, date
+        ):
+            raise ContractError("trusted transcript event date is malformed")
+        if not isinstance(self.event_disposition, TranscriptEventDisposition):
+            raise ContractError("transcript event disposition is malformed")
+        if any(
+            not isinstance(item, RelatedArtifactObservation)
+            for item in self.related_artifact_observations
+        ):
+            raise ContractError("transcript related-artifact observations are malformed")
+        if any(
+            not isinstance(item, TranscriptTurnObservation)
+            for item in self.speaker_turn_observations
+        ):
+            raise ContractError("transcript speaker-turn observations are malformed")
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        return {
+            "event_label": self.event_label,
+            "trusted_event_date": (
+                self.trusted_event_date.isoformat()
+                if self.trusted_event_date is not None else None
+            ),
+            "event_disposition": self.event_disposition.value,
+            "related_artifact_observations": [
+                item.to_dict() for item in self.related_artifact_observations
+            ],
+            "speaker_turn_observations": [
+                item.to_dict() for item in self.speaker_turn_observations
+            ],
+        }
 
 
 @dataclass(frozen=True)
@@ -454,6 +514,7 @@ class RetrievalResult:
     speaker_turn_observations: tuple[TranscriptTurnObservation, ...] = ()
     related_artifact_observations: tuple[RelatedArtifactObservation, ...] = ()
     transcript_learning_feedback: tuple[TranscriptLearningFeedback, ...] = ()
+    transcript_metadata_observation: TranscriptMetadataObservation | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.content, bytes):
@@ -485,6 +546,21 @@ class RetrievalResult:
             for item in self.transcript_learning_feedback
         ):
             raise ContractError("transcript learning feedback is malformed")
+        if (
+            self.transcript_metadata_observation is not None
+            and not isinstance(
+                self.transcript_metadata_observation, TranscriptMetadataObservation
+            )
+        ):
+            raise ContractError("transcript metadata observation is malformed")
+        observation = self.transcript_metadata_observation
+        if observation is not None and (
+            observation.trusted_event_date != self.trusted_event_date
+            or observation.speaker_turn_observations != self.speaker_turn_observations
+            or observation.related_artifact_observations
+            != self.related_artifact_observations
+        ):
+            raise ContractError("transcript metadata observation conflicts with retrieval")
 
 
 @dataclass(frozen=True, order=True)
