@@ -2,128 +2,131 @@
 
 ## Result
 
-TASK-066 is complete within its WDC-only boundary. The production pull composition now registers
-`wdc_press_release`, projects the provider from Western Digital's external firm configuration,
-discovers Business Wire release pages, qualifies issuer identity deterministically, and persists
-one terminally selected release through the existing acquisition engine and immutable repository.
-No provider writes SQLite or content storage directly, and no generic Business Wire abstraction was
-introduced.
+TASK-066 is **not operationally complete**. The WDC-only adapter, parser, qualification,
+selection, immutable persistence, and fixture evidence remain implemented, but no lawful public
+Business Wire surface tested from the actual RFI execution environment can provide deterministic
+WDC discovery plus complete release bytes. Production transport viability is a blocking acceptance
+gap, not a limitation that operators may waive.
 
-## Discovery, Parsing, Qualification, and Selection
+The production `UrllibPressReleaseTransport` timed out for both the configured newsroom and a known
+release detail. A conventional bounded curl request received raw Akamai HTTP 403 denial responses
+for the newsroom, detail, robots, sitemap, and feed-help URLs. No CAPTCHA circumvention, stealth
+automation, anti-bot evasion, browser automation, or browser-header impersonation was used.
 
-The configured search is:
+## Direct-Surface Investigation
+
+The investigated official surfaces were:
+
+- Configured server-rendered newsroom search and a known canonical detail page.
+- `robots.txt` and `sitemap.xml`, neither accessible from this execution edge.
+- Business Wire's official feed documentation and a reachable preconfigured public RSS feed.
+- WDC's issuer-controlled investor-relations listing and detail pages as a possible replacement.
+
+Business Wire's public RSS host returned HTTP 200 and parseable RSS, but the observed feed was a
+preconfigured Public Policy/Government category feed, contained no WDC items, exposed truncated
+descriptions, and linked every item back to the inaccessible Business Wire detail surface. It
+cannot supply complete release text or deterministic WDC discovery. Business Wire's official feed
+page describes RSS as headline links and presents full-text Atom, NX, and FTP/SFTP as media-partner
+newsfeed offerings. No unauthenticated WDC full-text API or feed contract was established.
+
+The WDC investor-relations archive is publicly indexed with complete releases and Business Wire
+source URLs, so it remains the best source-design candidate. However, conventional curl also
+received HTTP 403 for its listing and detail pages from this execution edge. It is therefore a
+recommendation subject to a separate production-network feasibility gate, not a proven repair.
+
+Raw bodies, response headers, hashes, exact production adapter failures, RSS assessment, and the
+surface decision are captured in `validation/transport-viability.json` and
+`validation/transport-raw/` inside the review package.
+
+## Earlier Browser-Capture Evidence
+
+The prior bounded validation remains valid but has narrower meaning. On 2026-08-05 a public browser
+session captured the configured newsroom and ten detail DOMs; replay through the adapter contract,
+real acquisition engine, source profile, and temporary repository selected release
+`20260805177075`, rejected a newer Sandisk false positive, extracted the complete 27,940-character
+story, persisted 1,553,182 immutable source bytes, and passed repository integrity verification.
+
+That evidence proves live-content parsing, strict qualification, terminal selection, normalized
+metadata, and real persistence. It does **not** prove production acquisition and is now labeled
+`historical-browser-capture-validation.json` in the package. Browser replay is not an operational
+fallback.
+
+## Discovery, Ordering, Qualification, and Selection
+
+The configured search remains:
 
 ```text
 https://www.businesswire.com/newsroom?keywords=ENTIRE_RELEASE%3Atrue%3Awdc
 ```
 
-Business Wire's actual pagination control preserves that query and navigates to `page=N`; page two
-was observed at the configured URL plus `&page=2`. Page one omits the parameter. The adapter parses
-server-visible release cards, canonicalizes same-host detail URLs, deduplicates them, rejects
-repeated page signatures and URLs as loops, and stops only on an explicit selection-aware boundary
-or configured 50-page maximum. Release-ID dates are advisory traversal bounds only; detail-page
-`NewsArticle.datePublished` is selection authority.
+Fixture and captured DOM evidence show page one at the configured URL and subsequent pages by
+preserving the query and appending `page=N`. The adapter now makes no newest-to-oldest assumption:
+both latest and inclusive-range modes exhaust pagination before selection, subject to the explicit
+50-page bound. Repeated page signatures fail as loops, canonical URLs are deduplicated, and hitting
+the bound while a next page exists fails observably. A focused regression places the newest
+qualified release on page two and verifies that latest mode still selects it.
 
-Detail parsing is separate from listing discovery. It extracts title, publication timestamp,
-Business Wire publisher panel, canonical URL, release ID, dateline, subhead, complete story,
-contacts, attachment links, and source attribution without script execution. Void HTML elements are
-handled without extending extraction beyond their owning story/contact/sidebar containers.
+Qualification remains detail-authoritative: the Business Wire publisher panel issuer must be
+`Western Digital` or `Western Digital Corporation`, and ticker must be exactly `NASDAQ:WDC`.
+Search membership, title/body mentions, listing snippets, JSON-LD author labels, release IDs, and
+listing position cannot qualify a release. Latest chooses the greatest detail
+`NewsArticle.datePublished`; inclusive range chooses the least timestamp within the supplied closed
+date interval, with release ID and candidate ID as deterministic ties.
 
-Qualification requires the detail-page Business Wire publisher panel issuer to be either
-`Western Digital` or `Western Digital Corporation` and the panel ticker to be exactly
-`NASDAQ:WDC`. Live pages demonstrated both issuer labels and also demonstrated that JSON-LD
-`author.name` may contain a media-contact label, so author metadata is deliberately not issuer
-authority. Search membership, WDC mentions, titles, bodies, and listing order cannot qualify a
-release.
+## Repository and Implementation Status
 
-Latest mode selects the greatest publication timestamp. Inclusive range mode selects the least
-timestamp between supplied dates. Ties use Business Wire release ID and candidate ID. Exhaustive
-range traversal with no qualifying release is a successful no-result outcome.
+The adapter continues to use the existing acquisition trial, terminal-selection, source-profile,
+firm-configuration, pull-workflow, and repository contracts. It does not write SQLite or content
+storage directly. Exact fetched detail bytes are immutable artifacts; normalized extraction and
+provenance are repository-owned attempt diagnostics. Exact reacquisition converges, while changed
+bytes add their SHA-256 to validated revision identity and append a new immutable observation.
 
-## Repository and Configuration Integration
+This successful implementation evidence is retained because it is useful if an authorized,
+production-viable transport is later supplied at the existing seam. It does not change the blocked
+operational result.
 
-`PressReleaseAcquisitionTarget` and its closed selection modes travel through `PullWorkflow`, the
-existing adapter registry, terminal selection policy, `AcquisitionEngine`, source-profile revision,
-and `AcquisitionRepository`. The existing `press_release` taxonomy is reused. The external firm
-configuration remains authoritative; the checked-in WDC example and both schema copies admit only
-the exact WDC-specific provider and configured search hint.
+## Validation
 
-Fetched detail bytes are the immutable artifact. Normalized extraction and provenance are stored on
-the repository-owned successful attempt. Exact reacquisition converges on retained evidence.
-Changed source bytes add their SHA-256 to validated revision identity, producing a new immutable
-artifact and observation while retaining the old bytes and history. Repository integrity and
-conflict failures remain distinct observable terminal failures.
+The focused suite contains eleven tests, including the new out-of-order multi-page latest
+regression. It also covers registration/config projection, strict issuer qualification, inclusive
+range and no-result behavior, pagination and loops, complete extraction, idempotency and changed
+bytes, malformed pages, repository failures, and the WDC-only boundary.
 
-## Tests and Validation
+The regenerated package requires focused tests, configuration regressions, acquisition
+regressions, historical browser-evidence verification, direct-transport-evidence verification,
+`git diff --check`, and full `make validate` to pass. These validate the implementation and the
+truthfulness/integrity of the blocking evidence; they do not convert the transport result to a
+pass.
 
-The focused fixture suite contains ten tests covering registration and firm-config projection,
-latest selection, inclusive range selection, explicit no-result, pagination, duplicate suppression,
-strict qualification and a newer Sandisk false positive, metadata and complete-body extraction,
-immutable idempotency and changed bytes, malformed discovery and detail pages, pagination loops,
-repository failure classification, and rejection of non-WDC firm use.
+## Recommendation and Required Follow-up
 
-The review generator records focused tests, configuration regressions, acquisition regressions,
-live-evidence verification, `git diff --check`, and the full `make validate` suite in the package.
-All commands must exit zero before package construction.
+Recommended source decision: **option 2**, after a separate feasibility gate—use WDC's
+issuer-controlled archive for discovery and complete acquisition, retaining the canonical Business
+Wire URL as related-source metadata. This preserves wire provenance without making the denied
+Business Wire detail surface an availability dependency.
 
-## Bounded Live Validation
+If the intended production network cannot directly reach the WDC archive, choose option 3 and
+explicitly defer Business Wire support. Option 1 is less desirable than option 2 because discarding
+the related Business Wire URL would lose useful provenance. A licensed Business Wire full-text feed
+could also be considered in a separately authorized task with credentials, terms, and retention
+rights made explicit.
 
-On 2026-08-05, the configured newsroom returned ten first-page candidates. Seven qualified from
-their detail publisher panels; the newest search hit was a Sandisk release and was rejected. The
-selected release was `20260805177075`, “WD Reports Fiscal Fourth Quarter and Fiscal Year 2026
-Financial Results,” published `2026-08-05T20:02:00+00:00`. Extraction retained a 27,940-character
-complete story, 317-character subhead, 191-character contacts block, canonical URL, dateline, and
-all other normalized fields. The real repository path persisted 1,553,182 evidence bytes as
-artifact `artifact-737310dcc9d00f5c5a2ba97904336829973f2e76a8c9cb7f23efecbd8b8139ac`;
-the stored SHA-256 and repository integrity verification both passed.
-
-Direct command-line investigation was attempted first. Python HTTPS timed out, while a bounded curl
-probe with browser-equivalent public headers received Business Wire Akamai `HTTP 403 Access
-Denied`. Because direct access was demonstrably unavailable from this execution edge, the bounded
-validation used a public browser session to load the configured newsroom and ten linked detail
-pages. Complete `documentElement` HTML was serialized without modification, then replayed through
-the adapter transport contract, acquisition engine, source profile, and real temporary repository.
-The evidence explicitly records `browser_assisted_same_session_dom_capture`. Production remains
-direct `urllib` HTTPS and contains no browser dependency or automation.
-
-This validates live discovery content, detail retrieval content, parsing, qualification, selection,
-and persistence, but it does not claim that this host's direct Business Wire edge path succeeded.
-
-## Files Changed
-
-- Acquisition contracts, WDC adapter, engine failure classification, and production registry.
-- Pull workflow, source-profile validation, firm-config schemas/template, and WDC config example.
-- Six press-release fixtures, focused tests, live validator, review generator, and baseline list.
-- Acquisition/operator documentation, roadmap status, and this architectural review.
-
-## Known Limitations and Follow-up
-
-- Business Wire's DOM, JSON-LD timestamp, publisher panel, and `page=N` contract are external and may
-  change; malformed or unsupported shapes fail observably rather than guessing.
-- The production HTTP transport has a 25 MB response limit, 30-second request timeout, and no
-  provider-local retry loop. Repository reruns provide durable retry semantics.
-- Range traversal is capped at 50 pages unless a smaller source-profile maximum is configured.
-- Release-ID dates are trusted only for traversal stopping, never for qualification or ordering.
-- Attachments are retained when the story exposes direct multimedia or recognized document links;
-  the selected live release exposed none in its story.
-- A future generic Business Wire provider should extract the separated listing/detail parsers and
-  transport contract only after another firm establishes shared semantics. TASK-066 must not be
-  retroactively generalized.
-- A future live run from an edge accepted by Business Wire should repeat the default direct-HTTPS
-  validator and replace the browser-assisted transport limitation with raw-response evidence.
+Do not enable or schedule `wdc_press_release` until one of those source decisions is implemented and
+validated through the real RFI acquisition path with raw direct-response evidence for latest and
+inclusive-range behavior.
 
 ## Architectural Status Summary
 
 | Subsystem | Responsibility | Status | Architectural effect / limitation |
 |---|---|---|---|
-| WDC Business Wire adapter | HTTP discovery, parsing, candidate provenance | Complete | WDC-only; external markup contract |
-| Terminal selection policy | Publisher qualification, date modes, deterministic ties | Complete | Two observed WDC publisher labels |
-| Firm configuration/source profile | Authoritative provider and exact seed projection | Complete | External config remains operator-owned |
-| Acquisition engine/repository | Durable selection, immutable bytes, history, idempotency | Complete | Existing contracts reused |
-| Fixture validation | Deterministic behavior and failure coverage | Complete | Six checked-in fixtures |
-| Live validation | Current discovery, extraction, qualification, persistence evidence | Usable with Limitations | Browser-assisted capture after direct edge denial |
-| Future provider generalization | Multi-firm Business Wire semantics | Not Started | Requires a separately authorized milestone |
+| WDC adapter implementation | Discovery/detail parsing and provenance | Implemented, Operationally Blocked | Transport cannot acquire live pages from RFI edge |
+| Pagination/selection | Correct latest and inclusive-range reduction | Complete (fixture-backed) | Exhaustive bounded traversal; no listing-order assumption |
+| Qualification | Exact WDC publisher panel and ticker | Complete (fixture/browser-content backed) | Detail metadata remains authority |
+| Engine/repository integration | Durable selection and immutable bytes | Complete | Existing contracts and persistence path reused |
+| Historical browser validation | Live-content parser and persistence proof | Complete, Non-operational | Does not prove direct transport |
+| Direct Business Wire transport | Production discovery and complete retrieval | Blocked | urllib timeout; curl HTTP 403; RSS insufficient |
+| WDC issuer archive alternative | Candidate discovery/acquisition source | Not Established | Publicly indexed, but current shell edge also receives 403 |
+| Multi-firm Business Wire provider | Generalization | Not Started | Explicitly outside TASK-066 |
 
-The next architectural milestone is not genericization by default. The recommended follow-up is a
-direct-HTTPS live rerun from a Business Wire-accepted network edge; generic provider work should
-wait for a second explicitly scoped firm and shared contract evidence.
+The next architectural milestone is an explicitly authorized source/transport decision, not a
+claim that TASK-066 is operational and not generic Business Wire provider work.

@@ -55,7 +55,7 @@ def fixture(name: str) -> bytes:
     return (FIXTURES / name).read_bytes()
 
 
-def responses(*, second_page: bool = False) -> dict[str, bytes]:
+def responses(*, second_page: bool = True) -> dict[str, bytes]:
     value = {
         SEARCH_URL: fixture("businesswire-wdc-page-1.html"),
         LATEST: fixture("businesswire-wdc-latest.html"),
@@ -174,6 +174,38 @@ class Task066Tests(unittest.TestCase):
         self.assertEqual(repository.read_artifact(attempt["artifact_id"]), fixture(
             "businesswire-wdc-latest.html"
         ))
+        self.assertIn(SEARCH_URL + "&page=2", transport.requests)
+        discovery = result.diagnostics[0]
+        self.assertEqual(discovery["discovery_stop_reason"], "pagination_exhausted")
+        self.assertEqual(
+            discovery["listing_order_assumption"],
+            "none; pagination exhausted before selection",
+        )
+
+    def test_latest_selection_is_correct_when_listing_order_is_not_chronological(self) -> None:
+        out_of_order = "https://www.businesswire.com/news/home/20260806110484/en/Earliest-WDC"
+        second_page = fixture("businesswire-wdc-page-2.html").replace(
+            b"20260601510484", b"20260806110484"
+        )
+        detail = fixture("businesswire-wdc-earliest.html").replace(
+            b"20260601510484", b"20260806110484"
+        ).replace(
+            b"2026-06-01T12:00:00+00:00", b"2026-08-06T12:00:00+00:00"
+        )
+        transport = Transport({
+            **responses(),
+            SEARCH_URL + "&page=2": second_page,
+            out_of_order: detail,
+        })
+        repository, result = self.run_engine(transport)
+        self.assertEqual(result.status, RunStatus.COMPLETE)
+        attempt = next(x for x in repository.history() if x.get("outcome") == "success")
+        self.assertEqual(
+            attempt["diagnostics"]["normalized_press_release"][
+                "businesswire_release_id"
+            ],
+            "20260806110484",
+        )
 
     def test_complete_body_and_pertinent_metadata_extraction(self) -> None:
         parsed = parse_press_release(fixture("businesswire-wdc-latest.html"), LATEST)
@@ -203,7 +235,7 @@ class Task066Tests(unittest.TestCase):
             date(2026, 5, 1), date(2026, 5, 31)
         )
         _repository, result = self.run_engine(
-            Transport(responses(second_page=True)), selection
+            Transport(responses()), selection
         )
         self.assertEqual(result.status, RunStatus.COMPLETE)
         self.assertEqual(result.durable_acquisitions, 0)

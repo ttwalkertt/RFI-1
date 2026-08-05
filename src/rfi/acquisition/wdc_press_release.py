@@ -10,7 +10,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from typing import Callable, Protocol
 
@@ -48,9 +48,6 @@ _RELEASE_PATH = re.compile(
 _WDC_ISSUER = "Western Digital Corporation"
 _WDC_PUBLISHER_LABELS = frozenset({_WDC_ISSUER, "Western Digital"})
 _WDC_TICKER = "NASDAQ:WDC"
-_WDC_LISTING = re.compile(
-    r"\)--\s*Western Digital Corporation\s*\(Nasdaq:\s*WDC\)", re.I
-)
 _MAX_RESPONSE_BYTES = 25_000_000
 _MAX_PAGES = 50
 _VOID_TAGS = frozenset({
@@ -133,13 +130,6 @@ class _ListingEntry:
     release_id: str
     title: str
     snippet: str
-
-    @property
-    def advisory_date(self) -> date:
-        return date.fromisoformat(
-            f"{self.release_id[:4]}-{self.release_id[4:6]}-{self.release_id[6:8]}"
-        )
-
 
 @dataclass
 class _ListingBuilder:
@@ -633,19 +623,6 @@ class WdcBusinessWirePressReleaseAdapter:
                     continue
                 seen_urls.add(entry.url)
                 all_entries.append((len(all_entries) + 1, entry, page_url))
-            dates = [entry.advisory_date for entry in parser.entries]
-            if self._selection.mode == PressReleaseSelectionMode.LATEST and any(
-                _WDC_LISTING.search(entry.snippet) for entry in parser.entries
-            ):
-                stop_reason = "publisher_candidate_observed"
-                break
-            if (
-                self._selection.mode == PressReleaseSelectionMode.FIRST_IN_DATE_RANGE
-                and self._selection.start_date is not None
-                and min(dates) < self._selection.start_date
-            ):
-                stop_reason = "inclusive_start_boundary_crossed"
-                break
             if not parser.has_next:
                 break
             page_number += 1
@@ -700,6 +677,7 @@ class WdcBusinessWirePressReleaseAdapter:
                 "listing_pages_fetched": pages,
                 "duplicate_release_urls_suppressed": duplicates,
                 "discovery_stop_reason": stop_reason,
+                "listing_order_assumption": "none; pagination exhausted before selection",
                 "candidate_count": len(candidates),
                 "effective_selection_mode": self._selection.mode.value,
             },

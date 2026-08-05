@@ -41,10 +41,16 @@ def run(name: str, command: list[str], timeout: int = 1800) -> dict[str, object]
 
 def generate(base: str | None) -> int:
     live_path = VALIDATION / "live-validation.json"
+    transport_path = VALIDATION / "transport-viability.json"
     if not live_path.is_file():
         raise RuntimeError(
             "capture bounded live evidence before package generation with "
             "scripts/task066_live_validation.py"
+        )
+    if not transport_path.is_file():
+        raise RuntimeError(
+            "capture production transport evidence before package generation with "
+            "scripts/task066_transport_viability.py"
         )
     outcomes = [
         run("focused", ["make", "task066-test"]),
@@ -64,10 +70,17 @@ def generate(base: str | None) -> int:
             ],
         ),
         run(
-            "bounded-live-evidence",
+            "historical-browser-capture-evidence",
             [
                 ".venv/bin/python", "scripts/task066_live_validation.py",
                 "--verify", str(live_path),
+            ],
+        ),
+        run(
+            "direct-transport-viability-evidence",
+            [
+                ".venv/bin/python", "scripts/task066_transport_viability.py",
+                "--verify", str(transport_path),
             ],
         ),
         run("diff-check", ["git", "diff", "--check"]),
@@ -108,13 +121,25 @@ def generate(base: str | None) -> int:
             ROOT / "src/rfi/resources/firm-config-v1.schema.json",
         ),
         ("evidence/live-validator.py", ROOT / "scripts/task066_live_validation.py"),
+        (
+            "evidence/transport-viability-probe.py",
+            ROOT / "scripts/task066_transport_viability.py",
+        ),
+        ("evidence/acquisition-documentation.md", ROOT / "docs/acquisition-engine.md"),
+        ("evidence/operator-documentation.md", ROOT / "docs/operator-guide.md"),
         ("evidence/fixture-readme.md", ROOT / "fixtures/press-releases/README.md"),
         *(
             (f"evidence/fixtures/{path.name}", path)
             for path in sorted((ROOT / "fixtures/press-releases").glob("*.html"))
         ),
         *((f"validation/{name}.txt", VALIDATION / f"{name}.txt") for name in names),
-        ("validation/live-validation.json", live_path),
+        ("validation/historical-browser-capture-validation.json", live_path),
+        ("validation/transport-viability.json", transport_path),
+        *(
+            (f"validation/transport-raw/{path.name}", path)
+            for path in sorted((VALIDATION / "transport-raw").glob("*"))
+            if path.suffix in {".body", ".headers"}
+        ),
         ("validation/results.json", VALIDATION / "results.json"),
     ]
     build_package(

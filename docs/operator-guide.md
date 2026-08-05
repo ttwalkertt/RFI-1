@@ -60,11 +60,16 @@ and [CLI equivalents](#cli-reference).
 
 ## Western Digital Business Wire press releases
 
-Western Digital press releases are executable only when the externally managed
+The WDC-specific adapter remains executable only when the externally managed
 `western-digital.firm-config.json` contains the provider-backed `press_release` block shown in
 `docs/western-digital.firm-config.example.json`. Reload the complete firm-profile set from Target
 Firms after changing that file. Pull Sources then uses `wdc_press_release` through the normal pull,
 acquisition, and immutable repository paths; it does not write provider data directly to SQLite.
+
+Do not enable or schedule this source in production. TASK-066 is operationally blocked: direct
+`urllib` requests to both Business Wire discovery and detail timed out from the RFI execution
+environment, while conventional curl received Akamai HTTP 403 denial responses. Browser-captured
+DOM evidence is parser/persistence validation only and is not an approved production transport.
 
 Normal Pull Sources execution requests the latest qualifying release. Programmatic operators can
 construct `PressReleaseAcquisitionTarget` with either `latest()` or
@@ -72,8 +77,18 @@ construct `PressReleaseAcquisitionTarget` with either `latest()` or
 Date boundaries are inclusive. A complete run with no qualifying release has zero durable
 acquisitions and zero failures.
 
-For deterministic verification run `make task066-test`. Bounded live validation is separate and
-uses public network access:
+For deterministic verification run `make task066-test`. Reproduce or verify the bounded direct
+transport evidence separately:
+
+```sh
+PYTHONPATH=src .venv/bin/python scripts/task066_transport_viability.py \
+  --output .artifacts/task066-validation/transport-viability.json
+PYTHONPATH=src .venv/bin/python scripts/task066_transport_viability.py \
+  --verify .artifacts/task066-validation/transport-viability.json
+```
+
+The historical browser-capture validation can still be verified as parser, qualification,
+selection, and real-repository evidence:
 
 ```sh
 PYTHONPATH=src .venv/bin/python scripts/task066_live_validation.py \
@@ -82,14 +97,15 @@ PYTHONPATH=src .venv/bin/python scripts/task066_live_validation.py \
   --verify .artifacts/task066-validation/live-validation.json
 ```
 
-The default validation uses the production direct-HTTPS transport. If the execution environment's
-Business Wire edge returns an explicit access denial, a separately captured public browser session
-may be supplied with `--capture-directory PATH`. That directory must contain complete, unmodified
-serialized document HTML as `listing.html` plus one `<release-id>.html` file for every listing
-candidate. The validator replays those bytes through the same adapter, engine, source profile, and
-repository contracts and labels the resulting evidence as browser assisted. This is a validation
-escape hatch, not the production adapter transport; record the direct failure and capture semantics
-in the task review.
+`task066_live_validation.py --capture-directory PATH` replays complete captured DOM through the
+adapter seam. It must not be used as an operational workaround. No CAPTCHA circumvention, stealth
+automation, browser automation, or header impersonation is authorized.
+
+Recommended next decision: first test a bounded issuer-controlled WDC archive transport from the
+intended production network. If viable, use WDC for discovery and complete acquisition while
+retaining the Business Wire URL as related-source metadata. If it is not viable, explicitly defer
+Business Wire press-release support. The current execution edge also returned HTTP 403 for the WDC
+IR listing and detail probes, so that alternative has not yet passed its own transport gate.
 
 Expected provenance includes the configured newsroom URL, `page=N` discovery description,
 Business Wire release ID, canonical detail URL, exact publisher/ticker qualification, selected

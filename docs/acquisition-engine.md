@@ -114,12 +114,11 @@ contracts.
 external firm configuration: provider `wdc_press_release`, hint kind `configured_search_url`, and
 the exact Business Wire newsroom search URL. Other firms fail closed.
 
-Discovery uses ordinary server-rendered HTTP. Page one is the configured URL; later pages retain
-the complete query and append `page=N`. The adapter bounds traversal, rejects repeated page
-signatures as loops, deduplicates canonical release URLs, and uses release-ID dates only to stop
-range traversal after crossing the inclusive start boundary. Detail-page JSON-LD remains the
-publication-time authority. Latest traversal stops after a page whose card publisher prefix shows
-a possible Western Digital publisher; strict qualification still occurs only from detail metadata.
+Discovery is implemented for ordinary server-rendered HTTP. Page one is the configured URL; later
+pages retain the complete query and append `page=N`. The adapter exhausts pagination before either
+latest or range selection, bounds traversal, rejects repeated page signatures as loops, and
+deduplicates canonical release URLs. It therefore makes no listing-order or release-ID chronology
+assumption. Detail-page JSON-LD remains the publication-time authority.
 
 Qualification requires the Business Wire publisher panel to name either `Western Digital` or
 `Western Digital Corporation` and to expose ticker `NASDAQ:WDC`. Search membership, JSON-LD
@@ -135,6 +134,15 @@ attachments, source attribution, discovery URL, and retrieval timestamp are pers
 repository-owned attempt/observation diagnostics. Reacquisition of the same bytes reuses retained
 evidence. Changed bytes incorporate their SHA-256 into validated revision identity, causing a new
 immutable artifact observation without rewriting prior evidence.
+
+Operational status is blocked as of the TASK-066 production-transport review on 2026-08-05.
+`UrllibPressReleaseTransport` timed out for both the configured newsroom and a known detail URL
+from the RFI execution environment; conventional curl received raw Akamai 403 denial bodies.
+Business Wire's reachable public RSS host exposed a category headline feed with truncated
+descriptions whose links still require the denied detail surface. Business Wire documents
+full-text Atom/NX/FTP as media-partner feed offerings, not an established unauthenticated adapter
+surface. Browser-captured DOM proves parsing and repository integration only and is not an
+operational transport. Do not schedule this source until a production source decision is made.
 
 Replay reads authoritative source records, ledger records, artifact metadata, and exact local
 bytes. It neither constructs nor calls adapters and does not inspect fixture provider state.
