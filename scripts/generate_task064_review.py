@@ -67,6 +67,20 @@ def generate(base: str | None) -> int:
     outcomes = [
         run("focused", ["make", "task064-test"]),
         run(
+            "digest-compatibility",
+            [
+                ".venv/bin/python", "-m", "unittest",
+                "tests.test_source_profile_digest_compatibility", "-v",
+            ],
+        ),
+        run(
+            "startup-configuration",
+            [
+                ".venv/bin/python", "-m", "unittest",
+                "tests.test_task012", "tests.test_task041", "-v",
+            ],
+        ),
+        run(
             "transcript-regressions",
             [
                 ".venv/bin/python", "-m", "unittest",
@@ -116,7 +130,7 @@ def generate(base: str | None) -> int:
     if marker not in review:
         raise RuntimeError("architectural review live-byte evidence is out of sync")
     if (
-        "27 manifested members verified; 28 total ZIP entries including `manifest.json`."
+        "31 manifested members verified; 32 total ZIP entries including `manifest.json`."
         not in review
     ):
         raise RuntimeError("architectural review package-member wording is out of sync")
@@ -138,6 +152,14 @@ def generate(base: str | None) -> int:
         ),
         ("evidence/provider-neutral-contracts.py", ROOT / "src/rfi/acquisition/contracts.py"),
         ("evidence/orchestrator.py", ROOT / "src/rfi/discovery.py"),
+        (
+            "evidence/source-profile-repository.py",
+            ROOT / "src/rfi/source_profiles/repository.py",
+        ),
+        (
+            "evidence/source-profile-digest-compatibility-tests.py",
+            ROOT / "tests/test_source_profile_digest_compatibility.py",
+        ),
         (
             "evidence/firm-config-schema.json",
             ROOT / "src/rfi/resources/firm-config-v1.schema.json",

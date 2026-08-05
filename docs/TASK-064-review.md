@@ -118,6 +118,35 @@ Durable learning remains transactionally repository-owned. A successful retained
 produces a provider-associated anchor only after validation and persistence; failed or rejected
 candidates do not teach or checkpoint.
 
+## Source-Profile Digest Compatibility Repair
+
+The post-TASK-064 live startup regression was traced to immutable source-profile revision
+`source-profile-revision-1346e6e31eb2f1cdc28a3f73f660bac7f203b765659f61b535003ad2c81ff93b`.
+Its exact persisted Meta payload has no digest-schema marker, no `discovery_class`, and no
+provider or typed-hint candidate fields, so the persisted shape selects schema 1. Its original
+canonical material is the stored payload minus `source_profile_revision_id`; compact sorted-key
+JSON with a trailing newline hashes with SHA-256 to the stored `1346e6...ff93b` identity.
+
+Startup selected schema 1 correctly, but constructed the current `RetrievalCandidate` before
+authentication. Current dataclass defaults added empty `provider`, `discovery_hint_kind`, and
+`discovery_hint_value` fields, while the schema-1 digest projection removed only
+`discovery_class`. The first canonical divergence was `discovery_hint_kind` at byte 175, and the
+incorrect recomputation was `d1a2eb...a12d6`.
+
+The repository now authenticates exact persisted JSON before constructing current dataclasses.
+Markerless schemas 1 and 2 retain their historical projections; explicitly marked schema 3
+retains `discovery_class` but excludes TASK-064 provider fields; schema 4 authenticates
+`discovery_class`, provider, and typed-hint fields. An available schema marker remains
+authoritative, partial or cross-schema field representations fail closed, and a second
+reconstructed-contract verification remains in place. No hash alternatives, revision rewrites,
+silent migration, or weakened comparison were introduced.
+
+The exact admin-server construction path was exercised against the live repository and
+succeeded. SHA-256 values for `repository.sqlite3`, its WAL, and SHM were identical before and
+after. The production-derived fixture recreates the exact reported revision ID, authenticates it
+through admin startup, and proves the canonical payload and database bytes remain unchanged.
+Firm-configuration import and reload code was not modified.
+
 ## Identifier, Archive, Direct Document, and Budgets
 
 `ORCL` deterministically normalizes to `orcl` and constructs:
@@ -170,10 +199,10 @@ the live JSON. The package report copies the same byte value.
 
 ## Package Counting and Verification
 
-27 manifested members verified; 28 total ZIP entries including `manifest.json`.
+31 manifested members verified; 32 total ZIP entries including `manifest.json`.
 
 The verifier now reports these as separate fields: `manifested_members_verified` and
-`total_zip_entries`. The manifest's `members` map covers the 27 hashed package members, while the
+`total_zip_entries`. The manifest's `members` map covers the 31 hashed package members, while the
 manifest is the additional ZIP entry and cannot hash itself. The generated package report,
 review text, verifier output, and final implementation report use the same wording and counts.
 
@@ -197,6 +226,8 @@ review text, verifier output, and final implementation report use the same wordi
 ## Validation Results
 
 - Focused TASK-064 suite: PASS (20 tests).
+- Source-profile digest compatibility: PASS (6 tests).
+- CLI startup and firm-configuration regressions: PASS (24 tests).
 - TASK-059 through TASK-063 transcript regressions: PASS (45 tests).
 - Review-package verifier regressions: PASS.
 - Deterministic fixture replay twice: PASS with identical typed observations and summaries.
@@ -218,6 +249,8 @@ inventory, live evidence, and SHA-256 manifest.
 - The current live page does not expose a tested explicit relationship container, so live related
   observations are empty instead of being guessed from global link labels.
 - Legacy non-provider transcript paths remain intentionally unchanged.
+- Digest schemas 1–3 remain explicit compatibility code and must be preserved while their
+  immutable revisions remain retained; new publications use schema 4 only.
 - Live layout and response size remain outside repository control, so each new package requires a
   fresh identity-bound live capture.
 
@@ -232,6 +265,7 @@ inventory, live evidence, and SHA-256 manifest.
 | Trusted-date qualification | Repository-owned acceptance and selection | Complete | Unknown provider forms remain unset |
 | Diagnostic boundary | Bounded operational summaries without bodies | Complete | Counts and digests only |
 | Learning/persistence/replay | Existing immutable lifecycle | Complete and unchanged | No relationship schema added |
+| Source-profile digest authentication | Authenticate immutable schema 1–4 revisions before default projection | Complete | Historical schema branches intentionally retained |
 | Review evidence | Identity-bound live bytes and unambiguous member counts | Complete | Fresh live capture per package |
 
 The next architectural milestone may add another explicit provider or a repository projection for
