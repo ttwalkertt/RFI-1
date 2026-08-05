@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from contextlib import contextmanager
+from datetime import date
 from pathlib import Path
 from threading import local
 from typing import Any, Iterator
@@ -23,9 +24,14 @@ from rfi.acquisition.contracts import (
     IntervalOutcomeReceipt,
     PartialFailure,
     ReplayResult,
+    RetainedRetrievalResult,
+    RelatedArtifactObservation,
     RetrievalOutcome,
     RetrievalResult,
     SourceProfile,
+    TranscriptEventDisposition,
+    TranscriptMetadataObservation,
+    TranscriptTurnObservation,
     require_identifier,
     validate_json,
 )
@@ -354,6 +360,103 @@ class AcquisitionRepository:
                 learning.append(self._decode(anchor_value, "discovery anchor"))
         return tuple(learning)
 
+    def retained_retrieval(
+        self, candidate: CandidateDocument
+    ) -> RetainedRetrievalResult | None:
+        """Hydrate selection-relevant retrieval semantics from immutable authority."""
+        self.source(candidate.source_id)
+        with self._database.connect(read_only=True) as connection:
+            rows = connection.execute(
+                "SELECT attempts.attempt_id,attempts.artifact_id,attempts.canonical_json,"
+                "artifacts.media_type FROM documents "
+                "JOIN acquisition_attempts AS attempts "
+                "ON attempts.document_id=documents.document_id "
+                "AND attempts.artifact_id=documents.current_artifact_id "
+                "JOIN artifacts ON artifacts.artifact_id=documents.current_artifact_id "
+                "WHERE documents.document_id=? AND attempts.source_id=? "
+                "AND attempts.candidate_id=? AND attempts.outcome='success' "
+                "ORDER BY attempts.occurred_at DESC,attempts.attempt_id DESC",
+                (candidate.document_id, candidate.source_id, candidate.candidate_id),
+            ).fetchall()
+        if not rows:
+            return None
+        attempt_id, artifact_id, value, media_type = rows[0]
+        record = self._decode(value, "retained successful acquisition attempt")
+        if (
+            record.get("attempt_id") != attempt_id
+            or record.get("artifact_id") != artifact_id
+            or record.get("document_id") != candidate.document_id
+            or record.get("candidate_id") != candidate.candidate_id
+            or record.get("source_id") != candidate.source_id
+            or record.get("outcome") != RetrievalOutcome.SUCCESS.value
+        ):
+            raise IntegrityError("retained acquisition identity is inconsistent")
+        content = self.read_artifact(str(artifact_id))
+        digest = sha256_bytes(content)
+        diagnostics = record.get("diagnostics")
+        if not isinstance(diagnostics, dict):
+            raise IntegrityError("retained acquisition diagnostics are malformed")
+        diagnostics = dict(diagnostics)
+        for key in ("content_sha256", "validated_content_sha256"):
+            retained_digest = diagnostics.get(key)
+            if retained_digest is not None and retained_digest != digest:
+                raise IntegrityError("retained validation digest conflicts with immutable bytes")
+        diagnostics.update({
+            "retained_artifact_reuse": True,
+            "retained_artifact_id": str(artifact_id),
+            "retained_attempt_id": str(attempt_id),
+            "content_sha256": digest,
+        })
+        observations_payload = record.get("transcript_observations")
+        trusted_event_date = self._retained_event_date(diagnostics)
+        if isinstance(observations_payload, dict):
+            payload_date_value = observations_payload.get("trusted_event_date")
+            if payload_date_value is not None:
+                if not isinstance(payload_date_value, str):
+                    raise IntegrityError("retained transcript date is malformed")
+                try:
+                    payload_date = date.fromisoformat(payload_date_value)
+                except ValueError as error:
+                    raise IntegrityError("retained transcript date is malformed") from error
+                if trusted_event_date is not None and payload_date != trusted_event_date:
+                    raise IntegrityError("retained transcript dates conflict")
+                if diagnostics.get("trusted_event_date_available") is False:
+                    raise IntegrityError("retained transcript date conflicts with diagnostics")
+                trusted_event_date = payload_date
+        turns, related, metadata = self._retained_transcript_observations(
+            observations_payload,
+            diagnostics,
+            trusted_event_date,
+        )
+        provider_identifiers = record.get("retrieval_provider_identifiers")
+        if not isinstance(provider_identifiers, dict) or any(
+            not isinstance(key, str) or not isinstance(item, str)
+            or not key or not item
+            for key, item in provider_identifiers.items()
+        ):
+            raise IntegrityError("retained provider identity is malformed")
+        occurred_at = record.get("occurred_at")
+        mechanism = record.get("mechanism")
+        if not isinstance(occurred_at, str) or not occurred_at:
+            raise IntegrityError("retained retrieval timestamp is malformed")
+        if not isinstance(mechanism, str) or not mechanism:
+            raise IntegrityError("retained retrieval mechanism is malformed")
+        retrieval = RetrievalResult(
+            content=content,
+            media_type=str(media_type),
+            retrieved_at=occurred_at,
+            mechanism=mechanism,
+            provider_identifiers=dict(provider_identifiers),
+            diagnostics=diagnostics,
+            trusted_event_date=trusted_event_date,
+            speaker_turn_observations=turns,
+            related_artifact_observations=related,
+            transcript_metadata_observation=metadata,
+        )
+        return RetainedRetrievalResult(
+            str(attempt_id), str(artifact_id), candidate.document_id, retrieval
+        )
+
     def has_retained_artifact(
         self, candidate: CandidateDocument, result: RetrievalResult
     ) -> bool:
@@ -407,6 +510,107 @@ class AcquisitionRepository:
             ):
                 return True
         return False
+
+    @staticmethod
+    def _retained_event_date(diagnostics: dict[str, Any]) -> date | None:
+        available = diagnostics.get("trusted_event_date_available")
+        if available is not None and not isinstance(available, bool):
+            raise IntegrityError("retained trusted-date presence is malformed")
+        trusted = diagnostics.get("trusted_event_date")
+        validated = diagnostics.get("validated_event_date")
+        if available is True and not isinstance(trusted, str):
+            raise IntegrityError("retained trusted event date is missing")
+        if available is False and trusted is not None:
+            raise IntegrityError("retained trusted-date presence conflicts with its value")
+        value = trusted if isinstance(trusted, str) else validated
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise IntegrityError("retained event date is malformed")
+        try:
+            return date.fromisoformat(value)
+        except ValueError as error:
+            raise IntegrityError("retained event date is malformed") from error
+
+    @staticmethod
+    def _retained_transcript_observations(
+        payload: Any,
+        diagnostics: dict[str, Any],
+        trusted_event_date: date | None,
+    ) -> tuple[
+        tuple[TranscriptTurnObservation, ...],
+        tuple[RelatedArtifactObservation, ...],
+        TranscriptMetadataObservation | None,
+    ]:
+        if payload is None:
+            disposition_value = diagnostics.get("event_disposition")
+            if disposition_value is None:
+                return (), (), None
+            try:
+                disposition = TranscriptEventDisposition(str(disposition_value))
+            except ValueError as error:
+                raise IntegrityError("retained transcript disposition is malformed") from error
+            provider_metadata = diagnostics.get("provider_metadata")
+            event_label = ""
+            if isinstance(provider_metadata, dict):
+                observed = provider_metadata.get("document_title")
+                if isinstance(observed, str):
+                    event_label = observed
+            return (), (), TranscriptMetadataObservation(
+                event_label, trusted_event_date, disposition
+            )
+        if not isinstance(payload, dict):
+            raise IntegrityError("retained transcript observations are malformed")
+        try:
+            turns = tuple(
+                TranscriptTurnObservation(
+                    int(item["ordinal"]),
+                    str(item["speaker_label"]),
+                    item.get("role_label"),
+                    item.get("section_label"),
+                    tuple(str(value) for value in item["paragraphs"]),
+                )
+                for item in payload.get("speaker_turn_observations", [])
+                if isinstance(item, dict)
+            )
+            related = tuple(
+                RelatedArtifactObservation(
+                    str(item["artifact_kind"]),
+                    str(item["observed_url"]),
+                    str(item["relationship_kind"]),
+                    str(item["source_provenance"]),
+                    str(item.get("provider_label", "")),
+                )
+                for item in payload.get("related_artifact_observations", [])
+                if isinstance(item, dict)
+            )
+        except (KeyError, TypeError, ValueError, ContractError) as error:
+            raise IntegrityError("retained transcript observations are malformed") from error
+        if len(turns) != len(payload.get("speaker_turn_observations", [])) or len(
+            related
+        ) != len(payload.get("related_artifact_observations", [])):
+            raise IntegrityError("retained transcript observations are malformed")
+        metadata_value = payload.get("transcript_metadata_observation")
+        if metadata_value is None:
+            return turns, related, None
+        if not isinstance(metadata_value, dict):
+            raise IntegrityError("retained transcript metadata is malformed")
+        metadata_date = metadata_value.get("trusted_event_date")
+        if metadata_date != (
+            trusted_event_date.isoformat() if trusted_event_date is not None else None
+        ):
+            raise IntegrityError("retained transcript metadata date conflicts")
+        try:
+            metadata = TranscriptMetadataObservation(
+                str(metadata_value["event_label"]),
+                trusted_event_date,
+                TranscriptEventDisposition(str(metadata_value["event_disposition"])),
+                related,
+                turns,
+            )
+        except (KeyError, ValueError, ContractError) as error:
+            raise IntegrityError("retained transcript metadata is malformed") from error
+        return turns, related, metadata
 
     @staticmethod
     def _validated_revision_identity(value: Any) -> tuple[int, str] | None:

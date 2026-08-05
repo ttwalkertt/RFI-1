@@ -11,6 +11,8 @@ ORCHESTRATOR = (ROOT / "src/rfi/discovery.py").read_text(encoding="utf-8")
 PROVIDER = (
     ROOT / "src/rfi/acquisition/providers/stockanalysis.py"
 ).read_text(encoding="utf-8")
+ENGINE = (ROOT / "src/rfi/acquisition/engine.py").read_text(encoding="utf-8")
+REPOSITORY = (ROOT / "src/rfi/acquisition/repository.py").read_text(encoding="utf-8")
 ALL_SOURCE = "\n".join(
     path.read_text(encoding="utf-8") for path in (ROOT / "src").rglob("*.py")
 )
@@ -27,6 +29,11 @@ checks = {
     "no_enclosing_page_event_classification_authority": (
         "data-event-classification" not in PROVIDER
         and "provider_classification" not in PROVIDER
+    ),
+    "retained_reuse_is_repository_owned": "def retained_retrieval(" in REPOSITORY,
+    "retained_reuse_is_transcript_bounded": (
+        'profile.mechanism == "earnings_transcript"' in ENGINE
+        and "deferred_evaluation" in ENGINE
     ),
     "no_event_group_id": "event_group_id" not in ALL_SOURCE,
     "no_crawlee": "crawlee" not in ALL_SOURCE.casefold(),

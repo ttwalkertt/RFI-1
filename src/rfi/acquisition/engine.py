@@ -439,6 +439,8 @@ class AdapterSelectionCandidate:
     repository_candidate: CandidateDocument
     retrieval: RetrievalResult
     decision: AdapterSelectionDecision
+    retained_attempt_id: str | None = None
+    retained_artifact_id: str | None = None
 
 
 class AdapterTerminalSelectionPolicy(Protocol):
@@ -856,25 +858,6 @@ class AcquisitionEngine:
                 seen_candidates[candidate.candidate_id] = candidate.canonical()
                 seen_candidate_identities[candidate.candidate_id] = identity
                 authoritative_candidates[candidate.candidate_id] = candidate
-                if (
-                    selection_policy is None
-                    and checkpoint_before
-                    and candidate.position <= checkpoint_before.position
-                ):
-                    checkpoint_confirmed = True
-                    outcomes.append(
-                        CandidateRunOutcome(
-                            candidate.candidate_id,
-                            candidate.document_id,
-                            candidate.position,
-                            candidate.revision,
-                            "checkpoint_filtered",
-                            None,
-                            False,
-                            "candidate position is at or before durable source progress",
-                        )
-                    )
-                    continue
                 repository_candidate = self._repository_candidate(profile, candidate)
                 if candidate.disposition == "skip":
                     skips += 1
@@ -900,14 +883,60 @@ class AcquisitionEngine:
                         )
                     )
                     continue
-                retrievals += 1
                 try:
-                    self._record_candidate_evaluation(
-                        diagnostics[trial_diagnostic_index]
+                    retained = (
+                        self._repository.retained_retrieval(repository_candidate)
+                        if deferred_evaluation
+                        and profile.mechanism == "earnings_transcript"
+                        else None
                     )
-                    result = adapter.retrieve(profile, candidate)
-                    if not isinstance(result, RetrievalResult):
-                        raise ContractError("adapter retrieval did not return RetrievalResult")
+                    if retained is None:
+                        if (
+                            selection_policy is None
+                            and checkpoint_before
+                            and candidate.position <= checkpoint_before.position
+                        ):
+                            checkpoint_confirmed = True
+                            outcomes.append(
+                                CandidateRunOutcome(
+                                    candidate.candidate_id,
+                                    candidate.document_id,
+                                    candidate.position,
+                                    candidate.revision,
+                                    "checkpoint_filtered",
+                                    None,
+                                    False,
+                                    "candidate position is at or before durable source progress",
+                                )
+                            )
+                            continue
+                        retrievals += 1
+                        self._record_candidate_evaluation(
+                            diagnostics[trial_diagnostic_index]
+                        )
+                        result = adapter.retrieve(profile, candidate)
+                        if not isinstance(result, RetrievalResult):
+                            raise ContractError(
+                                "adapter retrieval did not return RetrievalResult"
+                            )
+                    else:
+                        result = retained.retrieval
+                        diagnostics[trial_diagnostic_index][
+                            "retained_artifact_reuse_count"
+                        ] = 1
+                        diagnostics[trial_diagnostic_index][
+                            "retained_artifact_id"
+                        ] = retained.artifact_id
+                        diagnostics[trial_diagnostic_index][
+                            "retained_content_sha256"
+                        ] = hashlib.sha256(result.content).hexdigest()
+                        diagnostics[trial_diagnostic_index][
+                            "retained_provider_identifiers"
+                        ] = dict(result.provider_identifiers)
+                        if result.trusted_event_date is not None:
+                            diagnostics[trial_diagnostic_index][
+                                "retained_trusted_event_date"
+                            ] = result.trusted_event_date.isoformat()
                     self._record_transcript_observation_diagnostic(
                         diagnostics[trial_diagnostic_index], result
                     )
@@ -922,7 +951,12 @@ class AcquisitionEngine:
                         )
                         if decision.qualifies:
                             qualified_selection_candidates.append(AdapterSelectionCandidate(
-                                candidate, repository_candidate, result, decision
+                                candidate,
+                                repository_candidate,
+                                result,
+                                decision,
+                                retained.attempt_id if retained is not None else None,
+                                retained.artifact_id if retained is not None else None,
                             ))
                         else:
                             skips += 1
@@ -980,6 +1014,42 @@ class AcquisitionEngine:
                         checkpoint_position = validated_position
                     else:
                         checkpoint_position = candidate.position
+                    if retained is not None:
+                        maximum_position = max(maximum_position, checkpoint_position)
+                        maximum_success_position = max(
+                            maximum_success_position, checkpoint_position
+                        )
+                        checkpoint_success = retained.attempt_id
+                        last_success = retained.attempt_id
+                        successful_candidates[candidate.candidate_id] = candidate.canonical()
+                        retained_replays += 1
+                        if (
+                            checkpoint_before is not None
+                            and checkpoint_position <= checkpoint_before.position
+                        ):
+                            checkpoint_confirmed = True
+                            selection_checkpoint_eligible = False
+                        if fail_at == EngineFailurePoint.BEFORE_CHECKPOINT_FINALIZATION:
+                            failures += 1
+                            status = RunStatus.PARTIAL
+                            diagnostics.append({
+                                "failure_class": FailureClass.TRANSIENT_ADAPTER.value,
+                                "message": "injected failure before checkpoint finalization",
+                                "retryable": True,
+                            })
+                        else:
+                            unchanged += 1
+                            outcomes.append(CandidateRunOutcome(
+                                candidate.candidate_id,
+                                candidate.document_id,
+                                candidate.position,
+                                candidate.revision,
+                                "unchanged",
+                                None,
+                                False,
+                                f"retained artifact {retained.artifact_id} requalified",
+                            ))
+                        break
                     retained_replay = (
                         active_trial is not None
                         and checkpoint_before is not None
@@ -1328,7 +1398,31 @@ class AcquisitionEngine:
                     and validated_position <= checkpoint_before.position
                     and self._repository.has_retained_artifact(repository_candidate, result)
                 )
-                if retained_replay:
+                if selected_selection_candidate.retained_attempt_id is not None:
+                    retained_replays += 1
+                    unchanged += 1
+                    last_success = selected_selection_candidate.retained_attempt_id
+                    checkpoint_success = selected_selection_candidate.retained_attempt_id
+                    maximum_success_position = max(
+                        maximum_success_position, validated_position
+                    )
+                    successful_candidates[candidate.candidate_id] = candidate.canonical()
+                    if retained_replay:
+                        checkpoint_confirmed = True
+                    outcomes.append(CandidateRunOutcome(
+                        candidate.candidate_id,
+                        candidate.document_id,
+                        candidate.position,
+                        candidate.revision,
+                        "unchanged",
+                        None,
+                        False,
+                        (
+                            "retained artifact "
+                            f"{selected_selection_candidate.retained_artifact_id} requalified"
+                        ),
+                    ))
+                elif retained_replay:
                     checkpoint_confirmed = True
                     unchanged += 1
                     outcomes.append(CandidateRunOutcome(

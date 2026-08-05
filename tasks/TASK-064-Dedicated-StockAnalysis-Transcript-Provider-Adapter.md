@@ -76,6 +76,26 @@ and evaluated. Entries excluded during metadata admission consume no evaluation 
 Duplicate discovery occurrences retain trial-local provenance and do not become ambiguous
 candidate identities.
 
+### Bounded retained-artifact reuse correction
+
+Deferred earnings-transcript candidates consult repository authority before archive-position
+checkpoint filtering or adapter retrieval. When the candidate and current canonical document map
+to a successful retained artifact, the repository verifies the immutable bytes and hydrates a
+provider-neutral `RetrievalResult` containing the retained media type, provider identity,
+diagnostics, content digest, trusted date, and any typed transcript observations actually retained.
+Legacy successful records that predate typed-observation persistence hydrate their selection facts
+from bounded retained diagnostics; absent observations are not invented.
+
+The engine applies the current repository-owned qualification and terminal-selection rules to that
+hydrated result. A qualifying configured candidate returns unchanged, can confirm or advance the
+existing checkpoint from its retained successful attempt, consumes no candidate-evaluation slot,
+and terminates before learned seeds. A genuinely nonqualifying retained result remains rejected;
+later discovery of the same candidate is an additional `DiscoveryOccurrence` only and is neither
+ambiguous nor reevaluated. Missing, tampered, malformed, or digest-conflicting repository authority
+fails closed through existing integrity/conflict handling. Provider dispatch, configured-first
+ordering, adapter validation ownership, escalation, learning, and immutable persistence remain
+unchanged.
+
 ---
 
 ## Objective

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from unittest.mock import patch
@@ -15,12 +16,16 @@ from rfi.acquisition import (
     AcquisitionRepository,
     AdapterRegistry,
     AdapterFailure,
+    AdapterCandidate,
+    CandidateDocument,
+    RetrievalResult,
     SourceProfile,
     TranscriptAcquisitionSelection,
     TranscriptAcquisitionTarget,
     TranscriptSeed,
     TranscriptEventDisposition,
 )
+from rfi.acquisition.contracts import ConflictError
 from rfi.acquisition.earnings_transcripts import EarningsTranscriptHttpResponse
 from rfi.acquisition.providers.stockanalysis import (
     StockAnalysisTranscriptProvider,
@@ -70,6 +75,10 @@ WDC_INVESTOR_DAY_URL = (
 )
 WDC_ARCHIVE = (ROOT / "fixtures/transcripts/stockanalysis-wdc-archive.html").read_bytes()
 WDC_DOCUMENT = (ROOT / "fixtures/transcripts/stockanalysis-wdc-q3-2026.html").read_bytes()
+AMZN_ARCHIVE_URL = "https://stockanalysis.com/stocks/amzn/transcripts/"
+AMZN_DOCUMENT_URL = "https://stockanalysis.com/stocks/amzn/transcripts/657334-q2-2026/"
+AMZN_ARCHIVE = (ROOT / "fixtures/transcripts/stockanalysis-amzn-archive.html").read_bytes()
+AMZN_DOCUMENT = (ROOT / "fixtures/transcripts/stockanalysis-amzn-q2-2026.html").read_bytes()
 
 
 class Transport:
@@ -139,6 +148,25 @@ def wdc_profile() -> SourceProfile:
     )
 
 
+def amazon_profile() -> SourceProfile:
+    configured = profile()
+    return SourceProfile(
+        "source-amazon-transcript",
+        "Amazon transcripts",
+        True,
+        configured.mechanism,
+        {
+            **configured.configuration,
+            "discovery_hint_value": "AMZN",
+            "discovery_class": "standard",
+        },
+        {
+            **configured.policy,
+            "firm_id": "amazon",
+        },
+    )
+
+
 def policies(**overrides: int) -> DiscoveryPolicyCatalog:
     values = {
         "max_search_queries": 0,
@@ -154,6 +182,40 @@ def policies(**overrides: int) -> DiscoveryPolicyCatalog:
     }
     values.update(overrides)
     return DiscoveryPolicyCatalog({"standard": DiscoveryPolicy(**values)}, "standard")
+
+
+def retain_amazon_transcript(
+    repository: AcquisitionRepository,
+    artifact: bytes = AMZN_DOCUMENT,
+) -> tuple[AdapterCandidate, RetrievalResult, str]:
+    provider = StockAnalysisTranscriptProvider(
+        Transport({AMZN_DOCUMENT_URL: response(AMZN_DOCUMENT_URL, artifact)}),
+        lambda: "2026-08-05T00:00:00+00:00",
+    )
+    configured = amazon_profile()
+    candidate = provider.discover(
+        configured,
+        TranscriptSeed("stockanalysis", "url", AMZN_DOCUMENT_URL, "learned"),
+        TranscriptAcquisitionTarget("amazon"),
+    ).candidates[0]
+    result = provider.retrieve(configured, candidate)
+    repository_candidate = CandidateDocument(
+        candidate.candidate_id,
+        configured.source_id,
+        candidate.document_id,
+        candidate.provenance,
+    )
+    checkpoint = AcquisitionEngine._target_checkpoint(  # noqa: SLF001
+        2026 * 4 + 3,
+        {candidate.candidate_id: candidate.canonical()},
+    )
+    receipt = repository.record_success(
+        "attempt-task064-amazon-retained",
+        repository_candidate,
+        result,
+        checkpoint,
+    )
+    return candidate, result, receipt.artifact_id
 
 
 class StockAnalysisProviderTests(unittest.TestCase):
@@ -925,6 +987,173 @@ class ProviderOrchestrationTests(unittest.TestCase):
         self.assertIn('"validated_event_date": "2026-04-30"', rendered)
         self.assertIn('"candidate_evaluated_count": 4', rendered)
         self.assertNotIn('"related_artifact_count": 3', rendered)
+
+    def test_amazon_configured_trial_reuses_retained_artifact_before_learned_seed(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            firms = FirmRepository.initialize(root / "firms")
+            firms.create(FirmDraft(
+                "amazon", "Amazon.com, Inc.", "2026-01-01",
+                status=FirmStatus.ACTIVE,
+            ))
+            repository = AcquisitionRepository(root / "acquisition")
+            configured = amazon_profile()
+            repository.register_source(configured)
+            retained_candidate, retained_result, artifact_id = retain_amazon_transcript(
+                repository
+            )
+            transport = Transport({
+                AMZN_ARCHIVE_URL: response(AMZN_ARCHIVE_URL, AMZN_ARCHIVE),
+            })
+            adapter = EarningsTranscriptPullAdapter(
+                policies(max_candidate_evaluations=1),
+                transport=transport,
+                repository=repository,
+                clock=lambda: "2026-08-05T00:01:00+00:00",
+            )
+            result = AcquisitionEngine(
+                repository,
+                AdapterRegistry((adapter,)),
+                lambda: "2026-08-05T00:01:00+00:00",
+            ).run_source(configured.source_id, "task064-amazon-retained")
+            hydrated = repository.retained_retrieval(CandidateDocument(
+                retained_candidate.candidate_id,
+                configured.source_id,
+                retained_candidate.document_id,
+                retained_candidate.provenance,
+            ))
+        self.assertIsNotNone(hydrated)
+        assert hydrated is not None
+        self.assertEqual(hydrated.artifact_id, artifact_id)
+        self.assertEqual(hydrated.retrieval.content, retained_result.content)
+        self.assertEqual(hydrated.retrieval.trusted_event_date, date(2026, 7, 30))
+        self.assertEqual(hydrated.retrieval.speaker_turn_observations, ())
+        self.assertEqual(
+            hydrated.retrieval.transcript_metadata_observation.trusted_event_date,
+            date(2026, 7, 30),
+        )
+        self.assertEqual(
+            hydrated.retrieval.provider_identifiers,
+            {"provider": "stockanalysis", "provider_identifier": "amzn"},
+        )
+        self.assertEqual(result.status.value, "complete")
+        self.assertEqual(result.unchanged, 1)
+        self.assertEqual(result.retrieval_attempts, 0)
+        self.assertEqual(transport.requests, [AMZN_ARCHIVE_URL])
+        trials = [item for item in result.diagnostics if "trial_id" in item]
+        self.assertEqual(len(trials), 1)
+        self.assertEqual(trials[0]["trial_outcome"], "validated_success")
+        self.assertEqual(trials[0]["validation_outcome"], "validated")
+        self.assertEqual(trials[0]["candidate_evaluated_count"], 0)
+        self.assertEqual(trials[0]["retained_artifact_reuse_count"], 1)
+        self.assertEqual(trials[0]["retained_trusted_event_date"], "2026-07-30")
+        self.assertEqual(trials[0]["retained_artifact_id"], artifact_id)
+
+    def test_nonqualifying_retained_amazon_occurrences_remain_provenance_only(
+        self,
+    ) -> None:
+        without_date = AMZN_DOCUMENT.replace(
+            b' data-event-date="July 30, 2026"', b""
+        ).replace(
+            b'<time datetime="2026-07-30">July 30, 2026</time>', b""
+        )
+        one_candidate_archive = AMZN_ARCHIVE.replace(
+            b'    <li class="rounded-lg border border-sharp bg-contrast">\n'
+            b'      <a href="/stocks/amzn/transcripts/650000-questionable-event/">'
+            b'Questionable provider event</a>\n    </li>\n',
+            b"",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            FirmRepository.initialize(root / "firms").create(FirmDraft(
+                "amazon", "Amazon.com, Inc.", "2026-01-01",
+                status=FirmStatus.ACTIVE,
+            ))
+            repository = AcquisitionRepository(root / "acquisition")
+            configured = amazon_profile()
+            repository.register_source(configured)
+            retain_amazon_transcript(repository, without_date)
+            transport = Transport({
+                AMZN_ARCHIVE_URL: response(AMZN_ARCHIVE_URL, one_candidate_archive),
+            })
+            adapter = EarningsTranscriptPullAdapter(
+                policies(max_candidate_evaluations=1),
+                transport=transport,
+                repository=repository,
+                clock=lambda: "2026-08-05T00:01:00+00:00",
+            )
+            result = AcquisitionEngine(
+                repository, AdapterRegistry((adapter,)),
+                lambda: "2026-08-05T00:01:00+00:00",
+            ).run_source(configured.source_id, "task064-amazon-nonqualifying")
+        self.assertEqual(result.durable_acquisitions, 0)
+        self.assertEqual(result.retrieval_attempts, 0)
+        self.assertEqual(result.duplicates, 1)
+        self.assertEqual(transport.requests, [AMZN_ARCHIVE_URL])
+        trials = [item for item in result.diagnostics if "trial_id" in item]
+        self.assertEqual(len(trials), 2)
+        self.assertTrue(all(item["candidate_evaluated_count"] == 0 for item in trials))
+        rendered = json.dumps(result.diagnostics, sort_keys=True)
+        self.assertIn('"duplicate_occurrence_count": 1', rendered)
+        self.assertIn('"occurrence_count": 2', rendered)
+        self.assertNotIn("ambiguous duplicate candidate", rendered)
+        self.assertIn("no_qualifying_validated_artifact", rendered)
+
+    def test_tampered_retained_amazon_artifact_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            FirmRepository.initialize(root / "firms").create(FirmDraft(
+                "amazon", "Amazon.com, Inc.", "2026-01-01",
+                status=FirmStatus.ACTIVE,
+            ))
+            repository = AcquisitionRepository(root / "acquisition")
+            configured = amazon_profile()
+            repository.register_source(configured)
+            _candidate, _result, artifact_id = retain_amazon_transcript(repository)
+            digest = artifact_id.removeprefix("artifact-")
+            content_path = repository.content_root / digest[:2] / digest
+            content_path.chmod(0o600)
+            content_path.write_bytes(b"tampered")
+            transport = Transport({
+                AMZN_ARCHIVE_URL: response(AMZN_ARCHIVE_URL, AMZN_ARCHIVE),
+            })
+            result = AcquisitionEngine(
+                repository,
+                AdapterRegistry((EarningsTranscriptPullAdapter(
+                    policies(), transport=transport, repository=repository,
+                    clock=lambda: "2026-08-05T00:01:00+00:00",
+                ),)),
+                lambda: "2026-08-05T00:01:00+00:00",
+            ).run_source(configured.source_id, "task064-amazon-tampered")
+        self.assertEqual(result.status.value, "failed")
+        self.assertEqual(transport.requests, [AMZN_ARCHIVE_URL])
+        self.assertIn("repository_integrity", json.dumps(result.diagnostics))
+
+    def test_retained_reuse_does_not_weaken_immutable_artifact_conflicts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            FirmRepository.initialize(root / "firms").create(FirmDraft(
+                "amazon", "Amazon.com, Inc.", "2026-01-01",
+                status=FirmStatus.ACTIVE,
+            ))
+            repository = AcquisitionRepository(root / "acquisition")
+            configured = amazon_profile()
+            repository.register_source(configured)
+            candidate, result, _artifact_id = retain_amazon_transcript(repository)
+            repository_candidate = CandidateDocument(
+                candidate.candidate_id,
+                configured.source_id,
+                candidate.document_id,
+                candidate.provenance,
+            )
+            with self.assertRaisesRegex(ConflictError, "immutable artifact already differs"):
+                repository.record_success(
+                    "attempt-task064-amazon-media-conflict",
+                    repository_candidate,
+                    replace(result, media_type="application/json"),
+                )
 
     def test_duplicate_archive_and_learned_occurrences_are_not_ambiguous(self) -> None:
         archive = f'''<!doctype html><ul>

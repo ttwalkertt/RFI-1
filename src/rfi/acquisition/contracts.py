@@ -563,6 +563,23 @@ class RetrievalResult:
             raise ContractError("transcript metadata observation conflicts with retrieval")
 
 
+@dataclass(frozen=True)
+class RetainedRetrievalResult:
+    """Repository-authoritative retrieval semantics for one retained document."""
+
+    attempt_id: str
+    artifact_id: str
+    document_id: str
+    retrieval: RetrievalResult
+
+    def __post_init__(self) -> None:
+        require_identifier(self.attempt_id, "attempt_id")
+        require_identifier(self.artifact_id, "artifact_id")
+        require_identifier(self.document_id, "document_id")
+        if not isinstance(self.retrieval, RetrievalResult):
+            raise ContractError("retained retrieval result is malformed")
+
+
 @dataclass(frozen=True, order=True)
 class Checkpoint:
     """Explicit source-scoped progress position with caller-defined opaque cursor."""

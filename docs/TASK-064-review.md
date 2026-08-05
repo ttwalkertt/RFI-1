@@ -33,6 +33,12 @@ position, display labels, and enclosing-page conditions likewise have no classif
 A separate recall-oriented substance gate uses only parsed turns and normalized artifact text;
 uncertain event classification remains eligible when the artifact is structurally substantial.
 
+The retained-artifact correction closes a repository/engine seam exposed by Amazon. A deferred
+configured candidate now resolves its current canonical document before proposal-position
+checkpoint filtering. Repository authority verifies exact immutable bytes and hydrates the
+selection-relevant retrieval contract. Current qualification returns unchanged for the retained
+Q2 2026 Amazon transcript without retrieving the document or attempting its learned URL.
+
 ## Configuration, Dispatch, and Seed Contract
 
 The required firm configuration remains:
@@ -71,6 +77,7 @@ longer requires changing a StockAnalysis-specific tuple annotation or registry i
 | Trusted-date qualification | Owns qualification | Emits optional artifact-local observation |
 | Full transcript artifact | Persists authoritative bytes | Extracts provider transcript surface |
 | Speaker turns, related artifacts, feedback | Carries neutral typed values | Emits observations only |
+| Existing-artifact hydration and integrity | Verifies bytes and reconstructs retained neutral result | No repository access |
 | Durable learning, replay, checkpoints, conflicts | Owns unchanged | Has no repository dependency |
 
 ## Provider-Neutral Result Contract
@@ -122,6 +129,13 @@ the same text is absent from deterministic diagnostic JSON. Related artifacts an
 feedback remain available through their typed fields. Provider metadata diagnostics use a fixed
 five-field allowlist, cap every retained value at 256 characters, and remain below the existing
 serialized diagnostic bound even when an artifact attribute is oversized.
+
+Repository hydration returns exact artifact bytes, media type, provider identifiers, bounded
+diagnostics, trusted date, and content digest. If a retained record already carries a neutral typed
+transcript-observation projection, hydration preserves it; existing successful records do not, so
+unavailable turn and relationship details stay absent rather than being reconstructed. The current
+validator always reruns over hydrated semantics, so prior acceptance is not blindly copied. No
+persistence schema or provider-specific durable state was added.
 
 ## Trusted Metadata and Date Ownership
 
@@ -192,11 +206,10 @@ https://stockanalysis.com/stocks/orcl/transcripts/
 ```
 
 Archive extraction remains same-firm, transcript-only, first-occurrence deduplicated, and retains
-the opaque label plus original archive position. Admission deterministically groups explicit
-earnings first and unknown fallback second while preserving archive order within each group. A
-direct provider-associated transcript URL skips the archive fetch and converges on the same
-candidate identity. Deceptive hosts, unrelated firms, invalid paths, credentials, queries, and
-fragments fail closed.
+the opaque label plus original archive position. Admission preserves deterministic archive order;
+all tested StockAnalysis candidates have unknown disposition. A direct provider-associated
+transcript URL skips the archive fetch and converges on the same candidate identity. Deceptive
+hosts, unrelated firms, invalid paths, credentials, queries, and fragments fail closed.
 
 One `BudgetedTranscriptTransport` still spans archive retrieval, document retrieval, redirects,
 provider-local retries, and response caching. Page, byte, host, elapsed, redirect, retry,
@@ -206,12 +219,35 @@ consume evaluation budget, and candidates outside remaining admission capacity c
 Duplicate archive and learned occurrences converge on one identity and remain bounded
 trial-local provenance rather than an ambiguous-candidate failure. No search request occurs.
 
+Retained-result lookup is limited to deferred `earnings_transcript` candidates and occurs before
+checkpoint filtering. A qualifying match increments neither adapter retrieval count nor unique
+candidate-evaluation count, reuses its retained successful attempt as checkpoint authority, and
+ends the configured trial. A nonqualifying match remains truthfully rejected; a later learned
+occurrence is recorded without reevaluation or another budget slot. Immutable-content tampering,
+malformed retained facts, and media-type conflicts fail through the existing repository integrity
+and conflict paths.
+
 Relationship labels are read only from actual candidate- or transcript-associated relationship
 records inside a tested `Downloads` surface, or from an explicit provider relationship
 attribute. Exact observed URL, typed kind, opaque label, relationship provenance, and ordering are
 retained, but none is a transcript-classification input. The container's presence or absence is
 not classification evidence. Links in navigation, footers, or other global page regions cannot
 become observations; false-positive global “Slides” and “Annual Report” fixtures are ignored.
+
+## Amazon Retained-Artifact Reproduction
+
+The sanitized Amazon archive exposes Q2 2026 at archive position 1 and a learned direct-document
+anchor for the same canonical candidate. The staged production-path test first persists the exact
+transcript bytes and checkpoint, then reruns configured acquisition with only the archive response
+available. The configured trial hydrates the retained artifact, loads trusted date `2026-07-30`,
+provider identity, digest, and current qualification facts, returns unchanged, records zero adapter
+retrievals and zero candidate evaluations, and never requests the learned document URL.
+
+A legacy-record variant omits the newer typed-observation projection and still requalifies from
+retained bounded diagnostics. A nonqualifying legacy artifact with no trusted date proceeds to the
+learned occurrence without reevaluation; the two occurrences remain provenance for one identity.
+Separate negative cases prove immutable-byte tampering fails as repository integrity and an exact
+byte/media-type inconsistency retains the existing repository conflict outcome.
 
 ## Live Acceptance and Byte Authority
 
@@ -235,7 +271,7 @@ Observed bounded evidence:
 - search-engine calls: 0; and
 - bounds exhausted: false.
 
-Authoritative live transport bytes: `1501817`.
+Authoritative live transport bytes: `1501763`.
 
 The live evidence file is the single byte-count authority. It records SHA-256 identities for the
 provider, neutral contracts, engine, orchestrator, and live validator. Package generation verifies
@@ -244,10 +280,10 @@ from the live JSON. The package report copies the same byte value.
 
 ## Package Counting and Verification
 
-34 manifested members verified; 35 total ZIP entries including `manifest.json`.
+37 manifested members verified; 38 total ZIP entries including `manifest.json`.
 
 The verifier now reports these as separate fields: `manifested_members_verified` and
-`total_zip_entries`. The manifest's `members` map covers the 34 hashed package members, while the
+`total_zip_entries`. The manifest's `members` map covers the 37 hashed package members, while the
 manifest is the additional ZIP entry and cannot hash itself. The generated package report,
 review text, verifier output, and final implementation report use the same wording and counts.
 
@@ -270,7 +306,7 @@ review text, verifier output, and final implementation report use the same wordi
 
 ## Validation Results
 
-- Focused TASK-064 suite: PASS (29 tests).
+- Focused TASK-064 suite: PASS (33 tests).
 - Source-profile digest compatibility: PASS (6 tests).
 - CLI startup and firm-configuration regressions: PASS (24 tests).
 - TASK-059 through TASK-063 transcript regressions: PASS (45 tests).
@@ -307,12 +343,14 @@ inventory, live evidence, and SHA-256 manifest.
 | Transcript orchestrator | Seed order, escalation, budgets, lifecycle | Complete | Legacy generic path remains |
 | StockAnalysis adapter | Identifier, HTTP, parsing, typed observations | Complete | Known static layouts only |
 | Transcript substance gate | Recall-oriented validation from parsed turns and normalized text | Complete | Conservative fixed thresholds |
-| Neutral retrieval envelope | Artifact, optional date, turns, relations, feedback | Complete | No separate durable projection |
+| Neutral retrieval envelope | Artifact, optional date, turns, relations, feedback | Complete | Existing records retain selection facts, not full typed turns |
+| Retained-artifact hydration | Verify immutable authority and rerun current qualification without adapter retrieval | Complete | Limited to deferred transcript candidates |
 | Trusted-date qualification | Repository-owned acceptance and selection | Complete | Unknown provider forms remain unset |
 | Diagnostic boundary | Bounded operational summaries without bodies | Complete | Counts and digests only |
-| Learning/persistence/replay | Existing immutable lifecycle | Complete and unchanged | No relationship schema added |
+| Learning/persistence/replay | Existing immutable lifecycle | Complete and unchanged | No provider-specific schema added |
 | Source-profile digest authentication | Authenticate immutable schema 1–4 revisions before default projection | Complete | Historical schema branches intentionally retained |
 | Review evidence | Identity-bound live bytes and unambiguous member counts | Complete | Fresh live capture per package |
 
-The next architectural milestone may add another explicit provider or a repository projection for
-the existing neutral observations. It should not broaden StockAnalysis into a generic crawler.
+The next architectural milestone may add another explicit provider or a first-class query
+projection for the retained neutral observations. It should not broaden StockAnalysis into a
+generic crawler.

@@ -130,7 +130,7 @@ def generate(base: str | None) -> int:
     if marker not in review:
         raise RuntimeError("architectural review live-byte evidence is out of sync")
     if (
-        "34 manifested members verified; 35 total ZIP entries including `manifest.json`."
+        "37 manifested members verified; 38 total ZIP entries including `manifest.json`."
         not in review
     ):
         raise RuntimeError("architectural review package-member wording is out of sync")
@@ -153,6 +153,10 @@ def generate(base: str | None) -> int:
         ("evidence/provider-neutral-contracts.py", ROOT / "src/rfi/acquisition/contracts.py"),
         ("evidence/orchestrator.py", ROOT / "src/rfi/discovery.py"),
         ("evidence/acquisition-engine.py", ROOT / "src/rfi/acquisition/engine.py"),
+        (
+            "evidence/acquisition-repository.py",
+            ROOT / "src/rfi/acquisition/repository.py",
+        ),
         (
             "evidence/source-profile-repository.py",
             ROOT / "src/rfi/source_profiles/repository.py",
@@ -180,6 +184,14 @@ def generate(base: str | None) -> int:
         (
             "evidence/wdc-transcript.html",
             ROOT / "fixtures/transcripts/stockanalysis-wdc-q3-2026.html",
+        ),
+        (
+            "evidence/amazon-archive.html",
+            ROOT / "fixtures/transcripts/stockanalysis-amzn-archive.html",
+        ),
+        (
+            "evidence/amazon-transcript.html",
+            ROOT / "fixtures/transcripts/stockanalysis-amzn-q2-2026.html",
         ),
         (
             "evidence/capture-manifest.json",

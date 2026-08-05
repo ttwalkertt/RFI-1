@@ -29,6 +29,7 @@ IDENTITY_PATHS = {
     "contracts": ROOT / "src/rfi/acquisition/contracts.py",
     "orchestrator": ROOT / "src/rfi/discovery.py",
     "engine": ROOT / "src/rfi/acquisition/engine.py",
+    "acquisition_repository": ROOT / "src/rfi/acquisition/repository.py",
     "live_validator": Path(__file__).resolve(),
 }
 
