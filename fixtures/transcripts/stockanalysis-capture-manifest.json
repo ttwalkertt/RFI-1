@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "provider": "stockanalysis",
+  "firm": "Oracle Corporation",
+  "provider_identifier": "ORCL",
+  "sanitized": true,
+  "fixtures": [
+    {
+      "path": "stockanalysis-orcl-archive.html",
+      "sha256": "7b91946a7335880371c51ee126968e3d34e152dd2cedcd4a4064be3f9160661d",
+      "source_surface": "https://stockanalysis.com/stocks/orcl/transcripts/",
+      "notes": "Sanitized representative archive topology; no transcript body."
+    },
+    {
+      "path": "stockanalysis-orcl-q4-2026.html",
+      "sha256": "88d2ed5f203fbe6460141e40ebb94dd07153afac9d9c6e2a36ed6fcb582811d7",
+      "source_surface": "https://stockanalysis.com/stocks/orcl/transcripts/592465-q4-2026/",
+      "notes": "Sanitized representative metadata, turn, and related-link topology; synthetic transcript sentences replace captured text."
+    }
+  ]
+}

@@ -438,6 +438,7 @@ class AcquisitionRepository:
         adapter_id = policy.get("retrieval_adapter_id")
         metadata = candidate.provenance.metadata
         requested = metadata.get("requested_url")
+        provider = metadata.get("provider")
         resolved = result.diagnostics.get("final_url")
         if not all(isinstance(value, str) and value for value in (firm_id, adapter_id, requested)):
             return
@@ -446,12 +447,13 @@ class AcquisitionRepository:
         self._record_discovery_anchor_values(
             connection, source, candidate.source_id, requested, resolved,
             attempt_id, artifact_id, result.retrieved_at, "retained_artifact",
+            provider if isinstance(provider, str) and provider else None,
         )
 
     def _record_discovery_anchor_values(
         self, connection: Any, source: dict[str, Any], source_id: str,
         requested: str, resolved: str | None, attempt_id: str, artifact_id: str,
-        succeeded_at: str, qualification: str,
+        succeeded_at: str, qualification: str, provider: str | None = None,
     ) -> None:
         policy = source.get("policy", {})
         firm_id = str(policy["firm_id"])
@@ -472,6 +474,7 @@ class AcquisitionRepository:
             "succeeded_at": succeeded_at,
             "source_profile_revision_id": policy.get("source_profile_revision_id"),
             "qualification": qualification,
+            "provider": provider,
         }
         retained = [entry] + [item for item in prior if item["normalized_url"] != normalized]
         connection.execute(
@@ -513,6 +516,7 @@ class AcquisitionRepository:
             record = self._decode(attempt[1], "successful checkpoint attempt")
             provenance = record["candidate"]["provenance"]
             requested = provenance.get("metadata", {}).get("requested_url")
+            provider = provenance.get("metadata", {}).get("provider")
             resolved = record.get("diagnostics", {}).get("final_url")
             if not isinstance(requested, str) or not requested:
                 return False
@@ -535,6 +539,7 @@ class AcquisitionRepository:
                 connection, source, source_id, requested,
                 resolved if isinstance(resolved, str) else None,
                 str(event[0]), str(attempt[0]), utc_now(), "no_change",
+                provider if isinstance(provider, str) and provider else None,
             )
             self._database.advance_revision(connection)
             return True

@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 8030,
+      "destination_size": 8108,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "1edc95f5cb107a2c056e50757e440bb1d2974f69d115a44cbf88e5d38ba47440",
-      "content_change": "task roadmap reconciled through completed TASK-063 bounded transcript resolution"
+      "destination_sha256": "051051ed4aca5e22e2596ac540547a7aa91f62f6feaf7e3fa8a1750f180d31d6",
+      "content_change": "task roadmap reconciled through completed TASK-064 StockAnalysis transcript provider adapter"
     },
     {
       "source": "ROADMAP.md",

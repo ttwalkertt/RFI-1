@@ -129,6 +129,91 @@ class TranscriptAcquisitionTarget:
 
 
 @dataclass(frozen=True)
+class TranscriptSeed:
+    """Provider-neutral seed selected and ordered only by the orchestrator."""
+
+    provider: str
+    kind: str
+    value: str
+    origin: str
+
+    def __post_init__(self) -> None:
+        require_identifier(self.provider, "transcript seed provider")
+        require_identifier(self.kind, "transcript seed kind")
+        require_identifier(self.origin, "transcript seed origin")
+        if self.origin not in {"configured", "learned", "operator_supplied"}:
+            raise ContractError("transcript seed origin is unknown")
+        if not self.value.strip():
+            raise ContractError("transcript seed value must not be blank")
+
+
+@dataclass(frozen=True)
+class TranscriptTurnObservation:
+    """Optional provider observation; labels are not canonical identities."""
+
+    ordinal: int
+    speaker_label: str
+    role_label: str | None
+    section_label: str | None
+    paragraphs: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if self.ordinal < 1 or not self.speaker_label.strip() or not self.paragraphs:
+            raise ContractError("transcript turn observation is malformed")
+        if any(not paragraph.strip() for paragraph in self.paragraphs):
+            raise ContractError("transcript turn paragraphs must not be blank")
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        return {
+            "ordinal": self.ordinal,
+            "speaker_label": self.speaker_label,
+            "role_label": self.role_label,
+            "section_label": self.section_label,
+            "paragraphs": list(self.paragraphs),
+        }
+
+
+@dataclass(frozen=True)
+class RelatedArtifactObservation:
+    """Typed relationship explicitly observed on a provider transcript page."""
+
+    artifact_kind: str
+    observed_url: str
+    relationship_kind: str
+    source_provenance: str
+
+    def __post_init__(self) -> None:
+        require_identifier(self.artifact_kind, "related artifact kind")
+        require_identifier(self.relationship_kind, "related artifact relationship")
+        if not self.observed_url.strip() or not self.source_provenance.strip():
+            raise ContractError("related artifact observation is malformed")
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class TranscriptLearningFeedback:
+    """Bounded provider advice; only the orchestrator may make it durable."""
+
+    kind: str
+    provider: str
+    seed_kind: str
+    value: str
+    reusable: bool = True
+
+    def __post_init__(self) -> None:
+        require_identifier(self.kind, "learning feedback kind")
+        require_identifier(self.provider, "learning feedback provider")
+        require_identifier(self.seed_kind, "learning feedback seed kind")
+        if not self.value.strip():
+            raise ContractError("learning feedback value must not be blank")
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class IntervalAcquisitionRequest:
     """Request artifacts for one firm and type in ``[start_date, end_date)``."""
 

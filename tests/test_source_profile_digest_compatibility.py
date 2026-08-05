@@ -166,10 +166,10 @@ class SourceProfileDigestCompatibilityTests(unittest.TestCase):
             ),)),
             legacy_id,
         )
-        self.assertEqual(current.digest_schema_version, 3)
+        self.assertEqual(current.digest_schema_version, 4)
         self.assertEqual(current.supersedes_revision_id, legacy_id)
         history = self.repository.history("seagate")
-        self.assertEqual([item.digest_schema_version for item in history], [1, 3])
+        self.assertEqual([item.digest_schema_version for item in history], [1, 4])
         candidate = next(
             item for item in history[1].items if item.artifact_id == "earnings_transcript"
         ).retrieval_candidates[0]

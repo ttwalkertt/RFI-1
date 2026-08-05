@@ -365,6 +365,7 @@ class AdapterAcquisitionTrial:
     starting_seeds: tuple[str, ...] = ()
     duplicate_seed_count: int = 0
     continue_candidate_failures: bool = False
+    provider: str = ""
 
     def __post_init__(self) -> None:
         require_identifier(self.trial_id, "trial_id")
@@ -391,6 +392,8 @@ class AdapterAcquisitionTrial:
             raise ContractError("acquisition trial duplicate seed count is invalid")
         if not isinstance(self.continue_candidate_failures, bool):
             raise ContractError("acquisition trial failure-continuation policy is invalid")
+        if self.provider:
+            require_identifier(self.provider, "trial provider")
 
     @property
     def seeds(self) -> tuple[str, ...]:

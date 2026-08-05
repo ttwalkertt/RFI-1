@@ -206,7 +206,13 @@ class TranscriptPullIntegrationTests(unittest.TestCase):
                 "standard",
             )
             raw = json.loads(Path("docs/microsoft.firm-config.example.json").read_text())
-            self.assertEqual(raw["sources"]["earnings_transcript"], {"discovery_class": "extended"})
+            self.assertEqual(raw["sources"]["earnings_transcript"], {
+                "provider": "stockanalysis",
+                "discovery_hint": {
+                    "kind": "provider_identifier", "value": "MSFT"
+                },
+                "discovery_class": "extended",
+            })
             self.assertNotIn("listing_urls", json.dumps(raw))
             self.assertNotIn("allowed_hosts", json.dumps(raw))
 

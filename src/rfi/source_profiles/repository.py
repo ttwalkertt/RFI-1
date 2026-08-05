@@ -25,7 +25,8 @@ from rfi.storage.sqlite import canonical_json
 _SCHEMA_VERSION = 1
 _LEGACY_DIGEST_SCHEMA_VERSION = 1
 _UNVERSIONED_DISCOVERY_CLASS_DIGEST_SCHEMA_VERSION = 2
-_CURRENT_DIGEST_SCHEMA_VERSION = 3
+_PROVIDER_NEUTRAL_DIGEST_SCHEMA_VERSION = 4
+_CURRENT_DIGEST_SCHEMA_VERSION = _PROVIDER_NEUTRAL_DIGEST_SCHEMA_VERSION
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
 _DOMAIN = re.compile(
     r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
@@ -282,7 +283,28 @@ class SourceProfileRepository:
             candidate.parser_hint.strip(),
             candidate.operator_notes.strip(),
             candidate.discovery_class.strip(),
+            candidate.provider.strip().casefold(),
+            candidate.discovery_hint_kind.strip().casefold(),
+            candidate.discovery_hint_value.strip(),
         )
+        provider_fields = (
+            normalized.provider,
+            normalized.discovery_hint_kind,
+            normalized.discovery_hint_value,
+        )
+        if any(provider_fields) and not all(provider_fields):
+            raise SourceProfileError(
+                "provider-backed retrieval requires provider, discovery hint kind, and value"
+            )
+        if normalized.provider and normalized.provider != "stockanalysis":
+            raise SourceProfileError(f"unknown transcript provider: {normalized.provider}")
+        if normalized.provider == "stockanalysis":
+            if normalized.discovery_hint_kind != "provider_identifier":
+                raise SourceProfileError(
+                    "StockAnalysis supports discovery hint kind provider_identifier"
+                )
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{0,15}", normalized.discovery_hint_value):
+                raise SourceProfileError("StockAnalysis provider identifier is invalid")
         mode = self._modes[candidate.mode]
         values: dict[str, Any] = asdict(normalized)
         populated = {
@@ -337,6 +359,13 @@ class SourceProfileRepository:
                     candidate.pop("discovery_class")
         elif digest_schema_version == _UNVERSIONED_DISCOVERY_CLASS_DIGEST_SCHEMA_VERSION:
             pass
+        elif digest_schema_version == 3:
+            for item in material["items"]:
+                for candidate in item["retrieval_candidates"]:
+                    candidate.pop("provider", None)
+                    candidate.pop("discovery_hint_kind", None)
+                    candidate.pop("discovery_hint_value", None)
+            material["digest_schema_version"] = digest_schema_version
         elif digest_schema_version == _CURRENT_DIGEST_SCHEMA_VERSION:
             material["digest_schema_version"] = digest_schema_version
         else:
@@ -426,15 +455,16 @@ class SourceProfileRepository:
             if candidate_shapes == {True}
             else _LEGACY_DIGEST_SCHEMA_VERSION
         )
-        if "digest_schema_version" in value and value["digest_schema_version"] != (
-            _CURRENT_DIGEST_SCHEMA_VERSION
-        ):
+        if "digest_schema_version" in value and value["digest_schema_version"] not in {
+            3, _CURRENT_DIGEST_SCHEMA_VERSION
+        }:
             raise SourceProfileError("source-profile digest schema marker is not authenticated")
         digest_schema_version = value.get("digest_schema_version", implicit_schema)
         if digest_schema_version not in {
             _LEGACY_DIGEST_SCHEMA_VERSION,
             _UNVERSIONED_DISCOVERY_CLASS_DIGEST_SCHEMA_VERSION,
             _CURRENT_DIGEST_SCHEMA_VERSION,
+            3,
         }:
             raise SourceProfileError(
                 f"unsupported source-profile digest schema: {digest_schema_version}"

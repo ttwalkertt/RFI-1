@@ -43,6 +43,7 @@ from rfi.acquisition.contracts import (
     SourceProfile,
     TranscriptAcquisitionSelection,
     TranscriptAcquisitionTarget,
+    TranscriptSeed,
     TranscriptSelectionMode,
 )
 from rfi.acquisition.repository import AcquisitionRepository
@@ -56,6 +57,11 @@ from rfi.acquisition.engine import (
     FailureClass,
 )
 from rfi.storage.sqlite import utc_now
+from rfi.acquisition.providers import (
+    StockAnalysisTranscriptProvider,
+    TranscriptProvider,
+    TranscriptProviderRegistry,
+)
 
 
 class DiscoveryPolicyError(RuntimeError):
@@ -1416,6 +1422,39 @@ class TranscriptAcquisitionOrchestrator:
 
         mode = profile.configuration.get("mode")
         if mode == "discovery":
+            provider = profile.configuration.get("provider")
+            hint_kind = profile.configuration.get("discovery_hint_kind")
+            hint_value = profile.configuration.get("discovery_hint_value")
+            if provider:
+                if not all(isinstance(value, str) and value for value in (
+                    provider, hint_kind, hint_value
+                )):
+                    raise ContractError(
+                        "provider-backed transcript discovery requires an explicit typed hint"
+                    )
+                planned.append(AdapterAcquisitionTrial(
+                    "transcript-trial-1", str(hint_value), str(hint_kind), target,
+                    "configured", (str(hint_value),), provider=str(provider),
+                ))
+                learned_seen: set[tuple[str, str]] = set()
+                for anchor in history:
+                    anchor_provider = anchor.get("provider")
+                    if not isinstance(anchor_provider, str) or not anchor_provider:
+                        continue
+                    for form in ("resolved_url", "requested_url"):
+                        value = anchor.get(form)
+                        if not isinstance(value, str) or not value:
+                            continue
+                        key = (str(anchor_provider), normalize_transcript_url(value))
+                        if key in learned_seen:
+                            continue
+                        learned_seen.add(key)
+                        planned.append(AdapterAcquisitionTrial(
+                            f"transcript-trial-{len(planned) + 1}",
+                            key[1], "url", target, "learned", (key[1],),
+                            provider=str(anchor_provider),
+                        ))
+                return tuple(planned)
             learned: list[str] = []
             learned_seen: set[str] = set()
             duplicate_seed_count = 0
@@ -1572,6 +1611,10 @@ class EarningsTranscriptPullAdapter:
         self._clock = clock
         self._monotonic = monotonic
         self._budgets: dict[str, BudgetedTranscriptTransport] = {}
+        self._provider_adapters: dict[tuple[str, str], TranscriptProvider] = {}
+        self._provider_registry = TranscriptProviderRegistry(
+            (StockAnalysisTranscriptProvider,)
+        )
         self._validated_expected: set[str] = set()
         self._repository = repository
         self._selection = selection or TranscriptAcquisitionSelection.latest()
@@ -1591,6 +1634,7 @@ class EarningsTranscriptPullAdapter:
         """Plan one learned resolution phase and at most one configured fallback."""
         self._validate_profile(profile)
         self._budgets.pop(profile.source_id, None)
+        self._provider_adapters.clear()
         self._validated_expected.discard(profile.source_id)
         firm_id = profile.policy.get("firm_id")
         if not isinstance(firm_id, str):
@@ -1628,10 +1672,14 @@ class EarningsTranscriptPullAdapter:
             raise ContractError("injected transcript trial selection changed")
         normalized = normalize_transcript_url(starting_seed)
         self._budgets.pop(profile.source_id, None)
+        self._provider_adapters.clear()
         self._validated_expected.discard(profile.source_id)
+        provider = profile.configuration.get("provider")
         return AdapterAcquisitionTrial(
             "transcript-trial-1", normalized, "single_seed", target,
-            "operator_supplied", (normalized,),
+            "operator_supplied", (normalized,), provider=(
+                str(provider) if isinstance(provider, str) else ""
+            ),
         )
 
     def terminal_selection_policy(
@@ -1656,7 +1704,55 @@ class EarningsTranscriptPullAdapter:
             raise ContractError("deterministic transcript trial is malformed")
         if trial.acquisition_target.selection != self._selection:
             raise ContractError("deterministic transcript trial selection changed")
+        if trial.provider:
+            return self._discover_provider(profile, trial)
         return self._discover(profile, None, trial)
+
+    def _discover_provider(
+        self, profile: SourceProfile, trial: AdapterAcquisitionTrial
+    ) -> DiscoveryPage:
+        self._validate_profile(profile)
+        configured_provider = profile.configuration.get("provider")
+        if trial.seed_source == "configured" and trial.provider != configured_provider:
+            raise ContractError("transcript trial provider differs from firm configuration")
+        try:
+            policy = self._policies.resolve(
+                str(profile.configuration.get("discovery_class") or "") or None
+            )
+        except DiscoveryPolicyError as error:
+            raise ContractError(str(error)) from error
+        budgeted = self._budgets.get(profile.source_id)
+        if budgeted is None:
+            budgeted = BudgetedTranscriptTransport(
+                self._transport, policy, self._monotonic
+            )
+            self._budgets[profile.source_id] = budgeted
+        provider_key = (profile.source_id, trial.provider)
+        provider = self._provider_adapters.get(provider_key)
+        if provider is None:
+            provider = self._provider_registry.create(
+                trial.provider, budgeted, self._clock
+            )
+            self._provider_adapters[provider_key] = provider
+        seed = TranscriptSeed(
+            trial.provider,
+            "url" if trial.seed_source == "operator_supplied" else trial.seed_kind,
+            trial.starting_seed,
+            trial.seed_source,
+        )
+        page = provider.discover(profile, seed, trial.acquisition_target)
+        return DiscoveryPage(page.candidates, None, {
+            **page.diagnostics,
+            "adapter_id": self.adapter_id,
+            "discovery_class": profile.configuration.get("discovery_class"),
+            "pages": budgeted.pages,
+            "bytes": budgeted.bytes,
+            "distinct_hosts": len(budgeted.hosts),
+            "redirect_count": budgeted.redirects,
+            "bounds_exhausted": budgeted.exhausted,
+            "exhausted_budget": budgeted.exhausted_budget,
+            "candidate_evaluated_count": len(page.candidates),
+        })
 
     def _discover(
         self, profile: SourceProfile, continuation: str | None,
@@ -2180,6 +2276,19 @@ class EarningsTranscriptPullAdapter:
     def retrieve(self, profile: SourceProfile, candidate: AdapterCandidate) -> RetrievalResult:
         self._validate_profile(profile)
         metadata = candidate.provenance.metadata
+        provider_name = metadata.get("provider")
+        if isinstance(provider_name, str) and provider_name:
+            if provider_name != profile.configuration.get("provider"):
+                raise ContractError("transcript candidate provider changed")
+            provider = self._provider_adapters.get((profile.source_id, provider_name))
+            if provider is None:
+                raise AdapterFailure(
+                    FailureClass.MALFORMED_ADAPTER,
+                    "provider retrieval requires its dispatched discovery context",
+                    False,
+                    "missing_provider_context",
+                )
+            return provider.retrieve(profile, candidate)
         url = metadata.get("resolved_url")
         label = metadata.get("link_label")
         allowed_hosts = metadata.get("allowed_hosts")
@@ -2353,3 +2462,18 @@ class EarningsTranscriptPullAdapter:
             raise ContractError("earnings transcript adapter requires canonical artifact")
         if profile.configuration.get("mode") not in self.retrieval_modes:
             raise ContractError("earnings transcript retrieval mode is unsupported")
+        provider = profile.configuration.get("provider")
+        hint_kind = profile.configuration.get("discovery_hint_kind")
+        hint_value = profile.configuration.get("discovery_hint_value")
+        if any(value not in (None, "") for value in (provider, hint_kind, hint_value)):
+            if not all(isinstance(value, str) and value for value in (
+                provider, hint_kind, hint_value
+            )):
+                raise ContractError(
+                    "provider-backed transcript configuration requires provider, "
+                    "hint kind, and value"
+                )
+            if provider != "stockanalysis":
+                raise ContractError(f"unknown transcript provider: {provider}")
+            if hint_kind != "provider_identifier":
+                raise ContractError("StockAnalysis hint kind is unsupported")

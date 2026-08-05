@@ -124,6 +124,9 @@ class SourceProfileService:
             "parser_hint",
             "operator_notes",
             "discovery_class",
+            "provider",
+            "discovery_hint_kind",
+            "discovery_hint_value",
         }
         unknown = set(value).difference(allowed)
         if unknown:
@@ -138,6 +141,9 @@ class SourceProfileService:
             "parser_hint",
             "operator_notes",
             "discovery_class",
+            "provider",
+            "discovery_hint_kind",
+            "discovery_hint_value",
         ):
             field = value.get(name, "")
             if not isinstance(field, str):
@@ -156,6 +162,9 @@ class SourceProfileService:
             strings["parser_hint"],
             strings["operator_notes"],
             strings["discovery_class"],
+            strings["provider"],
+            strings["discovery_hint_kind"],
+            strings["discovery_hint_value"],
         )
 
     @staticmethod

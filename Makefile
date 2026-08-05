@@ -130,6 +130,9 @@ task062-review: setup
 task063-review: setup
 	PYTHONPATH=src $(VENV_PYTHON) scripts/generate_task063_review.py
 
+task064-review: setup
+	PYTHONPATH=src $(VENV_PYTHON) scripts/generate_task064_review.py
+
 task056-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task056 -v
 
@@ -153,6 +156,9 @@ task062-test: setup
 
 task063-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task063 -v
+
+task064-test: setup
+	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task064 -v
 
 task012-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task012 -v

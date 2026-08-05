@@ -183,9 +183,15 @@ class TraversalBudgetSemanticsTests(unittest.TestCase):
             f"<a href='{candidate}'>Earnings Call: Q2 2026</a></html>"
         ).encode()
         transcript = (
-            b"<!doctype html><html><title>Amazon Q2 2026 Earnings Call Transcript</title>"
-            b"<body>Amazon.com, Inc. quarterly earnings call transcript July 30, 2026. "
-            b"Operator: Welcome. Chief Executive Officer: Prepared remarks.</body></html>"
+            b"<!doctype html><html><body><article id='transcript' "
+            b"data-title='Amazon Q2 2026 Earnings Call Transcript' "
+            b"data-company='Amazon.com, Inc.' data-ticker='AMZN' "
+            b"data-event-type='Earnings Call' data-fiscal-period='Q2 2026'>"
+            b"<time datetime='2026-07-30'>July 30, 2026</time>"
+            b"<div data-speaker='Operator' data-role='Conference Call Operator'>"
+            b"<p>Welcome to the Amazon quarterly earnings call.</p></div>"
+            b"<div data-speaker='Chief Executive Officer'>"
+            b"<p>Prepared remarks.</p></div></article></body></html>"
         )
         requests = []
 
@@ -224,10 +230,10 @@ class TraversalBudgetSemanticsTests(unittest.TestCase):
         )
         diagnostics = artifact.attempts[0].details["engine_diagnostics"][0]
         self.assertEqual(artifact.outcome, ArtifactOutcome.SUCCESS)
-        self.assertEqual(diagnostics["configured_hint_status"], "used")
-        self.assertEqual(diagnostics["raw_hyperlinks"], 36)
-        self.assertEqual(diagnostics["eligible_hyperlinks"], 1)
-        self.assertEqual(diagnostics["traversed_hyperlinks"], 0)
+        self.assertEqual(diagnostics["provider"], "stockanalysis")
+        self.assertEqual(diagnostics["seed_kind"], "provider_identifier")
+        self.assertEqual(diagnostics["candidate_discovered_count"], 1)
+        self.assertEqual(diagnostics["candidate_admitted_count"], 1)
         self.assertEqual(diagnostics["candidate_urls"], 1)
         self.assertEqual(diagnostics["search_queries"], 0)
         self.assertEqual(requests, [STOCK_ANALYSIS_HINT, candidate])

@@ -48,6 +48,21 @@ retrieval_fields:
     description: Repository-owned named limit policy for bounded source discovery.
     type: string
     multiple: false
+  - name: provider
+    label: Transcript provider
+    description: Explicit provider selected for provider-backed acquisition.
+    type: string
+    multiple: false
+  - name: discovery_hint_kind
+    label: Discovery hint kind
+    description: Explicit provider-neutral kind of the configured discovery hint.
+    type: string
+    multiple: false
+  - name: discovery_hint_value
+    label: Discovery hint value
+    description: Exact configured value dispatched with the typed discovery hint.
+    type: string
+    multiple: false
 
 retrieval_modes:
   - mode: direct_url
@@ -77,9 +92,9 @@ retrieval_modes:
   - mode: discovery
     label: Bounded discovery
     description: Search is bounded by preferred domains, phrases, or operator guidance.
-    supported_fields: [priority, preferred_domains, discovery_hints, discovery_class, operator_notes]
+    supported_fields: [priority, preferred_domains, discovery_hints, discovery_class, operator_notes, provider, discovery_hint_kind, discovery_hint_value]
     required_fields: []
-    required_any: [preferred_domains, discovery_hints]
+    required_any: [preferred_domains, discovery_hints, discovery_hint_value]
 
 categories:
   - id: regulatory_financial

@@ -36,8 +36,10 @@
       "artifacts": ["sec_10k", "sec_10q", "sec_8k"]
     },
     "earnings_transcript": {
+      "provider": "stockanalysis",
+      "discovery_hint": {"kind": "provider_identifier", "value": "AMZN"},
       "discovery_class": "extended",
-      "discovery_hints": ["https://stockanalysis.com/stocks/amzn/transcripts/"]
+      "discovery_hints": []
     }
   }
 }

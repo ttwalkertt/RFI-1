@@ -18,6 +18,10 @@ from rfi.acquisition.contracts import (
     TranscriptAcquisitionSelection,
     TranscriptAcquisitionTarget,
     TranscriptSelectionMode,
+    TranscriptSeed,
+    TranscriptTurnObservation,
+    RelatedArtifactObservation,
+    TranscriptLearningFeedback,
 )
 from rfi.acquisition.engine import (
     AcquisitionEngine,
@@ -136,6 +140,10 @@ __all__ = [
     "TranscriptDocumentAssessment",
     "TranscriptDocumentStatus",
     "TranscriptSelectionMode",
+    "TranscriptSeed",
+    "TranscriptTurnObservation",
+    "RelatedArtifactObservation",
+    "TranscriptLearningFeedback",
     "UrllibEarningsTranscriptTransport",
     "credential_from_environment",
     "classify_transcript_document",

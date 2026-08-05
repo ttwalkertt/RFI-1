@@ -75,6 +75,8 @@ def main() -> int:
         "acquisition/fixture_adapters.py",
         "acquisition/interval.py",
         "acquisition/persistence.py",
+        "acquisition/providers/__init__.py",
+        "acquisition/providers/stockanalysis.py",
         "acquisition/repository.py",
         "acquisition/runtime_config.py",
         "acquisition/sec_api.py",

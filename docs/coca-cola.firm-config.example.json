@@ -30,6 +30,8 @@
   "sources": {
     "sec": null,
     "earnings_transcript": {
+      "provider": "stockanalysis",
+      "discovery_hint": {"kind": "provider_identifier", "value": "KO"},
       "discovery_class": "extended"
     }
   }

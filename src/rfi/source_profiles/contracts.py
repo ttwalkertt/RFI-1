@@ -97,6 +97,9 @@ class RetrievalCandidate:
     parser_hint: str = ""
     operator_notes: str = ""
     discovery_class: str = ""
+    provider: str = ""
+    discovery_hint_kind: str = ""
+    discovery_hint_value: str = ""
 
 
 @dataclass(frozen=True)
@@ -130,7 +133,7 @@ class SourceProfileRevision:
     created_at: str
     updated_at: str
     supersedes_revision_id: str | None
-    digest_schema_version: int = 3
+    digest_schema_version: int = 4
 
 
 @dataclass(frozen=True)

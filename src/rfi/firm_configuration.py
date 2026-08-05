@@ -292,6 +292,10 @@ def _profile(value: dict[str, Any]) -> SourceProfileDraft:
     def discovery_candidate(source: dict[str, Any] | None) -> tuple[RetrievalCandidate, ...]:
         if source is None:
             return ()
+        typed_hint = source.get("discovery_hint")
+        provider = source.get("provider", "")
+        hint_kind = typed_hint.get("kind", "") if isinstance(typed_hint, dict) else ""
+        hint_value = typed_hint.get("value", "") if isinstance(typed_hint, dict) else ""
         return (RetrievalCandidate(
             "discovery", 1,
             preferred_domains=tuple(firm["domains"]),
@@ -299,6 +303,9 @@ def _profile(value: dict[str, Any]) -> SourceProfileDraft:
                 *source.get("discovery_hints", ()), *hints,
             ))),
             discovery_class=source.get("discovery_class", "standard"),
+            provider=provider,
+            discovery_hint_kind=hint_kind,
+            discovery_hint_value=hint_value,
         ),)
 
     transcript_candidates = discovery_candidate(transcripts)
