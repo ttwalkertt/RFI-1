@@ -357,7 +357,20 @@ class AcquisitionRepository:
                 source.get("mechanism") == "earnings_transcript"
                 and source.get("policy", {}).get("artifact_id") == "earnings_transcript"
             ):
-                learning.append(self._decode(anchor_value, "discovery anchor"))
+                anchor = self._decode(anchor_value, "discovery anchor")
+                provider = anchor.get("provider")
+                if provider is not None:
+                    if not isinstance(provider, str):
+                        raise IntegrityError(
+                            "persisted transcript learning provider must be a string or null"
+                        )
+                    try:
+                        require_identifier(provider, "provider")
+                    except ContractError as error:
+                        raise IntegrityError(
+                            "persisted transcript learning provider is invalid"
+                        ) from error
+                learning.append({**anchor, "provider": provider})
         return tuple(learning)
 
     def retained_retrieval(

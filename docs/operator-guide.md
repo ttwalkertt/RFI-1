@@ -320,6 +320,36 @@ curl -X POST http://127.0.0.1:8765/api/transcript-acquisitions/seed \
 provider-specific URL validation. The optional `selection` object retains the existing transcript
 selection contract. Query parameters, including `?provider=stockanalysis`, are rejected.
 
+### Transcript learning inspection
+
+`GET /api/transcript-acquisitions/learning/{firm_id}` reads retained transcript learning without
+changing repository state. Each entry includes the persisted provider association used for
+dispatch; it is not inferred from the URL and is not substituted from current firm configuration.
+
+```sh
+curl http://127.0.0.1:8765/api/transcript-acquisitions/learning/oracle
+```
+
+```json
+{
+  "firm_id": "oracle",
+  "learning": [
+    {
+      "provider": "stockanalysis",
+      "requested_url": "https://stockanalysis.com/stocks/orcl/transcripts/592465-q4-2026/",
+      "normalized_url": "https://stockanalysis.com/stocks/orcl/transcripts/592465-q4-2026/"
+    }
+  ]
+}
+```
+
+The full entry retains the existing discovery-anchor field vocabulary and ordering. Historical
+rows that predate authoritative provider association expose `"provider": null`; the service does
+not guess or backfill a value. A known firm with no retained learning returns
+`{"firm_id":"oracle","learning":[]}`. An unknown firm uses the existing HTTP 400
+`invalid_request` envelope. Provider path segments, query filters, and query selection are not
+accepted.
+
 ### What changes state
 
 Selecting firms, refreshing, reading readiness, and viewing results do not mutate configuration.

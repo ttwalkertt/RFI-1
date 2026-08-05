@@ -47,6 +47,11 @@ def main() -> int:
     api = function_source(
         ROOT / "src/rfi/admin/server.py", "AdminHandler", "_api"
     )
+    learning = function_source(
+        ROOT / "src/rfi/acquisition/repository.py",
+        "AcquisitionRepository",
+        "transcript_learning",
+    )
     checks = {
         "one_registry": registry_count == 1,
         "injected_provider_resolves_in_registry": (
@@ -70,6 +75,13 @@ def main() -> int:
         "http_rejects_query_parameters": (
             "transcript seed acquisition does not accept query parameters" in api
         ),
+        "learning_reads_persisted_provider": 'anchor.get("provider")' in learning,
+        "learning_exposes_missing_provider": '"provider": provider' in learning,
+        "learning_has_no_url_or_config_inference": all(
+            token not in learning
+            for token in ("urlsplit", "hostname", "stockanalysis", "configuration")
+        ),
+        "learning_uses_read_only_connection": "connect(read_only=True)" in learning,
     }
     report = {"result": "PASS" if all(checks.values()) else "FAIL", "checks": checks}
     print(json.dumps(report, indent=2, sort_keys=True))

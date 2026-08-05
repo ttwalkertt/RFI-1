@@ -15,11 +15,14 @@ from rfi.acquisition import (
     AcquisitionEngine,
     AcquisitionRepository,
     AdapterRegistry,
+    CandidateDocument,
+    DiscoveryProvenance,
     EarningsTranscriptHttpResponse,
+    RetrievalResult,
     SourceProfile,
     TranscriptAcquisitionTarget,
 )
-from rfi.acquisition.contracts import ContractError
+from rfi.acquisition.contracts import ContractError, IntegrityError
 from rfi.acquisition.providers import (
     StockAnalysisTranscriptProvider,
     TranscriptProviderRegistry,
@@ -47,6 +50,7 @@ from rfi.source_profiles import (
     SourceProfileRepository,
     load_canonical_template,
 )
+from rfi.storage.sqlite import canonical_json
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -229,9 +233,12 @@ class ExplicitProviderDispatchTests(unittest.TestCase):
                 "stockanalysis",
                 DOCUMENT_URL,
             )
+            learning = repository.transcript_learning("oracle")
 
         self.assertEqual(result.durable_acquisitions, 1)
         self.assertEqual(transport.requests, [DOCUMENT_URL])
+        self.assertEqual(len(learning), 1)
+        self.assertEqual(learning[0]["provider"], "stockanalysis")
 
     def test_selected_provider_failure_does_not_learn_or_advance_checkpoint(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -259,13 +266,154 @@ class ExplicitProviderDispatchTests(unittest.TestCase):
                 repository, AdapterRegistry((adapter,)),
                 lambda: "2026-08-04T00:00:00+00:00",
             ).run_source_trial(configured.source_id, "task065-failure", trial)
-            learning = repository.discovery_anchors(
-                "oracle", configured.source_id, adapter.adapter_id
-            )
+            learning = repository.transcript_learning("oracle")
 
         self.assertEqual(result.durable_acquisitions, 0)
         self.assertEqual(result.checkpoint_before, result.checkpoint_after)
         self.assertEqual(learning, ())
+
+
+class PersistedProviderLearningTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        ConceptRepository.initialize(self.root)
+        self.firms = FirmRepository.initialize(self.root / "firm-catalog")
+        self.firms.create(FirmDraft(
+            "oracle", "Oracle Corporation", "2026-01-01",
+            status=FirmStatus.ACTIVE,
+        ))
+        self.repository = AcquisitionRepository(self.root / "acquisition")
+        self.source = profile()
+        self.repository.register_source(self.source)
+
+    def _learn(self, name: str, provider: str, url: str) -> None:
+        candidate = CandidateDocument(
+            f"candidate-{name}", self.source.source_id, f"document-{name}",
+            DiscoveryProvenance(
+                "2026-08-04T00:00:00+00:00",
+                "earnings_transcript",
+                provider_identifiers={"provider": provider},
+                locations=(url,),
+                metadata={"requested_url": url},
+            ),
+        )
+        self.repository.record_success(
+            f"attempt-{name}", candidate,
+            RetrievalResult(
+                f"artifact-{name}".encode(), "text/html",
+                "2026-08-04T00:00:00+00:00", "earnings_transcript",
+                diagnostics={"final_url": url},
+            ),
+        )
+
+    def test_read_returns_persisted_provider_without_url_or_config_inference(self) -> None:
+        url = "https://stockanalysis.com/stocks/orcl/transcripts/other-provider/"
+        self._learn("other", "other-provider", url)
+
+        learning = self.repository.transcript_learning("oracle")
+
+        self.assertEqual(learning[0]["provider"], "other-provider")
+        self.assertNotEqual(
+            learning[0]["provider"], self.source.configuration["provider"]
+        )
+
+    def test_endpoint_returns_persisted_provider_unchanged_and_is_read_only(self) -> None:
+        self._learn(
+            "endpoint", "other-provider",
+            "https://stockanalysis.com/stocks/orcl/transcripts/endpoint/",
+        )
+        before = self.repository.repository_revision()
+        server = create_admin_server(self.root, port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        try:
+            with urllib.request.urlopen(
+                f"http://{host}:{port}/api/transcript-acquisitions/learning/oracle",
+                timeout=3,
+            ) as reply:
+                body = json.load(reply)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+
+        self.assertEqual(body["learning"][0]["provider"], "other-provider")
+        self.assertEqual(self.repository.repository_revision(), before)
+
+    def test_provider_distinction_preserves_lifo_order_and_retention_bound(self) -> None:
+        entries = (
+            ("one", "provider-a"),
+            ("two", "provider-b"),
+            ("three", "provider-a"),
+            ("four", "provider-b"),
+        )
+        for name, provider in entries:
+            self._learn(name, provider, f"https://transcripts.example/{name}")
+
+        learning = self.repository.transcript_learning("oracle")
+
+        self.assertEqual(len(learning), 3)
+        self.assertEqual(
+            [(item["requested_url"].rsplit("/", 1)[-1], item["provider"])
+             for item in learning],
+            [("four", "provider-b"), ("three", "provider-a"),
+             ("two", "provider-b")],
+        )
+
+    def test_historical_missing_provider_is_explicit_null_and_read_only(self) -> None:
+        url = "https://stockanalysis.com/stocks/orcl/transcripts/historical/"
+        self._learn("historical", "stockanalysis", url)
+        with self.repository._database.transaction() as connection:
+            row = connection.execute(
+                "SELECT canonical_json FROM discovery_anchor_history WHERE firm_id=?",
+                ("oracle",),
+            ).fetchone()
+            value = json.loads(row[0])
+            del value["provider"]
+            connection.execute(
+                "UPDATE discovery_anchor_history SET canonical_json=? WHERE firm_id=?",
+                (canonical_json(value), "oracle"),
+            )
+        before = (
+            self.repository.repository_revision(), self.repository.sources(),
+            self.repository.history(), self.repository.artifact_metadata(),
+            self.repository.discovery_anchors(
+                "oracle", self.source.source_id, "earnings-call-transcript"
+            ),
+        )
+
+        learning = self.repository.transcript_learning("oracle")
+
+        after = (
+            self.repository.repository_revision(), self.repository.sources(),
+            self.repository.history(), self.repository.artifact_metadata(),
+            self.repository.discovery_anchors(
+                "oracle", self.source.source_id, "earnings-call-transcript"
+            ),
+        )
+        self.assertIn("provider", learning[0])
+        self.assertIsNone(learning[0]["provider"])
+        self.assertEqual(before, after)
+
+    def test_malformed_persisted_provider_fails_closed(self) -> None:
+        self._learn("malformed", "stockanalysis", "https://transcripts.example/malformed")
+        with self.repository._database.transaction() as connection:
+            row = connection.execute(
+                "SELECT canonical_json FROM discovery_anchor_history WHERE firm_id=?",
+                ("oracle",),
+            ).fetchone()
+            value = json.loads(row[0])
+            value["provider"] = "   "
+            connection.execute(
+                "UPDATE discovery_anchor_history SET canonical_json=? WHERE firm_id=?",
+                (canonical_json(value), "oracle"),
+            )
+
+        with self.assertRaisesRegex(IntegrityError, "provider is invalid"):
+            self.repository.transcript_learning("oracle")
 
 
 class ExplicitProviderApiTests(unittest.TestCase):

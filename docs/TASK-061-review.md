@@ -36,9 +36,11 @@ An empty successful response is:
 ```
 
 Each populated `learning` element is the canonical JSON already stored in
-`discovery_anchor_history`. Persisted fields include record/schema identity, firm/source/adapter
+`discovery_anchor_history`, with an explicit `provider` projection. Persisted fields include record/schema identity, firm/source/adapter
 identity, normalized/requested/resolved URL evidence, attempt and artifact identity, success time,
-source-profile revision, and qualification. The response invents no confidence, score, date,
+source-profile revision, qualification, and the authoritative provider association used for
+dispatch. Provider is not inferred from URL shape or current firm configuration. Historical rows
+without that association expose `provider: null` and are not backfilled. The response invents no confidence, score, date,
 promotion, or recovery metadata. Unknown firms use the existing HTTP 400 `invalid_request`
 convention.
 

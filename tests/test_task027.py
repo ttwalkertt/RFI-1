@@ -52,6 +52,9 @@ class HelpContractCase(unittest.TestCase):
         self.assertGreater(len(internal_links), 25)
         self.assertEqual(set(internal_links) - set(TOPICS_BY_ID), set())
         rendered = render_guide_markdown(source)
+        self.assertIn("persisted provider association used for", source)
+        self.assertIn('"provider": "stockanalysis"', source)
+        self.assertIn('"provider": null', source)
         for text in (
             '<h2 id="acquisition"',
             '<h2 id="streams"',

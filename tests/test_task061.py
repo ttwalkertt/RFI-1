@@ -127,7 +127,7 @@ class TranscriptLearningInspectionTests(unittest.TestCase):
         )
         self.repository.register_source(self.source)
 
-    def _learn(self, name: str, url: str) -> None:
+    def _learn(self, name: str, url: str, provider: str | None = None) -> None:
         candidate = CandidateDocument(
             f"candidate-{name}",
             self.source.source_id,
@@ -135,6 +135,7 @@ class TranscriptLearningInspectionTests(unittest.TestCase):
             DiscoveryProvenance(
                 "2026-08-03T00:00:00Z",
                 "earnings_transcript",
+                provider_identifiers={"provider": provider} if provider else {},
                 locations=(url,),
                 metadata={"requested_url": url},
             ),
@@ -215,6 +216,8 @@ class TranscriptLearningInspectionTests(unittest.TestCase):
             [item["normalized_url"] for item in body["learning"]],
             list(reversed(urls)),
         )
+        self.assertTrue(all("provider" in item for item in body["learning"]))
+        self.assertTrue(all(item["provider"] is None for item in body["learning"]))
 
     def test_unknown_firm_uses_existing_api_error_convention(self) -> None:
         server, thread, base = self._serve()
@@ -393,6 +396,7 @@ class TranscriptLearningInspectionTests(unittest.TestCase):
         self.assertEqual(len(learning["learning"]), 1)
         self.assertEqual(learning["learning"][0]["normalized_url"], artifact)
         self.assertEqual(learning["learning"][0]["requested_url"], artifact)
+        self.assertIsNone(learning["learning"][0]["provider"])
 
 
 if __name__ == "__main__":

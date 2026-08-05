@@ -129,8 +129,14 @@ request state exits two.
 - `GET /api/transcript-acquisitions/learning/{firm_id}` reads the firm's persisted transcript
   learning. It returns `{"firm_id":"seagate","learning":[]}` when no learning exists and returns
   the existing persisted discovery-anchor records in repository execution order when populated.
-  The request performs no acquisition, discovery, learning, checkpoint advancement, or source
-  registration. Unknown firms use the existing API error envelope.
+  Every entry includes its authoritative persisted `provider`, for example
+  `{"provider":"stockanalysis","requested_url":"https://stockanalysis.com/..."}`. This association
+  is used for dispatch and is never inferred from URL shape or substituted from current firm
+  configuration. Historical rows without an authoritative association expose `provider: null`
+  rather than being guessed or backfilled. The request performs no acquisition, discovery,
+  learning, checkpoint advancement, source registration, or repository revision change. Unknown
+  firms use the existing API error envelope; provider path segments and query filters are not
+  accepted.
 - `POST /api/transcript-acquisitions/seed` accepts one explicit transcript-provider request:
   `{"firm_id":"oracle","canonical_artifact_id":"earnings_transcript",`
   `"provider":"stockanalysis","starting_seed":"https://stockanalysis.com/stocks/`

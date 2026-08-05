@@ -82,6 +82,9 @@ def generate(base: str | None) -> int:
         ("evidence/transcript-adapter.py", ROOT / "src/rfi/discovery.py"),
         ("evidence/pull-workflow.py", ROOT / "src/rfi/pull/workflow.py"),
         ("evidence/http-adapter.py", ROOT / "src/rfi/admin/server.py"),
+        ("evidence/acquisition-repository.py", ROOT / "src/rfi/acquisition/repository.py"),
+        ("evidence/repository-schema.py", ROOT / "src/rfi/storage/sqlite.py"),
+        ("evidence/task061-learning-tests.py", ROOT / "tests/test_task061.py"),
         *((f"validation/{name}.txt", VALIDATION / f"{name}.txt") for name in names),
         ("validation/results.json", VALIDATION / "results.json"),
     ]
