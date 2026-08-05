@@ -55,18 +55,21 @@ opaque event label, optional trusted artifact-local date, event disposition, rel
 observations, and parsed speaker-turn observations. `event_disposition` is exactly one of
 `explicit_earnings`, `explicit_non_earnings`, or `unknown`.
 
-Disposition is populated only from fixture-covered provider-explicit candidate or artifact
-metadata. A directly associated earnings release, quarterly report, or annual report establishes
-`explicit_earnings`; only a dedicated StockAnalysis event classification establishes
-`explicit_non_earnings`; all incomplete or questionable evidence remains `unknown`. The mere
-presence or absence of a relationship container is not evidence. Titles, headings, URLs, slugs,
-fiscal-period text, archive position, and global link labels are never classification inputs.
+Disposition is populated only from a fixture-proven, dedicated, artifact-local StockAnalysis
+document-classification field. No such field is currently exposed by the tested StockAnalysis
+artifact, so the provider emits `unknown`. Archive-entry attributes and other enclosing-page
+conditions are not artifact-local authority. Related releases, reports, slides, audio, and other
+companion links remain ordered typed relationship observations only: their kinds, labels,
+locations, containers, or presence never establish transcript disposition or candidate rank, and
+the adapter does not retrieve them. Titles, headings, URLs, slugs, fiscal-period text, archive
+position, and display labels are likewise never classification inputs.
 
-Earnings acquisition ranks `explicit_earnings` before `unknown`, preserves archive order inside
-each class, and excludes only `explicit_non_earnings`. The transcript-substance gate is separate
-from event disposition and uses only already-parsed transcript structure: minimum turn count,
-content-bearing turn count, normalized-text word count, and distinct opaque speaker-label count.
-Questionable events remain eligible when they expose substantial transcript structure.
+Earnings acquisition therefore admits unknown/questionable transcript candidates in deterministic
+archive order. The transcript-substance gate uses only already-parsed artifact content: minimum
+ordered turn count, content-bearing turn count, normalized-text word count, multiple opaque
+speaker labels, and equality between normalized transcript text and the contiguous ordered turn
+paragraphs. Repository-owned terminal qualification, including trusted artifact-local date
+selection, determines the requested earnings-transcript outcome.
 
 Candidate-evaluation accounting begins only immediately before a unique document is retrieved
 and evaluated. Entries excluded during metadata admission consume no evaluation capacity.

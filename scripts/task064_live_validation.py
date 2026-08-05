@@ -6,13 +6,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from datetime import date
 from pathlib import Path
 
 from rfi.acquisition import (
     SourceProfile,
     TranscriptAcquisitionSelection,
     TranscriptAcquisitionTarget,
-    TranscriptEventDisposition,
     TranscriptSeed,
 )
 from rfi.acquisition.earnings_transcripts import UrllibEarningsTranscriptTransport
@@ -69,9 +69,9 @@ def main() -> int:
         max_results_per_query=1,
         max_unique_eligible_links_per_page=10,
         max_depth=1,
-        max_pages=3,
+        max_pages=8,
         max_distinct_hosts=1,
-        max_bytes=2_000_000,
+        max_bytes=5_000_000,
         max_elapsed_seconds=120,
         max_candidate_evaluations=10,
         max_redirects=2,
@@ -97,60 +97,85 @@ def main() -> int:
         TranscriptSeed(configured_provider, hint_kind, hint_value, "configured"),
         TranscriptAcquisitionTarget("western-digital"),
     )
-    representative = next((
-        item for item in page.candidates
-        if item.transcript_metadata_observation is not None
-        and item.transcript_metadata_observation.event_disposition
-        is TranscriptEventDisposition.EXPLICIT_EARNINGS
-    ), None)
-    direct: dict[str, object]
-    if representative is None:
-        direct = {"outcome": "not_discovered", "limitation": "archive layout changed"}
-    else:
+    selection_policy = TranscriptTerminalSelectionPolicy(
+        TranscriptAcquisitionSelection.first_in_date_range(
+            date(2026, 4, 1),
+            date(2026, 5, 1),
+        )
+    )
+    representative = None
+    result = None
+    decision = None
+    evaluated: list[dict[str, object]] = []
+    failure: Exception | None = None
+    for candidate in page.candidates:
         try:
-            result = provider.retrieve(profile, representative)
-            decision = TranscriptTerminalSelectionPolicy(
-                TranscriptAcquisitionSelection.latest()
-            ).qualify(representative, result)
-            direct = {
-                "outcome": "validated" if decision.qualifies else "rejected",
-                "requested_url": representative.provenance.metadata["requested_url"],
-                "resolved_url": result.diagnostics.get("resolved_url"),
-                "event_date": (
-                    result.trusted_event_date.isoformat()
-                    if result.trusted_event_date else None
-                ),
-                "event_label": result.transcript_metadata_observation.event_label,
+            candidate_result = provider.retrieve(profile, candidate)
+            candidate_decision = selection_policy.qualify(candidate, candidate_result)
+            evaluated.append({
                 "event_disposition": (
-                    result.transcript_metadata_observation.event_disposition.value
+                    candidate_result.transcript_metadata_observation.event_disposition.value
                 ),
-                "substantial_transcript": result.diagnostics.get(
-                    "substantial_transcript"
+                "trusted_event_date_present": (
+                    candidate_result.trusted_event_date is not None
                 ),
-                "transcript_word_count": result.diagnostics.get(
-                    "transcript_word_count"
-                ),
-                "speaker_turn_count": result.diagnostics.get("speaker_turn_count"),
-                "speaker_turn_content_sha256": result.diagnostics.get(
-                    "speaker_turn_content_sha256"
-                ),
-                "related_artifacts": [
-                    {"artifact_kind": item.artifact_kind,
-                     "observed_url": item.observed_url}
-                    for item in result.related_artifact_observations
-                ],
-                "learning_feedback": [
-                    item.to_dict() for item in result.transcript_learning_feedback
-                ],
-            }
-        except Exception as error:  # bounded live evidence must retain access/layout failures
-            direct = {
-                "outcome": "blocked",
+                "qualification_outcome": candidate_decision.validation_outcome,
+            })
+            if candidate_decision.qualifies:
+                representative = candidate
+                result = candidate_result
+                decision = candidate_decision
+                break
+        except Exception as error:  # preserve bounded access/layout evidence
+            evaluated.append({
                 "failure_type": error.__class__.__name__,
                 "failure_code": getattr(error, "code", "live_provider_failure"),
-                "limitation": str(error),
-                "requested_url": representative.provenance.metadata["requested_url"],
-            }
+            })
+            failure = error
+    direct: dict[str, object]
+    if representative is None or result is None or decision is None:
+        direct = {
+            "outcome": "not_qualified",
+            "limitation": (
+                str(failure) if failure is not None
+                else "no substantial transcript had an artifact-local date in range"
+            ),
+            "candidate_evaluations": evaluated,
+        }
+    else:
+        direct = {
+            "outcome": "validated",
+            "requested_url": representative.provenance.metadata["requested_url"],
+            "resolved_url": result.diagnostics.get("resolved_url"),
+            "event_date": (
+                result.trusted_event_date.isoformat()
+                if result.trusted_event_date else None
+            ),
+            "event_label": result.transcript_metadata_observation.event_label,
+            "event_disposition": (
+                result.transcript_metadata_observation.event_disposition.value
+            ),
+            "repository_qualification_outcome": decision.validation_outcome,
+            "candidate_evaluations": evaluated,
+            "substantial_transcript": result.diagnostics.get(
+                "substantial_transcript"
+            ),
+            "transcript_word_count": result.diagnostics.get(
+                "transcript_word_count"
+            ),
+            "speaker_turn_count": result.diagnostics.get("speaker_turn_count"),
+            "speaker_turn_content_sha256": result.diagnostics.get(
+                "speaker_turn_content_sha256"
+            ),
+            "related_artifacts": [
+                {"artifact_kind": item.artifact_kind,
+                 "observed_url": item.observed_url}
+                for item in result.related_artifact_observations
+            ],
+            "learning_feedback": [
+                item.to_dict() for item in result.transcript_learning_feedback
+            ],
+        }
     evidence = {
         "configured_provider": configured_provider,
         "configured_hint": {"kind": hint_kind, "value": hint_value},

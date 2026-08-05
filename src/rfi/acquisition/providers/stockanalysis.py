@@ -91,11 +91,17 @@ def is_substantial_transcript(
     normalized_text: str,
 ) -> bool:
     """Reject only artifacts lacking the already-parsed transcript structure."""
+    contiguous_turn_text = "\n".join(
+        paragraph
+        for turn in turns
+        for paragraph in turn.paragraphs
+    )
     return (
         len(turns) >= MIN_TURN_COUNT
         and sum(bool(turn.paragraphs) for turn in turns) >= MIN_CONTENT_TURNS
         and word_count(normalized_text) >= MIN_TRANSCRIPT_WORDS
         and distinct_speaker_label_count(turns) >= MIN_SPEAKER_LABELS
+        and contiguous_turn_text == normalized_text
     )
 
 
@@ -118,7 +124,6 @@ class _ArchiveEntryBuilder:
     observed_url: str = ""
     normalized_url: str = ""
     label: str = ""
-    provider_classification: str = ""
     related: list[RelatedArtifactObservation] = field(default_factory=list)
 
 
@@ -145,11 +150,7 @@ class _ArchiveParser(HTMLParser):
         elif tag.casefold() == "li" and {
             "rounded-lg", "border", "border-sharp", "bg-contrast"
         }.issubset(classes):
-            self._entry = _ArchiveEntryBuilder(
-                provider_classification=(
-                    values.get("data-event-classification") or ""
-                ).strip().casefold()
-            )
+            self._entry = _ArchiveEntryBuilder()
             self._entry_depth = 1
         if self._entry is None:
             if tag.casefold() == "a":
@@ -240,24 +241,12 @@ class _ArchiveParser(HTMLParser):
             return
         self._seen.add(entry.normalized_url)
         related = tuple(dict.fromkeys(entry.related))
-        earnings_relationship = any(
-            item.artifact_kind in {
-                "annual_report", "earnings_release", "quarterly_report"
-            }
-            for item in related
-        )
-        if entry.provider_classification == "non-earnings":
-            disposition = TranscriptEventDisposition.EXPLICIT_NON_EARNINGS
-        elif earnings_relationship:
-            disposition = TranscriptEventDisposition.EXPLICIT_EARNINGS
-        else:
-            disposition = TranscriptEventDisposition.UNKNOWN
         self.entries.append(_ArchiveEntry(
             entry.observed_url,
             entry.normalized_url,
             entry.label,
             len(self.entries) + 1,
-            disposition,
+            TranscriptEventDisposition.UNKNOWN,
             related,
         ))
 
@@ -281,7 +270,6 @@ class _TranscriptParser(HTMLParser):
         self.paragraphs: list[str] = []
         self.turns: list[_TurnBuilder] = []
         self.related: list[RelatedArtifactObservation] = []
-        self.explicit_event_classification = ""
         self._transcript_depth = 0
         self._excluded_depth = 0
         self._paragraph_depth = 0
@@ -386,9 +374,6 @@ class _TranscriptParser(HTMLParser):
             and (values.get("aria-label") or "").casefold() == "full transcript"
         ):
             self._transcript_depth = 1
-            self.explicit_event_classification = (
-                values.get("data-event-classification") or ""
-            ).strip().casefold()
             for source, target in (
                 ("data-title", "document_title"),
                 ("data-company", "company_label"),
@@ -681,20 +666,7 @@ class StockAnalysisTranscriptProvider:
                 "max_candidate_evaluations",
                 40,
             ))
-            eligible_entries = [
-                entry for entry in parser.entries
-                if entry.event_disposition
-                is not TranscriptEventDisposition.EXPLICIT_NON_EARNINGS
-            ]
-            ranked_entries = sorted(
-                eligible_entries,
-                key=lambda entry: (
-                    0 if entry.event_disposition
-                    is TranscriptEventDisposition.EXPLICIT_EARNINGS else 1,
-                    entry.position,
-                ),
-            )
-            admitted_entries = ranked_entries[:candidate_limit]
+            admitted_entries = parser.entries[:candidate_limit]
             candidates = tuple(
                 self._candidate(
                     entry.normalized_url,
@@ -720,9 +692,9 @@ class StockAnalysisTranscriptProvider:
             )
             diagnostics.update({
                 "candidate_discovered_count": len(parser.entries),
-                "candidate_excluded_count": len(parser.entries) - len(eligible_entries),
+                "candidate_excluded_count": 0,
                 "candidate_admitted_count": len(candidates),
-                "candidate_bound_exhausted": len(eligible_entries) > candidate_limit,
+                "candidate_bound_exhausted": len(parser.entries) > candidate_limit,
                 "candidate_budget": candidate_limit,
                 "event_disposition_counts": {
                     disposition.value: sum(
@@ -805,7 +777,11 @@ class StockAnalysisTranscriptProvider:
             )
             for index, turn in enumerate(parser.turns, start=1)
         )
-        normalized_text = "\n".join(parser.paragraphs)
+        normalized_text = "\n".join(
+            paragraph
+            for turn in turns
+            for paragraph in turn.paragraphs
+        )
         if not is_substantial_transcript(
             turns=turns,
             normalized_text=normalized_text,
@@ -822,24 +798,10 @@ class StockAnalysisTranscriptProvider:
         related_observations = tuple(
             RelatedArtifactObservation(*item) for item in related[:16]
         )
-        if parser.explicit_event_classification == "non-earnings":
-            event_disposition = TranscriptEventDisposition.EXPLICIT_NON_EARNINGS
-        elif any(
-            item.artifact_kind in {
-                "annual_report", "earnings_release", "quarterly_report"
-            }
-            for item in related_observations
-        ):
-            event_disposition = TranscriptEventDisposition.EXPLICIT_EARNINGS
-        else:
-            candidate_observation = candidate.transcript_metadata_observation
-            event_disposition = (
-                candidate_observation.event_disposition
-                if candidate_observation is not None
-                and candidate_observation.event_disposition
-                is TranscriptEventDisposition.EXPLICIT_EARNINGS
-                else TranscriptEventDisposition.UNKNOWN
-            )
+        # StockAnalysis exposes no fixture-proven, artifact-local document-type
+        # classification field. Relationship observations and opaque labels are
+        # deliberately not authority for the transcript's event disposition.
+        event_disposition = TranscriptEventDisposition.UNKNOWN
         event_label = parser.metadata.get("document_title", "")
         metadata_observation = TranscriptMetadataObservation(
             event_label,
@@ -858,7 +820,7 @@ class StockAnalysisTranscriptProvider:
                 ("Event date", event_date.isoformat() if event_date else None),
             ) if value
         ]
-        retained = ("\n".join((*metadata_lines, "", *parser.paragraphs)).rstrip() + "\n").encode()
+        retained = ("\n".join((*metadata_lines, "", normalized_text)).rstrip() + "\n").encode()
         feedback = (
             TranscriptLearningFeedback(
                 "confirmed_provider_identifier", self.provider,

@@ -61,6 +61,13 @@ WDC_UNKNOWN_URL = (
     "https://stockanalysis.com/stocks/wdc/transcripts/"
     "653281-2026-evercore-global-tmt-conference/"
 )
+WDC_PROVIDER_CLASSIFIED_URL = (
+    "https://stockanalysis.com/stocks/wdc/transcripts/"
+    "600000-provider-classified-event/"
+)
+WDC_INVESTOR_DAY_URL = (
+    "https://stockanalysis.com/stocks/wdc/transcripts/590000-investor-day/"
+)
 WDC_ARCHIVE = (ROOT / "fixtures/transcripts/stockanalysis-wdc-archive.html").read_bytes()
 WDC_DOCUMENT = (ROOT / "fixtures/transcripts/stockanalysis-wdc-q3-2026.html").read_bytes()
 
@@ -80,6 +87,16 @@ class Transport:
 
 def response(url: str, content: bytes) -> EarningsTranscriptHttpResponse:
     return EarningsTranscriptHttpResponse(url, 200, "text/html", content)
+
+
+def wdc_document_with_date(iso_date: str, display_date: str) -> bytes:
+    return WDC_DOCUMENT.replace(
+        b'data-event-date="April 30, 2026"',
+        f'data-event-date="{display_date}"'.encode(),
+    ).replace(
+        b'<time datetime="2026-04-30">April 30, 2026</time>',
+        f'<time datetime="{iso_date}">{display_date}</time>'.encode(),
+    )
 
 
 def profile() -> SourceProfile:
@@ -174,7 +191,7 @@ class StockAnalysisProviderTests(unittest.TestCase):
             "stockanalysis",
         )
 
-    def test_wdc_archive_ranks_artifact_metadata_without_title_semantics(self) -> None:
+    def test_wdc_archive_preserves_order_and_related_links_without_classification(self) -> None:
         provider = StockAnalysisTranscriptProvider(
             Transport({WDC_ARCHIVE_URL: response(WDC_ARCHIVE_URL, WDC_ARCHIVE)}),
             lambda: "2026-08-05T00:00:00+00:00",
@@ -190,22 +207,24 @@ class StockAnalysisProviderTests(unittest.TestCase):
         self.assertEqual(
             [candidate.provenance.metadata["link_label"] for candidate in page.candidates],
             [
-                "Earnings Call: Q3 2026",
                 "2026 Evercore Global TMT Conference",
+                "Earnings Call: Q3 2026",
+                "Provider-classified non-earnings event",
                 "Investor Day",
             ],
         )
         self.assertEqual(
             [item.event_disposition for item in observations if item is not None],
             [
-                TranscriptEventDisposition.EXPLICIT_EARNINGS,
+                TranscriptEventDisposition.UNKNOWN,
+                TranscriptEventDisposition.UNKNOWN,
                 TranscriptEventDisposition.UNKNOWN,
                 TranscriptEventDisposition.UNKNOWN,
             ],
         )
-        self.assertEqual(page.diagnostics["candidate_excluded_count"], 1)
-        self.assertEqual(page.candidates[0].provenance.metadata["archive_position"], 2)
-        related = observations[0].related_artifact_observations  # type: ignore[union-attr]
+        self.assertEqual(page.diagnostics["candidate_excluded_count"], 0)
+        self.assertEqual(page.candidates[0].provenance.metadata["archive_position"], 1)
+        related = observations[1].related_artifact_observations  # type: ignore[union-attr]
         self.assertEqual(
             [item.provider_label for item in related],
             ["Slides", "Earnings release", "Quarterly report"],
@@ -253,6 +272,10 @@ class StockAnalysisProviderTests(unittest.TestCase):
         observation = result.transcript_metadata_observation
         self.assertIsNotNone(observation)
         self.assertEqual(observation.event_label, "Earnings Call: Q3 2026")
+        self.assertEqual(
+            observation.event_disposition,
+            TranscriptEventDisposition.UNKNOWN,
+        )
         self.assertEqual(result.diagnostics["substantial_transcript"], True)
         self.assertTrue(is_substantial_transcript(
             turns=result.speaker_turn_observations,
@@ -260,6 +283,17 @@ class StockAnalysisProviderTests(unittest.TestCase):
                 paragraph
                 for turn in result.speaker_turn_observations
                 for paragraph in turn.paragraphs
+            ),
+        ))
+        self.assertFalse(is_substantial_transcript(
+            turns=result.speaker_turn_observations,
+            normalized_text=(
+                "\n".join(
+                    paragraph
+                    for turn in result.speaker_turn_observations
+                    for paragraph in turn.paragraphs
+                )
+                + "\nDetached provider summary text"
             ),
         ))
         no_semantic_fields = WDC_DOCUMENT.replace(
@@ -279,6 +313,10 @@ class StockAnalysisProviderTests(unittest.TestCase):
                          "Earnings Call: Q3 2026")
         self.assertNotIn("event_type_label", result.diagnostics["provider_metadata"])
         self.assertNotIn("fiscal_period_label", result.diagnostics["provider_metadata"])
+        self.assertEqual(
+            result.transcript_metadata_observation.event_disposition,
+            TranscriptEventDisposition.UNKNOWN,
+        )
 
         insubstantial = WDC_DOCUMENT.replace(
             b'<div data-speaker="Management" data-role="Provider role label" '
@@ -319,6 +357,43 @@ class StockAnalysisProviderTests(unittest.TestCase):
             TranscriptEventDisposition.UNKNOWN,
         )
         self.assertTrue(result.diagnostics["substantial_transcript"])
+
+    def test_related_artifacts_do_not_change_substance_or_event_disposition(self) -> None:
+        without_relationships = WDC_DOCUMENT.replace(
+            b'<aside id="related-artifacts">',
+            b'<aside id="provider-summary" data-provider-summary="true">',
+        ).replace(b"data-related-kind", b"data-untrusted-kind")
+        results = []
+        for artifact in (WDC_DOCUMENT, without_relationships):
+            provider = StockAnalysisTranscriptProvider(
+                Transport({WDC_DOCUMENT_URL: response(WDC_DOCUMENT_URL, artifact)}),
+                lambda: "2026-08-05T00:00:00+00:00",
+            )
+            candidate = provider.discover(
+                wdc_profile(),
+                TranscriptSeed("stockanalysis", "url", WDC_DOCUMENT_URL, "learned"),
+                TranscriptAcquisitionTarget("western-digital"),
+            ).candidates[0]
+            results.append(provider.retrieve(wdc_profile(), candidate))
+        with_related, without_related = results
+        self.assertEqual(len(with_related.related_artifact_observations), 3)
+        self.assertEqual(without_related.related_artifact_observations, ())
+        self.assertEqual(
+            with_related.speaker_turn_observations,
+            without_related.speaker_turn_observations,
+        )
+        self.assertEqual(
+            with_related.diagnostics["transcript_word_count"],
+            without_related.diagnostics["transcript_word_count"],
+        )
+        self.assertEqual(
+            with_related.transcript_metadata_observation.event_disposition,
+            TranscriptEventDisposition.UNKNOWN,
+        )
+        self.assertEqual(
+            without_related.transcript_metadata_observation.event_disposition,
+            TranscriptEventDisposition.UNKNOWN,
+        )
 
     def test_direct_document_skips_archive_and_converges_on_candidate_identity(self) -> None:
         transport = Transport({
@@ -368,6 +443,18 @@ class StockAnalysisProviderTests(unittest.TestCase):
         self.assertEqual([item.artifact_kind for item in related], [
             "earnings_release", "presentation_slides", "annual_report", "audio",
         ])
+        self.assertEqual([item.provider_label for item in related], [
+            "Earnings release", "Slides", "Annual report", "Audio",
+        ])
+        self.assertTrue(all(
+            item.relationship_kind == "explicitly_related_to_transcript"
+            and item.source_provenance == DOCUMENT_URL
+            for item in related
+        ))
+        self.assertEqual(
+            result.transcript_metadata_observation.event_disposition,
+            TranscriptEventDisposition.UNKNOWN,
+        )
         self.assertEqual(result.diagnostics["related_artifacts_retrieved"], 0)
         self.assertEqual(
             [item.provider for item in result.transcript_learning_feedback],
@@ -782,15 +869,35 @@ class ProviderOrchestrationTests(unittest.TestCase):
             repository = AcquisitionRepository(root / "acquisition")
             configured = wdc_profile()
             repository.register_source(configured)
+            q3_without_related = WDC_DOCUMENT.replace(
+                b'<aside id="related-artifacts">',
+                b'<aside id="provider-summary" data-provider-summary="true">',
+            ).replace(b"data-related-kind", b"data-untrusted-kind")
             transport = Transport({
                 WDC_ARCHIVE_URL: response(WDC_ARCHIVE_URL, WDC_ARCHIVE),
-                WDC_DOCUMENT_URL: response(WDC_DOCUMENT_URL, WDC_DOCUMENT),
+                WDC_UNKNOWN_URL: response(
+                    WDC_UNKNOWN_URL,
+                    wdc_document_with_date("2026-06-03", "June 3, 2026"),
+                ),
+                WDC_DOCUMENT_URL: response(WDC_DOCUMENT_URL, q3_without_related),
+                WDC_PROVIDER_CLASSIFIED_URL: response(
+                    WDC_PROVIDER_CLASSIFIED_URL,
+                    wdc_document_with_date("2026-05-18", "May 18, 2026"),
+                ),
+                WDC_INVESTOR_DAY_URL: response(
+                    WDC_INVESTOR_DAY_URL,
+                    wdc_document_with_date("2026-05-05", "May 5, 2026"),
+                ),
             })
             adapter = EarningsTranscriptPullAdapter(
-                policies(max_candidate_evaluations=1),
+                policies(max_candidate_evaluations=10),
                 transport=transport,
                 repository=repository,
                 clock=lambda: "2026-08-05T00:00:00+00:00",
+            ).with_selection(
+                TranscriptAcquisitionSelection.first_in_date_range(
+                    date(2026, 4, 1), date(2026, 5, 1)
+                )
             )
             with patch.object(
                 repository,
@@ -806,11 +913,18 @@ class ProviderOrchestrationTests(unittest.TestCase):
                     lambda: "2026-08-05T00:00:00+00:00",
                 ).run_source(configured.source_id, "task064-wdc-correction")
         self.assertEqual(result.durable_acquisitions, 1)
-        self.assertEqual(transport.requests, [WDC_ARCHIVE_URL, WDC_DOCUMENT_URL])
+        self.assertEqual(transport.requests, [
+            WDC_ARCHIVE_URL,
+            WDC_UNKNOWN_URL,
+            WDC_DOCUMENT_URL,
+            WDC_PROVIDER_CLASSIFIED_URL,
+            WDC_INVESTOR_DAY_URL,
+        ])
         rendered = json.dumps(result.diagnostics, sort_keys=True)
-        self.assertIn('"evaluated_event_disposition": "explicit_earnings"', rendered)
-        self.assertIn('"candidate_evaluated_count": 1', rendered)
-        self.assertNotIn(WDC_UNKNOWN_URL, rendered)
+        self.assertIn('"evaluated_event_disposition": "unknown"', rendered)
+        self.assertIn('"validated_event_date": "2026-04-30"', rendered)
+        self.assertIn('"candidate_evaluated_count": 4', rendered)
+        self.assertNotIn('"related_artifact_count": 3', rendered)
 
     def test_duplicate_archive_and_learned_occurrences_are_not_ambiguous(self) -> None:
         archive = f'''<!doctype html><ul>

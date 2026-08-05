@@ -26,11 +26,12 @@ turn, document body, or provider summary is serialized into diagnostics, logs, f
 live evidence, or this review package.
 
 StockAnalysis archives contain earnings calls and other event transcripts. The repaired provider
-ranks `explicit_earnings` before `unknown`, preserves archive order inside each class, excludes
-only provider-explicit `explicit_non_earnings`, and never derives disposition from titles, URLs,
-slugs, periods, archive position, or global link labels. A separate recall-oriented substance
-gate uses only parsed turns and normalized artifact text; uncertain event classification remains
-eligible when the artifact is structurally a substantial transcript.
+preserves deterministic archive order and emits `unknown` because StockAnalysis exposes no tested,
+dedicated, artifact-local document-classification field. Related documents remain observations
+only and never establish disposition or rank. Titles, headings, URLs, slugs, periods, archive
+position, display labels, and enclosing-page conditions likewise have no classification authority.
+A separate recall-oriented substance gate uses only parsed turns and normalized artifact text;
+uncertain event classification remains eligible when the artifact is structurally substantial.
 
 ## Configuration, Dispatch, and Seed Contract
 
@@ -95,10 +96,12 @@ the live WDC artifact emitted 75 turns. No generic segmentation or canonical per
 introduced.
 
 Transcript substance is established only from the extracted structure: at least two turns, two
-content-bearing turns, eight normalized words, and two distinct opaque speaker labels. Tests prove
-that an earnings-looking title cannot rescue an insubstantial artifact and that a substantial
-`unknown` event remains eligible. These deliberately conservative thresholds minimize false
-negatives without title, URL, fiscal-period, or keyword semantics.
+content-bearing turns, eight normalized words, two distinct opaque speaker labels, and exact
+equality between normalized text and the contiguous ordered turn paragraphs. Tests prove that an
+earnings-looking title cannot rescue an insubstantial artifact, removing every relationship leaves
+substance unchanged, and a substantial `unknown` event remains eligible. These deliberately
+conservative thresholds minimize false negatives without title, URL, fiscal-period, link-label,
+or keyword semantics.
 
 `RelatedArtifactObservation` retains the typed artifact kind, exact observed URL, relationship
 kind, and source-page provenance. The fixture exposes earnings release, slides, annual report,
@@ -198,28 +201,29 @@ fragments fail closed.
 One `BudgetedTranscriptTransport` still spans archive retrieval, document retrieval, redirects,
 provider-local retries, and response caching. Page, byte, host, elapsed, redirect, retry,
 candidate, and diagnostic bounds remain shared and named. The candidate ledger is updated only
-immediately before the engine evaluates a unique document. Archive entries rejected as
-`explicit_non_earnings` and candidates outside remaining admission capacity consume no evaluation
-budget. Duplicate archive and learned occurrences converge on one identity and remain bounded
+immediately before the engine evaluates a unique document. Archive observations themselves do not
+consume evaluation budget, and candidates outside remaining admission capacity consume none.
+Duplicate archive and learned occurrences converge on one identity and remain bounded
 trial-local provenance rather than an ambiguous-candidate failure. No search request occurs.
 
 Relationship labels are read only from actual candidate- or transcript-associated relationship
 records inside a tested `Downloads` surface, or from an explicit provider relationship
-attribute. The container's presence or absence is not itself classification evidence. Links in
-navigation, footers, or other global page regions cannot become observations; false-positive
-global “Slides” and “Annual Report” fixtures are ignored.
+attribute. Exact observed URL, typed kind, opaque label, relationship provenance, and ordering are
+retained, but none is a transcript-classification input. The container's presence or absence is
+not classification evidence. Links in navigation, footers, or other global page regions cannot
+become observations; false-positive global “Slides” and “Annual Report” fixtures are ignored.
 
 ## Live Acceptance and Byte Authority
 
 The bounded live validation used `provider=stockanalysis`, hint
-`provider_identifier=WDC`, and the zero-search policy. It constructed the Western Digital
-archive, ranked the archive-position-5 Q3 2026 earnings call ahead of preceding conference
-transcripts, retrieved it, established substantial parsed structure, and validated the
-artifact-local date `2026-04-30` through the neutral selection policy.
+`provider_identifier=WDC`, and the zero-search policy. It constructed the Western Digital archive,
+kept candidates in observed order with `unknown` disposition, evaluated substantial transcript
+artifacts without retrieving related documents, and selected the artifact-local date `2026-04-30`
+through repository-owned `first_in_date_range` qualification.
 
 Observed bounded evidence:
 
-- pages: 2;
+- pages: 6 (archive plus five transcript artifacts evaluated in observed order);
 - host count: 1;
 - redirects: 0;
 - provider retries: 0;
@@ -227,11 +231,11 @@ Observed bounded evidence:
 - normalized transcript words: 7,014;
 - related-artifact observations: 3 (quarterly report, earnings release, and slides from the
   transcript-associated `Downloads` surface);
-- event disposition: `explicit_earnings`;
+- event disposition: `unknown`;
 - search-engine calls: 0; and
 - bounds exhausted: false.
 
-Authoritative live transport bytes: `645661`.
+Authoritative live transport bytes: `1501817`.
 
 The live evidence file is the single byte-count authority. It records SHA-256 identities for the
 provider, neutral contracts, engine, orchestrator, and live validator. Package generation verifies
@@ -266,7 +270,7 @@ review text, verifier output, and final implementation report use the same wordi
 
 ## Validation Results
 
-- Focused TASK-064 suite: PASS (28 tests).
+- Focused TASK-064 suite: PASS (29 tests).
 - Source-profile digest compatibility: PASS (6 tests).
 - CLI startup and firm-configuration regressions: PASS (24 tests).
 - TASK-059 through TASK-063 transcript regressions: PASS (45 tests).

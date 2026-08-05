@@ -21,6 +21,13 @@ checks = {
     "provider_has_no_repository_dependency": "AcquisitionRepository" not in PROVIDER,
     "provider_has_no_search_dependency": "DiscoverySearch" not in PROVIDER
     and "DuckDuckGo" not in PROVIDER,
+    "related_artifacts_never_establish_earnings_disposition": (
+        "TranscriptEventDisposition.EXPLICIT_EARNINGS" not in PROVIDER
+    ),
+    "no_enclosing_page_event_classification_authority": (
+        "data-event-classification" not in PROVIDER
+        and "provider_classification" not in PROVIDER
+    ),
     "no_event_group_id": "event_group_id" not in ALL_SOURCE,
     "no_crawlee": "crawlee" not in ALL_SOURCE.casefold(),
     "no_playwright": "playwright" not in ALL_SOURCE.casefold(),
