@@ -1495,11 +1495,23 @@ class AcquisitionEngine:
                         f"artifact {receipt.artifact_id}",
                         validated_position=validated_position,
                     ))
-            except (ContractError, ConflictError, IntegrityError) as error:
+            except ContractError as error:
                 failures += 1
                 status = RunStatus.FAILED
                 diagnostics.append(self._diagnostic(
                     FailureClass.MALFORMED_ADAPTER, str(error), False
+                ))
+            except ConflictError as error:
+                failures += 1
+                status = RunStatus.FAILED
+                diagnostics.append(self._diagnostic(
+                    FailureClass.REPOSITORY_CONFLICT, str(error), False
+                ))
+            except IntegrityError as error:
+                failures += 1
+                status = RunStatus.FAILED
+                diagnostics.append(self._diagnostic(
+                    FailureClass.REPOSITORY_INTEGRITY, str(error), False
                 ))
 
         if status == RunStatus.COMPLETE and not (

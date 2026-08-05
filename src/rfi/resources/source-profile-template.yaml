@@ -49,7 +49,7 @@ retrieval_fields:
     type: string
     multiple: false
   - name: provider
-    label: Transcript provider
+    label: Acquisition provider
     description: Explicit provider selected for provider-backed acquisition.
     type: string
     multiple: false

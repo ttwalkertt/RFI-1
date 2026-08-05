@@ -343,6 +343,7 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "acquisition/sec_api.py",
                 "acquisition/sec_provider.py",
                 "acquisition/url_identity.py",
+                "acquisition/wdc_press_release.py",
                 "admin/__init__.py",
                 "admin/field_definitions.py",
                 "admin/help.py",
@@ -433,7 +434,7 @@ class ScopeBoundaryTests(unittest.TestCase):
             if path.name
             not in {
                 "direct_url.py", "earnings_transcripts.py", "edgar.py", "sec_api.py",
-                "sec_provider.py",
+                "sec_provider.py", "wdc_press_release.py",
             }
         ).lower()
         for term in ("requests", "urllib.request", "http.client", "socket"):

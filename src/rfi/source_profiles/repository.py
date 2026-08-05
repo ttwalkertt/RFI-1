@@ -36,6 +36,10 @@ _IDENTIFIER = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
 _DOMAIN = re.compile(
     r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
 )
+_WDC_BUSINESSWIRE_SEARCH = (
+    "https://www.businesswire.com/newsroom?"
+    "keywords=ENTIRE_RELEASE%3Atrue%3Awdc"
+)
 
 
 def _canonical(value: Any) -> bytes:
@@ -301,8 +305,10 @@ class SourceProfileRepository:
             raise SourceProfileError(
                 "provider-backed retrieval requires provider, discovery hint kind, and value"
             )
-        if normalized.provider and normalized.provider != "stockanalysis":
-            raise SourceProfileError(f"unknown transcript provider: {normalized.provider}")
+        if normalized.provider and normalized.provider not in {
+            "stockanalysis", "wdc_press_release"
+        }:
+            raise SourceProfileError(f"unknown acquisition provider: {normalized.provider}")
         if normalized.provider == "stockanalysis":
             if normalized.discovery_hint_kind != "provider_identifier":
                 raise SourceProfileError(
@@ -310,6 +316,13 @@ class SourceProfileRepository:
                 )
             if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{0,15}", normalized.discovery_hint_value):
                 raise SourceProfileError("StockAnalysis provider identifier is invalid")
+        if normalized.provider == "wdc_press_release" and (
+            normalized.discovery_hint_kind != "configured_search_url"
+            or normalized.discovery_hint_value != _WDC_BUSINESSWIRE_SEARCH
+        ):
+            raise SourceProfileError(
+                "wdc_press_release requires the configured Business Wire search URL"
+            )
         mode = self._modes[candidate.mode]
         values: dict[str, Any] = asdict(normalized)
         populated = {

@@ -58,6 +58,45 @@ current form.
 Related topics: [repository model](#repository), [repository protection](#repository-protection),
 and [CLI equivalents](#cli-reference).
 
+## Western Digital Business Wire press releases
+
+Western Digital press releases are executable only when the externally managed
+`western-digital.firm-config.json` contains the provider-backed `press_release` block shown in
+`docs/western-digital.firm-config.example.json`. Reload the complete firm-profile set from Target
+Firms after changing that file. Pull Sources then uses `wdc_press_release` through the normal pull,
+acquisition, and immutable repository paths; it does not write provider data directly to SQLite.
+
+Normal Pull Sources execution requests the latest qualifying release. Programmatic operators can
+construct `PressReleaseAcquisitionTarget` with either `latest()` or
+`first_in_date_range(start_date, end_date)` and call `PullWorkflow.acquire_press_release`.
+Date boundaries are inclusive. A complete run with no qualifying release has zero durable
+acquisitions and zero failures.
+
+For deterministic verification run `make task066-test`. Bounded live validation is separate and
+uses public network access:
+
+```sh
+PYTHONPATH=src .venv/bin/python scripts/task066_live_validation.py \
+  --output .artifacts/task066-validation/live-validation.json
+PYTHONPATH=src .venv/bin/python scripts/task066_live_validation.py \
+  --verify .artifacts/task066-validation/live-validation.json
+```
+
+The default validation uses the production direct-HTTPS transport. If the execution environment's
+Business Wire edge returns an explicit access denial, a separately captured public browser session
+may be supplied with `--capture-directory PATH`. That directory must contain complete, unmodified
+serialized document HTML as `listing.html` plus one `<release-id>.html` file for every listing
+candidate. The validator replays those bytes through the same adapter, engine, source profile, and
+repository contracts and labels the resulting evidence as browser assisted. This is a validation
+escape hatch, not the production adapter transport; record the direct failure and capture semantics
+in the task review.
+
+Expected provenance includes the configured newsroom URL, `page=N` discovery description,
+Business Wire release ID, canonical detail URL, exact publisher/ticker qualification, selected
+publication timestamp, immutable artifact ID and SHA-256, and repository integrity confirmation.
+Transport, malformed-page, unsupported-discovery, pagination-loop, and repository failures remain
+visible in engine diagnostics rather than becoming successful no-result outcomes.
+
 <!-- help-topic: repository -->
 ## Repository and state model
 

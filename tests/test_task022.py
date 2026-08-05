@@ -354,6 +354,7 @@ class NumberedFormVerticalSliceTests(unittest.TestCase):
             claims,
             {
                 ("earnings_transcript",): "earnings-call-transcript",
+                ("press_release",): "wdc_press_release",
                 ("sec_10k",): "sec-form-10k",
                 ("sec_10q",): "sec-form-10q",
                 ("sec_8k",): "sec-form-8k",

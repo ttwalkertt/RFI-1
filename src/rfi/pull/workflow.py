@@ -17,6 +17,7 @@ from rfi.acquisition import (
     AdapterRegistry,
     RunStatus,
     SourceProfile,
+    PressReleaseAcquisitionTarget,
     TranscriptAcquisitionTarget,
 )
 from rfi.firms.contracts import FirmCatalog
@@ -314,6 +315,47 @@ class PullWorkflow:
         firm = self._firms.get(firm_id)
         return self._acquisition.transcript_learning(firm.firm_id)
 
+    def acquire_press_release(
+        self, target: PressReleaseAcquisitionTarget
+    ) -> AcquisitionRunResult:
+        """Run one invocation-scoped WDC release selector through normal persistence."""
+        if not isinstance(target, PressReleaseAcquisitionTarget):
+            raise PullError("press-release acquisition target is required")
+        with self._execution_lock:
+            firm = self._firms.get(target.firm_id)
+            profile = self._profiles.get(target.firm_id)
+            plan = self._planner().plan(firm, profile)
+            artifacts = tuple(
+                item for item in plan.artifacts
+                if item.artifact_id == target.canonical_artifact_id
+            )
+            if len(artifacts) != 1:
+                raise PullError("configured press-release artifact does not match the request")
+            artifact = artifacts[0]
+            selected = None
+            for candidate in artifact.runnable_candidates:
+                registration = self._adapters.select(artifact.artifact_id, candidate)
+                if registration.capability.adapter_id == "wdc_press_release":
+                    selected = (candidate, registration)
+                    break
+            if selected is None:
+                raise PullError("firm has no runnable WDC press-release configuration")
+            candidate, registration = selected
+            source = self._source_profile(plan, artifact, candidate, registration)
+            with_selection = getattr(registration.source_adapter, "with_selection", None)
+            if not callable(with_selection):
+                raise PullError("configured press-release adapter does not accept selection")
+            invocation_adapter = with_selection(target.selection)
+            self._acquisition.register_source(source)
+            engine = AcquisitionEngine(
+                self._acquisition, AdapterRegistry((invocation_adapter,)), self._clock
+            )
+            return self._run_engine_source(
+                engine,
+                source.source_id,
+                f"press-release-{self._identifier_factory()}",
+            )
+
     def _resolve_firms(self, request: PullRequest) -> tuple[Any, ...]:
         if request.all_configured:
             return tuple(
@@ -414,7 +456,8 @@ class PullWorkflow:
                 self._adapters.acquisition_registry(adapter_id),
                 self._clock,
             )
-            result = engine.run_source(
+            result = self._run_engine_source(
+                engine,
                 source_id,
                 "workflow-"
                 f"{workflow_run_id.removeprefix('pull-')}-{candidate.priority}",
@@ -447,6 +490,13 @@ class PullWorkflow:
                 ),
                 ArtifactOutcome.RETRIEVAL_FAILURE,
             )
+
+    @staticmethod
+    def _run_engine_source(
+        engine: AcquisitionEngine, source_id: str, run_key: str
+    ) -> AcquisitionRunResult:
+        """Keep normal and invocation-scoped pulls on one engine entry point."""
+        return engine.run_source(source_id, run_key)
 
     def _source_profile(
         self,

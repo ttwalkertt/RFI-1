@@ -97,7 +97,11 @@
           "oneOf": [{"type": "null"}, {"$ref": "#/$defs/transcript_discovery_source"}]
         },
         "press_release": {
-          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/discovery_source"}]
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/discovery_source"},
+            {"$ref": "#/$defs/wdc_press_release_source"}
+          ]
         }
       }
     },
@@ -114,6 +118,26 @@
         {"$ref": "#/$defs/generic_transcript_discovery_source"},
         {"$ref": "#/$defs/provider_transcript_discovery_source"}
       ]
+    },
+    "wdc_press_release_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "discovery_hint", "discovery_class"],
+      "properties": {
+        "provider": {"const": "wdc_press_release"},
+        "discovery_hint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": {"const": "configured_search_url"},
+            "value": {
+              "const": "https://www.businesswire.com/newsroom?keywords=ENTIRE_RELEASE%3Atrue%3Awdc"
+            }
+          }
+        },
+        "discovery_class": {"enum": ["shallow", "standard", "extended"]}
+      }
     },
     "generic_transcript_discovery_source": {
       "type": "object",

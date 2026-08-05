@@ -88,6 +88,7 @@ def main() -> int:
         "acquisition/sec_numbered_form.py",
         "acquisition/sec_provider.py",
         "acquisition/url_identity.py",
+        "acquisition/wdc_press_release.py",
         "admin/__init__.py",
         "admin/admin_preferences.js",
         "admin/artifact_browser.html",

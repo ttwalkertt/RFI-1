@@ -106,6 +106,36 @@ contracts.
 
 ## Replay boundary and limitations
 
+## Western Digital Business Wire press releases
+
+`WdcBusinessWirePressReleaseAdapter` is the intentionally firm-specific executable adapter named
+`wdc_press_release`. The production pull composition registers it only for the canonical
+`press_release` artifact and `discovery` retrieval mode. Its source comes from the Western Digital
+external firm configuration: provider `wdc_press_release`, hint kind `configured_search_url`, and
+the exact Business Wire newsroom search URL. Other firms fail closed.
+
+Discovery uses ordinary server-rendered HTTP. Page one is the configured URL; later pages retain
+the complete query and append `page=N`. The adapter bounds traversal, rejects repeated page
+signatures as loops, deduplicates canonical release URLs, and uses release-ID dates only to stop
+range traversal after crossing the inclusive start boundary. Detail-page JSON-LD remains the
+publication-time authority. Latest traversal stops after a page whose card publisher prefix shows
+a possible Western Digital publisher; strict qualification still occurs only from detail metadata.
+
+Qualification requires the Business Wire publisher panel to name either `Western Digital` or
+`Western Digital Corporation` and to expose ticker `NASDAQ:WDC`. Search membership, JSON-LD
+contact/author names, title text, and body mentions are not sufficient. The two labels reflect
+Business Wire's observed issuer naming for WDC releases. Selection chooses the greatest
+publication timestamp for latest mode and the least
+timestamp in an inclusive supplied range; release ID and candidate ID provide deterministic ties.
+A fully traversed range with no match is a successful no-result run.
+
+Exact fetched HTML is the immutable artifact. Normalized title, timestamp, issuer, ticker,
+canonical URL, release ID, dateline, summary/highlights, complete body text, contacts,
+attachments, source attribution, discovery URL, and retrieval timestamp are persisted in the
+repository-owned attempt/observation diagnostics. Reacquisition of the same bytes reuses retained
+evidence. Changed bytes incorporate their SHA-256 into validated revision identity, causing a new
+immutable artifact observation without rewriting prior evidence.
+
 Replay reads authoritative source records, ledger records, artifact metadata, and exact local
 bytes. It neither constructs nor calls adapters and does not inspect fixture provider state.
 Deleting both mutable views after multi-source and multi-run acquisition and invoking repository

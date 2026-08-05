@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "config_id": "western-digital",
+  "status": "active",
+  "comments": "Western Digital source authority including the bounded TASK-066 adapter.",
+  "firm": {
+    "id": "western-digital",
+    "display_name": "Western Digital",
+    "legal_name": "Western Digital Corporation",
+    "subtitle": "Data storage products and storage technology supplier",
+    "priority": 90,
+    "valid_from": "2020-01-01",
+    "jurisdiction": "Delaware, United States",
+    "headquarters": "San Jose, California, United States",
+    "sector": "Information Technology",
+    "industry": "Technology Hardware, Storage and Peripherals",
+    "aliases": ["WDC", "WD"],
+    "identifiers": [
+      {"kind": "ticker", "value": "WDC", "market": "NASDAQ"},
+      {"kind": "cik", "value": "0000106040", "market": "SEC"}
+    ],
+    "domains": ["westerndigital.com"],
+    "technology_focus": ["hard disk drives", "data storage", "storage systems"],
+    "source_hints": [
+      {
+        "kind": "investor-relations",
+        "value": "https://investor.wdc.com/",
+        "comments": "Operator orientation only; not retrieved provenance."
+      }
+    ],
+    "comments": "Authoritative firm configuration comments remain uninterpreted text."
+  },
+  "sources": {
+    "sec": {
+      "enabled": true,
+      "cik": "0000106040",
+      "registrant_name": "WESTERN DIGITAL CORP",
+      "filing_regime": "domestic",
+      "verification": {
+        "status": "verified",
+        "verified_at": "2026-07-27T00:00:00+00:00",
+        "source": "SEC EDGAR submissions identity"
+      },
+      "artifacts": ["sec_10k", "sec_10q", "sec_8k"],
+      "comments": "Runtime endpoints, accessions, and filing URLs are deliberately omitted."
+    },
+    "earnings_transcript": {
+      "provider": "stockanalysis",
+      "discovery_hint": {"kind": "provider_identifier", "value": "WDC"},
+      "discovery_class": "extended"
+    },
+    "press_release": {
+      "provider": "wdc_press_release",
+      "discovery_hint": {
+        "kind": "configured_search_url",
+        "value": "https://www.businesswire.com/newsroom?keywords=ENTIRE_RELEASE%3Atrue%3Awdc"
+      },
+      "discovery_class": "standard"
+    }
+  }
+}

@@ -54,6 +54,84 @@ class TranscriptSelectionMode(StrEnum):
     FIRST_IN_DATE_RANGE = "first_in_date_range"
 
 
+class PressReleaseSelectionMode(StrEnum):
+    """Bounded selector vocabulary for one press-release acquisition attempt."""
+
+    LATEST = "latest"
+    FIRST_IN_DATE_RANGE = "first_in_date_range"
+
+
+@dataclass(frozen=True)
+class PressReleaseAcquisitionSelection:
+    """Immutable rules deciding which qualified press release is retained."""
+
+    mode: PressReleaseSelectionMode = PressReleaseSelectionMode.LATEST
+    start_date: date | None = None
+    end_date: date | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.mode, PressReleaseSelectionMode):
+            raise ContractError("press-release selection mode is invalid")
+        if self.mode == PressReleaseSelectionMode.LATEST:
+            if self.start_date is not None or self.end_date is not None:
+                raise ContractError("latest press-release selection cannot include a date range")
+            return
+        if not isinstance(self.start_date, date) or not isinstance(self.end_date, date):
+            raise ContractError("first_in_date_range requires date boundaries")
+        if self.start_date > self.end_date:
+            raise ContractError("press-release selection start_date must not follow end_date")
+
+    @classmethod
+    def latest(cls) -> PressReleaseAcquisitionSelection:
+        return cls()
+
+    @classmethod
+    def first_in_date_range(
+        cls, start_date: date, end_date: date
+    ) -> PressReleaseAcquisitionSelection:
+        return cls(PressReleaseSelectionMode.FIRST_IN_DATE_RANGE, start_date, end_date)
+
+    def contains(self, publication_date: date) -> bool:
+        if self.mode == PressReleaseSelectionMode.LATEST:
+            return True
+        assert self.start_date is not None and self.end_date is not None
+        return self.start_date <= publication_date <= self.end_date
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        return {
+            "mode": self.mode.value,
+            "start_date": self.start_date.isoformat() if self.start_date else None,
+            "end_date": self.end_date.isoformat() if self.end_date else None,
+        }
+
+
+@dataclass(frozen=True)
+class PressReleaseAcquisitionTarget:
+    """Immutable WDC press-release target shared by discovery and selection."""
+
+    firm_id: str
+    canonical_artifact_id: str = "press_release"
+    selection: PressReleaseAcquisitionSelection = field(
+        default_factory=PressReleaseAcquisitionSelection.latest
+    )
+
+    def __post_init__(self) -> None:
+        require_identifier(self.firm_id, "press-release acquisition target firm_id")
+        if self.firm_id != "western-digital":
+            raise ContractError("wdc_press_release only supports western-digital")
+        if self.canonical_artifact_id != "press_release":
+            raise ContractError("press-release acquisition target has the wrong artifact type")
+        if not isinstance(self.selection, PressReleaseAcquisitionSelection):
+            raise ContractError("press-release acquisition target selection is invalid")
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        return {
+            "firm_id": self.firm_id,
+            "canonical_artifact_id": self.canonical_artifact_id,
+            "selection": self.selection.to_dict(),
+        }
+
+
 @dataclass(frozen=True)
 class TranscriptAcquisitionSelection:
     """Immutable rules deciding which validated transcript qualifies."""

@@ -17,6 +17,7 @@ from rfi.acquisition.sec_form_20f import SecForm20FAdapter
 from rfi.acquisition.sec_form_6k import SecForm6KAdapter
 from rfi.acquisition.sec_form_8k import SecForm8KAdapter
 from rfi.acquisition.sec_provider import SecProviderClient
+from rfi.acquisition.wdc_press_release import WdcBusinessWirePressReleaseAdapter
 from rfi.firms import FirmRepository
 from rfi.pull.adapters import (
     RetrievalAdapterCapability,
@@ -68,6 +69,7 @@ def create_pull_workflow(state: Path) -> PullWorkflow:
     transcripts = EarningsTranscriptPullAdapter(
         load_discovery_policies(), clock=utc_now, repository=acquisition
     )
+    wdc_releases = WdcBusinessWirePressReleaseAdapter(clock=utc_now)
     adapters = RetrievalAdapterRegistry(
         (
             RetrievalAdapterRegistration(
@@ -81,6 +83,14 @@ def create_pull_workflow(state: Path) -> PullWorkflow:
                     transcripts.retrieval_modes,
                 ),
                 transcripts,
+            ),
+            RetrievalAdapterRegistration(
+                RetrievalAdapterCapability(
+                    wdc_releases.adapter_id,
+                    wdc_releases.artifact_ids,
+                    wdc_releases.retrieval_modes,
+                ),
+                wdc_releases,
             ),
             *(
                 RetrievalAdapterRegistration(
