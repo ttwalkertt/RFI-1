@@ -54,7 +54,9 @@ from rfi.storage.sqlite import canonical_json
 
 
 ROOT = Path(__file__).resolve().parents[1]
+ARCHIVE_URL = "https://stockanalysis.com/stocks/orcl/transcripts/"
 DOCUMENT_URL = "https://stockanalysis.com/stocks/orcl/transcripts/592465-q4-2026/"
+ARCHIVE = (ROOT / "fixtures/transcripts/stockanalysis-orcl-archive.html").read_bytes()
 DOCUMENT = (ROOT / "fixtures/transcripts/stockanalysis-orcl-q4-2026.html").read_bytes()
 
 
@@ -175,6 +177,46 @@ class ExplicitProviderDispatchTests(unittest.TestCase):
         self.assertEqual(result.durable_acquisitions, 1)
         self.assertEqual(trial.provider, "stockanalysis")
         self.assertEqual(transport.requests, [DOCUMENT_URL])
+
+    def test_archive_injection_discovers_and_retrieves_a_document(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            firms = FirmRepository.initialize(root / "firms")
+            firms.create(FirmDraft(
+                "oracle", "Oracle Corporation", "2026-01-01",
+                status=FirmStatus.ACTIVE,
+            ))
+            repository = AcquisitionRepository(root / "acquisition")
+            configured = profile()
+            repository.register_source(configured)
+            transport = Transport({
+                ARCHIVE_URL: response(ARCHIVE_URL, ARCHIVE),
+                DOCUMENT_URL: response(DOCUMENT_URL, DOCUMENT),
+            })
+            adapter = EarningsTranscriptPullAdapter(
+                policies(), transport=transport, repository=repository,
+                clock=lambda: "2026-08-04T00:00:00+00:00",
+            )
+            trial = adapter.injected_trial(
+                configured,
+                TranscriptAcquisitionTarget("oracle"),
+                "stockanalysis",
+                ARCHIVE_URL,
+            )
+            result = AcquisitionEngine(
+                repository, AdapterRegistry((adapter,)),
+                lambda: "2026-08-04T00:00:00+00:00",
+            ).run_source_trial(configured.source_id, "task065-archive", trial)
+
+        self.assertEqual(result.durable_acquisitions, 1)
+        self.assertEqual(trial.starting_seed, ARCHIVE_URL)
+        self.assertEqual(transport.requests, [ARCHIVE_URL, DOCUMENT_URL])
+        self.assertEqual(result.outcomes[0].proposal_position, 1)
+        self.assertEqual(result.outcomes[0].validated_position, 8106)
+        rendered_outcome = result.to_dict()["outcomes"][0]
+        self.assertNotIn("position", rendered_outcome)
+        self.assertEqual(rendered_outcome["proposal_position"], 1)
+        self.assertEqual(rendered_outcome["validated_position"], 8106)
 
     def test_workflow_propagates_provider_to_direct_document_injection(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

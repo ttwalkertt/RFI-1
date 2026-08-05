@@ -144,7 +144,10 @@ request state exits two.
   the existing transcript provider registry, and accepted only in the JSON body. The HTTP adapter
   performs no provider-specific branching or URL-based provider inference. The selected provider
   owns URL validation; unknown providers and all query parameters use the existing invalid-request
-  client-error envelope.
+  client-error envelope. Candidate outcomes distinguish provider discovery order as
+  `proposal_position` from authoritative post-retrieval progress as `validated_position`; the
+  latter is `null` when validation did not establish one. Durable checkpoints retain their
+  existing `position` field.
 
 The local HTTP adapter starts the workflow in a background thread so the browser can poll durable
 stage progress. It contains no retrieval planning or repository calls.

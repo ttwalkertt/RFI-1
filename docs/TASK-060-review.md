@@ -101,10 +101,14 @@ Success returns HTTP 200 with the existing acquisition result. Representative fi
   "durable_acquisitions": 1,
   "checkpoint_before": null,
   "checkpoint_after": {"position": 8106, "cursor": "engine-..."},
-  "outcomes": [],
+  "outcomes": [{"proposal_position": 1, "validated_position": 8106}],
   "diagnostics": []
 }
 ```
+
+Outcome `proposal_position` is provider discovery order. Outcome `validated_position` is the
+authoritative post-retrieval progress coordinate and is `null` when validation establishes none.
+Checkpoint `position` remains the durable source-progress coordinate.
 
 Malformed, blank, non-HTTP(S), extra, repeated, multiple-seed, query-controlled, and mismatched
 requests fail closed with the existing REST error envelope and `invalid_request` classification

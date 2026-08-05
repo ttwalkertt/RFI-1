@@ -510,16 +510,27 @@ class AdapterRegistry:
 
 @dataclass(frozen=True)
 class CandidateRunOutcome:
-    """Observed durable or non-durable result for one candidate occurrence."""
+    """One candidate result with discovery and validated progress kept distinct.
+
+    ``proposal_position`` orders provider proposals. ``validated_position`` is
+    the authoritative post-retrieval progress coordinate when one was proven.
+    """
 
     candidate_id: str
     document_id: str
-    position: int
+    proposal_position: int
     revision: str
     outcome: str
     attempt_id: str | None
     durable: bool
     diagnostic: str
+    validated_position: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.proposal_position < 1:
+            raise ContractError("candidate outcome proposal position must be positive")
+        if self.validated_position is not None and self.validated_position < 1:
+            raise ContractError("candidate outcome validated position must be positive")
 
 
 @dataclass(frozen=True)
@@ -969,6 +980,13 @@ class AcquisitionEngine:
                                 None,
                                 False,
                                 decision.validation_outcome,
+                                validated_position=(
+                                    decision.diagnostics.get("validated_position")
+                                    if isinstance(
+                                        decision.diagnostics.get("validated_position"), int
+                                    )
+                                    else None
+                                ),
                             ))
                         continue
                     if deferred_evaluation:
@@ -1048,6 +1066,9 @@ class AcquisitionEngine:
                                 None,
                                 False,
                                 f"retained artifact {retained.artifact_id} requalified",
+                                validated_position=(
+                                    checkpoint_position if deferred_evaluation else None
+                                ),
                             ))
                         break
                     retained_replay = (
@@ -1079,6 +1100,9 @@ class AcquisitionEngine:
                                 None,
                                 False,
                                 "validated artifact is already retained at durable progress",
+                                validated_position=(
+                                    checkpoint_position if deferred_evaluation else None
+                                ),
                             ))
                         break
                     attempt_id = self._attempt_id(run_id, candidate, "success")
@@ -1109,6 +1133,9 @@ class AcquisitionEngine:
                             attempt_id,
                             True,
                             f"artifact {receipt.artifact_id}",
+                            validated_position=(
+                                checkpoint_position if deferred_evaluation else None
+                            ),
                         )
                     )
                     # A successful deterministic trial is terminal. Range selection
@@ -1421,6 +1448,7 @@ class AcquisitionEngine:
                             "retained artifact "
                             f"{selected_selection_candidate.retained_artifact_id} requalified"
                         ),
+                        validated_position=validated_position,
                     ))
                 elif retained_replay:
                     checkpoint_confirmed = True
@@ -1434,6 +1462,7 @@ class AcquisitionEngine:
                         None,
                         False,
                         "validated artifact is already retained at durable progress",
+                        validated_position=validated_position,
                     ))
                 else:
                     attempt_id = self._attempt_id(run_id, candidate, "success")
@@ -1464,6 +1493,7 @@ class AcquisitionEngine:
                         attempt_id,
                         True,
                         f"artifact {receipt.artifact_id}",
+                        validated_position=validated_position,
                     ))
             except (ContractError, ConflictError, IntegrityError) as error:
                 failures += 1

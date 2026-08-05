@@ -253,6 +253,40 @@ class StockAnalysisProviderTests(unittest.TestCase):
             "stockanalysis",
         )
 
+    def test_archive_url_seed_uses_the_existing_archive_discovery_path(self) -> None:
+        transport = Transport({ARCHIVE_URL: response(ARCHIVE_URL, ARCHIVE)})
+        page = self.provider(transport).discover(
+            profile(),
+            TranscriptSeed("stockanalysis", "url", ARCHIVE_URL, "operator_supplied"),
+            TranscriptAcquisitionTarget("oracle"),
+        )
+
+        self.assertEqual(transport.requests, [ARCHIVE_URL])
+        self.assertEqual(page.diagnostics["provider_surface"], "archive")
+        self.assertEqual(page.diagnostics["seed_kind"], "url")
+        self.assertEqual(
+            [
+                candidate.provenance.metadata["resolved_url"]
+                for candidate in page.candidates
+            ],
+            [
+                DOCUMENT_URL,
+                "https://stockanalysis.com/stocks/orcl/transcripts/581200-q3-2026/",
+            ],
+        )
+
+    def test_archive_url_seed_rejects_an_unrelated_provider_identifier(self) -> None:
+        transport = Transport({})
+        with self.assertRaisesRegex(AdapterFailure, "unrelated provider identifier"):
+            self.provider(transport).discover(
+                profile(),
+                TranscriptSeed(
+                    "stockanalysis", "url", WDC_ARCHIVE_URL, "operator_supplied"
+                ),
+                TranscriptAcquisitionTarget("oracle"),
+            )
+        self.assertEqual(transport.requests, [])
+
     def test_wdc_archive_preserves_order_and_related_links_without_classification(self) -> None:
         provider = StockAnalysisTranscriptProvider(
             Transport({WDC_ARCHIVE_URL: response(WDC_ARCHIVE_URL, WDC_ARCHIVE)}),

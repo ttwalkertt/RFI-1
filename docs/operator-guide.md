@@ -320,6 +320,11 @@ curl -X POST http://127.0.0.1:8765/api/transcript-acquisitions/seed \
 provider-specific URL validation. The optional `selection` object retains the existing transcript
 selection contract. Query parameters, including `?provider=stockanalysis`, are rejected.
 
+Each candidate result uses `proposal_position` for its provider discovery order and
+`validated_position` for the authoritative post-retrieval reporting-period position. A candidate
+that never establishes authoritative period evidence reports `validated_position: null`.
+Checkpoint objects continue to use `position` for durable source progress.
+
 ### Transcript learning inspection
 
 `GET /api/transcript-acquisitions/learning/{firm_id}` reads retained transcript learning without

@@ -645,68 +645,18 @@ class StockAnalysisTranscriptProvider:
             exact_identifier = seed.value
             normalized_identifier = normalize_provider_identifier(exact_identifier)
             requested = archive_url(exact_identifier)
-            response = self._get(requested)
-            resolved, resolved_identifier = validate_archive_url(response.url)
-            if resolved_identifier != normalized_identifier:
-                raise self._failure("archive redirect changed provider identifier", False,
-                                    "provider_identifier_conflict")
-            if response.media_type.casefold() not in {"text/html", "application/xhtml+xml"}:
-                raise self._failure("StockAnalysis archive is not HTML", False,
-                                    "provider_content_type")
-            parser = _ArchiveParser(normalized_identifier, response.url)
-            parser.feed(response.content.decode("utf-8", "replace"))
-            if not parser.entries:
-                raise self._failure(
-                    "StockAnalysis archive exposed no recognized transcript documents",
-                    False,
-                    "provider_layout_changed",
-                )
-            candidate_limit = int(getattr(
-                getattr(self.transport, "policy", None),
-                "max_candidate_evaluations",
-                40,
-            ))
-            admitted_entries = parser.entries[:candidate_limit]
-            candidates = tuple(
-                self._candidate(
-                    entry.normalized_url,
-                    entry.observed_url,
-                    entry.label,
-                    entry.position,
-                    proposal_rank,
-                    resolved,
-                    exact_identifier,
-                    normalized_identifier,
-                    target,
-                    TranscriptMetadataObservation(
-                        entry.label,
-                        None,
-                        entry.event_disposition,
-                        entry.related,
-                    ),
-                )
-                for proposal_rank, entry in enumerate(admitted_entries, start=1)
+            return self._discover_archive(
+                seed, requested, exact_identifier, normalized_identifier, target
             )
-            diagnostics = self._diagnostics(
-                seed, requested, response.url, len(candidates), "archive"
-            )
-            diagnostics.update({
-                "candidate_discovered_count": len(parser.entries),
-                "candidate_excluded_count": 0,
-                "candidate_admitted_count": len(candidates),
-                "candidate_bound_exhausted": len(parser.entries) > candidate_limit,
-                "candidate_budget": candidate_limit,
-                "event_disposition_counts": {
-                    disposition.value: sum(
-                        entry.event_disposition is disposition
-                        for entry in parser.entries
-                    )
-                    for disposition in TranscriptEventDisposition
-                },
-            })
-            return DiscoveryPage(candidates, None, diagnostics)
-        requested, ticker, _slug = validate_document_url(seed.value)
+
         configured_identifier = profile.configuration.get("discovery_hint_value")
+        try:
+            requested, ticker = validate_archive_url(seed.value)
+        except ValueError:
+            is_archive = False
+            requested, ticker, _slug = validate_document_url(seed.value)
+        else:
+            is_archive = True
         if (
             not isinstance(configured_identifier, str)
             or normalize_provider_identifier(configured_identifier) != ticker
@@ -715,6 +665,10 @@ class StockAnalysisTranscriptProvider:
                 "StockAnalysis URL seed belongs to an unrelated provider identifier",
                 False,
                 "provider_identifier_conflict",
+            )
+        if is_archive:
+            return self._discover_archive(
+                seed, requested, configured_identifier, ticker, target
             )
         candidate = self._candidate(
             requested,
@@ -733,6 +687,79 @@ class StockAnalysisTranscriptProvider:
         return DiscoveryPage((candidate,), None, self._diagnostics(
             seed, seed.value, seed.value, 1, "direct_document"
         ))
+
+    def _discover_archive(
+        self,
+        seed: TranscriptSeed,
+        requested: str,
+        exact_identifier: str,
+        normalized_identifier: str,
+        target: object,
+    ) -> DiscoveryPage:
+        response = self._get(requested)
+        resolved, resolved_identifier = validate_archive_url(response.url)
+        if resolved_identifier != normalized_identifier:
+            raise self._failure(
+                "archive redirect changed provider identifier",
+                False,
+                "provider_identifier_conflict",
+            )
+        if response.media_type.casefold() not in {"text/html", "application/xhtml+xml"}:
+            raise self._failure(
+                "StockAnalysis archive is not HTML", False, "provider_content_type"
+            )
+        parser = _ArchiveParser(normalized_identifier, response.url)
+        parser.feed(response.content.decode("utf-8", "replace"))
+        if not parser.entries:
+            raise self._failure(
+                "StockAnalysis archive exposed no recognized transcript documents",
+                False,
+                "provider_layout_changed",
+            )
+        candidate_limit = int(getattr(
+            getattr(self.transport, "policy", None),
+            "max_candidate_evaluations",
+            40,
+        ))
+        admitted_entries = parser.entries[:candidate_limit]
+        candidates = tuple(
+            self._candidate(
+                entry.normalized_url,
+                entry.observed_url,
+                entry.label,
+                entry.position,
+                proposal_rank,
+                resolved,
+                exact_identifier,
+                normalized_identifier,
+                target,
+                TranscriptMetadataObservation(
+                    entry.label,
+                    None,
+                    entry.event_disposition,
+                    entry.related,
+                ),
+            )
+            for proposal_rank, entry in enumerate(admitted_entries, start=1)
+        )
+        diagnostics = self._diagnostics(
+            seed, requested, response.url, len(candidates), "archive"
+        )
+        diagnostics.update({
+            "candidate_discovered_count": len(parser.entries),
+            "candidate_excluded_count": 0,
+            "candidate_admitted_count": len(candidates),
+            "candidate_bound_exhausted": len(parser.entries) > candidate_limit,
+            "candidate_budget": candidate_limit,
+            "event_disposition_counts": {
+                disposition.value: sum(
+                    entry.event_disposition is disposition
+                    for entry in parser.entries
+                )
+                for disposition in TranscriptEventDisposition
+            },
+        })
+        return DiscoveryPage(candidates, None, diagnostics)
 
     def retrieve(self, profile: SourceProfile, candidate: AdapterCandidate) -> RetrievalResult:
         metadata = candidate.provenance.metadata
