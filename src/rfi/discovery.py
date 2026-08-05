@@ -1755,7 +1755,28 @@ class EarningsTranscriptPullAdapter:
             trial.seed_source,
         )
         page = provider.discover(profile, seed, trial.acquisition_target)
-        return DiscoveryPage(page.candidates, None, {
+        admitted: list[AdapterCandidate] = []
+        newly_admitted = 0
+        candidate_limit_reached = False
+        for candidate in page.candidates:
+            requested_url = candidate.provenance.metadata.get("requested_url")
+            if not isinstance(requested_url, str):
+                raise ContractError("provider candidate lacks a requested URL identity")
+            identity = candidate.candidate_id
+            if identity in budgeted.candidate_identities:
+                admitted.append(candidate)
+                continue
+            if len(budgeted.candidate_identities) >= policy.max_candidate_evaluations:
+                candidate_limit_reached = True
+                budgeted.candidate_capacity_exhausted = True
+                continue
+            budgeted.candidate_identities.add(identity)
+            newly_admitted += 1
+            admitted.append(candidate)
+        if candidate_limit_reached:
+            budgeted.exhausted = True
+            budgeted.exhausted_budget = "max_candidate_evaluations"
+        return DiscoveryPage(tuple(admitted), None, {
             **page.diagnostics,
             "adapter_id": self.adapter_id,
             "discovery_class": profile.configuration.get("discovery_class"),
@@ -1765,7 +1786,11 @@ class EarningsTranscriptPullAdapter:
             "redirect_count": budgeted.redirects,
             "bounds_exhausted": budgeted.exhausted,
             "exhausted_budget": budgeted.exhausted_budget,
-            "candidate_evaluated_count": len(page.candidates),
+            "candidate_budget": policy.max_candidate_evaluations,
+            "candidate_admitted_count": len(admitted),
+            "candidate_bound_exhausted": candidate_limit_reached,
+            "run_unique_candidate_count": len(budgeted.candidate_identities),
+            "candidate_evaluated_count": newly_admitted,
         })
 
     def _discover(

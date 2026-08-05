@@ -26,6 +26,7 @@ from rfi.acquisition.providers.stockanalysis import (
     normalize_provider_identifier,
     validate_document_url,
 )
+from rfi.acquisition.providers import TranscriptProviderRegistry
 from rfi.discovery import (
     DiscoveryPolicy,
     DiscoveryPolicyCatalog,
@@ -274,6 +275,91 @@ class StockAnalysisProviderTests(unittest.TestCase):
         self.assertNotIn("2026-06-15", serialized)
         self.assertNotIn("event_date", result.diagnostics["provider_metadata"])
 
+    def test_trusted_date_observations_are_normalized_and_conflicts_are_unset(self) -> None:
+        equivalent = DOCUMENT.replace(
+            b'<article id="transcript"',
+            b'<article id="transcript" data-event-date="June 15, 2026"',
+        )
+        conflicting = DOCUMENT.replace(
+            b'<article id="transcript"',
+            b'<article id="transcript" data-event-date="June 14, 2026"',
+        )
+        for artifact, expected in (
+            (equivalent, date(2026, 6, 15)),
+            (conflicting, None),
+        ):
+            with self.subTest(expected=expected):
+                provider = self.provider(Transport({
+                    DOCUMENT_URL: response(DOCUMENT_URL, artifact)
+                }))
+                candidate = provider.discover(
+                    profile(),
+                    TranscriptSeed("stockanalysis", "url", DOCUMENT_URL, "learned"),
+                    TranscriptAcquisitionTarget("oracle"),
+                ).candidates[0]
+                result = provider.retrieve(profile(), candidate)
+                self.assertEqual(result.trusted_event_date, expected)
+
+        unrelated_same_class = DOCUMENT.replace(
+            b"</article>",
+            b'<p class="text-sm font-semibold text-faded">Summary</p></article>',
+        )
+        provider = self.provider(Transport({
+            DOCUMENT_URL: response(DOCUMENT_URL, unrelated_same_class)
+        }))
+        candidate = provider.discover(
+            profile(), TranscriptSeed("stockanalysis", "url", DOCUMENT_URL, "learned"),
+            TranscriptAcquisitionTarget("oracle"),
+        ).candidates[0]
+        self.assertEqual(
+            provider.retrieve(profile(), candidate).trusted_event_date,
+            date(2026, 6, 15),
+        )
+
+    def test_related_label_fallback_is_scoped_to_the_explicit_related_surface(self) -> None:
+        artifact = DOCUMENT.replace(
+            b'<aside id="provider-summary"',
+            b'<a href="https://navigation.example.test/report">Annual Report</a>'
+            b'<aside id="provider-summary"',
+        )
+        provider = self.provider(Transport({
+            DOCUMENT_URL: response(DOCUMENT_URL, artifact)
+        }))
+        candidate = provider.discover(
+            profile(), TranscriptSeed("stockanalysis", "url", DOCUMENT_URL, "learned"),
+            TranscriptAcquisitionTarget("oracle"),
+        ).candidates[0]
+        result = provider.retrieve(profile(), candidate)
+        self.assertEqual(len(result.related_artifact_observations), 4)
+        self.assertNotIn(
+            "https://navigation.example.test/report",
+            [item.observed_url for item in result.related_artifact_observations],
+        )
+
+    def test_provider_metadata_diagnostics_are_allowlisted_and_bounded(self) -> None:
+        oversized = ("diagnostic-marker-" + ("x" * 5_000)).encode()
+        artifact = DOCUMENT.replace(
+            b'data-company="Oracle Corporation"',
+            b'data-company="' + oversized + b'" data-untrusted="transcript-body-marker"',
+        )
+        provider = self.provider(Transport({
+            DOCUMENT_URL: response(DOCUMENT_URL, artifact)
+        }))
+        candidate = provider.discover(
+            profile(), TranscriptSeed("stockanalysis", "url", DOCUMENT_URL, "learned"),
+            TranscriptAcquisitionTarget("oracle"),
+        ).candidates[0]
+        result = provider.retrieve(profile(), candidate)
+        metadata = result.diagnostics["provider_metadata"]
+        self.assertEqual(set(metadata), {
+            "company_label", "document_title", "event_type_label",
+            "fiscal_period_label", "ticker_label",
+        })
+        self.assertLessEqual(len(metadata["company_label"]), 256)
+        rendered = json.dumps(result.diagnostics, sort_keys=True)
+        self.assertNotIn("transcript-body-marker", rendered)
+        self.assertLess(len(rendered.encode()), 4096)
+
     def test_url_validation_rejects_deceptive_hosts_paths_and_cross_firm_routes(self) -> None:
         for url in (
             "https://stockanalysis.com.evil.test/stocks/orcl/transcripts/x/",
@@ -310,6 +396,23 @@ class StockAnalysisProviderTests(unittest.TestCase):
 
 
 class ProviderOrchestrationTests(unittest.TestCase):
+    def test_registry_accepts_provider_neutral_factories(self) -> None:
+        class OtherTranscriptProvider:
+            provider = "other"
+
+            def __init__(self, transport: object, clock: object) -> None:
+                self.transport = transport
+                self.clock = clock
+
+        registry = TranscriptProviderRegistry((
+            StockAnalysisTranscriptProvider,
+            OtherTranscriptProvider,
+        ))
+        self.assertEqual(registry.registrations(), {
+            "other": "OtherTranscriptProvider",
+            "stockanalysis": "StockAnalysisTranscriptProvider",
+        })
+
     def test_firm_configuration_requires_explicit_provider_hint_kind_and_value(self) -> None:
         schema = json.loads(
             (ROOT / "src/rfi/resources/firm-config-v1.schema.json").read_text()
@@ -391,6 +494,65 @@ class ProviderOrchestrationTests(unittest.TestCase):
         page = adapter.discover_trial(profile(), trial)
         self.assertEqual(page.diagnostics["provider"], "stockanalysis")
         self.assertEqual(transport.requests, [ARCHIVE_URL])
+
+    def test_provider_trials_share_the_run_candidate_evaluation_budget(self) -> None:
+        learned_url = (
+            "https://stockanalysis.com/stocks/orcl/transcripts/learned-q3-2026/"
+        )
+
+        class Repository:
+            @staticmethod
+            def discovery_anchors(*_args: object) -> tuple[dict[str, object], ...]:
+                return ({"provider": "stockanalysis", "requested_url": learned_url},)
+
+        adapter = EarningsTranscriptPullAdapter(
+            policies(max_candidate_evaluations=1),
+            transport=Transport({ARCHIVE_URL: response(ARCHIVE_URL, ARCHIVE)}),
+            repository=Repository(),  # type: ignore[arg-type]
+            clock=lambda: "2026-08-04T00:00:00+00:00",
+        )
+        trials = adapter.acquisition_trials(profile())
+        configured = adapter.discover_trial(profile(), trials[0])
+        learned = adapter.discover_trial(profile(), trials[1])
+        self.assertEqual(len(configured.candidates), 1)
+        self.assertEqual(learned.candidates, ())
+        self.assertEqual(learned.diagnostics["run_unique_candidate_count"], 1)
+        self.assertEqual(learned.diagnostics["exhausted_budget"],
+                         "max_candidate_evaluations")
+
+    def test_latest_missing_date_is_neutrally_rejected_by_durable_validation(self) -> None:
+        without_date = DOCUMENT.replace(
+            b'<time datetime="2026-06-15">June 15, 2026</time>', b""
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            firms = FirmRepository.initialize(root / "firms")
+            firms.create(FirmDraft(
+                "oracle", "Oracle Corporation", "2026-01-01",
+                status=FirmStatus.ACTIVE,
+            ))
+            repository = AcquisitionRepository(root / "acquisition")
+            configured = profile()
+            repository.register_source(configured)
+            adapter = EarningsTranscriptPullAdapter(
+                policies(max_candidate_evaluations=1),
+                transport=Transport({
+                    ARCHIVE_URL: response(ARCHIVE_URL, ARCHIVE),
+                    DOCUMENT_URL: response(DOCUMENT_URL, without_date),
+                }),
+                repository=repository,
+                clock=lambda: "2026-08-04T00:00:00+00:00",
+            )
+            result = AcquisitionEngine(
+                repository, AdapterRegistry((adapter,)),
+                lambda: "2026-08-04T00:00:00+00:00",
+            ).run_source(configured.source_id, "task064-missing-date")
+            self.assertEqual(result.durable_acquisitions, 0)
+            self.assertEqual(result.failures, 0)
+            self.assertEqual(result.skips, 1)
+            self.assertIn("event_date_unavailable", json.dumps(result.diagnostics))
+            self.assertNotIn("deferred candidate retrieval lacks validated position",
+                             json.dumps(result.diagnostics))
 
     def test_source_profile_validation_fails_closed_for_partial_or_unknown_provider(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

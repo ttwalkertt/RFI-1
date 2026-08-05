@@ -918,10 +918,43 @@ class AcquisitionEngine:
                         continue
                     if deferred_evaluation:
                         validated_position = result.diagnostics.get("validated_position")
-                        if not isinstance(validated_position, int) or validated_position < 1:
-                            raise ContractError(
-                                "deferred candidate retrieval lacks validated position"
+                        if result.trusted_event_date is not None:
+                            trusted_date = result.trusted_event_date
+                            trusted_position = (
+                                trusted_date.year * 4
+                                + ((trusted_date.month - 1) // 3)
+                                + 1
                             )
+                            if (
+                                validated_position is not None
+                                and validated_position != trusted_position
+                            ):
+                                raise ContractError(
+                                    "deferred candidate position conflicts with trusted date"
+                                )
+                            validated_position = trusted_position
+                        if not isinstance(validated_position, int) or validated_position < 1:
+                            skips += 1
+                            decision = AdapterSelectionDecision(
+                                False,
+                                "validation_rejected",
+                                "event_date_unavailable",
+                                {"trusted_event_date_available": False},
+                            )
+                            self._record_selection_diagnostic(
+                                diagnostics[trial_diagnostic_index], candidate, decision
+                            )
+                            outcomes.append(CandidateRunOutcome(
+                                candidate.candidate_id,
+                                candidate.document_id,
+                                candidate.position,
+                                candidate.revision,
+                                "selection_rejected",
+                                None,
+                                False,
+                                decision.validation_outcome,
+                            ))
+                            continue
                         maximum_position = max(maximum_position, validated_position)
                         checkpoint_position = validated_position
                     else:

@@ -32,6 +32,8 @@ The required firm configuration remains:
 attempts the configured StockAnalysis `provider_identifier` first, then preserves learned FIFO
 order and each learned seed's explicit provider association. It never selects a provider by URL
 shape. `TranscriptProviderRegistry` remains the single provider-name dispatch definition.
+Its registration type is a provider-neutral constructor protocol; adding a second provider no
+longer requires changing a StockAnalysis-specific tuple annotation or registry import.
 
 | Provider | Seed kind | Configured | Learned | Operator supplied |
 |---|---|---:|---:|---:|
@@ -81,7 +83,9 @@ The diagnostic projection contains only:
 
 Focused tests prove that complete turn paragraphs remain available through the typed field while
 the same text is absent from deterministic diagnostic JSON. Related artifacts and learning
-feedback remain available through their typed fields.
+feedback remain available through their typed fields. Provider metadata diagnostics use a fixed
+five-field allowlist, cap every retained value at 256 characters, and remain below the existing
+serialized diagnostic bound even when an artifact attribute is oversized.
 
 ## Trusted Metadata and Date Ownership
 
@@ -91,13 +95,17 @@ terminal-selection policy validates it.
 
 When the artifact-local date is absent, malformed, or unrecognized, the provider returns
 `trusted_event_date=None` and omits date-derived diagnostic fields. It does not raise a
-provider-specific `event_date_unavailable` failure. Repository-owned terminal qualification then
-records the neutral `event_date_unavailable` outcome when the selection requires a date.
+provider-specific `event_date_unavailable` failure. Repository-owned durable qualification then
+records the neutral `event_date_unavailable` outcome, including for the compatibility `latest`
+path, instead of classifying an unset date as a malformed adapter result.
 
 The negative fixture retains a date-bearing URL slug, fiscal label, archive position and label,
-publication timestamp, and related-document URLs. None becomes a fallback event date. Conflicting
-trusted artifact metadata continues to fail closed; URL, archive order, fiscal period,
-publication metadata, and related documents remain non-authoritative.
+publication timestamp, and related-document URLs. None becomes a fallback event date. Multiple
+artifact-local date observations are parsed into normalized dates before comparison: equivalent
+known formats agree, while malformed, unrecognized, or conflicting observations leave the date
+unset independent of DOM order. Other conflicting trusted metadata continues to fail closed;
+URL, archive order, fiscal period, publication metadata, and related documents remain
+non-authoritative.
 
 ## Provenance and Learning
 
@@ -125,7 +133,14 @@ queries, and fragments fail closed.
 
 One `BudgetedTranscriptTransport` still spans archive retrieval, document retrieval, redirects,
 provider-local retries, and response caching. Page, byte, host, elapsed, redirect, retry,
-candidate, and diagnostic bounds remain shared and named. No search request occurs.
+candidate, and diagnostic bounds remain shared and named. Provider candidates are admitted
+through that transport's run-level candidate-identity ledger, so a later learned seed can reuse
+an already admitted identity but cannot introduce an eleventh identity after a ten-candidate
+configured attempt. No search request occurs.
+
+Label-based related-artifact fallback is scoped to an explicit provider relationship container.
+Links in navigation, footers, or the transcript body cannot become relationship observations;
+provider-explicit `data-related-kind` links remain accepted and typed.
 
 ## Live Acceptance and Byte Authority
 
@@ -141,11 +156,12 @@ Observed bounded evidence:
 - redirects: 0;
 - provider retries: 0;
 - speaker turns: 36;
-- related kinds: annual report, presentation slides, and earnings release;
+- related-artifact observations: 0 (the current live page exposes no tested explicit relationship
+  surface; fixture-covered explicit links still emit all four typed kinds);
 - search-engine calls: 0; and
 - bounds exhausted: false.
 
-Authoritative live transport bytes: `775055`.
+Authoritative live transport bytes: `772879`.
 
 The live evidence file is the single byte-count authority. It records SHA-256 identities for the
 provider, neutral contracts, orchestrator, and live validator. Package generation verifies those
@@ -170,14 +186,17 @@ review text, verifier output, and final implementation report use the same wordi
   remain with their prior owners.
 - Existing diagnostics-only validated-date evidence remains compatible for legacy transcript
   adapters; StockAnalysis uses the new typed trusted-date observation.
-- `latest` and `first_in_date_range` behavior remains under existing selection semantics.
+- `latest` and `first_in_date_range` remain under existing selection semantics; an unset provider
+  date is a neutral validation rejection rather than a malformed-adapter failure.
+- The provider registry accepts provider-neutral factories and has no first-provider type leak.
+- Related-link label fallback is restricted to a fixture-covered explicit relationship surface.
 - No transcript body is persisted as diagnostics.
 - No `event_group_id`, generic speaker segmentation, search fallback, Crawlee, Playwright,
   browser storage, or crawler state was introduced.
 
 ## Validation Results
 
-- Focused TASK-064 suite: PASS (14 tests).
+- Focused TASK-064 suite: PASS (20 tests).
 - TASK-059 through TASK-063 transcript regressions: PASS (45 tests).
 - Review-package verifier regressions: PASS.
 - Deterministic fixture replay twice: PASS with identical typed observations and summaries.
@@ -191,9 +210,13 @@ inventory, live evidence, and SHA-256 manifest.
 ## Complexity, Limitations, and Technical Debt
 
 - Static server-rendered HTML remains sufficient; unknown future layouts fail explicitly.
+- Parser complexity remains linear in bounded response size; metadata projection, relationship
+  scope, candidate admission, retry counts, and serialized diagnostics all have explicit caps.
 - The authoritative retained artifact remains normalized transcript text rather than full page UI.
 - Typed turn and relationship observations are not yet projected into a separate durable
   relationship schema; transcript bytes remain authoritative.
+- The current live page does not expose a tested explicit relationship container, so live related
+  observations are empty instead of being guessed from global link labels.
 - Legacy non-provider transcript paths remain intentionally unchanged.
 - Live layout and response size remain outside repository control, so each new package requires a
   fresh identity-bound live capture.
@@ -202,7 +225,7 @@ inventory, live evidence, and SHA-256 manifest.
 
 | Subsystem | Responsibility | Status | Limitations / next milestone |
 |---|---|---|---|
-| Transcript provider registry | Explicit name-based dispatch | Complete | One concrete provider |
+| Transcript provider registry | Explicit name-based dispatch through neutral factories | Complete | One concrete provider |
 | Transcript orchestrator | Seed order, escalation, budgets, lifecycle | Complete | Legacy generic path remains |
 | StockAnalysis adapter | Identifier, HTTP, parsing, typed observations | Complete | Known static layouts only |
 | Neutral retrieval envelope | Artifact, optional date, turns, relations, feedback | Complete | No separate durable projection |

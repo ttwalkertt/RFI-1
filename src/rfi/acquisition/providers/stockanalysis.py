@@ -36,10 +36,16 @@ PROVIDER = "stockanalysis"
 HOST = "stockanalysis.com"
 _IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,15}$")
 _DOCUMENT_PATH = re.compile(
-    r"^/stocks/(?P<ticker>[a-z0-9.-]+)/transcripts/(?P<slug>[a-z0-9][a-z0-9-]*)/$"
+    r"^/stocks/(?P<ticker>[a-z0-9.-]+)/transcripts/(?P<slug>[a-z0-9][a-z0-9-]{0,199})/$"
 )
 _ARCHIVE_PATH = re.compile(r"^/stocks/(?P<ticker>[a-z0-9.-]+)/transcripts/$")
 _TRUSTED_DATE_FORMATS = ("%Y-%m-%d", "%B %d, %Y", "%B %d %Y", "%b %d, %Y")
+_DATE_LIKE = re.compile(
+    r"^(?:20\d{2}[-_/]|Jan(?:uary)?\b|Feb(?:ruary)?\b|Mar(?:ch)?\b|"
+    r"Apr(?:il)?\b|May\b|Jun(?:e)?\b|Jul(?:y)?\b|Aug(?:ust)?\b|"
+    r"Sep(?:tember)?\b|Oct(?:ober)?\b|Nov(?:ember)?\b|Dec(?:ember)?\b)",
+    re.IGNORECASE,
+)
 _RELATED_KINDS = {
     "annual-report": "annual_report",
     "annual_report": "annual_report",
@@ -50,6 +56,14 @@ _RELATED_KINDS = {
     "audio": "audio",
     "transcript-download": "transcript_download",
 }
+_DIAGNOSTIC_METADATA_KEYS = (
+    "company_label",
+    "document_title",
+    "event_type_label",
+    "fiscal_period_label",
+    "ticker_label",
+)
+_MAX_DIAGNOSTIC_METADATA_VALUE_CHARS = 256
 
 
 class TranscriptProviderTransport(Protocol):
@@ -117,6 +131,7 @@ class _TranscriptParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.page_url = page_url
         self.metadata: dict[str, str] = {}
+        self.event_date_observations: list[str] = []
         self.paragraphs: list[str] = []
         self.turns: list[_TurnBuilder] = []
         self.related: list[RelatedArtifactObservation] = []
@@ -137,8 +152,20 @@ class _TranscriptParser(HTMLParser):
         self._page_date_depth = 0
         self._json_ld_depth = 0
         self._json_ld_text: list[str] = []
-        self._global_href: str | None = None
-        self._global_link_text: list[str] = []
+        self._related_depth = 0
+        self._related_href: str | None = None
+        self._related_link_text: list[str] = []
+
+    def _observe_metadata(self, key: str, value: str) -> None:
+        observed = value.strip()
+        if not observed:
+            return
+        if key == "event_date":
+            self.event_date_observations.append(observed)
+            return
+        if key in self.metadata and self.metadata[key] != observed:
+            self.metadata_conflict = True
+        self.metadata[key] = observed
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
@@ -150,9 +177,6 @@ class _TranscriptParser(HTMLParser):
             self._json_ld_text = []
         elif self._json_ld_depth:
             self._json_ld_depth += 1
-        if tag.casefold() == "a" and values.get("href"):
-            self._global_href = values["href"]
-            self._global_link_text = []
         if tag.casefold() == "h1" and "text-2xl" in classes_value:
             self._page_title_depth = 1
             self._live_text = []
@@ -183,12 +207,20 @@ class _TranscriptParser(HTMLParser):
                 ("data-event-date", "event_date"),
             ):
                 if values.get(source):
-                    observed = str(values[source]).strip()
-                    if target in self.metadata and self.metadata[target] != observed:
-                        self.metadata_conflict = True
-                    self.metadata[target] = observed
+                    self._observe_metadata(target, str(values[source]))
         if not self._transcript_depth:
             return
+        if self._related_depth:
+            self._related_depth += 1
+        elif marker == "related-artifacts":
+            self._related_depth = 1
+        if (
+            tag.casefold() == "a"
+            and values.get("href")
+            and self._related_depth
+        ):
+            self._related_href = values["href"]
+            self._related_link_text = []
         excluded = values.get("data-provider-summary") is not None or marker in {
             "provider-summary", "related-artifacts", "transcript-controls"
         }
@@ -214,13 +246,7 @@ class _TranscriptParser(HTMLParser):
             self._heading_depth = self._transcript_depth
             self._text = []
         if tag.casefold() == "time" and values.get("datetime"):
-            observed_date = str(values["datetime"]).strip()
-            if (
-                "event_date" in self.metadata
-                and self.metadata["event_date"] != observed_date
-            ):
-                self.metadata_conflict = True
-            self.metadata["event_date"] = observed_date
+            self._observe_metadata("event_date", str(values["datetime"]))
             self._time_depth = self._transcript_depth
         speaker = values.get("data-speaker")
         if speaker:
@@ -252,8 +278,8 @@ class _TranscriptParser(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._json_ld_depth:
             self._json_ld_text.append(data)
-        if self._global_href is not None:
-            self._global_link_text.append(data)
+        if self._related_href is not None:
+            self._related_link_text.append(data)
         if self._page_title_depth or self._page_date_depth:
             self._live_text.append(data)
             return
@@ -282,18 +308,18 @@ class _TranscriptParser(HTMLParser):
                             self.metadata.setdefault(target, observed.strip())
                 self._json_ld_text = []
             self._json_ld_depth -= 1
-        if tag.casefold() == "a" and self._global_href is not None:
-            label = " ".join(" ".join(self._global_link_text).split()).casefold()
+        if tag.casefold() == "a" and self._related_href is not None:
+            label = " ".join(" ".join(self._related_link_text).split()).casefold()
             kind = _RELATED_KINDS.get(label.replace(" ", "-"))
             if kind:
                 self.related.append(RelatedArtifactObservation(
                     kind,
-                    urllib.parse.urljoin(self.page_url, self._global_href),
+                    urllib.parse.urljoin(self.page_url, self._related_href),
                     "explicitly_related_to_transcript",
                     self.page_url,
                 ))
-            self._global_href = None
-            self._global_link_text = []
+            self._related_href = None
+            self._related_link_text = []
         if self._page_title_depth:
             if self._page_title_depth == 1 and tag.casefold() == "h1":
                 value = " ".join(" ".join(self._live_text).split())
@@ -311,8 +337,8 @@ class _TranscriptParser(HTMLParser):
         if self._page_date_depth:
             if self._page_date_depth == 1 and tag.casefold() == "p":
                 value = " ".join(" ".join(self._live_text).split())
-                if value:
-                    self.metadata.setdefault("event_date", value)
+                if value and _DATE_LIKE.match(value):
+                    self._observe_metadata("event_date", value)
                 self._live_text = []
             self._page_date_depth -= 1
         if not self._transcript_depth:
@@ -350,6 +376,8 @@ class _TranscriptParser(HTMLParser):
                     self.turns.append(self._turn)
                 self._turn = None
                 self._turn_depth = 0
+        if self._related_depth:
+            self._related_depth -= 1
         self._transcript_depth -= 1
 
 
@@ -409,6 +437,26 @@ def _trusted_date(value: str | None) -> date | None:
         except ValueError:
             continue
     return None
+
+
+def _trusted_event_date(observations: list[str]) -> date | None:
+    """Accept only unanimous, recognized artifact-local date observations."""
+    if not observations:
+        return None
+    normalized = tuple(_trusted_date(value) for value in observations)
+    if any(value is None for value in normalized):
+        return None
+    accepted = {value for value in normalized if value is not None}
+    return next(iter(accepted)) if len(accepted) == 1 else None
+
+
+def _bounded_diagnostic_metadata(metadata: dict[str, str]) -> dict[str, str]:
+    """Project trusted labels into a deterministic, body-safe diagnostic bound."""
+    return {
+        key: metadata[key][:_MAX_DIAGNOSTIC_METADATA_VALUE_CHARS]
+        for key in _DIAGNOSTIC_METADATA_KEYS
+        if key in metadata
+    }
 
 
 class StockAnalysisTranscriptProvider:
@@ -538,9 +586,7 @@ class StockAnalysisTranscriptProvider:
         if observed_ticker and observed_ticker != ticker:
             raise self._failure("artifact ticker conflicts with provider identifier", False,
                                 "trusted_metadata_conflict")
-        event_date = _trusted_date(parser.metadata.get("event_date"))
-        if parser.metadata.get("event_date") and event_date is None:
-            parser.metadata.pop("event_date", None)
+        event_date = _trusted_event_date(parser.event_date_observations)
         turns = tuple(
             TranscriptTurnObservation(
                 index, turn.speaker, turn.role, turn.section, tuple(turn.paragraphs)
@@ -585,7 +631,7 @@ class StockAnalysisTranscriptProvider:
             "requested_url": requested,
             "resolved_url": response.url,
             "provider": self.provider,
-            "provider_metadata": dict(sorted(parser.metadata.items())),
+            "provider_metadata": _bounded_diagnostic_metadata(parser.metadata),
             "trusted_event_date_available": event_date is not None,
             "speaker_turn_count": len(turns),
             "speaker_turn_content_sha256": hashlib.sha256(turn_payload).hexdigest(),
@@ -599,12 +645,7 @@ class StockAnalysisTranscriptProvider:
             "provider_max_retries": self.maximum_retries,
         }
         if event_date is not None:
-            period = ((event_date.month - 1) // 3) + 1
-            diagnostics.update({
-                "trusted_event_date": event_date.isoformat(),
-                "validated_position": event_date.year * 4 + period,
-                "validated_revision": f"published-{event_date.isoformat()}",
-            })
+            diagnostics["trusted_event_date"] = event_date.isoformat()
         return RetrievalResult(
             content=retained,
             media_type="text/plain",
