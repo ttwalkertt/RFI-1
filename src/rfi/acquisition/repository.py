@@ -438,7 +438,7 @@ class AcquisitionRepository:
         adapter_id = policy.get("retrieval_adapter_id")
         metadata = candidate.provenance.metadata
         requested = metadata.get("requested_url")
-        provider = metadata.get("provider")
+        provider = candidate.provenance.provider_identifiers.get("provider")
         resolved = result.diagnostics.get("final_url")
         if not all(isinstance(value, str) and value for value in (firm_id, adapter_id, requested)):
             return
@@ -516,7 +516,7 @@ class AcquisitionRepository:
             record = self._decode(attempt[1], "successful checkpoint attempt")
             provenance = record["candidate"]["provenance"]
             requested = provenance.get("metadata", {}).get("requested_url")
-            provider = provenance.get("metadata", {}).get("provider")
+            provider = provenance.get("provider_identifiers", {}).get("provider")
             resolved = record.get("diagnostics", {}).get("final_url")
             if not isinstance(requested, str) or not requested:
                 return False

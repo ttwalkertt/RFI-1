@@ -1523,16 +1523,30 @@ class TranscriptTerminalSelectionPolicy:
     def qualify(
         self, candidate: AdapterCandidate, retrieval: RetrievalResult
     ) -> AdapterSelectionDecision:
-        value = retrieval.diagnostics.get("validated_event_date")
-        if not isinstance(value, str):
-            raise ContractError("validated transcript lacks an event date")
-        try:
-            event_date = date.fromisoformat(value)
-        except ValueError as error:
-            raise ContractError("validated transcript event date is malformed") from error
+        event_date = retrieval.trusted_event_date
+        if event_date is None:
+            existing_value = retrieval.diagnostics.get("validated_event_date")
+            if isinstance(existing_value, str):
+                try:
+                    event_date = date.fromisoformat(existing_value)
+                except ValueError as error:
+                    raise ContractError(
+                        "validated transcript event date is malformed"
+                    ) from error
+        if event_date is None:
+            return AdapterSelectionDecision(
+                False,
+                "validation_rejected",
+                "event_date_unavailable",
+                {"trusted_event_date_available": False},
+            )
+        value = event_date.isoformat()
         rank = self._deterministic_rank(candidate)
+        period = ((event_date.month - 1) // 3) + 1
         evidence = {
             "validated_event_date": value,
+            "validated_position": event_date.year * 4 + period,
+            "validated_revision": f"published-{value}",
             "validated_content_sha256": hashlib.sha256(retrieval.content).hexdigest(),
             "deterministic_selection_rank": list(rank),
         }
@@ -2276,7 +2290,7 @@ class EarningsTranscriptPullAdapter:
     def retrieve(self, profile: SourceProfile, candidate: AdapterCandidate) -> RetrievalResult:
         self._validate_profile(profile)
         metadata = candidate.provenance.metadata
-        provider_name = metadata.get("provider")
+        provider_name = candidate.provenance.provider_identifiers.get("provider")
         if isinstance(provider_name, str) and provider_name:
             if provider_name != profile.configuration.get("provider"):
                 raise ContractError("transcript candidate provider changed")

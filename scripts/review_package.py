@@ -303,6 +303,7 @@ def verify_package(zip_path: Path, *, expected_task_id: str | None = None) -> di
     return {
         "task_id": task_id,
         "format_version": FORMAT_VERSION,
-        "members_verified": len(members),
+        "manifested_members_verified": len(members),
+        "total_zip_entries": len(names),
         "result": "PASS",
     }

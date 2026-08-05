@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from jsonschema import Draft202012Validator
 
@@ -14,6 +15,7 @@ from rfi.acquisition import (
     AdapterRegistry,
     AdapterFailure,
     SourceProfile,
+    TranscriptAcquisitionSelection,
     TranscriptAcquisitionTarget,
     TranscriptSeed,
 )
@@ -28,6 +30,7 @@ from rfi.discovery import (
     DiscoveryPolicy,
     DiscoveryPolicyCatalog,
     EarningsTranscriptPullAdapter,
+    TranscriptTerminalSelectionPolicy,
     TranscriptAcquisitionOrchestrator,
 )
 from rfi.source_profiles import (
@@ -132,6 +135,12 @@ class StockAnalysisProviderTests(unittest.TestCase):
         ])
         self.assertEqual(page.diagnostics["search_queries"], 0)
         self.assertEqual(page.candidates[0].provenance.locations[0], ARCHIVE_URL)
+        provenance = json.dumps(page.candidates[0].provenance.to_dict(), sort_keys=True)
+        self.assertEqual(provenance.count('"provider"'), 1)
+        self.assertEqual(
+            page.candidates[0].provenance.provider_identifiers["provider"],
+            "stockanalysis",
+        )
 
     def test_direct_document_skips_archive_and_converges_on_candidate_identity(self) -> None:
         transport = Transport({
@@ -168,36 +177,102 @@ class StockAnalysisProviderTests(unittest.TestCase):
         self.assertIn("I will now hand the call to Doug.", text)
         self.assertNotIn("Provider-generated summary", text)
         self.assertNotIn("Subscription prompt", text)
-        self.assertEqual(result.diagnostics["validated_event_date"], "2026-06-15")
-        turns = result.diagnostics["speaker_turns"]
-        self.assertEqual([item["ordinal"] for item in turns], [1, 2, 3, 4])
+        self.assertEqual(result.trusted_event_date, date(2026, 6, 15))
+        turns = result.speaker_turn_observations
+        self.assertEqual([item.ordinal for item in turns], [1, 2, 3, 4])
         self.assertEqual(
-            [item["speaker_label"] for item in turns][1:3],
+            [item.speaker_label for item in turns][1:3],
             ["Safra Catz", "Safra Catz"],
         )
-        self.assertEqual(len(turns[1]["paragraphs"]), 2)
-        related = result.diagnostics["related_artifacts"]
-        self.assertEqual([item["artifact_kind"] for item in related], [
+        self.assertEqual(len(turns[1].paragraphs), 2)
+        self.assertIn("Good afternoon, and welcome", turns[0].paragraphs[0])
+        related = result.related_artifact_observations
+        self.assertEqual([item.artifact_kind for item in related], [
             "earnings_release", "presentation_slides", "annual_report", "audio",
         ])
         self.assertEqual(result.diagnostics["related_artifacts_retrieved"], 0)
-        self.assertEqual([item["provider"] for item in result.diagnostics["learning_feedback"]], [
-            "stockanalysis", "stockanalysis",
-        ])
+        self.assertEqual(
+            [item.provider for item in result.transcript_learning_feedback],
+            ["stockanalysis", "stockanalysis"],
+        )
+        self.assertEqual(result.diagnostics["speaker_turn_count"], 4)
+        self.assertEqual(result.diagnostics["related_artifact_count"], 4)
+        self.assertEqual(result.diagnostics["learning_feedback_count"], 2)
+        rendered_diagnostics = json.dumps(result.diagnostics, sort_keys=True)
+        self.assertEqual(rendered_diagnostics, json.dumps(result.diagnostics, sort_keys=True))
+        self.assertLess(len(rendered_diagnostics.encode()), 4096)
+        for forbidden in (
+            "Good afternoon, and welcome",
+            "I will now hand the call to Doug.",
+            "speaker_turns",
+            '"paragraphs"',
+            '"related_artifacts"',
+            '"learning_feedback"',
+        ):
+            self.assertNotIn(forbidden, rendered_diagnostics)
         self.assertNotIn("event_group_id", json.dumps(result.diagnostics))
+        decision = TranscriptTerminalSelectionPolicy(
+            TranscriptAcquisitionSelection.first_in_date_range(
+                date(2026, 1, 1), date(2026, 12, 31)
+            )
+        ).qualify(candidate, result)
+        self.assertTrue(decision.qualifies)
+        self.assertEqual(decision.diagnostics["validated_event_date"], "2026-06-15")
 
     def test_event_date_is_not_inferred_from_document_slug(self) -> None:
         without_date = DOCUMENT.replace(
             b'<time datetime="2026-06-15">June 15, 2026</time>', b""
+        ).replace(
+            b"</head>",
+            b'<script type="application/ld+json">'
+            b'{"@type":"Article","datePublished":"2026-06-16"}'
+            b"</script></head>",
         )
-        transport = Transport({DOCUMENT_URL: response(DOCUMENT_URL, without_date)})
+        transport = Transport({
+            ARCHIVE_URL: response(ARCHIVE_URL, ARCHIVE),
+            DOCUMENT_URL: response(DOCUMENT_URL, without_date),
+        })
         provider = self.provider(transport)
+        candidate = provider.discover(
+            profile(),
+            TranscriptSeed(
+                "stockanalysis", "provider_identifier", "ORCL", "configured"
+            ),
+            TranscriptAcquisitionTarget("oracle"),
+        ).candidates[0]
+        result = provider.retrieve(profile(), candidate)
+        self.assertIsNone(result.trusted_event_date)
+        self.assertFalse(result.diagnostics["trusted_event_date_available"])
+        for forbidden in (
+            "validated_event_date", "trusted_event_date", "validated_position",
+            "validated_revision",
+        ):
+            self.assertNotIn(forbidden, result.diagnostics)
+        decision = TranscriptTerminalSelectionPolicy(
+            TranscriptAcquisitionSelection.first_in_date_range(
+                date(2026, 1, 1), date(2026, 12, 31)
+            )
+        ).qualify(candidate, result)
+        self.assertFalse(decision.qualifies)
+        self.assertEqual(decision.validation_outcome, "event_date_unavailable")
+
+    def test_unrecognized_artifact_date_stays_unset_without_fallback(self) -> None:
+        unrecognized = DOCUMENT.replace(
+            b'<time datetime="2026-06-15">June 15, 2026</time>',
+            b'<time datetime="not-a-date">June 15, 2026</time>',
+        )
+        provider = self.provider(Transport({
+            DOCUMENT_URL: response(DOCUMENT_URL, unrecognized)
+        }))
         candidate = provider.discover(
             profile(), TranscriptSeed("stockanalysis", "url", DOCUMENT_URL, "learned"),
             TranscriptAcquisitionTarget("oracle"),
         ).candidates[0]
-        with self.assertRaisesRegex(AdapterFailure, "artifact-local event date"):
-            provider.retrieve(profile(), candidate)
+        result = provider.retrieve(profile(), candidate)
+        self.assertIsNone(result.trusted_event_date)
+        serialized = json.dumps(result.diagnostics, sort_keys=True)
+        self.assertNotIn("2026-06-15", serialized)
+        self.assertNotIn("event_date", result.diagnostics["provider_metadata"])
 
     def test_url_validation_rejects_deceptive_hosts_paths_and_cross_firm_routes(self) -> None:
         for url in (
@@ -360,6 +435,19 @@ class ProviderOrchestrationTests(unittest.TestCase):
                 "candidates": [item.canonical() for item in page.candidates],
                 "content": result.content.decode(),
                 "diagnostics": result.diagnostics,
+                "trusted_event_date": (
+                    result.trusted_event_date.isoformat()
+                    if result.trusted_event_date else None
+                ),
+                "speaker_turn_observations": [
+                    item.to_dict() for item in result.speaker_turn_observations
+                ],
+                "related_artifact_observations": [
+                    item.to_dict() for item in result.related_artifact_observations
+                ],
+                "transcript_learning_feedback": [
+                    item.to_dict() for item in result.transcript_learning_feedback
+                ],
             }, sort_keys=True))
         self.assertEqual(outputs[0], outputs[1])
 

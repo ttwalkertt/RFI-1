@@ -450,6 +450,10 @@ class RetrievalResult:
     mechanism: str
     provider_identifiers: dict[str, str] = field(default_factory=dict)
     diagnostics: dict[str, JsonValue] = field(default_factory=dict)
+    trusted_event_date: date | None = None
+    speaker_turn_observations: tuple[TranscriptTurnObservation, ...] = ()
+    related_artifact_observations: tuple[RelatedArtifactObservation, ...] = ()
+    transcript_learning_feedback: tuple[TranscriptLearningFeedback, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.content, bytes):
@@ -462,6 +466,25 @@ class RetrievalResult:
         if any(not key or not value for key, value in self.provider_identifiers.items()):
             raise ContractError("provider identifiers require non-empty keys and values")
         validate_json(self.diagnostics, "retrieval diagnostics")
+        if self.trusted_event_date is not None and not isinstance(
+            self.trusted_event_date, date
+        ):
+            raise ContractError("trusted event date must be a date or unset")
+        if not isinstance(self.speaker_turn_observations, tuple) or any(
+            not isinstance(item, TranscriptTurnObservation)
+            for item in self.speaker_turn_observations
+        ):
+            raise ContractError("speaker-turn observations are malformed")
+        if not isinstance(self.related_artifact_observations, tuple) or any(
+            not isinstance(item, RelatedArtifactObservation)
+            for item in self.related_artifact_observations
+        ):
+            raise ContractError("related-artifact observations are malformed")
+        if not isinstance(self.transcript_learning_feedback, tuple) or any(
+            not isinstance(item, TranscriptLearningFeedback)
+            for item in self.transcript_learning_feedback
+        ):
+            raise ContractError("transcript learning feedback is malformed")
 
 
 @dataclass(frozen=True, order=True)

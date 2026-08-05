@@ -1259,7 +1259,9 @@ class AcquisitionEngine:
                 candidate = selected_selection_candidate.candidate
                 repository_candidate = selected_selection_candidate.repository_candidate
                 result = selected_selection_candidate.retrieval
-                validated_position = result.diagnostics.get("validated_position")
+                validated_position = selected_selection_candidate.decision.diagnostics.get(
+                    "validated_position"
+                )
                 if not isinstance(validated_position, int) or validated_position < 1:
                     raise ContractError("selected retrieval lacks validated position")
                 maximum_position = max(maximum_position, validated_position)

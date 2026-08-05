@@ -4,19 +4,61 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
-from rfi.acquisition import SourceProfile, TranscriptAcquisitionTarget, TranscriptSeed
+from rfi.acquisition import (
+    SourceProfile,
+    TranscriptAcquisitionSelection,
+    TranscriptAcquisitionTarget,
+    TranscriptSeed,
+)
 from rfi.acquisition.earnings_transcripts import UrllibEarningsTranscriptTransport
 from rfi.acquisition.providers.stockanalysis import StockAnalysisTranscriptProvider, archive_url
-from rfi.discovery import BudgetedTranscriptTransport, DiscoveryPolicy
+from rfi.discovery import (
+    BudgetedTranscriptTransport,
+    DiscoveryPolicy,
+    TranscriptTerminalSelectionPolicy,
+)
+
+ROOT = Path(__file__).resolve().parents[1]
+IDENTITY_PATHS = {
+    "provider": ROOT / "src/rfi/acquisition/providers/stockanalysis.py",
+    "contracts": ROOT / "src/rfi/acquisition/contracts.py",
+    "orchestrator": ROOT / "src/rfi/discovery.py",
+    "live_validator": Path(__file__).resolve(),
+}
+
+
+def implementation_identity() -> dict[str, str]:
+    return {
+        name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for name, path in sorted(IDENTITY_PATHS.items())
+    }
+
+
+def verify_evidence(path: Path) -> dict[str, object]:
+    evidence = json.loads(path.read_text(encoding="utf-8"))
+    if evidence.get("implementation_identity") != implementation_identity():
+        raise ValueError("live evidence does not match the current TASK-064 implementation")
+    usage = evidence.get("resource_usage")
+    if not isinstance(usage, dict) or not isinstance(usage.get("bytes"), int):
+        raise ValueError("live evidence has no authoritative byte count")
+    if evidence.get("direct_document", {}).get("outcome") != "validated":
+        raise ValueError("live evidence does not contain a validated direct document")
+    return evidence
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--verify", type=Path)
     args = parser.parse_args()
+    if args.verify is not None:
+        evidence = verify_evidence(args.verify)
+        print(json.dumps(evidence, indent=2, sort_keys=True))
+        return 0
     configured_provider = "stockanalysis"
     hint_kind = "provider_identifier"
     hint_value = "ORCL"
@@ -64,22 +106,29 @@ def main() -> int:
     else:
         try:
             result = provider.retrieve(profile, representative)
+            decision = TranscriptTerminalSelectionPolicy(
+                TranscriptAcquisitionSelection.latest()
+            ).qualify(representative, result)
             direct = {
-                "outcome": "validated",
+                "outcome": "validated" if decision.qualifies else "rejected",
                 "requested_url": representative.provenance.metadata["requested_url"],
                 "resolved_url": result.diagnostics.get("resolved_url"),
-                "event_date": result.diagnostics.get("validated_event_date"),
+                "event_date": (
+                    result.trusted_event_date.isoformat()
+                    if result.trusted_event_date else None
+                ),
                 "speaker_turn_count": result.diagnostics.get("speaker_turn_count"),
                 "speaker_turn_content_sha256": result.diagnostics.get(
                     "speaker_turn_content_sha256"
                 ),
                 "related_artifacts": [
-                    {"artifact_kind": item.get("artifact_kind"),
-                     "observed_url": item.get("observed_url")}
-                    for item in result.diagnostics.get("related_artifacts", [])
-                    if isinstance(item, dict)
+                    {"artifact_kind": item.artifact_kind,
+                     "observed_url": item.observed_url}
+                    for item in result.related_artifact_observations
                 ],
-                "learning_feedback": result.diagnostics.get("learning_feedback", []),
+                "learning_feedback": [
+                    item.to_dict() for item in result.transcript_learning_feedback
+                ],
             }
         except Exception as error:  # bounded live evidence must retain access/layout failures
             direct = {
@@ -112,6 +161,7 @@ def main() -> int:
             "exhausted_budget": transport.exhausted_budget,
         },
         "search_engine_call_count": 0,
+        "implementation_identity": implementation_identity(),
     }
     rendered = json.dumps(evidence, indent=2, sort_keys=True) + "\n"
     if args.output:

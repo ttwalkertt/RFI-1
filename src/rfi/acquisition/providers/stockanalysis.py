@@ -541,12 +541,6 @@ class StockAnalysisTranscriptProvider:
         event_date = _trusted_date(parser.metadata.get("event_date"))
         if parser.metadata.get("event_date") and event_date is None:
             parser.metadata.pop("event_date", None)
-        if event_date is None:
-            raise self._failure(
-                "StockAnalysis artifact lacks a recognized artifact-local event date",
-                False,
-                "event_date_unavailable",
-            )
         turns = tuple(
             TranscriptTurnObservation(
                 index, turn.speaker, turn.role, turn.section, tuple(turn.paragraphs)
@@ -557,7 +551,9 @@ class StockAnalysisTranscriptProvider:
             (item.artifact_kind, item.observed_url, item.relationship_kind,
              item.source_provenance) for item in parser.related
         ))
-        related_observations = tuple(RelatedArtifactObservation(*item) for item in related)
+        related_observations = tuple(
+            RelatedArtifactObservation(*item) for item in related[:16]
+        )
         metadata_lines = [
             f"{name}: {value}" for name, value in (
                 ("Title", parser.metadata.get("document_title")),
@@ -565,7 +561,7 @@ class StockAnalysisTranscriptProvider:
                 ("Ticker", parser.metadata.get("ticker_label")),
                 ("Event type", parser.metadata.get("event_type_label")),
                 ("Fiscal period", parser.metadata.get("fiscal_period_label")),
-                ("Event date", event_date.isoformat()),
+                ("Event date", event_date.isoformat() if event_date else None),
             ) if value
         ]
         retained = ("\n".join((*metadata_lines, "", *parser.paragraphs)).rstrip() + "\n").encode()
@@ -578,32 +574,51 @@ class StockAnalysisTranscriptProvider:
                 "reusable_direct_document", self.provider, "url", resolved
             ),
         )
-        period = ((event_date.month - 1) // 3) + 1
-        return RetrievalResult(
-            retained,
-            "text/plain",
-            self.clock(),
-            "earnings_transcript",
-            {"provider": self.provider, "provider_identifier": expected_ticker},
-            {
-                "http_status": response.status,
-                "final_url": response.url,
-                "requested_url": requested,
-                "resolved_url": response.url,
-                "provider": self.provider,
-                "provider_metadata": dict(sorted(parser.metadata.items())),
-                "validated_event_date": event_date.isoformat(),
+        turn_payload = json.dumps(
+            [item.to_dict() for item in turns],
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        diagnostics: dict[str, JsonValue] = {
+            "http_status": response.status,
+            "final_url": response.url,
+            "requested_url": requested,
+            "resolved_url": response.url,
+            "provider": self.provider,
+            "provider_metadata": dict(sorted(parser.metadata.items())),
+            "trusted_event_date_available": event_date is not None,
+            "speaker_turn_count": len(turns),
+            "speaker_turn_content_sha256": hashlib.sha256(turn_payload).hexdigest(),
+            "related_artifact_count": len(related_observations),
+            "related_artifact_kinds": [
+                item.artifact_kind for item in related_observations
+            ],
+            "related_artifacts_retrieved": 0,
+            "learning_feedback_count": len(feedback),
+            "provider_retry_count": self.retry_count,
+            "provider_max_retries": self.maximum_retries,
+        }
+        if event_date is not None:
+            period = ((event_date.month - 1) // 3) + 1
+            diagnostics.update({
+                "trusted_event_date": event_date.isoformat(),
                 "validated_position": event_date.year * 4 + period,
                 "validated_revision": f"published-{event_date.isoformat()}",
-                "speaker_turns": [item.to_dict() for item in turns],
-                "speaker_turn_count": len(turns),
-                "speaker_turn_content_sha256": hashlib.sha256(retained).hexdigest(),
-                "related_artifacts": [item.to_dict() for item in related_observations],
-                "related_artifacts_retrieved": 0,
-                "learning_feedback": [item.to_dict() for item in feedback],
-                "provider_retry_count": self.retry_count,
-                "provider_max_retries": self.maximum_retries,
+            })
+        return RetrievalResult(
+            content=retained,
+            media_type="text/plain",
+            retrieved_at=self.clock(),
+            mechanism="earnings_transcript",
+            provider_identifiers={
+                "provider": self.provider,
+                "provider_identifier": expected_ticker,
             },
+            diagnostics=diagnostics,
+            trusted_event_date=event_date,
+            speaker_turn_observations=turns,
+            related_artifact_observations=related_observations,
+            transcript_learning_feedback=feedback,
         )
 
     def _candidate(
@@ -622,7 +637,6 @@ class StockAnalysisTranscriptProvider:
                 {"provider": self.provider, "provider_identifier": exact_identifier},
                 tuple(dict.fromkeys((parent, observed, normalized))),
                 {
-                    "provider": self.provider,
                     "provider_surface": "transcript",
                     "firm_id": getattr(target, "firm_id", ""),
                     "canonical_artifact_id": "earnings_transcript",

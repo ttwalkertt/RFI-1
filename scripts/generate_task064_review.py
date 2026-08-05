@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import subprocess
+import zipfile
 from pathlib import Path
 
 from review_package import build_package, verify_package
@@ -16,6 +17,24 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / ".artifacts/review/TASK-064"
 ZIP_PATH = ROOT / ".artifacts/review/TASK-064-review.zip"
 VALIDATION = ROOT / ".artifacts/task064-validation"
+REPORT_PATH = ROOT / ".artifacts/review/TASK-064-review-report.json"
+
+
+def live_transport_bytes(path: Path) -> int:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    usage = value.get("resource_usage")
+    if not isinstance(usage, dict) or not isinstance(usage.get("bytes"), int):
+        raise RuntimeError("TASK-064 live evidence has no authoritative byte count")
+    return int(usage["bytes"])
+
+
+def packaged_live_transport_bytes(path: Path) -> int:
+    with zipfile.ZipFile(path) as archive:
+        value = json.loads(archive.read("TASK-064/validation/live-validation.json"))
+    usage = value.get("resource_usage")
+    if not isinstance(usage, dict) or not isinstance(usage.get("bytes"), int):
+        raise RuntimeError("packaged TASK-064 live evidence has no byte count")
+    return int(usage["bytes"])
 
 
 def run(name: str, command: list[str], timeout: int = 1800) -> dict[str, object]:
@@ -39,6 +58,12 @@ def run(name: str, command: list[str], timeout: int = 1800) -> dict[str, object]
 
 
 def generate(base: str | None) -> int:
+    live_path = VALIDATION / "live-validation.json"
+    if not live_path.is_file():
+        raise RuntimeError(
+            "capture bounded live evidence before package generation with "
+            "scripts/task064_live_validation.py --output"
+        )
     outcomes = [
         run("focused", ["make", "task064-test"]),
         run(
@@ -73,7 +98,7 @@ def generate(base: str | None) -> int:
             "bounded-live",
             [
                 ".venv/bin/python", "scripts/task064_live_validation.py",
-                "--output", str(VALIDATION / "live-validation.json"),
+                "--verify", str(live_path),
             ],
         ),
         run("diff-check", ["git", "diff", "--check"]),
@@ -85,6 +110,16 @@ def generate(base: str | None) -> int:
     )
     if any(item["exit_code"] for item in outcomes):
         raise RuntimeError("one or more TASK-064 validations failed")
+    authoritative_bytes = live_transport_bytes(live_path)
+    review = (ROOT / "docs/TASK-064-review.md").read_text(encoding="utf-8")
+    marker = f"Authoritative live transport bytes: `{authoritative_bytes}`."
+    if marker not in review:
+        raise RuntimeError("architectural review live-byte evidence is out of sync")
+    if (
+        "27 manifested members verified; 28 total ZIP entries including `manifest.json`."
+        not in review
+    ):
+        raise RuntimeError("architectural review package-member wording is out of sync")
     names = tuple(str(item["name"]) for item in outcomes)
     copied = [
         (
@@ -136,7 +171,17 @@ def generate(base: str | None) -> int:
     ZIP_PATH.with_suffix(".zip.sha256").write_text(
         f"{digest}  {ZIP_PATH.name}\n", encoding="utf-8"
     )
-    print(json.dumps({**report, "zip": str(ZIP_PATH), "sha256": digest}, indent=2))
+    package_report = {
+        **report,
+        "live_transport_bytes": authoritative_bytes,
+        "zip": str(ZIP_PATH),
+        "sha256": digest,
+    }
+    REPORT_PATH.write_text(
+        json.dumps(package_report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps(package_report, indent=2))
     return 0
 
 
@@ -146,9 +191,11 @@ def main() -> int:
     parser.add_argument("--base")
     args = parser.parse_args()
     if args.verify:
-        print(json.dumps(
-            verify_package(args.verify, expected_task_id="TASK-064"), indent=2
-        ))
+        report = verify_package(args.verify, expected_task_id="TASK-064")
+        print(json.dumps({
+            **report,
+            "live_transport_bytes": packaged_live_transport_bytes(args.verify),
+        }, indent=2))
         return 0
     return generate(args.base)
 
