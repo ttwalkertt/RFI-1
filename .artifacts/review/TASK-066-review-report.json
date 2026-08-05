@@ -1,9 +1,9 @@
 {
   "format_version": 2,
-  "manifested_members_verified": 33,
+  "manifested_members_verified": 54,
   "result": "PASS",
-  "sha256": "1e4d92ebe956578991d80059c6e75daaec53a5edfcbe3935c6116bc45dc4debd",
+  "sha256": "8ea4e2ccc8b372bfb3b1f306e840c51897d8838d70a027e7c901d6befe8154d8",
   "task_id": "TASK-066",
-  "total_zip_entries": 34,
+  "total_zip_entries": 55,
   "zip": "/Users/tim-macbook/src/RFI-1/.artifacts/review/TASK-066-review.zip"
 }
