@@ -21,6 +21,7 @@ from rfi.acquisition import (
     TranscriptAcquisitionTarget,
 )
 from rfi.firms.contracts import FirmCatalog
+from rfi.feeds import FeedError, FeedPollRequest, FeedRunOutcome, FeedService
 from rfi.pull.adapters import RetrievalAdapterRegistry
 from rfi.pull.contracts import (
     ArtifactOutcome,
@@ -62,6 +63,7 @@ class PullWorkflow:
         runs: PullRunRepository,
         clock: Callable[[], str] = utc_now,
         identifier_factory: Callable[[], str] = lambda: uuid.uuid4().hex,
+        feeds: FeedService | None = None,
     ) -> None:
         self._firms = firms
         self._profiles = profiles
@@ -69,6 +71,7 @@ class PullWorkflow:
         self._acquisition = acquisition
         self._adapters = adapters
         self._runs = runs
+        self._feeds = feeds
         self._clock = clock
         self._identifier_factory = identifier_factory
         self._execution_lock = threading.Lock()
@@ -132,6 +135,7 @@ class PullWorkflow:
                 "profile_snapshots": [],
                 "plan": [],
                 "firms": [],
+                "feed_run": None,
                 "summary": asdict(self._summary(())),
                 "diagnostics": [],
             },
@@ -208,6 +212,22 @@ class PullWorkflow:
                     firm_results.append(result)
                     record["firms"] = [asdict(item) for item in firm_results]
                     self._runs.save(run_id, record)
+                if self._feeds is not None:
+                    try:
+                        feed_result = self._feeds.poll(FeedPollRequest(
+                            firm_ids=tuple(firm.firm_id for firm in firms),
+                            trigger="firm_pull",
+                            parent_pull_run_id=run_id,
+                        ))
+                        record["feed_run"] = feed_result.to_dict()
+                    except FeedError as error:
+                        record["diagnostics"].append(
+                            f"associated feed polling was not started: {error}"
+                        )
+                        record["feed_run"] = {
+                            "outcome": "failed", "diagnostic": str(error),
+                            "parent_pull_run_id": run_id,
+                        }
                 self._complete_stage(record, PullStage.RETRIEVAL_EXECUTED)
                 self._complete_stage(record, PullStage.ARTIFACTS_INGESTED)
                 self._complete_stage(record, PullStage.RESULTS_RECORDED)
@@ -217,6 +237,10 @@ class PullWorkflow:
                 record["status"] = self._aggregate_status(
                     tuple(item.status for item in firm_results)
                 ).value
+                if (record.get("feed_run") or {}).get("outcome") in {
+                    FeedRunOutcome.PARTIAL.value, FeedRunOutcome.FAILED.value,
+                } and record["status"] == PullStatus.COMPLETED.value:
+                    record["status"] = PullStatus.PARTIAL.value
                 record["completed_at"] = self._clock()
                 self._complete_stage(record, PullStage.SUMMARIZED)
             except Exception as error:
@@ -909,4 +933,5 @@ class PullWorkflow:
                 **record["summary"],
             }),
             tuple(record["diagnostics"]),
+            record.get("feed_run"),
         )

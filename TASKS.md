@@ -63,6 +63,7 @@
 | TASK-062 | Separate candidate identity from discovery occurrence | Complete |
 | TASK-063 | Bounded transcript resolution session | Complete |
 | TASK-064 | Dedicated StockAnalysis transcript provider adapter | Complete |
+| TASK-067 | Repository-owned feed sources and feed-driven acquisition | Complete |
 
 ## Architectural Progression
 

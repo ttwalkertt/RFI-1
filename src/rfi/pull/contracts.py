@@ -143,3 +143,4 @@ class PullRunResult:
     firms: tuple[FirmPullResult, ...]
     summary: PullSummary
     diagnostics: tuple[str, ...] = ()
+    feed_run: dict[str, JsonValue] | None = None

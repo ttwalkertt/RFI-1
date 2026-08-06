@@ -438,6 +438,29 @@ rfi pull --state STATE --all-configured
 Related topics: [Target Firms](#firms), [source readiness](#source-readiness),
 [Artifacts](#artifacts), and [troubleshooting](#troubleshooting).
 
+<!-- help-topic: feeds -->
+## Repository-owned feeds
+
+The Feeds page manages RSS and Atom discovery sources independently from external firm
+configuration. Add or edit a feed through the shared editor; validation detects the format and
+preserves entered values when a source is invalid. Optional firm associations only include the
+feed in that firm's Pull Sources execution. They do not assign entry ownership or grant acquisition
+authority.
+
+`Poll all enabled` and each card's `Poll` action use the same service as firm pulls and
+`rfi feeds poll`. Newly observed or materially updated entry links remain subject to normal URL,
+qualification, immutable-storage, identity, duplicate, and provenance rules. Retrieval failures
+remain in the unavailable-entry queue and do not stop other entries or feeds.
+
+Expand recent runs to inspect the authoritative structured JSON. Use the queue to retry, dismiss,
+restore, or provide a local file or operator-supplied alternate URL. Manual candidates are shown
+for comparison and pass through repository qualification; original failure evidence remains.
+`Export All as RSS` renders bounded durable observations without polling publishers.
+
+Deleting a feed creates a retired revision. Prior observations, artifacts, unavailable entries,
+and run history are preserved. The command `rfi feeds poll --state /absolute/state/path --json`
+performs one pass and exits, making external schedulers the recurrence authority.
+
 <!-- help-topic: linux-mailing-lists -->
 ## Linux Mailing Lists
 

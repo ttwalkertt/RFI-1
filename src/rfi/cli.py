@@ -22,6 +22,7 @@ from rfi.catalog_import import (
 )
 from rfi.concepts import ConceptError, ConceptRepository, sample_concepts
 from rfi.firms import FirmError, FirmRepository, sample_firms
+from rfi.feeds import FeedError, FeedPollRequest, FeedRunOutcome, FeedService
 from rfi.firm_configuration import (
     FirmConfigurationError,
     prepare_firm_configuration,
@@ -177,6 +178,23 @@ def parser() -> argparse.ArgumentParser:
         action="store_true",
         help="pull every firm with a saved source profile",
     )
+    feeds = commands.add_parser(
+        "feeds", help="poll repository-owned RSS and Atom discovery sources",
+        description="Operate repository-owned feeds through the shared polling service.",
+    )
+    feed_actions = feeds.add_subparsers(dest="feeds_action", required=True)
+    feed_poll = feed_actions.add_parser(
+        "poll", help="perform one cron-suitable polling pass and exit",
+        epilog=(
+            "examples:\n"
+            "  rfi feeds poll --state /absolute/path/to/state\n"
+            "  rfi feeds poll --state /absolute/path/to/state --feed feed-abc --json"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    _add_state(feed_poll)
+    feed_poll.add_argument("--feed", dest="feed_id", metavar="FEED_ID")
+    feed_poll.add_argument("--json", action="store_true", help="print authoritative run JSON")
     sec = commands.add_parser(
         "sec-retrieve",
         help="run the authoritative bounded SEC Form 10-K workflow",
@@ -444,6 +462,43 @@ def pull_sources(state: Path, firm_ids: tuple[str, ...], all_configured: bool) -
     return 0 if result.status == PullStatus.COMPLETED else 1
 
 
+def poll_feeds(state: Path, feed_id: str | None, json_output: bool) -> int:
+    """Perform exactly one shared feed polling invocation and exit."""
+    _open_state(state)
+    result = FeedService(state).poll(FeedPollRequest(
+        feed_ids=(feed_id,) if feed_id else (), trigger="cli",
+    ))
+    value = result.to_dict()
+    if json_output:
+        print(json.dumps(value, indent=2, sort_keys=True))
+    else:
+        summary = result.summary
+        print(f"Feed run: {result.run_id}")
+        print(f"Outcome: {result.outcome.value}")
+        print(
+            "Feeds: "
+            f"{summary['feeds_selected']} selected; {summary['feeds_succeeded']} succeeded; "
+            f"{summary['feeds_failed']} failed"
+        )
+        print(
+            "Entries: "
+            f"{summary['entries_observed']} observed; {summary['entries_new']} new; "
+            f"{summary['entries_updated']} updated; {summary['entries_unchanged']} unchanged"
+        )
+        print(
+            "Acquisition: "
+            f"{summary['acquisition_requests']} requests; "
+            f"{summary['artifacts_retained']} artifacts; "
+            f"{summary['tombstones_created']} tombstones created; "
+            f"{summary['tombstones_updated']} tombstones updated"
+        )
+    return 0 if result.outcome in {
+        FeedRunOutcome.COMPLETED,
+        FeedRunOutcome.COMPLETED_WITH_UNAVAILABLE,
+        FeedRunOutcome.PARTIAL,
+    } else 1
+
+
 def sec_retrieve(state: Path, firm_id: str) -> int:
     """Run the independently invocable authoritative SEC workflow."""
     _open_state(state)
@@ -649,6 +704,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 tuple(arguments.firm),
                 arguments.all_configured,
             )
+        elif arguments.command == "feeds":
+            return poll_feeds(arguments.state, arguments.feed_id, arguments.json)
         elif arguments.command == "sec-retrieve":
             return sec_retrieve(arguments.state, arguments.firm)
         elif arguments.command == "backup":
@@ -677,6 +734,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         StreamError,
         StorageError,
         ConfigurationError,
+        FeedError,
         OSError,
     ) as error:
         print(f"rfi: error: {error}", file=sys.stderr)

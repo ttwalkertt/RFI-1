@@ -33,6 +33,7 @@ from rfi.artifacts import (
 )
 from rfi.concepts import ConceptError, ConceptRepository, ConceptService
 from rfi.firms import FirmError, FirmRepository, FirmService
+from rfi.feeds import FeedError, FeedPollRequest, FeedService
 from rfi.firm_configuration import (
     FirmConfigurationError,
     FirmConfigurationStatus,
@@ -58,11 +59,13 @@ from rfi.source_profiles import (
 from rfi.streams import StreamError, StreamRepository, StreamService, draft_from_dict
 
 MAX_BODY_BYTES = 1_000_000
+MAX_FEED_UPLOAD_BODY_BYTES = 14_000_000
 ADMIN_PREFERENCES_JS = (Path(__file__).parent / "admin_preferences.js").read_bytes()
 OPERATOR_NAVIGATION = (
     ("/concepts", "Concept Catalog"),
     ("/firms", "Target Firms"),
     ("/pull-sources", "Pull Sources"),
+    ("/feeds", "Feeds"),
     ("/linux-mailing-lists", "Linux Mailing Lists"),
     ("/streams", "Streams"),
     ("/artifacts", "Artifacts"),
@@ -300,6 +303,7 @@ LINUX_MAILING_LISTS_HTML = _load_operator_page(
     "linux_mailing_lists.html", "/linux-mailing-lists"
 )
 PULL_SOURCES_HTML = _load_operator_page("pull_sources.html", "/pull-sources")
+FEEDS_HTML = _load_operator_page("feeds.html", "/feeds")
 ARTIFACT_BROWSER_HTML = _load_operator_page("artifact_browser.html", "/artifacts")
 STREAMS_HTML = _load_operator_page("streams.html", "/streams")
 
@@ -317,6 +321,7 @@ class AdminConsole(ThreadingHTTPServer):
         firm_service: FirmService,
         source_profile_service: SourceProfileService,
         pull_workflow: PullWorkflow,
+        feed_service: FeedService,
         artifact_query_service: ArtifactQueryService,
         mailing_list_query_service: MailingListQueryService,
         mailing_list_source_service: MailingListSourceService,
@@ -332,6 +337,7 @@ class AdminConsole(ThreadingHTTPServer):
         self.firm_service = firm_service
         self.source_profile_service = source_profile_service
         self.pull_workflow = pull_workflow
+        self.feed_service = feed_service
         self.artifact_query_service = artifact_query_service
         self.mailing_list_query_service = mailing_list_query_service
         self.mailing_list_source_service = mailing_list_source_service
@@ -380,6 +386,10 @@ class AdminHandler(BaseHTTPRequestHandler):
         """Serve optimistic revision updates."""
         self._dispatch("PUT")
 
+    def do_DELETE(self) -> None:
+        """Serve confirmation-backed feed retirement."""
+        self._dispatch("DELETE")
+
     def log_message(self, format_text: str, *arguments: Any) -> None:
         """Retain standard visibility without logging request bodies or credentials."""
         super().log_message(format_text, *arguments)
@@ -411,6 +421,9 @@ class AdminHandler(BaseHTTPRequestHandler):
                     PULL_SOURCES_HTML.encode(),
                     "text/html; charset=utf-8",
                 )
+                return
+            if method == "GET" and path == "/feeds":
+                self._send(HTTPStatus.OK, FEEDS_HTML.encode(), "text/html; charset=utf-8")
                 return
             if method == "GET" and path == "/linux-mailing-lists":
                 self._send(
@@ -491,6 +504,7 @@ class AdminHandler(BaseHTTPRequestHandler):
             ArtifactQueryError,
             MailingListError,
             StreamError,
+            FeedError,
             ValueError,
             TypeError,
             KeyError,
@@ -542,6 +556,99 @@ class AdminHandler(BaseHTTPRequestHandler):
         mailing_list_workflow = self.server.linux_mailing_list_workflow
         mailing_list_fetch_queue = self.server.mailing_list_fetch_queue
         streams = self.server.stream_service
+        feeds = self.server.feed_service
+        if method == "GET" and parts == ["api", "feed-items.rss"]:
+            self._send(
+                HTTPStatus.OK, feeds.rss_export(), "application/rss+xml; charset=utf-8"
+            )
+            return
+        if method == "GET" and parts == ["api", "feeds"]:
+            self._send_json(HTTPStatus.OK, {
+                "items": [item.to_dict() for item in feeds.repository.list()]
+            })
+            return
+        if method == "POST" and parts == ["api", "feeds", "validate"]:
+            body = self._body()
+            self._send_json(HTTPStatus.OK, asdict(feeds.validate(str(body.get("feed_url", "")))))
+            return
+        if method == "POST" and parts == ["api", "feeds"]:
+            self._send_json(HTTPStatus.CREATED, feeds.create(self._body()).to_dict())
+            return
+        if method == "POST" and parts == ["api", "feeds", "poll"]:
+            body = self._body()
+            raw_ids = body.get("feed_ids", [])
+            if not isinstance(raw_ids, list) or any(not isinstance(item, str) for item in raw_ids):
+                raise FeedError("feed_ids must be an array of strings")
+            result = feeds.poll(FeedPollRequest(tuple(raw_ids), trigger="ui"))
+            self._send_json(HTTPStatus.OK, result.to_dict())
+            return
+        if method == "GET" and parts == ["api", "feeds", "runs"]:
+            self._send_json(HTTPStatus.OK, {"items": list(feeds.repository.runs())})
+            return
+        if method == "GET" and len(parts) == 4 and parts[:3] == ["api", "feeds", "runs"]:
+            self._send_json(HTTPStatus.OK, feeds.repository.run(parts[3]))
+            return
+        if method == "GET" and parts == ["api", "feeds", "unavailable"]:
+            self._send_json(HTTPStatus.OK, {
+                "items": list(feeds.repository.tombstones(self._first(query, "status") or None))
+            })
+            return
+        if len(parts) == 3 and parts[:2] == ["api", "feeds"]:
+            feed_id = parts[2]
+            if method == "GET":
+                self._send_json(HTTPStatus.OK, feeds.repository.get(feed_id).to_dict())
+                return
+            body = self._body()
+            expected = body.pop("expected_revision_id", None)
+            if not isinstance(expected, str):
+                raise FeedError("expected_revision_id is required")
+            if method == "PUT":
+                self._send_json(HTTPStatus.OK, feeds.update(feed_id, body, expected).to_dict())
+                return
+            if method == "DELETE":
+                if body:
+                    raise FeedError("delete confirmation contains unsupported fields")
+                self._send_json(HTTPStatus.OK, feeds.retire(feed_id, expected).to_dict())
+                return
+        if (
+            method == "POST"
+            and len(parts) == 4
+            and parts[:2] == ["api", "feeds"]
+            and parts[3] == "poll"
+        ):
+            self._body()
+            self._send_json(HTTPStatus.OK, feeds.poll(
+                FeedPollRequest((parts[2],), trigger="ui")
+            ).to_dict())
+            return
+        if method == "POST" and len(parts) == 5 and parts[:3] == ["api", "feeds", "unavailable"]:
+            tombstone_id, action = parts[3], parts[4]
+            body = self._body(
+                maximum_bytes=(
+                    MAX_FEED_UPLOAD_BODY_BYTES
+                    if action == "fulfill-upload"
+                    else MAX_BODY_BYTES
+                )
+            )
+            if action == "retry":
+                value = feeds.retry(tombstone_id).to_dict()
+            elif action in {"dismiss", "restore"}:
+                value = feeds.repository.set_tombstone_status(
+                    tombstone_id,
+                    "dismissed" if action == "dismiss" else "unresolved",
+                    feeds.clock(),
+                )
+            elif action == "fulfill-upload":
+                value = feeds.fulfill_upload(
+                    tombstone_id, str(body.get("content_base64", "")),
+                    str(body.get("media_type", "application/octet-stream")),
+                )
+            elif action == "fulfill-url":
+                value = feeds.fulfill_url(tombstone_id, str(body.get("alternate_url", "")))
+            else:
+                raise FeedError("unknown unavailable-entry action")
+            self._send_json(HTTPStatus.OK, value)
+            return
         if method == "GET" and parts == ["api", "firm-configurations", "status"]:
             self._send_json(
                 HTTPStatus.OK,
@@ -1146,12 +1253,17 @@ class AdminHandler(BaseHTTPRequestHandler):
         except ValueError as error:
             raise PullError("transcript selection dates must be valid ISO dates") from error
 
-    def _body(self, *, reject_duplicate_fields: bool = False) -> dict[str, Any]:
+    def _body(
+        self,
+        *,
+        reject_duplicate_fields: bool = False,
+        maximum_bytes: int = MAX_BODY_BYTES,
+    ) -> dict[str, Any]:
         length_text = self.headers.get("Content-Length")
         if not length_text:
             raise ConceptError("request body is required")
         length = int(length_text)
-        if length < 0 or length > MAX_BODY_BYTES:
+        if length < 0 or length > maximum_bytes:
             raise ConceptError("request body exceeds local console limit")
         if self.headers.get_content_type() != "application/json":
             raise ConceptError("application/json is required")
@@ -1314,6 +1426,7 @@ def create_admin_server(
         firm_service,
         SourceProfileService(source_profile_repository, firm_repository, template),
         create_pull_workflow(state),
+        FeedService(state),
         ArtifactQueryService(acquisition_repository, firm_repository, template),
         mailing_list_query_service,
         mailing_list_source_service,

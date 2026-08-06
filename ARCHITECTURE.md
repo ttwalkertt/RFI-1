@@ -76,6 +76,14 @@ Artifact-specific deterministic SEC retrieval now covers Form 10-K, Form 10-Q, F
 provider owns SEC transport mechanics. All retrieved bytes enter through public acquisition and
 repository contracts, and no adapter depends on SQLite or persistence layout.
 
+Repository-owned RSS and Atom definitions are revisioned structured discovery configuration,
+independent of externally managed firm files. Normalized entry observations, unavailable-entry
+tombstones, fulfillment history, and bounded poll-run instrumentation remain SQLite authority;
+successfully retrieved entry content enters the ordinary acquisition engine and content-addressed
+artifact store. Optional firm associations select feeds during a pull but neither assign entry
+ownership nor grant acquisition authority. UI, CLI, and firm-pull entry points share one polling
+service, and aggregate RSS is a read-only projection of durable observations.
+
 ---
 
 # Architectural Separation

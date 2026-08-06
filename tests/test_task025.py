@@ -388,6 +388,7 @@ class StreamCase(unittest.TestCase):
             ("/concepts", "Concept Catalog"),
             ("/firms", "Target Firms"),
             ("/pull-sources", "Pull Sources"),
+            ("/feeds", "Feeds"),
             ("/linux-mailing-lists", "Linux Mailing Lists"),
             ("/streams", "Streams"),
             ("/artifacts", "Artifacts"),
@@ -395,7 +396,7 @@ class StreamCase(unittest.TestCase):
         admin_assets = ROOT / "src/rfi/admin"
         for filename in (
             "console.html", "firms.html",
-            "pull_sources.html", "linux_mailing_lists.html", "streams.html",
+            "pull_sources.html", "feeds.html", "linux_mailing_lists.html", "streams.html",
             "artifact_browser.html",
         ):
             template = (admin_assets / filename).read_text(encoding="utf-8")
@@ -445,7 +446,7 @@ class StreamCase(unittest.TestCase):
                 connection.execute(f"DROP TABLE {table}")
             connection.execute("UPDATE schema_metadata SET schema_version=2")
         database = RepositoryDatabase.open(fresh)
-        self.assertEqual(database.validate()["schema_version"], 15)
+        self.assertEqual(database.validate()["schema_version"], 16)
         with database.connect(read_only=True) as connection:
             names = {str(row[0]) for row in connection.execute(
                 "SELECT name FROM sqlite_schema WHERE type='table'"

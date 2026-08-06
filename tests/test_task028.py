@@ -287,7 +287,7 @@ class WorkflowCase(unittest.TestCase):
         with database.connect() as connection:
             connection.execute("UPDATE schema_metadata SET schema_version=4")
         migrated = RepositoryDatabase.open(self.state)
-        self.assertEqual(migrated.validate()["schema_version"], 15)
+        self.assertEqual(migrated.validate()["schema_version"], 16)
         self.assertEqual(len(self.repository.sources()), 1)
         restarted = MailingListRepository(self.state)
         self.assertEqual(

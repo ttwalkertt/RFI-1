@@ -58,7 +58,7 @@ class RemovedExternalSourcesPresentationCase(unittest.TestCase):
 
     def test_navigation_and_all_operator_pages_have_no_management_surface(self) -> None:
         expected_paths = {
-            "/concepts", "/firms", "/pull-sources", "/linux-mailing-lists",
+            "/concepts", "/firms", "/pull-sources", "/feeds", "/linux-mailing-lists",
             "/streams", "/artifacts",
         }
         self.assertEqual({path for path, _label in OPERATOR_NAVIGATION}, expected_paths)

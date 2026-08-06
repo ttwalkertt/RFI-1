@@ -19,6 +19,7 @@ from rfi.acquisition.sec_form_8k import SecForm8KAdapter
 from rfi.acquisition.sec_provider import SecProviderClient
 from rfi.acquisition.wdc_press_release import WdcBusinessWirePressReleaseAdapter
 from rfi.firms import FirmRepository
+from rfi.feeds import FeedService
 from rfi.pull.adapters import (
     RetrievalAdapterCapability,
     RetrievalAdapterError,
@@ -112,6 +113,7 @@ def create_pull_workflow(state: Path) -> PullWorkflow:
         acquisition,
         adapters,
         PullRunRepository(state / "pull-workflows"),
+        feeds=FeedService(state),
     )
 
 

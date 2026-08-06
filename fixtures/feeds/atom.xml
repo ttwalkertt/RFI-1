@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>RFI Fixture Atom</title>
+  <updated>2025-08-06T14:00:00Z</updated>
+  <id>urn:rfi:fixture:atom</id>
+  <entry>
+    <title>Available Atom artifact</title>
+    <id>urn:rfi:fixture:atom:success</id>
+    <updated>2025-08-06T14:00:00Z</updated>
+    <published>2025-08-06T13:30:00Z</published>
+    <author><name>Atom Author</name></author>
+    <link rel="alternate" href="https://content.example/atom-success"/>
+    <summary>Available Atom fixture content.</summary>
+  </entry>
+</feed>

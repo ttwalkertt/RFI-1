@@ -1,8 +1,8 @@
-# TASK-0XX — Repository-Owned Feed Sources and Feed-Driven Acquisition
+# TASK-067 — Repository-Owned Feed Sources and Feed-Driven Acquisition
 
 ## Status
 
-Draft for review.
+Completed.
 
 ## Objective
 
@@ -432,3 +432,81 @@ Before implementation, reviewers should specifically assess:
 5. Whether a materially updated feed entry should trigger immediate reacquisition when a canonical artifact already exists.
 6. Whether unresolved tombstones should be included in ordinary repository search results or only in the unavailable-entry work queue.
 7. Whether feed XML bytes themselves should be retained as immutable acquisition evidence or whether normalized observations plus run diagnostics are sufficient.
+
+---
+
+## Completion Record
+
+Completed on 2026-08-06 on `codex/task-067-repository-feed-sources`.
+
+### Material implementation decisions
+
+1. Delete is implemented as an appended disabled, retired revision. It never physically removes
+   a feed or its observations, artifact links, tombstones, provenance, or run history.
+2. Feed-run history retains the newest 100 authoritative application results in deterministic
+   order.
+3. Aggregate RSS exports at most 200 current feed-entry observations and never polls a source
+   while rendering.
+4. A manually supplied alternate URL may use a different public host when the operator explicitly
+   supplies it. The URL must remain credential-free HTTP(S), the candidate retains operator and
+   alternate-URL provenance, and normal repository qualification still applies.
+5. A materially changed normalized entry is reacquired immediately. Repository content identity
+   decides whether the resulting bytes are new or an existing canonical duplicate.
+6. Unresolved tombstones are exposed only through the unavailable-entry queue and RSS status
+   projection, not as fabricated artifacts in ordinary repository search.
+7. Raw feed XML is not retained as an artifact. Durable normalized observations and bounded
+   fetch/parse diagnostics are the feed-discovery evidence; linked content is the governed
+   artifact.
+
+### Clarified semantics and bounded deviations
+
+- `completed_with_unavailable` is a successful feed-run outcome and does not degrade a containing
+  firm pull. A feed-document fetch or parse failure makes the feed run partial while other feeds,
+  entries, and firms continue.
+- Feed-run JSON is persisted by the application and returned unchanged to UI, API, and CLI
+  projections. A feed run inside a firm pull has one `parent_pull_run_id` and is embedded once in
+  the containing pull result rather than copied into parallel instrumentation.
+- An entry acquisition is submitted through a governed source identity derived from the feed
+  revision, stable entry identity, and material observation hash. This prevents an acquisition
+  checkpoint from suppressing sibling entries or material updates without creating a second
+  artifact path.
+- No functional requirement was removed and no explicit non-goal was implemented. Fixed retention
+  and export limits are bounded repository policy rather than new operator configuration.
+
+### Implemented behavior
+
+- **Operator:** dedicated Feeds navigation and compact card stack; shared add/edit editor with RSS
+  and Atom validation; searchable optional multi-firm association; retirement confirmation;
+  per-feed and Poll All actions; expandable durable run JSON; unavailable queue filters and
+  retry/dismiss/restore actions; upload and alternate-URL fulfillment; aggregate RSS export.
+- **API:** feed registry validation and revision endpoints, polling, run history, unavailable work
+  queue actions, manual fulfillment, and `GET /api/feed-items.rss` with the required RSS media type.
+- **CLI:** single-pass `rfi feeds poll`, optional `--feed`, stable human output, authoritative
+  `--json`, and exit semantics suitable for an external scheduler such as cron.
+- **Persistence:** schema version 16 adds revisioned definitions and firm associations, immutable
+  observations, current entry selectors, canonical artifact links, durable tombstones and attempt
+  history, and bounded feed runs. Migration is additive and restart-safe.
+- **Repository:** automatic feed acquisitions reuse `AcquisitionEngine` and
+  `AcquisitionRepository`; manual candidates reuse public repository ingress and qualification.
+  Immutable storage, identity, deduplication, metadata, observations, and provenance remain owned
+  by the existing repository.
+
+### Verification results
+
+- Focused: `make task067-test` — 13 tests passed, including deterministic RSS, Atom, unavailable,
+  malformed, materially updated, duplicate, firm-pull, UI/API, CLI, restart, RSS export, and manual
+  fulfillment scenarios.
+- Full: `make validate` — 677 tests passed; lint, format, type, import, docs, design-baseline,
+  source-archive build, and integrity validation passed.
+- Live smoke: bounded parsing succeeded for NASA public RSS (10 visible entries) and CPython GitHub
+  Atom (20 visible entries) on 2026-08-06. Live evidence is diagnostic and does not replace the
+  deterministic fixture suite.
+- Restart and persistence, CLI transcripts, API examples, authoritative feed-run JSON, valid RSS
+  2.0, schema evidence, manual fulfillment, and the required operator screenshots are included in
+  the generated review package.
+
+### Review package
+
+- Directory: `.artifacts/review/TASK-067/`
+- Archive: `.artifacts/review/TASK-067-review.zip`
+- Architectural completion report: `docs/TASK-067-review.md`

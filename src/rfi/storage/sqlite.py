@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 DATABASE_NAME = "repository.sqlite3"
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 BUSY_TIMEOUT_MS = 5_000
 _COMPONENT_DIRECTORIES = {
     "firm-catalog",
@@ -525,6 +525,70 @@ CREATE TABLE artifact_stream_membership_lineage (
     inclusion_reason TEXT NOT NULL,
     canonical_json TEXT NOT NULL
 ) STRICT;
+CREATE TABLE IF NOT EXISTS feed_definitions (
+    feed_id TEXT PRIMARY KEY,
+    current_revision_id TEXT NOT NULL UNIQUE,
+    lifecycle_status TEXT NOT NULL CHECK (lifecycle_status IN ('active','retired'))
+) STRICT;
+CREATE TABLE IF NOT EXISTS feed_revisions (
+    revision_id TEXT PRIMARY KEY,
+    feed_id TEXT NOT NULL REFERENCES feed_definitions(feed_id) DEFERRABLE INITIALLY DEFERRED,
+    revision_number INTEGER NOT NULL CHECK (revision_number > 0),
+    predecessor_id TEXT REFERENCES feed_revisions(revision_id),
+    created_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL,
+    UNIQUE (feed_id, revision_number)
+) STRICT;
+CREATE TABLE IF NOT EXISTS feed_firm_associations (
+    revision_id TEXT NOT NULL REFERENCES feed_revisions(revision_id),
+    firm_id TEXT NOT NULL REFERENCES firms(firm_id),
+    PRIMARY KEY (revision_id, firm_id)
+) STRICT;
+CREATE TABLE IF NOT EXISTS feed_entry_observations (
+    observation_id TEXT PRIMARY KEY,
+    feed_id TEXT NOT NULL REFERENCES feed_definitions(feed_id),
+    revision_id TEXT NOT NULL REFERENCES feed_revisions(revision_id),
+    entry_key TEXT NOT NULL,
+    material_hash TEXT NOT NULL CHECK (length(material_hash) = 64),
+    observed_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL,
+    UNIQUE (feed_id, entry_key, material_hash)
+) STRICT;
+CREATE TABLE IF NOT EXISTS feed_entry_state (
+    feed_id TEXT NOT NULL REFERENCES feed_definitions(feed_id),
+    entry_key TEXT NOT NULL,
+    current_observation_id TEXT NOT NULL REFERENCES feed_entry_observations(observation_id),
+    PRIMARY KEY (feed_id, entry_key)
+) STRICT;
+CREATE TABLE IF NOT EXISTS feed_entry_artifacts (
+    feed_id TEXT NOT NULL REFERENCES feed_definitions(feed_id),
+    entry_key TEXT NOT NULL,
+    material_hash TEXT NOT NULL CHECK (length(material_hash) = 64),
+    artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+    attempt_id TEXT NOT NULL REFERENCES acquisition_attempts(attempt_id),
+    linked_at TEXT NOT NULL,
+    PRIMARY KEY (feed_id, entry_key, material_hash)
+) STRICT;
+CREATE TABLE IF NOT EXISTS feed_tombstones (
+    tombstone_id TEXT PRIMARY KEY,
+    feed_id TEXT NOT NULL REFERENCES feed_definitions(feed_id),
+    entry_key TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('unresolved','fulfilled','dismissed')),
+    artifact_id TEXT REFERENCES artifacts(artifact_id),
+    first_observed_at TEXT NOT NULL,
+    last_observed_at TEXT NOT NULL,
+    canonical_json TEXT NOT NULL,
+    UNIQUE (feed_id, entry_key)
+) STRICT;
+CREATE TABLE IF NOT EXISTS feed_runs (
+    run_id TEXT PRIMARY KEY,
+    trigger TEXT NOT NULL,
+    requested_at TEXT NOT NULL,
+    completed_at TEXT NOT NULL,
+    outcome TEXT NOT NULL CHECK (outcome IN
+      ('running','completed','completed_with_unavailable_entries','partial','failed','canceled')),
+    canonical_json TEXT NOT NULL
+) STRICT;
 CREATE INDEX artifacts_sha256 ON artifacts(sha256);
 CREATE INDEX attempts_document_time ON acquisition_attempts(document_id, occurred_at, attempt_id);
 CREATE INDEX attempts_source_time ON acquisition_attempts(source_id, occurred_at, attempt_id);
@@ -555,6 +619,16 @@ CREATE INDEX artifact_stream_memberships_stream_run
 ON artifact_stream_memberships(stream_id, run_id, ordinal);
 CREATE INDEX artifact_stream_lineage_membership
 ON artifact_stream_membership_lineage(membership_id, lineage_id);
+CREATE INDEX IF NOT EXISTS feed_revisions_feed_order
+ON feed_revisions(feed_id, revision_number DESC);
+CREATE INDEX IF NOT EXISTS feed_associations_firm
+ON feed_firm_associations(firm_id, revision_id);
+CREATE INDEX IF NOT EXISTS feed_observations_feed_time
+ON feed_entry_observations(feed_id, observed_at DESC, observation_id DESC);
+CREATE INDEX IF NOT EXISTS feed_tombstones_status_time
+ON feed_tombstones(status, last_observed_at DESC, tombstone_id DESC);
+CREATE INDEX IF NOT EXISTS feed_runs_time
+ON feed_runs(requested_at DESC, run_id DESC);
 CREATE TABLE IF NOT EXISTS mailing_list_fetch_history (
     history_id INTEGER PRIMARY KEY AUTOINCREMENT,
     stream_id TEXT NOT NULL,
@@ -836,6 +910,14 @@ CREATE TABLE IF NOT EXISTS discovery_anchor_history (
     UNIQUE (firm_id, source_id, adapter_id, normalized_url)
 ) STRICT;
 """
+
+_MIGRATE_V15_TO_V16 = _SCHEMA[
+    _SCHEMA.index("CREATE TABLE IF NOT EXISTS feed_definitions") :
+    _SCHEMA.index("CREATE INDEX artifacts_sha256")
+] + _SCHEMA[
+    _SCHEMA.index("CREATE INDEX IF NOT EXISTS feed_revisions_feed_order") :
+    _SCHEMA.index("CREATE TABLE IF NOT EXISTS mailing_list_fetch_history")
+]
 
 
 def _backfill_task045(connection: sqlite3.Connection) -> None:
@@ -1209,7 +1291,7 @@ class RepositoryDatabase:
                 version = int(row[0])
                 if version == SCHEMA_VERSION:
                     return False
-                if version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}:
+                if version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}:
                     raise StorageError(
                         "incompatible_schema",
                         f"repository schema version {version} is unsupported; "
@@ -1221,6 +1303,8 @@ class RepositoryDatabase:
                     for item in connection.execute("PRAGMA table_info(mailing_list_runs)")
                 }
                 scripts = []
+                if version <= 15:
+                    scripts.append(_MIGRATE_V15_TO_V16)
                 if version <= 14:
                     scripts.append(_MIGRATE_V14_TO_V15)
                 if version <= 13:

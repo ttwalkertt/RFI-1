@@ -1,0 +1,1 @@
+Deterministic manually supplied feed artifact.

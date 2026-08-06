@@ -40,7 +40,7 @@ class HelpContractCase(unittest.TestCase):
     def test_every_major_page_has_one_valid_context_mapping(self) -> None:
         expected = {
             "/concepts", "/firms",
-            "/pull-sources", "/linux-mailing-lists", "/streams", "/artifacts",
+            "/pull-sources", "/feeds", "/linux-mailing-lists", "/streams", "/artifacts",
         }
         self.assertEqual(set(PAGE_HELP_TOPICS), expected)
         self.assertTrue(set(PAGE_HELP_TOPICS.values()).issubset(TOPICS_BY_ID))

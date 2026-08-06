@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>RFI Fixture RSS</title>
+  <item><guid isPermaLink="false">rss-entry-success</guid><title>Available RSS artifact — updated</title><link>https://content.example/rss-success</link><pubDate>Wed, 06 Aug 2025 12:00:00 GMT</pubDate><description>Materially updated metadata.</description></item>
+  <item><guid isPermaLink="false">rss-entry-unavailable</guid><title>Unavailable RSS artifact</title><link>https://content.example/rss-unavailable</link><pubDate>Wed, 06 Aug 2025 13:00:00 GMT</pubDate><description>Expected unavailable content.</description></item>
+</channel></rss>

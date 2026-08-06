@@ -839,6 +839,18 @@ class AcquisitionRepository:
         records.extend((str(row[0]), self._decode(row[1], "checkpoint")) for row in checkpoints)
         return [record for _, record in sorted(records, key=lambda item: item[0])]
 
+    def attempt(self, attempt_id: str) -> dict[str, Any]:
+        """Return one repository-authoritative acquisition attempt by stable identity."""
+        require_identifier(attempt_id, "attempt_id")
+        with self._database.connect(read_only=True) as connection:
+            row = connection.execute(
+                "SELECT canonical_json FROM acquisition_attempts WHERE attempt_id=?",
+                (attempt_id,),
+            ).fetchone()
+        if row is None:
+            raise ContractError(f"unknown acquisition attempt: {attempt_id}")
+        return self._decode(row[0], "attempt")
+
     def record_interval_outcome(
         self,
         outcome_id: str,
