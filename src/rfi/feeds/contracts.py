@@ -77,6 +77,22 @@ class FeedValidationResult:
 
 
 @dataclass(frozen=True)
+class FeedCandidatePreview:
+    """Advisory metadata observed before manual candidate qualification."""
+
+    candidate_kind: str
+    filename: str | None
+    source_url: str | None
+    media_type: str
+    byte_count: int
+    title: str | None
+    publication_date: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class FeedPollRequest:
     feed_ids: tuple[str, ...] = ()
     firm_ids: tuple[str, ...] = ()

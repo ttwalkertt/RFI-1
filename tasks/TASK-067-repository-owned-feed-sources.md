@@ -510,3 +510,41 @@ Completed on 2026-08-06 on `codex/task-067-repository-feed-sources`.
 - Directory: `.artifacts/review/TASK-067/`
 - Archive: `.artifacts/review/TASK-067-review.zip`
 - Architectural completion report: `docs/TASK-067-review.md`
+
+### Post-completion review repairs — 2026-08-06
+
+Three bounded review findings were repaired without changing the original requirements or adding
+new feed-acquisition authority:
+
+1. Aggregate RSS `pubDate` values now use deterministic UTC RFC-822/RFC-1123 serialization, for
+   example `Wed, 06 Aug 2025 12:00:00 +0000`, instead of ISO-8601 text.
+2. Normal `FeedService` startup now recovers durable feed runs left as `running` by a prior
+   process. The established `canceled` terminal state is used. Each row is updated in place before
+   overlap detection, retaining its run identity, request/start facts, trigger and pull context,
+   selected feeds and firms, partial summary/results, and prior diagnostics. Recovery appends one
+   bounded `startup_recovery` diagnostic and records completion/recovery timestamps. It has no age
+   threshold, never rewrites terminal rows, and is idempotent across repeated startups.
+3. Manual fulfillment now requires an advisory candidate preview before confirmation. Local
+   uploads expose filename, detected media type, byte size, and bounded extracted title and
+   publication metadata when available. Alternate URLs use the existing bounded feed transport
+   for an equivalent preflight; missing metadata is explicitly unavailable. Preview creates no
+   acquisition fact and no new qualification rule. Confirmed candidates continue through the
+   original repository qualification, hashing, immutable storage, metadata, deduplication,
+   validation, and provenance path.
+
+Focused regression evidence covers the exact emitted RSS dates, crash/restart recovery and
+metadata preservation, subsequent polling, unchanged terminal runs, repeated-startup idempotence,
+advisory upload and alternate-URL preview, HTTP preview presentation, and the existing conflict,
+duplicate, and provenance behavior. The regenerated review package includes candidate-preview and
+startup-recovery JSON evidence in addition to the original evidence set.
+
+Repair verification:
+
+- Focused: `make task067-test` — 15 tests passed.
+- Full: `make validate` — 679 tests passed; lint, formatting, typing, imports,
+  documentation, design-baseline, source-archive, and integrity checks passed.
+- Operator smoke: the local Feeds dialog kept confirmation disabled until preview and displayed
+  deterministic candidate metadata before qualification; the replacement screenshot is retained
+  in the regenerated review package.
+- Live-source evidence remains the bounded 2026-08-06 NASA RSS and CPython GitHub Atom smoke
+  result. It remains diagnostic only and was reverified by the package workflow.

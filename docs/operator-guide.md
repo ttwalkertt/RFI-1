@@ -453,13 +453,17 @@ qualification, immutable-storage, identity, duplicate, and provenance rules. Ret
 remain in the unavailable-entry queue and do not stop other entries or feeds.
 
 Expand recent runs to inspect the authoritative structured JSON. Use the queue to retry, dismiss,
-restore, or provide a local file or operator-supplied alternate URL. Manual candidates are shown
-for comparison and pass through repository qualification; original failure evidence remains.
-`Export All as RSS` renders bounded durable observations without polling publishers.
+restore, or provide a local file or operator-supplied alternate URL. Preview the selected candidate
+to compare its available filename, detected type, size, title, and publication metadata before
+confirming. The preview is advisory; confirmation still passes through repository qualification
+and preserves original failure evidence. `Export All as RSS` renders bounded durable observations
+without polling publishers and emits deterministic UTC RSS dates.
 
 Deleting a feed creates a retired revision. Prior observations, artifacts, unavailable entries,
 and run history are preserved. The command `rfi feeds poll --state /absolute/state/path --json`
 performs one pass and exits, making external schedulers the recurrence authority.
+If a prior process ended during a poll, the next normal startup closes its preserved `running` row
+as `canceled` with a recovery diagnostic before allowing another poll.
 
 <!-- help-topic: linux-mailing-lists -->
 ## Linux Mailing Lists

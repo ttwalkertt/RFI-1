@@ -626,7 +626,7 @@ class AdminHandler(BaseHTTPRequestHandler):
             body = self._body(
                 maximum_bytes=(
                     MAX_FEED_UPLOAD_BODY_BYTES
-                    if action == "fulfill-upload"
+                    if action in {"fulfill-upload", "preview-upload"}
                     else MAX_BODY_BYTES
                 )
             )
@@ -643,6 +643,17 @@ class AdminHandler(BaseHTTPRequestHandler):
                     tombstone_id, str(body.get("content_base64", "")),
                     str(body.get("media_type", "application/octet-stream")),
                 )
+            elif action == "preview-upload":
+                value = feeds.preview_upload(
+                    tombstone_id,
+                    str(body.get("content_base64", "")),
+                    str(body.get("media_type", "application/octet-stream")),
+                    str(body.get("filename", "")),
+                ).to_dict()
+            elif action == "preview-url":
+                value = feeds.preview_url(
+                    tombstone_id, str(body.get("alternate_url", ""))
+                ).to_dict()
             elif action == "fulfill-url":
                 value = feeds.fulfill_url(tombstone_id, str(body.get("alternate_url", "")))
             else:

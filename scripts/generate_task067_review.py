@@ -91,7 +91,8 @@ def generate(base: str | None) -> int:
         *((f"validation/{name}", VALIDATION / name) for name in (
             "live-smoke.json", "cli-human.txt", "cli-json.json", "cli-json-exit.txt",
             "cron-example.txt", "api-examples.json", "aggregate.rss", "feed-run.json",
-            "restart-persistence.json", "manual-fulfillment.json", "schema-evidence.json",
+            "restart-persistence.json", "startup-recovery.json", "candidate-preview.json",
+            "manual-fulfillment.json", "schema-evidence.json",
             "ui-state-summary.json", "results.json",
         )),
         *((f"validation/screenshots/{path.name}", path)

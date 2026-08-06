@@ -7,6 +7,7 @@ import tempfile
 import threading
 import unittest
 from contextlib import redirect_stdout
+from email.utils import parsedate_to_datetime
 from http.client import HTTPConnection
 from pathlib import Path
 from unittest.mock import patch
@@ -235,6 +236,135 @@ class Task067Case(unittest.TestCase):
             for item in items
         ]
         self.assertEqual(set(availability), {"retained", "unavailable"})
+        dates = {
+            item.findtext("title"): item.findtext("pubDate") for item in items
+        }
+        self.assertEqual(
+            dates,
+            {
+                "Available RSS artifact": "Wed, 06 Aug 2025 12:00:00 +0000",
+                "Unavailable RSS artifact": "Wed, 06 Aug 2025 13:00:00 +0000",
+            },
+        )
+        for value in dates.values():
+            self.assertEqual(parsedate_to_datetime(value).isoformat(), value.replace(
+                "Wed, 06 Aug 2025 ", "2025-08-06T"
+            ).replace(" +0000", "+00:00"))
+
+    def test_startup_recovers_stale_running_run_before_new_poll(self) -> None:
+        terminal = {
+            "schema_version": 1,
+            "run_id": "feedrun-terminal",
+            "trigger": "ui",
+            "requested_at": "2026-08-05T08:00:00+00:00",
+            "completed_at": "2026-08-05T08:01:00+00:00",
+            "outcome": "completed",
+            "selected_feed_ids": [],
+            "firm_ids": [],
+            "parent_pull_run_id": None,
+            "summary": {"feeds_selected": 0},
+            "feeds": [],
+            "diagnostics": [],
+            "termination_reason": "selected feeds exhausted",
+        }
+        self.service.repository.create_run({**terminal, "completed_at": "", "outcome": "running"})
+        self.service.repository.save_run(terminal)
+        terminal_before = self.service.repository.run(terminal["run_id"])
+        stale = {
+            "schema_version": 1,
+            "run_id": "feedrun-stale",
+            "trigger": "firm-pull",
+            "requested_at": "2026-08-06T10:00:00+00:00",
+            "completed_at": "",
+            "outcome": "running",
+            "selected_feed_ids": ["feed-original"],
+            "firm_ids": ["firm-original"],
+            "parent_pull_run_id": "pull-original",
+            "summary": {"feeds_selected": 1, "entries_observed": 2},
+            "feeds": [{"feed_id": "feed-original", "status": "completed"}],
+            "diagnostics": [{"category": "retained", "message": "prior detail"}],
+            "termination_reason": "running",
+        }
+        self.service.repository.create_run(stale)
+
+        recovery_at = "2026-08-06T11:00:00+00:00"
+        restarted = FeedService(
+            self.state,
+            transport=self.transport,
+            clock=lambda: recovery_at,
+            identifier_factory=Identifiers(),
+        )
+        recovered = restarted.repository.run(stale["run_id"])
+        self.assertEqual(recovered["run_id"], stale["run_id"])
+        for key in (
+            "trigger", "requested_at", "selected_feed_ids", "firm_ids",
+            "parent_pull_run_id", "summary", "feeds",
+        ):
+            self.assertEqual(recovered[key], stale[key])
+        self.assertEqual(recovered["outcome"], "canceled")
+        self.assertEqual(recovered["completed_at"], recovery_at)
+        self.assertEqual(recovered["recovered_at"], recovery_at)
+        self.assertEqual(recovered["diagnostics"][0], stale["diagnostics"][0])
+        self.assertEqual(recovered["diagnostics"][-1]["category"], "startup_recovery")
+        self.assertIn("prior process ended", recovered["diagnostics"][-1]["message"])
+        self.assertEqual(restarted.repository.run(terminal["run_id"]), terminal_before)
+
+        subsequent = restarted.poll(FeedPollRequest(trigger="cron"))
+        self.assertEqual(subsequent.outcome, FeedRunOutcome.COMPLETED)
+        recovered_before_repeat = restarted.repository.run(stale["run_id"])
+        terminal_before_repeat = restarted.repository.run(terminal["run_id"])
+        FeedService(
+            self.state,
+            transport=self.transport,
+            clock=lambda: "2026-08-06T12:00:00+00:00",
+        )
+        self.assertEqual(
+            restarted.repository.run(stale["run_id"]), recovered_before_repeat
+        )
+        self.assertEqual(
+            restarted.repository.run(terminal["run_id"]), terminal_before_repeat
+        )
+
+    def test_manual_fulfillment_preview_is_advisory_and_extracts_metadata(self) -> None:
+        self.create_feed()
+        self.service.poll(FeedPollRequest(trigger="test"))
+        tombstone = self.service.repository.tombstones("unresolved")[0]
+        before = self.service.repository.tombstone(tombstone["tombstone_id"])
+        content = (FIXTURES / "artifact-a.html").read_bytes()
+        upload = self.service.preview_upload(
+            tombstone["tombstone_id"],
+            base64.b64encode(content).decode(),
+            "application/octet-stream",
+            "folder/report.html",
+        )
+        self.assertEqual(upload.filename, "report.html")
+        self.assertEqual(upload.media_type, "text/html")
+        self.assertEqual(upload.byte_count, len(content))
+        self.assertEqual(upload.title, "Fixture Artifact A")
+        self.assertEqual(upload.publication_date, "2025-08-06T12:00:00Z")
+        plain_content = (FIXTURES / "manual.txt").read_bytes()
+        plain = self.service.preview_upload(
+            tombstone["tombstone_id"],
+            base64.b64encode(plain_content).decode(),
+            "text/plain",
+            "manual.txt",
+        )
+        self.assertEqual(plain.media_type, "text/plain")
+        self.assertIsNone(plain.title)
+        self.assertIsNone(plain.publication_date)
+
+        alternate = self.service.preview_url(
+            tombstone["tombstone_id"], "https://content.example/rss-success"
+        )
+        self.assertEqual(alternate.filename, "rss-success")
+        self.assertEqual(alternate.source_url, "https://content.example/rss-success")
+        self.assertEqual(alternate.media_type, "text/html")
+        self.assertEqual(alternate.byte_count, len(content))
+        self.assertEqual(alternate.title, "Fixture Artifact A")
+        self.assertEqual(alternate.publication_date, "2025-08-06T12:00:00Z")
+        self.assertEqual(
+            self.service.repository.tombstone(tombstone["tombstone_id"]), before
+        )
 
     def test_overlap_is_rejected(self) -> None:
         self.service.repository.create_run({
@@ -318,12 +448,33 @@ class Task067CliApiCase(unittest.TestCase):
             self.assertEqual(page.status, 200)
             self.assertIn("Unavailable-entry work queue", html)
             self.assertIn("Export All as RSS", html)
+            self.assertIn("Preview candidate", html)
+            self.assertIn("Advisory candidate metadata", html)
             connection.request("POST", "/api/feeds/poll", body=b'{"feed_ids":[]}',
                                headers={"Content-Type":"application/json"})
             polled = connection.getresponse()
             value = json.loads(polled.read())
             self.assertEqual(polled.status, 200)
             self.assertIn("feeds", value)
+            tombstone = server.feed_service.repository.tombstones("unresolved")[0]
+            content = (FIXTURES / "artifact-a.html").read_bytes()
+            connection.request(
+                "POST",
+                f"/api/feeds/unavailable/{tombstone['tombstone_id']}/preview-upload",
+                body=json.dumps({
+                    "content_base64": base64.b64encode(content).decode(),
+                    "media_type": "application/octet-stream",
+                    "filename": "review.html",
+                }),
+                headers={"Content-Type": "application/json"},
+            )
+            preview_response = connection.getresponse()
+            preview = json.loads(preview_response.read())
+            self.assertEqual(preview_response.status, 200)
+            self.assertEqual(preview["filename"], "review.html")
+            self.assertEqual(preview["media_type"], "text/html")
+            self.assertEqual(preview["title"], "Fixture Artifact A")
+            self.assertEqual(preview["publication_date"], "2025-08-06T12:00:00Z")
             connection.request("GET", "/api/feeds/runs")
             history = json.loads(connection.getresponse().read())
             self.assertEqual(history["items"][0], value)

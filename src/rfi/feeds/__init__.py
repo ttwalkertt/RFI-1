@@ -1,6 +1,7 @@
 """Repository-owned feed source public API."""
 
 from rfi.feeds.contracts import (
+    FeedCandidatePreview,
     FeedDefinition,
     FeedEntry,
     FeedError,
@@ -16,7 +17,8 @@ from rfi.feeds.service import FeedService
 from rfi.feeds.transport import FeedHttpTransport, HttpResponse
 
 __all__ = [
-    "FeedDefinition", "FeedEntry", "FeedError", "FeedHttpTransport", "FeedPollRequest",
+    "FeedCandidatePreview", "FeedDefinition", "FeedEntry", "FeedError",
+    "FeedHttpTransport", "FeedPollRequest",
     "FeedRepository", "FeedRunOutcome", "FeedRunResult", "FeedService",
     "FeedValidationResult", "HttpResponse", "TombstoneStatus", "parse_feed",
 ]

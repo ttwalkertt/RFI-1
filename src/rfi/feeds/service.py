@@ -8,8 +8,11 @@ import threading
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
+from email.utils import format_datetime
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit
 from xml.sax.saxutils import escape
 
 from rfi.acquisition import (
@@ -23,6 +26,7 @@ from rfi.acquisition import (
 )
 from rfi.feeds.adapter import FeedEntryAdapter
 from rfi.feeds.contracts import (
+    FeedCandidatePreview,
     FeedDefinition,
     FeedEntry,
     FeedError,
@@ -36,6 +40,111 @@ from rfi.feeds.repository import FeedRepository
 from rfi.feeds.transport import FeedHttpTransport, validate_public_url
 
 MAX_FEED_ARTIFACT_BYTES = 10_000_000
+MAX_PREVIEW_TEXT_BYTES = 256_000
+
+
+class _PreviewHTMLParser(HTMLParser):
+    """Extract only bounded advisory title and publication metadata."""
+
+    _date_names = {
+        "article:published_time",
+        "date",
+        "datepublished",
+        "publication_date",
+        "publish-date",
+    }
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.in_title = False
+        self.title_parts: list[str] = []
+        self.publication_date: str | None = None
+
+    def handle_starttag(
+        self, tag: str, attributes: list[tuple[str, str | None]]
+    ) -> None:
+        if tag.lower() == "title":
+            self.in_title = True
+            return
+        if tag.lower() != "meta" or self.publication_date is not None:
+            return
+        values = {name.lower(): value or "" for name, value in attributes}
+        name = (
+            values.get("property") or values.get("name") or values.get("itemprop") or ""
+        ).lower()
+        if name in self._date_names and values.get("content"):
+            self.publication_date = values["content"].strip()[:128] or None
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() == "title":
+            self.in_title = False
+
+    def handle_data(self, data: str) -> None:
+        if self.in_title and sum(len(value) for value in self.title_parts) < 512:
+            self.title_parts.append(data)
+
+    @property
+    def title(self) -> str | None:
+        value = " ".join("".join(self.title_parts).split())[:512]
+        return value or None
+
+
+def _detected_media_type(content: bytes, supplied: str) -> str:
+    sample = content[:4096].lstrip().lower()
+    if sample.startswith(b"%pdf-"):
+        return "application/pdf"
+    if sample.startswith((b"<!doctype html", b"<html")):
+        return "text/html"
+    if sample.startswith((b"<?xml", b"<rss", b"<feed")):
+        return "application/xml"
+    try:
+        content[:MAX_PREVIEW_TEXT_BYTES].decode("utf-8")
+    except UnicodeDecodeError:
+        value = supplied.split(";", 1)[0].strip().lower()
+        return value or "application/octet-stream"
+    value = supplied.split(";", 1)[0].strip().lower()
+    return value if value.startswith("text/") else "text/plain"
+
+
+def _candidate_preview(
+    content: bytes,
+    supplied_media_type: str,
+    *,
+    candidate_kind: str,
+    filename: str | None,
+    source_url: str | None,
+) -> FeedCandidatePreview:
+    media_type = _detected_media_type(content, supplied_media_type)
+    title = None
+    publication_date = None
+    if media_type in {"text/html", "application/xhtml+xml"}:
+        parser = _PreviewHTMLParser()
+        parser.feed(
+            content[:MAX_PREVIEW_TEXT_BYTES].decode("utf-8", errors="replace")
+        )
+        title = parser.title
+        publication_date = parser.publication_date
+    return FeedCandidatePreview(
+        candidate_kind,
+        filename,
+        source_url,
+        media_type,
+        len(content),
+        title,
+        publication_date,
+    )
+
+
+def _rss_date(value: object) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return format_datetime(parsed.astimezone(UTC))
 
 
 def utc_now() -> str:
@@ -56,10 +165,12 @@ class FeedService:
         identifier_factory: Callable[[], str] = lambda: uuid.uuid4().hex,
     ) -> None:
         self.state = state
+        self.clock = clock
         self.repository = FeedRepository(state)
+        if not self._process_lock.locked():
+            self.repository.recover_running_runs(self.clock())
         self.acquisition = AcquisitionRepository(state / "acquisition")
         self.transport = transport or FeedHttpTransport()
-        self.clock = clock
         self.identifier_factory = identifier_factory
 
     def validate(self, feed_url: str) -> FeedValidationResult:
@@ -351,6 +462,61 @@ class FeedService:
             )
             raise
 
+    def preview_upload(
+        self,
+        tombstone_id: str,
+        encoded: str,
+        media_type: str,
+        filename: str,
+    ) -> FeedCandidatePreview:
+        """Return advisory upload metadata without writing acquisition facts."""
+        self._previewable_tombstone(tombstone_id)
+        content = self._decode_preview_content(encoded)
+        safe_name = filename.replace("\\", "/").rsplit("/", 1)[-1].strip()[:255]
+        return _candidate_preview(
+            content,
+            media_type,
+            candidate_kind="local_upload",
+            filename=safe_name or None,
+            source_url=None,
+        )
+
+    def preview_url(
+        self, tombstone_id: str, alternate_url: str
+    ) -> FeedCandidatePreview:
+        """Perform one bounded advisory fetch without accepting the candidate."""
+        self._previewable_tombstone(tombstone_id)
+        validate_public_url(alternate_url)
+        response = self.transport.fetch(alternate_url)
+        path_name = unquote(urlsplit(response.final_url).path).rstrip("/").rsplit("/", 1)[-1]
+        return _candidate_preview(
+            response.content,
+            response.media_type,
+            candidate_kind="alternate_url",
+            filename=path_name[:255] or None,
+            source_url=response.final_url,
+        )
+
+    def _previewable_tombstone(self, tombstone_id: str) -> dict[str, Any]:
+        tombstone = self.repository.tombstone(tombstone_id)
+        if tombstone["status"] == "fulfilled":
+            raise FeedError("unavailable entry is already fulfilled")
+        return tombstone
+
+    @staticmethod
+    def _decode_preview_content(encoded: str) -> bytes:
+        try:
+            content = base64.b64decode(encoded, validate=True)
+        except ValueError as error:
+            raise FeedError("uploaded candidate is not valid base64") from error
+        if not content:
+            raise FeedError("uploaded candidate is empty")
+        if len(content) > MAX_FEED_ARTIFACT_BYTES:
+            raise FeedError(
+                f"uploaded candidate exceeds {MAX_FEED_ARTIFACT_BYTES} bytes"
+            )
+        return content
+
     def fulfill_url(self, tombstone_id: str, alternate_url: str) -> dict[str, Any]:
         try:
             validate_public_url(alternate_url)
@@ -428,6 +594,7 @@ class FeedService:
         rows = []
         for item in items:
             entry = item["entry"]
+            published_at = _rss_date(entry.get("published_at"))
             description = entry.get("summary") or ""
             if item["availability"] == "unavailable":
                 description = "[Unavailable artifact] " + description
@@ -438,8 +605,8 @@ class FeedService:
                 + escape(item["feed_id"] + ":" + entry["entry_key"])
                 + "</guid>"
                 + (
-                    "<pubDate>" + escape(entry["published_at"]) + "</pubDate>"
-                    if entry.get("published_at")
+                    "<pubDate>" + escape(published_at) + "</pubDate>"
+                    if published_at
                     else ""
                 )
                 + "<description>" + escape(description) + "</description>"

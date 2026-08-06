@@ -131,11 +131,62 @@ def generate(output: Path) -> None:
     })
 
     unavailable = list(reopened.repository.tombstones("unresolved"))
-    fulfilled = reopened.fulfill_upload(
-        unavailable[0]["tombstone_id"],
-        base64.b64encode((FIXTURES / "manual.txt").read_bytes()).decode(), "text/plain",
+    candidate_content = (FIXTURES / "artifact-a.html").read_bytes()
+    json_write(output / "candidate-preview.json", {
+        "upload": reopened.preview_upload(
+            unavailable[0]["tombstone_id"],
+            base64.b64encode(candidate_content).decode(),
+            "application/octet-stream",
+            "review-candidate.html",
+        ).to_dict(),
+        "alternate_url": reopened.preview_url(
+            unavailable[0]["tombstone_id"],
+            "https://content.example/rss-success",
+        ).to_dict(),
+        "advisory_only": (
+            reopened.repository.tombstone(unavailable[0]["tombstone_id"])["status"]
+            == "unresolved"
+        ),
+    })
+
+    recovery_state = output / "recovery-state"
+    if recovery_state.exists():
+        shutil.rmtree(recovery_state)
+    RepositoryDatabase.initialize(recovery_state)
+    stale_service = FeedService(recovery_state, clock=lambda: "2026-08-06T09:00:00+00:00")
+    stale = {
+        "schema_version": 1, "run_id": "feedrun-review-stale", "trigger": "cron",
+        "requested_at": "2026-08-06T09:01:00+00:00", "completed_at": "",
+        "outcome": "running", "selected_feed_ids": ["feed-review"],
+        "firm_ids": ["seagate"], "parent_pull_run_id": None,
+        "summary": {"feeds_selected": 1, "entries_observed": 1},
+        "feeds": [{"feed_id": "feed-review", "status": "completed"}],
+        "diagnostics": [{"category": "retained", "message": "prior result"}],
+        "termination_reason": "running",
+    }
+    stale_service.repository.create_run(stale)
+    recovered_service = FeedService(
+        recovery_state, clock=lambda: "2026-08-06T09:05:00+00:00",
+        identifier_factory=Ids(),
     )
-    json_write(output / "manual-fulfillment.json", fulfilled)
+    recovered = recovered_service.repository.run(stale["run_id"])
+    subsequent = recovered_service.poll(FeedPollRequest(trigger="cron")).to_dict()
+    recovered_before_repeat = recovered_service.repository.run(stale["run_id"])
+    FeedService(recovery_state, clock=lambda: "2026-08-06T09:10:00+00:00")
+    json_write(output / "startup-recovery.json", {
+        "original": stale,
+        "recovered": recovered,
+        "metadata_preserved": all(
+            recovered[key] == stale[key]
+            for key in ("run_id", "trigger", "requested_at", "selected_feed_ids",
+                        "firm_ids", "summary", "feeds")
+        ),
+        "subsequent_poll": subsequent,
+        "idempotent": (
+            recovered_service.repository.run(stale["run_id"])
+            == recovered_before_repeat
+        ),
+    })
     json_write(output / "schema-evidence.json", {
         "schema": RepositoryDatabase.open(evidence_state).validate(),
         "feed_revisions": sum(
@@ -153,13 +204,36 @@ def generate(output: Path) -> None:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
+        upload_body = {
+            "content_base64": base64.b64encode(
+                (FIXTURES / "manual.txt").read_bytes()
+            ).decode(),
+            "media_type": "text/plain",
+            "filename": "manual.txt",
+        }
+        preview_example = request(
+            server, "POST",
+            f"/api/feeds/unavailable/{unavailable[0]['tombstone_id']}/preview-upload",
+            upload_body,
+        )
+        fulfillment_example = request(
+            server, "POST",
+            f"/api/feeds/unavailable/{unavailable[0]['tombstone_id']}/fulfill-upload",
+            upload_body,
+        )
         examples = [
             request(server, "GET", "/api/feeds"),
             request(server, "GET", "/api/feeds/runs"),
+            preview_example,
+            fulfillment_example,
             request(server, "GET", "/api/feeds/unavailable?status=fulfilled"),
             request(server, "GET", "/api/feed-items.rss"),
         ]
         json_write(output / "api-examples.json", examples)
+        json_write(
+            output / "manual-fulfillment.json",
+            fulfillment_example["response"]["body"],
+        )
     finally:
         server.shutdown()
         server.server_close()

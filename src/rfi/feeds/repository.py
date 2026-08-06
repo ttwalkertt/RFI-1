@@ -373,6 +373,47 @@ class FeedRepository:
             )
             self._database.advance_revision(connection)
 
+    def recover_running_runs(self, recovered_at: str) -> tuple[str, ...]:
+        """Cancel runs left active by the prior process without replacing their facts."""
+        recovered: list[str] = []
+        diagnostic = {
+            "category": "startup_recovery",
+            "message": (
+                "The prior process ended while this feed run was active; "
+                "startup recovery canceled the run."
+            ),
+        }
+        with self._database.transaction() as connection:
+            rows = connection.execute(
+                "SELECT run_id,canonical_json FROM feed_runs "
+                "WHERE outcome='running' ORDER BY requested_at,run_id"
+            ).fetchall()
+            for row in rows:
+                run_id = str(row[0])
+                try:
+                    value = json.loads(str(row[1]))
+                except json.JSONDecodeError as error:
+                    raise FeedError(f"invalid feed run record: {run_id}") from error
+                if not isinstance(value, dict) or value.get("run_id") != run_id:
+                    raise FeedError(f"invalid feed run record: {run_id}")
+                diagnostics = value.get("diagnostics", [])
+                if not isinstance(diagnostics, list):
+                    raise FeedError(f"invalid feed run diagnostics: {run_id}")
+                value["diagnostics"] = [*diagnostics, diagnostic]
+                value["outcome"] = "canceled"
+                value["completed_at"] = recovered_at
+                value["recovered_at"] = recovered_at
+                value["termination_reason"] = "canceled during startup recovery"
+                connection.execute(
+                    "UPDATE feed_runs SET completed_at=?,outcome='canceled',canonical_json=? "
+                    "WHERE run_id=? AND outcome='running'",
+                    (recovered_at, canonical_json(value), run_id),
+                )
+                recovered.append(run_id)
+            if recovered:
+                self._database.advance_revision(connection)
+        return tuple(recovered)
+
     def save_run(self, value: dict[str, Any]) -> None:
         with self._database.transaction() as connection:
             changed = connection.execute(
