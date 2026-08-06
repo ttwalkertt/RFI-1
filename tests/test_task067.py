@@ -450,6 +450,38 @@ class Task067CliApiCase(unittest.TestCase):
             self.assertIn("Export All as RSS", html)
             self.assertIn("Preview candidate", html)
             self.assertIn("Advisory candidate metadata", html)
+            self.assertIn('data-enabled="', html)
+            self.assertIn("toggleEnabled", html)
+            self.assertIn("Artifacts obtained", html)
+            self.assertIn("Structured JSON for debugging", html)
+            self.assertIn("runs-panel", html)
+            self.assertNotIn("No firm associations", html)
+            feed = server.feed_service.repository.list()[0]
+            toggle = {
+                "display_name": feed.display_name,
+                "feed_url": feed.feed_url,
+                "enabled": False,
+                "notes": feed.notes,
+                "firm_ids": list(feed.firm_ids),
+                "expected_revision_id": feed.revision_id,
+            }
+            connection.request(
+                "PUT", f"/api/feeds/{feed.feed_id}", body=json.dumps(toggle),
+                headers={"Content-Type": "application/json"},
+            )
+            disabled_response = connection.getresponse()
+            disabled = json.loads(disabled_response.read())
+            self.assertEqual(disabled_response.status, 200)
+            self.assertFalse(disabled["enabled"])
+            toggle.update(enabled=True, expected_revision_id=disabled["revision_id"])
+            connection.request(
+                "PUT", f"/api/feeds/{feed.feed_id}", body=json.dumps(toggle),
+                headers={"Content-Type": "application/json"},
+            )
+            enabled_response = connection.getresponse()
+            enabled = json.loads(enabled_response.read())
+            self.assertEqual(enabled_response.status, 200)
+            self.assertTrue(enabled["enabled"])
             connection.request("POST", "/api/feeds/poll", body=b'{"feed_ids":[]}',
                                headers={"Content-Type":"application/json"})
             polled = connection.getresponse()

@@ -447,12 +447,16 @@ preserves entered values when a source is invalid. Optional firm associations on
 feed in that firm's Pull Sources execution. They do not assign entry ownership or grant acquisition
 authority.
 
-`Poll all enabled` and each card's `Poll` action use the same service as firm pulls and
+Use each card's **Enabled** checkbox to include or exclude that feed from **Poll all enabled**.
+The checkbox publishes the same revisioned feed definition as the editor. `Poll all enabled` and
+each card's `Poll` action use the same service as firm pulls and
 `rfi feeds poll`. Newly observed or materially updated entry links remain subject to normal URL,
 qualification, immutable-storage, identity, duplicate, and provenance rules. Retrieval failures
 remain in the unavailable-entry queue and do not stop other entries or feeds.
 
-Expand recent runs to inspect the authoritative structured JSON. Use the queue to retry, dismiss,
+Recent runs name their selected feeds and provide readable counts plus lists of obtained artifacts
+and other discovered entries. Expand **Structured JSON for debugging** when exact authoritative
+instrumentation is needed. Use the queue to retry, dismiss,
 restore, or provide a local file or operator-supplied alternate URL. Preview the selected candidate
 to compare its available filename, detected type, size, title, and publication metadata before
 confirming. The preview is advisory; confirmation still passes through repository qualification
