@@ -60,7 +60,11 @@ provenance on every acquisition attempt. Canonical bytes continue to deduplicate
 The Feeds tab provides compact scrolling cards, add/edit through one editor, format validation,
 optional searchable multi-firm association, retirement confirmation, per-feed and Poll All
 actions, 100-run history with expandable application JSON, filtered unavailable queues, retry,
-dismiss/restore, upload and alternate-URL fulfillment, and aggregate RSS export. Before manual
+dismiss/restore, upload and alternate-URL fulfillment, and aggregate RSS export. Feed-run cards
+separate entry observation from artifact results: they report observed, new/materially updated,
+unchanged, acquisition-request, obtained-artifact, unavailable, and true repository-duplicate
+counts. The compact heading makes a successful no-work repeat poll explicit rather than implying
+that nothing happened. Before manual
 confirmation, the shared fulfillment dialog requires an advisory preview of the current candidate.
 Uploads show filename, detected media type, byte size, and bounded extracted title and publication
 metadata when available; alternate URLs use one bounded transport preflight for the same evidence.
@@ -89,9 +93,16 @@ advisory upload/URL preview metadata through both service and HTTP boundaries.
 `make task067-test` passes 15 tests. `make validate` passes all 679 repository tests plus lint,
 formatting, typing, import, documentation, design-baseline, source-archive, and integrity checks.
 
+The operator-summary regression proves a first poll with new entries and executed acquisition
+requests, an all-unchanged second poll with zero acquisition requests and zero duplicates, and a
+materially updated entry whose executed acquisition links an existing canonical artifact as a
+genuine duplicate. This is a presentation and evidence correction only: the authoritative run
+fields and all feed service behavior remain unchanged.
+
 The review evidence directory contains human and JSON CLI transcripts, an absolute-path cron
-example, API examples, feed-run JSON, RSS output, schema and restart evidence, manual fulfillment,
-live-smoke results, and operator screenshots. Bounded live validation on 2026-08-06 parsed NASA's
+example, API examples, feed-run JSON, first/repeat/duplicate summary outcomes, RSS output, schema
+and restart evidence, manual fulfillment, live-smoke results, and operator screenshots. Bounded
+live validation on 2026-08-06 parsed NASA's
 public RSS feed (10 visible entries) and CPython's public GitHub Atom feed (20 visible entries).
 Live failures are diagnostic only; deterministic fixtures remain the acceptance authority.
 
@@ -116,7 +127,7 @@ Live failures are diagnostic only; deterministic fixtures remain the acceptance 
 | Acquisition integration | Qualification, immutable bytes, identity, dedupe, provenance | Complete | Existing engine and repository contracts reused |
 | Unavailable work queue | Durable non-byte outcomes and deferred resolution | Complete | Failures remain non-blocking and inspectable |
 | Manual fulfillment | Advisory candidate comparison, qualification, and linking | Complete | Preview is non-authoritative; original failure history and governed acceptance are preserved |
-| Feed-run instrumentation | Durable authoritative structured results and startup recovery | Complete | Newest 100 retained; stale running rows become canceled in place; expandable UI uses exact JSON |
+| Feed-run instrumentation | Durable authoritative structured results and startup recovery | Complete | Newest 100 retained; stale running rows become canceled in place; UI separates entry outcomes from artifact outcomes while preserving exact JSON |
 | Aggregate RSS | Offline bounded projection of durable observations | Complete | 200 items; retained/unavailable status explicit; dates use deterministic UTC RSS syntax |
 | Live public-source smoke | Representative RSS and Atom compatibility | Complete | Diagnostic evidence only; fixtures remain authoritative |
 | Internal scheduler/authenticated feeds | Recurrence and credentialed transport | Not Started | Explicitly outside TASK-067 |

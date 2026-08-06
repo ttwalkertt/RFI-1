@@ -454,9 +454,13 @@ each card's `Poll` action use the same service as firm pulls and
 qualification, immutable-storage, identity, duplicate, and provenance rules. Retrieval failures
 remain in the unavailable-entry queue and do not stop other entries or feeds.
 
-Recent runs name their selected feeds and provide readable counts plus lists of obtained artifacts
-and other discovered entries. Expand **Structured JSON for debugging** when exact authoritative
-instrumentation is needed. Use the queue to retry, dismiss,
+Recent runs name their selected feeds and distinguish feed-entry outcomes from artifact outcomes.
+The compact summary reports entries observed, new or materially updated entries, unchanged entries,
+acquisition requests, obtained artifacts, and unavailable entries. An unchanged entry was observed
+successfully but required no acquisition work; it is not an artifact duplicate. **Repository
+artifact duplicates linked** counts only acquisition requests satisfied by existing canonical
+bytes. Expand **Structured JSON for debugging** when exact authoritative instrumentation is needed.
+Use the queue to retry, dismiss,
 restore, or provide a local file or operator-supplied alternate URL. Preview the selected candidate
 to compare its available filename, detected type, size, title, and publication metadata before
 confirming. The preview is advisory; confirmation still passes through repository qualification

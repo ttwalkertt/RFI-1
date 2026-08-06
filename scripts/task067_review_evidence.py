@@ -27,10 +27,11 @@ class FixtureTransport:
     def __init__(self) -> None:
         self.rss_url = "https://publisher.example/task067-rss"
         self.atom_url = "https://publisher.example/task067-atom"
+        self.rss_fixture = "rss.xml"
 
     def fetch(self, url: str) -> HttpResponse:
         paths = {
-            self.rss_url: ("rss.xml", "application/rss+xml"),
+            self.rss_url: (self.rss_fixture, "application/rss+xml"),
             self.atom_url: ("atom.xml", "application/atom+xml"),
             "https://content.example/rss-success": ("artifact-a.html", "text/html"),
             "https://content.example/atom-success": ("artifact-a.html", "text/html"),
@@ -121,6 +122,43 @@ def generate(output: Path) -> None:
 
     latest = service.repository.runs(1)[0]
     json_write(output / "feed-run.json", latest)
+
+    summary_transport = FixtureTransport()
+    summary_service = create_state(output / "run-summary-state", summary_transport)
+    first_poll = summary_service.poll(FeedPollRequest(trigger="review_first_poll")).to_dict()
+    second_poll = summary_service.poll(FeedPollRequest(trigger="review_repeat_poll")).to_dict()
+    summary_transport.rss_fixture = "rss-updated.xml"
+    rss_feed = next(
+        item for item in summary_service.repository.list()
+        if item.feed_url == summary_transport.rss_url
+    )
+    duplicate_poll = summary_service.poll(
+        FeedPollRequest(
+            (rss_feed.feed_id,),
+            trigger="review_material_update",
+        )
+    ).to_dict()
+    json_write(output / "run-summary-outcomes.json", {
+        "first_poll": first_poll,
+        "second_poll": second_poll,
+        "genuine_repository_duplicate": duplicate_poll,
+        "checks": {
+            "first_poll_requested_acquisition": (
+                first_poll["summary"]["entries_new"] > 0
+                and first_poll["summary"]["acquisition_requests"] > 0
+            ),
+            "second_poll_recognized_unchanged_without_acquisition": (
+                second_poll["summary"]["entries_unchanged"]
+                == second_poll["summary"]["entries_observed"]
+                and second_poll["summary"]["acquisition_requests"] == 0
+                and second_poll["summary"]["duplicates"] == 0
+            ),
+            "duplicate_followed_acquisition": (
+                duplicate_poll["summary"]["acquisition_requests"] > 0
+                and duplicate_poll["summary"]["duplicates"] > 0
+            ),
+        },
+    })
     (output / "aggregate.rss").write_bytes(service.rss_export())
     reopened = FeedService(evidence_state, transport=transport)
     json_write(output / "restart-persistence.json", {

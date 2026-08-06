@@ -548,3 +548,27 @@ Repair verification:
   in the regenerated review package.
 - Live-source evidence remains the bounded 2026-08-06 NASA RSS and CPython GitHub Atom smoke
   result. It remains diagnostic only and was reverified by the package workflow.
+
+### Post-completion operator summary correction — 2026-08-06
+
+The feed-run operator presentation was corrected to distinguish feed-entry outcomes from artifact
+outcomes without changing acquisition, checkpoint, repository identity, persistence, or polling
+behavior. Compact history now reports feeds, entries observed, combined new/materially updated
+entries, unchanged entries, artifacts obtained, and unavailable entries. Its one-line summary
+explicitly names the selected feeds and states entries observed, unchanged entries, and acquisition
+requests. A previously observed unchanged entry is therefore visible as successful polling work
+that required no acquisition request.
+
+Repository artifact duplicates remain a separate subordinate result. They count only when an
+acquisition request was executed and existing canonical bytes satisfied it; checkpoint-filtered
+unchanged entries are never described or counted as duplicates. The authoritative structured JSON
+was already compatible through `entries_new`, `entries_updated`, `entries_unchanged`,
+`acquisition_requests`, and `duplicates`, so no schema or service change was made.
+
+Verification evidence now includes a deterministic first poll with new entries and acquisition
+requests, a second poll in which every entry is unchanged and acquisition requests and duplicates
+are both zero, and a materially updated entry whose executed acquisition links a genuine existing
+canonical artifact. `make task067-test` passes all 15 focused tests; `make validate` passes all 679
+repository tests plus lint, formatting, typing, imports, documentation, design-baseline,
+source-archive, and integrity checks. The regenerated package retains the three authoritative run
+results in `validation/run-summary-outcomes.json` and a refreshed operator-history screenshot.
