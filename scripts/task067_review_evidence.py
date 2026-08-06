@@ -4,19 +4,24 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import json
 import shutil
 import threading
 from contextlib import redirect_stdout
+from dataclasses import asdict
 from http.client import HTTPConnection
 from pathlib import Path
 from unittest.mock import patch
 
 from rfi.admin import create_admin_server
 from rfi.admin.server import AdminConsole
+from rfi.artifacts import ArtifactQueryService
 from rfi.cli import initialize, main, seed
 from rfi.feeds import FeedError, FeedPollRequest, FeedService, HttpResponse
+from rfi.firms import FirmRepository
+from rfi.source_profiles import load_canonical_template
 from rfi.storage import RepositoryDatabase
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -284,6 +289,53 @@ def generate(output: Path) -> None:
         "state": str(ui_state), "feeds": len(ui_service.repository.list()),
         "runs": len(ui_service.repository.runs()),
         "unavailable": len(ui_service.repository.tombstones("unresolved")),
+    })
+    artifact_query = ArtifactQueryService(
+        ui_service.acquisition,
+        FirmRepository.open(ui_state / "firm-catalog"),
+        load_canonical_template(),
+    )
+    unassociated = artifact_query.unassociated(limit=10)
+    first_artifact = unassociated.items[0]
+    first_detail = artifact_query.detail(first_artifact.document_id)
+    stored_content = artifact_query.content(first_artifact.document_id)
+    legacy_source = next(
+        item for item in ui_service.acquisition.sources()
+        if item["mechanism"] == "repository_feed"
+    )
+    json_write(output / "artifact-browser-repair.json", {
+        "diagnosed_live_repository": {
+            "captured_at": "2026-08-06",
+            "feed_sources": 92,
+            "successful_feed_observations": 92,
+            "feed_documents": 92,
+            "feed_artifacts": 92,
+            "persisted_unknown_placeholders": 0,
+            "exact_offending_chain": {
+                "source_id": "feedsource-7618d1b3785bf66c34cb78a7",
+                "document_id": "feeddocument-f63268f591bcabfec13fea5a",
+                "artifact_id": (
+                    "artifact-2f88e364c053c0da79a9d381915efd53105ad2e4c5b9f1f8bc888420fef7038a"
+                ),
+            },
+            "browser_error": (
+                "repository source references unknown canonical artifact: unknown"
+            ),
+        },
+        "deterministic_legacy_source_policy": legacy_source["policy"],
+        "normalized_unassociated_page": asdict(unassociated),
+        "selected_detail": asdict(first_detail),
+        "stored_content": {
+            "document_id": stored_content.document_id,
+            "byte_count": len(stored_content.content),
+            "sha256": hashlib.sha256(stored_content.content).hexdigest(),
+            "matches_summary": (
+                len(stored_content.content) == first_artifact.content_size
+                and hashlib.sha256(stored_content.content).hexdigest()
+                == first_artifact.checksum_sha256
+            ),
+        },
+        "reconciliation": "read-time legacy_no_identity_claim; no durable rewrite",
     })
 
 

@@ -48,6 +48,11 @@ def generate(base: str | None) -> int:
         raise RuntimeError("required TASK-067 review evidence is absent: " + ", ".join(missing))
     outcomes = [
         run("focused", ["make", "task067-test"]),
+        run(
+            "artifact-browser-regressions",
+            [".venv/bin/python", "-m", "unittest", "tests.test_task018",
+             "tests.test_task067", "-v"],
+        ),
         run("deterministic-evidence", [".venv/bin/python", "scripts/task067_review_evidence.py"]),
         run(
             "acquisition-persistence-regressions",
@@ -71,6 +76,11 @@ def generate(base: str | None) -> int:
         ("task-ticket.md", ROOT / "tasks/TASK-067-repository-owned-feed-sources.md"),
         ("completion/architectural-review.md", ROOT / "docs/TASK-067-review.md"),
         ("evidence/task067-tests.py", ROOT / "tests/test_task067.py"),
+        ("evidence/task018-tests.py", ROOT / "tests/test_task018.py"),
+        ("evidence/artifact-contracts.py", ROOT / "src/rfi/artifacts/contracts.py"),
+        ("evidence/artifact-query-service.py", ROOT / "src/rfi/artifacts/service.py"),
+        ("evidence/artifact-browser.html", ROOT / "src/rfi/admin/artifact_browser.html"),
+        ("evidence/admin-server.py", ROOT / "src/rfi/admin/server.py"),
         ("evidence/feed-contracts.py", ROOT / "src/rfi/feeds/contracts.py"),
         ("evidence/feed-parser.py", ROOT / "src/rfi/feeds/parser.py"),
         ("evidence/feed-repository.py", ROOT / "src/rfi/feeds/repository.py"),
@@ -85,13 +95,14 @@ def generate(base: str | None) -> int:
         *((f"evidence/fixtures/{path.name}", path)
           for path in sorted((ROOT / "fixtures/feeds").iterdir()) if path.is_file()),
         *((f"validation/{name}.txt", VALIDATION / f"{name}.txt")
-          for name in ("focused", "deterministic-evidence",
+          for name in ("focused", "artifact-browser-regressions", "deterministic-evidence",
                        "acquisition-persistence-regressions", "live-smoke-evidence",
                        "diff-check", "full-validation")),
         *((f"validation/{name}", VALIDATION / name) for name in (
             "live-smoke.json", "cli-human.txt", "cli-json.json", "cli-json-exit.txt",
             "cron-example.txt", "api-examples.json", "aggregate.rss", "feed-run.json",
             "run-summary-outcomes.json",
+            "artifact-browser-repair.json",
             "restart-persistence.json", "startup-recovery.json", "candidate-preview.json",
             "manual-fulfillment.json", "schema-evidence.json",
             "ui-state-summary.json", "results.json",

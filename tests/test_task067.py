@@ -14,6 +14,7 @@ from unittest.mock import patch
 from xml.etree import ElementTree
 
 from rfi.admin import create_admin_server
+from rfi.artifacts import ArtifactAssociation, ArtifactQueryService
 from rfi.cli import initialize, main, seed
 from rfi.feeds import (
     FeedError,
@@ -152,6 +153,21 @@ class Task067Case(unittest.TestCase):
         self.assertEqual(len(self.service.repository.runs()), 1)
         reopened = FeedService(self.state, transport=self.transport)
         self.assertEqual(reopened.repository.run(result.run_id), result.to_dict())
+        artifact_query = ArtifactQueryService(
+            AcquisitionRepository(self.state / "acquisition"),
+            FirmRepository.initialize(self.state / "firm-catalog"),
+            load_canonical_template(),
+        )
+        feed_artifacts = artifact_query.unassociated(limit=10)
+        self.assertEqual(len(feed_artifacts.items), 2)
+        self.assertTrue(all(
+            item.association_kind == ArtifactAssociation.UNASSOCIATED
+            and item.firm_id is None
+            and item.canonical_artifact_id is None
+            for item in feed_artifacts.items
+        ))
+        stored = artifact_query.content(feed_artifacts.items[0].document_id)
+        self.assertTrue(stored.content)
 
     def test_unchanged_reordering_material_update_and_duplicate_content(self) -> None:
         feed = self.create_feed()

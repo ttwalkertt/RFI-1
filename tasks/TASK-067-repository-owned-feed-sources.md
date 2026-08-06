@@ -572,3 +572,31 @@ canonical artifact. `make task067-test` passes all 15 focused tests; `make valid
 repository tests plus lint, formatting, typing, imports, documentation, design-baseline,
 source-archive, and integrity checks. The regenerated package retains the three authoritative run
 results in `validation/run-summary-outcomes.json` and a refreshed operator-history screenshot.
+
+### Post-completion Artifact Browser projection repair — 2026-08-06
+
+Investigation of the operator error `repository source references unknown canonical artifact:
+unknown` found 92 durable feed-derived documents with valid immutable artifacts and provenance.
+Their repository-feed source policies contained no `firm_id`, no canonical `artifact_id`, and no
+persisted `unknown` placeholder. Feed association controls polling inclusion and does not grant or
+imply a firm/canonical artifact identity, so this durable state is contractually valid.
+
+The defect was the generic TASK-018 query projection: absent projection metadata was treated as a
+firm-artifact claim and missing identities were replaced with `unknown`. The repair adds an
+explicit normalized unassociated-artifact read model and browser branch while preserving the
+existing canonical hierarchy. Firm/canonical fields remain null and are displayed as **Not
+applicable**. Malformed partial or invalid claims remain integrity errors, but bounded diagnostics
+now isolate only the offending records instead of preventing all valid artifacts from rendering.
+
+No schema migration, feed acquisition change, or durable reconciliation write is needed. Legacy
+sources are reconciled deterministically at read time: both identities mean firm/canonical,
+neither means unassociated, and a partial/invalid claim remains malformed. Immutable bytes and
+provenance remain untouched. The regenerated review package includes the before/after browser
+captures, exact offending-record evidence, normalized query and stored-preview evidence, focused
+TASK-018/TASK-067 regressions, and full validation output.
+
+Repair verification: the combined TASK-018/TASK-067 focused suite passed 21 tests. `make validate`
+passed all 680 repository tests plus lint, formatting, typing, imports, documentation,
+design-baseline, source-archive, and integrity gates. The live operator-state read exposed 18 firm
+branches, 92 unassociated artifacts, no malformed-state diagnostics, and a verified stored-copy
+preview. No network source was consulted to build that tree or preview.

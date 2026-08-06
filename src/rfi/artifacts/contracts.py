@@ -29,6 +29,13 @@ class ObservationSelection(StrEnum):
     LAST = "last"
 
 
+class ArtifactAssociation(StrEnum):
+    """Whether repository evidence carries firm/canonical semantics."""
+
+    FIRM_CANONICAL = "firm-canonical"
+    UNASSOCIATED = "unassociated"
+
+
 @dataclass(frozen=True)
 class ArtifactQuery:
     """Bounded typed artifact query; no persistence-shaped predicates are accepted."""
@@ -37,6 +44,7 @@ class ArtifactQuery:
     family_ids: tuple[str, ...] = ()
     canonical_artifact_ids: tuple[str, ...] = ()
     provider_ids: tuple[str, ...] = ()
+    association_kinds: tuple[ArtifactAssociation, ...] = ()
     durable_statuses: tuple[str, ...] = ("durable",)
     source_effective_from: str | None = None
     source_effective_through: str | None = None
@@ -61,12 +69,14 @@ class ArtifactSummary:
 
     document_id: str
     artifact_id: str
-    firm_id: str
-    firm_name: str
-    family_id: str
-    family_label: str
-    canonical_artifact_id: str
-    canonical_artifact_label: str
+    association_kind: ArtifactAssociation
+    association_basis: str
+    firm_id: str | None
+    firm_name: str | None
+    family_id: str | None
+    family_label: str | None
+    canonical_artifact_id: str | None
+    canonical_artifact_label: str | None
     display_title: str
     source_effective: SourceEffectiveOrder
     filing_or_publication_date: str | None
@@ -80,6 +90,17 @@ class ArtifactSummary:
     media_type: str
     content_size: int
     stored_content_available: bool
+
+
+@dataclass(frozen=True)
+class ArtifactReadDiagnostic:
+    """Bounded integrity finding isolated from otherwise readable artifacts."""
+
+    code: str
+    message: str
+    source_id: str
+    document_id: str
+    artifact_id: str
 
 
 @dataclass(frozen=True)
@@ -140,6 +161,8 @@ class ArtifactPage:
     items: tuple[ArtifactSummary, ...]
     next_cursor: str | None
     repository_snapshot: str
+    total_items: int
+    diagnostics: tuple[ArtifactReadDiagnostic, ...] = ()
 
 
 @dataclass(frozen=True)

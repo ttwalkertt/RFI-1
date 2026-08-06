@@ -20,7 +20,13 @@ from rfi.acquisition import (
     SourceProfile,
 )
 from rfi.admin import create_admin_server
-from rfi.artifacts import ArtifactOrder, ArtifactQuery, ArtifactQueryError, ArtifactQueryService
+from rfi.artifacts import (
+    ArtifactAssociation,
+    ArtifactOrder,
+    ArtifactQuery,
+    ArtifactQueryError,
+    ArtifactQueryService,
+)
 from rfi.concepts import ConceptRepository
 from rfi.firms import FirmDraft, FirmRepository, sample_firms
 from rfi.source_profiles import SourceProfileRepository, load_canonical_template
@@ -135,6 +141,49 @@ class ArtifactRepositoryCase(unittest.TestCase):
         )
         return older, newer, amazon
 
+    def ingest_unassociated(
+        self,
+        suffix: str,
+        policy: dict[str, object],
+        content: bytes = b"<h1>Feed retained copy</h1>",
+    ) -> str:
+        source_id = f"feedsource-{suffix}"
+        document_id = f"feeddocument-{suffix}"
+        self.repository.register_source(SourceProfile(
+            source_id,
+            "Repository feed entry",
+            True,
+            "repository_feed",
+            {"feed_url": "https://publisher.example/feed.xml"},
+            policy,
+        ))
+        self.repository.record_success(
+            f"feedattempt-{suffix}",
+            CandidateDocument(
+                f"feedcandidate-{suffix}",
+                source_id,
+                document_id,
+                DiscoveryProvenance(
+                    "2026-08-06T12:00:00Z",
+                    "repository_feed",
+                    {"feed_entry_id": f"entry-{suffix}"},
+                    (
+                        "https://publisher.example/feed.xml",
+                        f"https://publisher.example/articles/{suffix}",
+                    ),
+                    {"configured_source": True},
+                ),
+            ),
+            RetrievalResult(
+                content,
+                "text/html",
+                "2026-08-06T12:01:00Z",
+                "repository_feed",
+                {"feed_entry_id": f"entry-{suffix}"},
+            ),
+        )
+        return document_id
+
     def test_normalized_query_latest_dates_details_and_content(self) -> None:
         older, newer, _amazon = self.seed()
         page = self.service.query(
@@ -206,6 +255,91 @@ class ArtifactRepositoryCase(unittest.TestCase):
         self.assertEqual(before, restarted)
         self.assertEqual(self.repository.verify_integrity()["result"], "PASS")
 
+    def test_unassociated_artifacts_are_browseable_and_malformed_sources_are_isolated(self) -> None:
+        _older, canonical_document, _amazon = self.seed()
+        feed_document = self.ingest_unassociated(
+            "legacy-feed",
+            {
+                "feed_id": "feed-review",
+                "feed_revision_id": "feedrev-review",
+                "entry_key": "entry-legacy-feed",
+            },
+        )
+        malformed_document = self.ingest_unassociated(
+            "malformed-partial",
+            {"firm_id": "seagate"},
+        )
+        unknown_canonical_document = self.ingest_unassociated(
+            "malformed-unknown-canonical",
+            {"firm_id": "seagate", "artifact_id": "not-a-canonical-artifact"},
+        )
+
+        page = self.service.query(ArtifactQuery(limit=10))
+        self.assertIn(canonical_document, [item.document_id for item in page.items])
+        self.assertIn(feed_document, [item.document_id for item in page.items])
+        self.assertNotIn(malformed_document, [item.document_id for item in page.items])
+        self.assertNotIn(unknown_canonical_document, [item.document_id for item in page.items])
+        self.assertEqual(
+            {(item.code, item.document_id) for item in page.diagnostics},
+            {
+                ("malformed_source_reference", malformed_document),
+                ("unknown_canonical_artifact", unknown_canonical_document),
+            },
+        )
+
+        unassociated = self.service.unassociated(limit=10)
+        self.assertEqual([item.document_id for item in unassociated.items], [feed_document])
+        summary = unassociated.items[0]
+        self.assertEqual(summary.association_kind, ArtifactAssociation.UNASSOCIATED)
+        self.assertEqual(summary.association_basis, "legacy_no_identity_claim")
+        self.assertIsNone(summary.firm_id)
+        self.assertIsNone(summary.canonical_artifact_id)
+        self.assertNotEqual(summary.display_title, "unknown")
+        detail = self.service.detail(feed_document)
+        self.assertEqual(
+            detail.original_source_url, "https://publisher.example/articles/legacy-feed"
+        )
+        self.assertEqual(
+            self.service.content(feed_document).content, b"<h1>Feed retained copy</h1>"
+        )
+        self.assertEqual(self.service.firms()[0]["firm_id"], "amazon")
+
+        restarted = ArtifactQueryService(
+            AcquisitionRepository(self.state / "acquisition"),
+            FirmRepository.open(self.state / "firm-catalog"),
+            load_canonical_template(),
+        )
+        self.assertEqual(restarted.unassociated(limit=10), unassociated)
+
+        server = create_admin_server(self.state, port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        base = f"http://{host}:{port}"
+        try:
+            with urllib.request.urlopen(base + "/api/artifacts/firms", timeout=3) as response:
+                firms_payload = json.loads(response.read())
+            self.assertTrue(firms_payload["items"])
+            self.assertEqual(
+                {item["code"] for item in firms_payload["diagnostics"]},
+                {"malformed_source_reference", "unknown_canonical_artifact"},
+            )
+            with urllib.request.urlopen(
+                base + "/api/artifacts/unassociated?limit=10", timeout=3
+            ) as response:
+                unassociated_payload = json.loads(response.read())
+            self.assertEqual(
+                unassociated_payload["items"][0]["document_id"], feed_document
+            )
+            with urllib.request.urlopen(
+                base + f"/api/artifacts/{feed_document}/content", timeout=3
+            ) as response:
+                self.assertEqual(response.read(), b"<h1>Feed retained copy</h1>")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+
     def test_admin_api_browser_and_preview_security_boundary(self) -> None:
         _older, newer, _amazon = self.seed()
         server = create_admin_server(self.state, port=0)
@@ -219,6 +353,7 @@ class ArtifactRepositoryCase(unittest.TestCase):
             for marker in (
                 "Artifact Repository", "role=\"tree\"", "Open stored document in new tab",
                 "Open original source", "setAttribute('sandbox','')", "Load more",
+                "Unassociated artifacts", "Not applicable",
             ):
                 self.assertIn(marker, html)
             for forbidden in ("Edit artifact", "Delete artifact", "Rename artifact"):

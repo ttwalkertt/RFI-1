@@ -12,6 +12,7 @@ from typing import Any
 from rfi.acquisition import AcquisitionRepository
 from rfi.acquisition.contracts import IntegrityError
 from rfi.artifacts.contracts import (
+    ArtifactAssociation,
     ArtifactContent,
     ArtifactDetail,
     ArtifactObservation,
@@ -19,6 +20,7 @@ from rfi.artifacts.contracts import (
     ArtifactPage,
     ArtifactQuery,
     ArtifactQueryError,
+    ArtifactReadDiagnostic,
     ArtifactSummary,
     ObservationSelection,
     ProvenanceLocation,
@@ -48,7 +50,7 @@ class ArtifactQueryService:
     def query(self, query: ArtifactQuery) -> ArtifactPage:
         """Return a deterministic page bound to one authoritative-state digest."""
         self._validate_query(query)
-        snapshot, summaries = self._snapshot_summaries()
+        snapshot, summaries, diagnostics = self._snapshot_summaries()
         filtered = [item for item in summaries if self._matches(item, query)]
         filtered.sort(key=self._sort_key, reverse=query.order == ArtifactOrder.NEWEST)
         offset = self._cursor_offset(query, snapshot)
@@ -57,7 +59,7 @@ class ArtifactQueryService:
         next_cursor = None
         if next_offset < len(filtered):
             next_cursor = self._encode_cursor(snapshot, self._fingerprint(query), next_offset)
-        return ArtifactPage(page, next_cursor, snapshot)
+        return ArtifactPage(page, next_cursor, snapshot, len(filtered), diagnostics)
 
     def latest(self, firm_id: str, canonical_artifact_id: str) -> ArtifactSummary | None:
         """Project newest durable state through the ordinary query contract."""
@@ -85,10 +87,13 @@ class ArtifactQueryService:
 
     def firms(self) -> tuple[dict[str, Any], ...]:
         """List only firms with durable artifact-document counts."""
-        _, summaries = self._snapshot_summaries()
+        _, summaries, _diagnostics = self._snapshot_summaries()
         counts: dict[str, int] = {}
         names: dict[str, str] = {}
         for item in summaries:
+            if item.association_kind != ArtifactAssociation.FIRM_CANONICAL:
+                continue
+            assert item.firm_id is not None and item.firm_name is not None
             counts[item.firm_id] = counts.get(item.firm_id, 0) + 1
             names[item.firm_id] = item.firm_name
         return tuple(
@@ -104,6 +109,7 @@ class ArtifactQueryService:
         grouped: dict[str, set[str]] = {}
         labels: dict[str, str] = {}
         for item in self._all_for_firm(firm_id):
+            assert item.family_id is not None and item.family_label is not None
             grouped.setdefault(item.family_id, set()).add(item.document_id)
             labels[item.family_id] = item.family_label
         return tuple(
@@ -125,6 +131,8 @@ class ArtifactQueryService:
         labels: dict[str, str] = {}
         for item in self._all_for_firm(firm_id):
             if item.family_id == family_id:
+                assert item.canonical_artifact_id is not None
+                assert item.canonical_artifact_label is not None
                 grouped.setdefault(item.canonical_artifact_id, set()).add(item.document_id)
                 labels[item.canonical_artifact_id] = item.canonical_artifact_label
         return tuple(
@@ -136,13 +144,28 @@ class ArtifactQueryService:
             for artifact_id in sorted(grouped, key=lambda value: self._artifacts[value].order)
         )
 
+    def unassociated(self, limit: int = 50, cursor: str | None = None) -> ArtifactPage:
+        """List durable artifacts for which firm/canonical identity is inapplicable."""
+        return self.query(ArtifactQuery(
+            association_kinds=(ArtifactAssociation.UNASSOCIATED,),
+            limit=limit,
+            cursor=cursor,
+        ))
+
+    def diagnostics(self) -> tuple[ArtifactReadDiagnostic, ...]:
+        """Expose bounded malformed-state diagnostics without blocking valid reads."""
+        _snapshot, _summaries, diagnostics = self._snapshot_summaries()
+        return diagnostics
+
     def detail(
         self,
         document_id: str,
         observation: str | ObservationSelection = ObservationSelection.LAST,
     ) -> ArtifactDetail:
         """Resolve one artifact and exactly one of its immutable observations."""
-        snapshot, summaries, _records, observations, _sources, metadata = self._state()
+        (
+            snapshot, summaries, _records, observations, _sources, metadata, _diagnostics,
+        ) = self._state()
         summary = next((item for item in summaries if item.document_id == document_id), None)
         if summary is None:
             raise ArtifactQueryError("unknown_document_id", f"unknown document ID: {document_id}")
@@ -258,7 +281,9 @@ class ArtifactQueryService:
     def _navigate_observation(self, cursor: str, delta: int) -> ArtifactDetail:
         """Resolve one snapshot-bound cursor and move by one observation."""
         payload = self._decode_observation_cursor(cursor)
-        snapshot, summaries, _records, observations, _sources, metadata = self._state()
+        (
+            snapshot, summaries, _records, observations, _sources, metadata, _diagnostics,
+        ) = self._state()
         if payload.get("snapshot") != snapshot:
             raise ArtifactQueryError(
                 "stale_cursor", "repository changed; restart observation navigation"
@@ -323,9 +348,11 @@ class ArtifactQueryService:
             detail.summary.checksum_sha256,
         )
 
-    def _snapshot_summaries(self) -> tuple[str, tuple[ArtifactSummary, ...]]:
-        snapshot, summaries, _, _, _, _ = self._state()
-        return snapshot, summaries
+    def _snapshot_summaries(
+        self,
+    ) -> tuple[str, tuple[ArtifactSummary, ...], tuple[ArtifactReadDiagnostic, ...]]:
+        snapshot, summaries, _, _, _, _, diagnostics = self._state()
+        return snapshot, summaries, diagnostics
 
     def _state(
         self,
@@ -336,6 +363,7 @@ class ArtifactQueryService:
         list[dict[str, Any]],
         dict[str, dict[str, Any]],
         dict[str, dict[str, Any]],
+        tuple[ArtifactReadDiagnostic, ...],
     ]:
         try:
             records = self._repository.history()
@@ -367,31 +395,100 @@ class ArtifactQueryService:
                 str(prior.get("attempt_id", "")),
             ):
                 latest_by_document[document_id] = record
-        summaries = tuple(
-            self._summary(record, sources.get(str(record.get("source_id")), {}), metadata)
-            for record in latest_by_document.values()
-            if sources.get(str(record.get("source_id")), {}).get("policy", {}).get(
-                "repository_projection", "firm-artifact"
-            ) == "firm-artifact"
+        summaries: list[ArtifactSummary] = []
+        diagnostics: list[ArtifactReadDiagnostic] = []
+        for record in latest_by_document.values():
+            source = sources.get(str(record.get("source_id")), {})
+            try:
+                projection, basis = self._projection(source)
+                if projection is None:
+                    continue
+                summaries.append(self._summary(record, source, metadata, projection, basis))
+            except ArtifactQueryError as error:
+                diagnostics.append(ArtifactReadDiagnostic(
+                    error.code,
+                    str(error)[:512],
+                    str(record.get("source_id", "")),
+                    str(record.get("document_id", "")),
+                    str(record.get("artifact_id", "")),
+                ))
+        diagnostics.sort(key=lambda item: (item.source_id, item.document_id, item.artifact_id))
+        return (
+            snapshot, tuple(summaries), records, observations, sources, metadata,
+            tuple(diagnostics[:100]),
         )
-        return snapshot, summaries, records, observations, sources, metadata
+
+    @staticmethod
+    def _projection(source: dict[str, Any]) -> tuple[ArtifactAssociation | None, str]:
+        """Reconcile legacy source policies without inventing missing identity."""
+        policy = source.get("policy", {})
+        if not isinstance(policy, dict):
+            raise ArtifactQueryError(
+                "malformed_source_reference", "repository source policy is malformed"
+            )
+        explicit = policy.get("repository_projection")
+        if explicit in {"mailing-list", "stream"}:
+            return None, "explicit"
+        if explicit not in {None, "firm-artifact", "unassociated-artifact"}:
+            raise ArtifactQueryError(
+                "unsupported_repository_projection",
+                f"repository source has unsupported projection: {explicit}",
+            )
+        firm_id = policy.get("firm_id")
+        canonical_id = policy.get("artifact_id")
+        has_firm = isinstance(firm_id, str) and bool(firm_id)
+        has_canonical = isinstance(canonical_id, str) and bool(canonical_id)
+        if explicit == "firm-artifact":
+            if not has_firm or not has_canonical:
+                raise ArtifactQueryError(
+                    "malformed_source_reference",
+                    "firm-artifact source requires firm and canonical artifact identity",
+                )
+            return ArtifactAssociation.FIRM_CANONICAL, "explicit"
+        if explicit == "unassociated-artifact":
+            if has_firm or has_canonical:
+                raise ArtifactQueryError(
+                    "malformed_source_reference",
+                    "unassociated source must not claim firm or canonical artifact identity",
+                )
+            return ArtifactAssociation.UNASSOCIATED, "explicit"
+        if has_firm and has_canonical:
+            return ArtifactAssociation.FIRM_CANONICAL, "legacy_complete_identity"
+        if not has_firm and not has_canonical:
+            return ArtifactAssociation.UNASSOCIATED, "legacy_no_identity_claim"
+        raise ArtifactQueryError(
+            "malformed_source_reference",
+            "repository source has a partial firm/canonical identity claim",
+        )
 
     def _summary(
         self,
         record: dict[str, Any],
         source: dict[str, Any],
         metadata: dict[str, dict[str, Any]],
+        projection: ArtifactAssociation,
+        association_basis: str,
     ) -> ArtifactSummary:
         policy = source.get("policy", {})
-        firm_id = str(policy.get("firm_id", "unknown"))
-        artifact_id = str(policy.get("artifact_id", "unknown"))
-        if artifact_id not in self._artifacts:
-            raise ArtifactQueryError(
-                "unknown_canonical_artifact",
-                f"repository source references unknown canonical artifact: {artifact_id}",
-            )
-        canonical = self._artifacts[artifact_id]
-        family = self._families[canonical.category_id]
+        firm_id: str | None = None
+        firm_name: str | None = None
+        family_id: str | None = None
+        family_label: str | None = None
+        canonical_id: str | None = None
+        canonical_label: str | None = None
+        canonical_short_name: str | None = None
+        if projection == ArtifactAssociation.FIRM_CANONICAL:
+            firm_id = str(policy["firm_id"])
+            canonical_id = str(policy["artifact_id"])
+            if canonical_id not in self._artifacts:
+                raise ArtifactQueryError(
+                    "unknown_canonical_artifact",
+                    "repository source references an unknown canonical artifact",
+                )
+            canonical = self._artifacts[canonical_id]
+            family = self._families[canonical.category_id]
+            family_id, family_label = family.category_id, family.label
+            canonical_label, canonical_short_name = canonical.label, canonical.short_name
         discovery = record.get("candidate", {}).get("provenance", {})
         discovery_metadata = discovery.get("metadata", {})
         provider_ids = {
@@ -414,18 +511,32 @@ class ArtifactQueryService:
         )
         repo_artifact_id = str(record.get("artifact_id", ""))
         artifact_meta = metadata.get(repo_artifact_id, {})
-        try:
-            firm_name = self._firms.get(firm_id).canonical_name
-        except Exception:
-            firm_name = firm_id
+        if firm_id is not None:
+            try:
+                firm_name = self._firms.get(firm_id).canonical_name
+            except Exception:
+                firm_name = firm_id
         filing_date = self._text(discovery_metadata.get("filing_date")) or self._text(
             discovery_metadata.get("publication_date")
+        ) or self._text(
+            discovery_metadata.get("publication_datetime")
         )
         period_date = self._text(discovery_metadata.get("period_of_report"))
+        raw_locations = discovery.get("locations", [])
+        original_location = next(
+            (value for value in reversed(raw_locations) if isinstance(value, str) and value), None
+        )
+        display_title = (
+            f"{canonical_short_name} · {period_date or filing_date or effective_value[:10]}"
+            if canonical_short_name is not None
+            else self._text(discovery_metadata.get("title"))
+            or original_location
+            or str(record.get("candidate_id", record["document_id"]))
+        )
         return ArtifactSummary(
-            str(record["document_id"]), repo_artifact_id, firm_id, firm_name,
-            family.category_id, family.label, canonical.artifact_id, canonical.label,
-            f"{canonical.short_name} · {period_date or filing_date or effective_value[:10]}",
+            str(record["document_id"]), repo_artifact_id, projection, association_basis,
+            firm_id, firm_name, family_id, family_label, canonical_id, canonical_label,
+            display_title,
             SourceEffectiveOrder(
                 effective_value,
                 basis,
@@ -488,6 +599,7 @@ class ArtifactQueryService:
                 or item.canonical_artifact_id in query.canonical_artifact_ids
             )
             and (not query.provider_ids or item.provider in query.provider_ids)
+            and (not query.association_kinds or item.association_kind in query.association_kinds)
             and item.durable_status in query.durable_statuses
             and (
                 query.source_effective_from is None
@@ -510,6 +622,10 @@ class ArtifactQueryService:
             raise ArtifactQueryError(
                 "unknown_canonical_artifact",
                 "query references an unknown canonical artifact",
+            )
+        if set(query.association_kinds) - set(ArtifactAssociation):
+            raise ArtifactQueryError(
+                "invalid_query", "association kind must be firm-canonical or unassociated"
             )
         if set(query.durable_statuses) - {"durable"}:
             raise ArtifactQueryError(

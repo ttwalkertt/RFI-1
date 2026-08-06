@@ -37,6 +37,14 @@ entry identity, and material observation hash. This prevents acquisition checkpo
 filtering a sibling entry or a materially updated version while preserving the feed and entry
 provenance on every acquisition attempt. Canonical bytes continue to deduplicate globally.
 
+Feed-derived repository sources make no firm or canonical-type identity claim. TASK-018 now
+projects such durable evidence explicitly as `unassociated`, with null/inapplicable firm, family,
+and canonical fields, while preserving the existing hierarchy for complete identity claims. The
+legacy reconciliation is read-only and deterministic: both identities mean firm/canonical,
+neither means unassociated, and partial or invalid claims produce bounded per-record diagnostics.
+No repository row or immutable byte is migrated. This repaired the browser-wide failure caused by
+the former synthesized `unknown` canonical identity without weakening integrity validation.
+
 ## Bounded review decisions
 
 1. **Deletion means retirement.** Delete appends a disabled retired revision. Prior definitions,
@@ -99,6 +107,17 @@ materially updated entry whose executed acquisition links an existing canonical 
 genuine duplicate. This is a presentation and evidence correction only: the authoritative run
 fields and all feed service behavior remain unchanged.
 
+Artifact-browser regression evidence reproduces the original 400 response against the operator
+repository, identifies all 92 affected feed sources and one exact source/document/artifact chain,
+and confirms that none persisted a literal `unknown` identity. Focused tests prove that canonical
+SEC-style artifacts retain their firm/family/type hierarchy, valid unassociated artifacts are
+visible and preview exact stored bytes, malformed partial and unknown-canonical claims are
+reported but isolated, and restart returns the same normalized projection. The before/after
+screenshots and normalized live-repository example are packaged with the validation transcripts.
+The combined TASK-018/TASK-067 focused suite passes 21 tests. The full repository gate passes all
+680 tests plus lint, formatting, typing, imports, documentation, design-baseline, source-archive,
+and integrity validation.
+
 The review evidence directory contains human and JSON CLI transcripts, an absolute-path cron
 example, API examples, feed-run JSON, first/repeat/duplicate summary outcomes, RSS output, schema
 and restart evidence, manual fulfillment, live-smoke results, and operator screenshots. Bounded
@@ -129,6 +148,7 @@ Live failures are diagnostic only; deterministic fixtures remain the acceptance 
 | Manual fulfillment | Advisory candidate comparison, qualification, and linking | Complete | Preview is non-authoritative; original failure history and governed acceptance are preserved |
 | Feed-run instrumentation | Durable authoritative structured results and startup recovery | Complete | Newest 100 retained; stale running rows become canceled in place; UI separates entry outcomes from artifact outcomes while preserving exact JSON |
 | Aggregate RSS | Offline bounded projection of durable observations | Complete | 200 items; retained/unavailable status explicit; dates use deterministic UTC RSS syntax |
+| Artifact Browser projection | Generic canonical and unassociated repository reads | Complete | Valid no-identity evidence is explicit; malformed claims are isolated with bounded diagnostics |
 | Live public-source smoke | Representative RSS and Atom compatibility | Complete | Diagnostic evidence only; fixtures remain authoritative |
 | Internal scheduler/authenticated feeds | Recurrence and credentialed transport | Not Started | Explicitly outside TASK-067 |
 

@@ -782,3 +782,34 @@ Architectural change: durable artifact state now has one reusable repository-own
 shared by human inspection and future automated consumers. Next architectural milestone: implement
 Bring Repository Up to Date planning against this latest-artifact contract, or authorize the next
 roadmap milestone based on current governance.
+
+## Post-completion unassociated-artifact projection repair — 2026-08-06
+
+TASK-067 exposed a latent TASK-018 projection assumption: the generic query service treated every
+source without an explicit projection as firm/canonical and synthesized the string `unknown` for
+both missing identities. The current operator repository contained 92 valid feed observations,
+all backed by immutable artifacts, whose source policies correctly made neither claim. One exact
+example linked source `feedsource-7618d1b3785bf66c34cb78a7`, document
+`feeddocument-f63268f591bcabfec13fea5a`, and artifact
+`artifact-2f88e364c053c0da79a9d381915efd53105ad2e4c5b9f1f8bc888420fef7038a`.
+No persisted source, document, or observation contained a placeholder identity named `unknown`.
+
+The normalized read contract now distinguishes `firm-canonical` and `unassociated` artifacts.
+Firm, family, and canonical-type fields are null/inapplicable for an unassociated artifact; the UI
+labels them **Not applicable**. Existing complete identity claims retain the TASK-018 hierarchy.
+Partial claims, unknown claimed canonical types, and unsupported projection declarations remain
+malformed and are excluded individually with bounded structured diagnostics, so they cannot hide
+unrelated valid artifacts.
+
+No durable migration or repository rewrite is required. A deterministic read-time reconciliation
+maps a legacy source with both identities to the canonical hierarchy and one with neither identity
+to the unassociated projection. It never creates a firm or canonical identity and does not modify
+immutable bytes or provenance. Focused regression coverage proves canonical and unassociated
+enumeration, explicit malformed-state isolation, stored-copy preview, API behavior, and identical
+results after repository restart.
+
+Repair verification: the combined TASK-018/TASK-067 focused suite passed 21 tests. The full
+repository validation passed all 680 tests plus lint, formatting, typing, imports, documentation,
+design-baseline, source-archive, and integrity gates. Browser evidence against the operator state
+shows 18 canonical firm branches and 92 unassociated artifacts with zero diagnostics; selecting a
+feed artifact loads its verified stored repository copy.

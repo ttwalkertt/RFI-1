@@ -26,6 +26,7 @@ from rfi.admin.help import (
     topic_url,
 )
 from rfi.artifacts import (
+    ArtifactAssociation,
     ArtifactOrder,
     ArtifactQuery,
     ArtifactQueryError,
@@ -945,7 +946,10 @@ class AdminHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.OK, asdict(mailing_lists.message(message_key)))
                 return
         if method == "GET" and parts == ["api", "artifacts", "firms"]:
-            self._send_json(HTTPStatus.OK, {"items": list(artifacts.firms())})
+            self._send_json(HTTPStatus.OK, {
+                "items": list(artifacts.firms()),
+                "diagnostics": [asdict(item) for item in artifacts.diagnostics()],
+            })
             return
         if method == "GET" and parts == ["api", "artifacts", "families"]:
             firm_id = self._first(query, "firm_id")
@@ -958,6 +962,12 @@ class AdminHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {"items": list(artifacts.canonical_types(firm_id, family_id))},
             )
+            return
+        if method == "GET" and parts == ["api", "artifacts", "unassociated"]:
+            limit_text = self._first(query, "limit") or "50"
+            self._send_json(HTTPStatus.OK, asdict(artifacts.unassociated(
+                limit=int(limit_text), cursor=self._first(query, "cursor") or None,
+            )))
             return
         if method == "GET" and parts == ["api", "artifacts"]:
             order_text = self._first(query, "order") or ArtifactOrder.NEWEST.value
@@ -974,6 +984,10 @@ class AdminHandler(BaseHTTPRequestHandler):
                     family_ids=self._query_values(query, "family_id"),
                     canonical_artifact_ids=self._query_values(query, "canonical_artifact_id"),
                     provider_ids=self._query_values(query, "provider"),
+                    association_kinds=tuple(
+                        ArtifactAssociation(value)
+                        for value in self._query_values(query, "association_kind")
+                    ),
                     source_effective_from=self._first(query, "date_from") or None,
                     source_effective_through=self._first(query, "date_through") or None,
                     order=order,

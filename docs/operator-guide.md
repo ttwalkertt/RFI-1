@@ -666,8 +666,8 @@ traces are not exposed to the operator.
 
 ### Purpose
 
-Inspect exact repository evidence through read-only projections for Firm artifacts, Development
-mailing lists, and Artifact streams.
+Inspect exact repository evidence through read-only projections for Firm artifacts, Unassociated
+artifacts, Development mailing lists, and Artifact streams.
 
 ### Prerequisites
 
@@ -678,7 +678,8 @@ repository tree.
 ### Typical workflow
 
 1. Expand a projection, then its lazy branches.
-2. Select a firm document, mailing-list message, or stream membership.
+2. Select a firm document, unassociated repository document, mailing-list message, or stream
+   membership.
 3. Inspect normalized metadata, identities, checksum, provenance, observation/run information,
    inclusion reason, and lineage as applicable.
 4. Use Previous observation and Next observation for repeated firm-document observations.
@@ -697,6 +698,13 @@ Firm artifacts distinguish stable logical `document_id`, byte-derived `artifact_
 `observation_id`, and acquisition `attempt_id`. Mailing-list detail exposes stored connectivity and
 inclusion reasons. Stream membership exposes the saved stream revision, execution run, inclusion
 kind/reason, completeness, and upstream/seed lineage.
+
+An **Unassociated artifact** is valid stored evidence whose source makes no firm or canonical-type
+claim. Firm and canonical artifact metadata are shown as **Not applicable**, not guessed or labeled
+unknown. Legacy complete firm/type claims retain the existing canonical hierarchy; legacy sources
+with neither claim are reconciled read-only into the unassociated projection. Partial identity
+claims, unknown canonical types, and unsupported projection declarations remain malformed. The
+browser isolates them, keeps valid branches available, and exposes bounded integrity diagnostics.
 
 ### Common problems and recovery
 

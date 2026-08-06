@@ -1,6 +1,7 @@
 """Public repository-owned artifact query and inspection surface."""
 
 from rfi.artifacts.contracts import (
+    ArtifactAssociation,
     ArtifactContent,
     ArtifactDetail,
     ArtifactObservation,
@@ -8,6 +9,7 @@ from rfi.artifacts.contracts import (
     ArtifactPage,
     ArtifactQuery,
     ArtifactQueryError,
+    ArtifactReadDiagnostic,
     ArtifactSummary,
     ObservationSelection,
     ProvenanceLocation,
@@ -16,7 +18,8 @@ from rfi.artifacts.contracts import (
 from rfi.artifacts.service import ArtifactQueryService
 
 __all__ = [
-    "ArtifactContent", "ArtifactDetail", "ArtifactObservation", "ArtifactOrder", "ArtifactPage",
-    "ArtifactQuery", "ArtifactQueryError", "ArtifactQueryService", "ArtifactSummary",
+    "ArtifactAssociation", "ArtifactContent", "ArtifactDetail", "ArtifactObservation",
+    "ArtifactOrder", "ArtifactPage", "ArtifactQuery", "ArtifactQueryError",
+    "ArtifactQueryService", "ArtifactReadDiagnostic", "ArtifactSummary",
     "ObservationSelection", "ProvenanceLocation", "SourceEffectiveOrder",
 ]

@@ -78,6 +78,13 @@ Tree expansion must not require loading full provenance or artifact bytes.
 
 Read models should distinguish known values, unknown values, inapplicable fields, and malformed durable state.
 
+Canonical artifact and firm identity are applicable only to sources that claim the firm/canonical
+projection. A durable artifact whose source claims neither identity is explicitly unassociated;
+its normalized firm, family, and canonical-type fields are null/inapplicable, never the synthesized
+string `unknown`. A partial identity claim or an invalid claimed canonical type is malformed state,
+not an unassociated artifact. Bounded diagnostics should isolate such records when other valid
+repository evidence remains readable.
+
 Do not synthesize dates, titles, provider identifiers, or status values to simplify the UI. The UI may display a human-readable placeholder, but the contract must preserve the actual semantic state.
 
 ### Use source-effective ordering
