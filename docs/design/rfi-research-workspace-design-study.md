@@ -1,7 +1,9 @@
 # RFI Research Workspace — Product and Architecture Design Study
 
-**Status:** Recommendation for architectural review; no implementation authorized  
-**Date:** 2026-08-06  
+**Status:** Reconciled recommendation and implementation-planning baseline; no implementation authorized
+
+**Date:** 2026-08-07
+
 **Scope:** Interactive research over retained RFI data, with a governed path to later internet augmentation
 
 ## 1. Executive summary
@@ -16,12 +18,15 @@ The normal experience should combine three modes without forcing the operator to
 
 This is preferable to a conventional chatbot because RFI's advantage is not fluent prose. It is retained evidence, authority separation, inspectability, provenance, replay, and work that compounds over time. A chat-first product would subordinate those advantages to a fragile linear transcript and encourage generated answers to become accidental working truth.
 
-The current repository already contains more of the required architecture than the roadmap and task-ticket statuses imply. Public contracts and committed implementations exist for source objects, derived knowledge, governed retrieval, evidence packages, bounded intelligence, and durable investigations. Forty-one focused TASK-005 through TASK-008 tests pass. However, these capabilities remain POC subsystems: they are not composed into the main browser product, retrieval quality and semantic coverage are narrow, the planner and reasoner are deterministic substitutes, and there is no internet-evidence class or research application API.
+The recommendation survives reconciliation with the current repository. The important update is that RFI now has a credible retained transcript corpus path for the representative use case. TASK-069 added bounded historical transcript backfill, and TASK-070 now classifies substantial non-earnings management events separately from earnings calls while retaining both as governed evidence. Public POC contracts also exist for source objects, derived knowledge, governed retrieval, evidence packages, bounded intelligence, and durable investigations. The remaining frontier is therefore **product composition**, not reinvention of those layers.
 
-The smallest useful first implementation should be **repository-only and single-operator**. It should prove one end-to-end vertical slice against actual RFI application state:
+That frontier is still material. Current source-object parsing is SEC-specific and cannot cite transcript turns or paragraphs. Retrieval and intelligence remain proof-oriented, the planner and reasoner are deterministic substitutes, investigation persistence is not integrated with the main application state, and the browser product exposes none of these capabilities. The smallest useful first implementation should use the current Seagate transcript corpus to prove one honest end-to-end question: **“How has Seagate management's positioning on HAMR changed over the last two years?”**
+
+The smallest useful first implementation should be **repository-only, single-operator, and deliberately narrow**. It should prove one end-to-end vertical slice against actual RFI application state:
 
 - open or create a durable investigation;
 - ask a question against governed repository data;
+- constrain Seagate, the last two years, and retained `earnings_transcript` plus `management_transcript` evidence;
 - see and, before execution, adjust the interpreted scope;
 - execute a bounded research plan through public retrieval and evidence contracts;
 - receive claim-level citations with clear authority labels;
@@ -30,31 +35,35 @@ The smallest useful first implementation should be **repository-only and single-
 - retain the execution, operator notes, and selected evidence references without treating the answer as repository truth; and
 - reopen the investigation and understand what happened.
 
-Internet research should be added only after these semantics work with repository evidence. The recommended later architecture uses an RFI-owned external-research gateway and evidence class. Search services and, selectively, model-native search or a bounded browser agent may operate behind that gateway. External discoveries are ephemeral by default, visibly ungoverned, and cannot become repository evidence except through an explicit acquisition workflow such as **Add to RFI**. That action proposes or launches ordinary governed acquisition; it does not allow the research layer to write canonical evidence.
+Internet research should be added only after these semantics work with repository evidence. Stage 1 should reserve authority and adapter seams for external evidence, but should not implement search, fetching, browser agents, or acquisition promotion. The recommended later architecture uses an RFI-owned external-research gateway and evidence class. External discoveries are ephemeral by default, visibly ungoverned, and cannot become repository evidence except through an explicit acquisition workflow such as **Add to RFI**. That action proposes or launches ordinary governed acquisition; it does not allow the research layer to write canonical evidence.
 
 ## 2. Study basis and current-state reconciliation
 
 This study used the repository's governing design material, relevant task tickets and ADRs, current source contracts and implementations, focused tests, operator documentation, committed history, and a live inspection of the local browser product.
 
-Key evidence included:
+The 2026-08-07 reconciliation additionally reviewed the completed TASK-068 through TASK-070 work, the current transcript classification and retention evidence, the product composition roots, and the live browser product. Key evidence included:
 
 - [ARCHITECTURE.md](../../ARCHITECTURE.md), [DESIGN_PRINCIPLES.md](../../DESIGN_PRINCIPLES.md), [RFI_MANIFESTO.md](../../RFI_MANIFESTO.md), [ROADMAP.md](../../ROADMAP.md), and [TASKS.md](../../TASKS.md);
 - TASK-005 through TASK-008 tickets and ADR-0005 through ADR-0008;
+- TASK-068 through TASK-070 tickets, reviews, tests, and validation evidence;
 - [source-object and derived-knowledge design](../source-objects-and-derived-knowledge.md), [governed retrieval design](../governed-retrieval-and-source-browser.md), [model-guided intelligence design](../model-guided-source-grounded-intelligence.md), and [consulting workspace design](../consulting-workspace-and-execution-journal.md);
 - current contracts under `rfi.source_objects`, `rfi.knowledge`, `rfi.retrieval`, `rfi.intelligence`, `rfi.workspace`, and `rfi.artifacts`;
 - the current admin server and artifact-browser implementation; and
-- focused execution of `tests.test_task005`, `tests.test_task006`, `tests.test_task007`, and `tests.test_task008` (41 tests passing).
+- focused execution of the research POC and current transcript tests.
 
 ### 2.1 Reconciliation finding
 
-The lightweight roadmap is stale for this design question. `TASKS.md` still describes TASK-007 as planned and TASK-008 as provisional. Their tickets still say `Ready`. In contrast:
+The documentation-status mismatch identified in the first version of this study has been repaired by TASK-068. `TASKS.md`, `docs/current-state.md`, and `ROADMAP.md` now consistently distinguish **product-integrated capabilities** from **implemented POCs**. TASK-005 through TASK-008 remain real architectural inputs, but they are not composed into the operating product.
 
-- commits `2046a45` and `53c82cc` implement the intelligence and workspace layers;
-- the corresponding design documents describe completed POC contracts;
-- the packages and tests exist in the current tree; and
-- the focused tests pass.
+TASK-069 and TASK-070 materially improve the evidence foundation for this design:
 
-Accordingly, this study treats TASK-007 and TASK-008 as **implemented architectural POCs, not production product capabilities**. Their contracts are real design inputs. Their deterministic answer quality, script-based composition, filesystem workspace, and lack of integrated UI are current limitations, not evidence that the layers are absent.
+- historical transcript pulls can select successive earlier earnings transcripts within a bounded date range, including when a newer checkpoint already exists;
+- only deterministically established earnings calls enter `earnings_transcript`;
+- conferences, investor days, fireside chats, analyst events, and other substantial management speech enter `management_transcript`;
+- the repository-owned `TranscriptEventKind` preserves a provider-neutral canonical classification while raw provider disposition remains inspectable; and
+- repeated pulls retain a management transcript once without corrupting the earnings-selection checkpoint.
+
+The research product must consume these canonical artifact classes and event-kind diagnostics. It must not create another transcript taxonomy, scrape an alternate corpus, or reinterpret provider observations in the UI or model layer.
 
 ### 2.2 Live product finding
 
@@ -71,6 +80,33 @@ Existing UI concepts worth reusing are:
 - visible incomplete, failed, and repairable operational states.
 
 Existing UI concepts that should not constrain the research product are the global admin navigation, configuration-form orientation, sparse one-object detail layouts, and reliance on raw JSON for the TASK-006 through TASK-008 proofs.
+
+### 2.3 Summary of changes from the 2026-08-06 study
+
+| Baseline conclusion | Reconciled conclusion |
+|---|---|
+| Investigation-centric workspace was the recommended product model | Unchanged; now tied to one concrete Seagate HAMR vertical slice |
+| Research readiness was a generic source/knowledge/retrieval composition problem | Narrowed to transcript source-object construction, corpus lifecycle, retrieval quality, and product composition |
+| Transcript availability and event semantics were uncertain | Historical backfill and canonical earnings-versus-management classification now exist |
+| TASKS/roadmap status was stale | Repaired by TASK-068; no longer an architectural gap |
+| A new research application API was needed | Refined to a stable `ResearchApplicationService` facade over existing public contracts |
+| Workspace POC could be extended without a persistence decision | Product integration should use the application's structured-state authority behind preserved workspace semantics; copying a second filesystem authority is not the default |
+| A named evidence set belonged in the first slice | Deferred; execution-scoped citations and notes are sufficient to prove the first vertical slice |
+| Internet gateway was an early staged component | Only authority and adapter hooks are reserved initially; no web implementation belongs in the first four tasks |
+
+### 2.4 Current assessment
+
+| Capability | Assessment after reconciliation |
+|---|---|
+| Immutable artifacts, observations, content inspection | Product-integrated and suitable as the evidence authority |
+| Historical management transcript acquisition | Product-integrated with bounded provider coverage; corpus completeness remains indeterminate rather than guaranteed |
+| Canonical transcript classification | Product-integrated; sufficient for earnings versus broader management research scope |
+| Transcript source objects | Missing; the blocking semantic-evidence gap for the HAMR slice |
+| Governed retrieval and evidence packages | Implemented POC contracts; not composed against live application state and not quality-validated for transcripts |
+| Bounded intelligence and claim mappings | Implemented POC contracts; no live replaceable model runtime or transcript evaluation |
+| Durable investigations | Implemented local POC semantics; not product-composed and not integrated with the main structured-state authority |
+| Operator research interface | Missing; current browser offers reusable artifact inspection only |
+| Internet research | Intentionally absent; later design remains valid, but provider decisions are premature |
 
 ## 3. Current-state architecture relevant to research
 
@@ -104,11 +140,13 @@ Exact acquired bytes remain authoritative. Content-addressed artifacts are separ
 
 The artifact browser uses the same repository-owned read contracts as automated consumers. It verifies stored content, serves it with restrictive headers, and renders hostile HTML in a capability-denying sandbox. Original URLs remain provenance conveniences rather than the inspection authority.
 
+For transcripts, repository authority now includes a useful separation that Research must preserve: the provider observation is retained as observed, while repository-owned canonical artifact type and `TranscriptEventKind` determine whether the evidence is an earnings call, conference, investor day, fireside chat, analyst event, or other management event. Source-effective date, speaker/event metadata available in the retained content, and canonical artifact classification are evidence properties; model-generated topic or position labels are not.
+
 ### 3.2 Source objects
 
 `SourceObject` provides stable structural identity, exact artifact byte spans, hierarchy, role, and digest. `SourceObjectReader` supports inventory, identity lookup, document lookup, and normalized field value access. This is the correct evidence-location abstraction for citations and context expansion.
 
-Current semantic coverage is very narrow. The only parser is a deterministic SEC complete-submission parser. It identifies the SEC header, embedded document regions, and selected header/document fields. It does not segment filing prose, earnings-call turns, press releases, feed content, mailing-list messages, tables, PDFs, or XBRL into research-ready source objects.
+Current semantic coverage is very narrow. The only parser is a deterministic SEC complete-submission parser. It identifies the SEC header, embedded document regions, and selected header/document fields. It does not segment transcript turns or paragraphs. A transcript parser that creates exact, digest-bound source objects from retained transcript bytes is the first new semantic capability needed. It should carry human-readable event, date, and speaker metadata where deterministically available without converting topic interpretation into source evidence.
 
 ### 3.3 Derived repository knowledge
 
@@ -129,6 +167,8 @@ Important limitations are:
 - no integrated application lifecycle builds and refreshes source, knowledge, and retrieval generations from the live application repository; and
 - no browser/API surface exposes this subsystem in the current product.
 
+`MetadataConstraints` can already bind retrieval to document, artifact, entity, document-type, source-kind/role, knowledge-type/status, and period constraints. The missing product boundary is an operator-facing `ResearchScope` expressed in canonical firm IDs, artifact types, source-effective dates, and optional event kinds. The application service should resolve that scope through `ArtifactQueryService` and translate it to existing retrieval identities; neither the UI nor the model should manufacture low-level retrieval constraints.
+
 ### 3.5 Bounded intelligence
 
 `InformationNeed`, `RetrievalPlan`, `RetrievalStep`, `IntelligenceBudget`, `IntelligenceClaim`, `EvidenceReference`, `IntelligenceResult`, and `ExecutionTrace` are strong provider-neutral foundations. The orchestrator validates plans, bounds retrieval and disclosure, validates evidence packages, requires claim-to-evidence mappings, requires uncertainty on model inference, and fails closed on unsupported or unmapped output.
@@ -148,15 +188,28 @@ This is directionally aligned with the recommendation. It is nevertheless a thin
 - the store is local, single-writer, and filesystem based; and
 - it has no integrated browser or application API.
 
+The POC's append-only execution semantics, reference snapshots, integrity checks, and explicit non-authority should be preserved. Product composition should not casually introduce a second authoritative filesystem state root beside the application's current SQLite structured-state authority. The preferred direction is to place product investigation state behind a public investigation repository using the application's structured state while preserving append-only event meaning. The exact persistence decision remains a human architectural decision, not something to smuggle into a UI task.
+
 ## 4. Representative research workflows
 
 The design should be judged against complete consulting workflows, not isolated question answering.
 
 ### 4.1 Position change over time
 
-**Need:** “How has Western Digital management's position on HAMR changed across earnings calls and filings?”
+**Need:** “How has Seagate management's positioning on HAMR changed over the last two years?”
 
-The operator defines company, source families, and period; reviews the interpreted scope; runs repository retrieval; inspects a timeline of exact statements; distinguishes source quotations from derived topic normalization; identifies gaps in transcript coverage; pins pivotal excerpts; records an interpretation; and later reruns after new evidence arrives to see what changed.
+This is the acceptance scenario for the first vertical slice. The assumed repository contains retained Seagate earnings calls, management conference transcripts, investor-day transcripts, and related evidence. The flow is:
+
+1. Create an investigation titled “Seagate HAMR positioning — last two years.”
+2. Set repository-only scope to Seagate, the trailing two-year source-effective date range, and canonical `earnings_transcript` plus `management_transcript` artifact types.
+3. Review corpus readiness: eligible artifacts, indexed documents, unsupported/failed items, freshness, and the distinction between **research-index coverage** and indeterminate **acquisition coverage**.
+4. Ask the question. RFI interprets it as a chronological comparison of management statements, not a request for a current product-status fact alone.
+5. Execute bounded retrieval across periods and event kinds, expand exact context, assemble an evidence package, and perform grounded synthesis.
+6. Present source-fact claims about what management said separately from the model inference that positioning “changed.” Show conflicting language, speakers, event context, missing periods, and stopping reason.
+7. Expand a citation to see the exact excerpt, bounded neighboring context, speaker/event/date, source-object identity, immutable artifact, and acquisition observation.
+8. Save the execution in the investigation, close the product, reopen it, and rehydrate the same evidence references or visibly report stale/missing upstream authorities.
+
+The first slice does not require a generated timeline, cross-firm comparison, named evidence set, report builder, web search, or acquisition action. Those are later projections over semantics this flow must establish first.
 
 ### 4.2 Thesis support and contradiction
 
@@ -352,7 +405,7 @@ No single confidence percentage should summarize the answer. Confidence belongs,
 
 ```text
 ┌ Investigations ──────┬ Investigation: HAMR adoption ─────────────────────┬ Evidence desk ────────────┐
-│ • HAMR adoption      │ Scope: WDC + STX | 2022–2026 | filings + calls   │ 12 repository items       │
+│ • HAMR adoption      │ Scope: Seagate | trailing 2y | earnings + mgmt   │ 12 repository items       │
 │ • Kernel I/O trend   │ Mode: Repository only                 [Edit]      │  8 source evidence        │
 │ • Acquisition brief  │                                                   │  4 derived knowledge       │
 │                      │ Ask or direct research…                 [Run]      │                          │
@@ -361,12 +414,12 @@ No single confidence percentage should summarize the answer. Confidence belongs,
 │ • Timeline           │ Management language moved from evaluation… [1][2] │ Source: FY25 call          │
 │                      │                                                   │ Authority: Repository      │
 │ Unresolved (3)       │ Claims                                             │ Artifact / span / digest   │
-│ Contradictions (1)   │ [Source] WDC stated…                    [1]        │ [Open stored artifact]     │
+│ Contradictions (1)   │ [Source] Management stated…             [1]        │ [Open stored artifact]     │
 │                      │ [Derived] Topic normalization indicates… [2][3]   │ [Show provenance]          │
 │                      │ [Inference] This may imply…             [1][4]   │                          │
 │                      │                                                   │ Why included               │
-│                      │ Gaps: Q2 transcript unavailable                   │ matched scope + reranked   │
-├──────────────────────┴ Run: 3/3 steps • incomplete • missing Q2 call ───┴──────────────────────────┤
+│                      │ Gaps: conference coverage indeterminate          │ matched scope + reranked   │
+├──────────────────────┴ Run: 3/3 steps • incomplete • coverage bounded ──┴──────────────────────────┤
 └────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -415,6 +468,72 @@ The visual distinction must survive export and not depend only on color. Use lab
 
 ## 10. Repository research execution model
 
+### 10.1 Stable research application boundary
+
+Add one product-facing application facade, conceptually `rfi.research.ResearchApplicationService`. The name is illustrative; the dependency direction is the decision. Browser routes, a future CLI, and tests depend on this facade. The facade composes existing repository-owned ports and returns UI-ready, persistence-independent contracts. It must not become a second repository or a generic agent framework.
+
+The facade should expose a small command/query surface:
+
+| Operation | Responsibility |
+|---|---|
+| `create_investigation`, `list_investigations`, `get_investigation` | Durable operator-work organization, never repository evidence |
+| `get_corpus_status`, `build_or_rebuild_corpus` | Explicit source/retrieval generation lifecycle, partial failures, staleness, and authority fingerprints |
+| `interpret_need` | Normalize `InformationNeed` plus `ResearchScope` for operator review without performing hidden retrieval |
+| `execute_question` | Bind one execution to an investigation, scope snapshot, corpus generations, budget, planner/reasoner runtime, and stop/failure semantics |
+| `get_execution` | Return saved claims, evidence references, gaps, trace summary, runtime metadata, and historical authority fingerprints |
+| `resolve_citation` | Rehydrate a claim reference to exact context and public provenance, or explicitly return stale/missing/superseded state |
+| `add_note` | Append explicit operator-authored material outside repository authority |
+
+Reuse existing contracts wherever their meaning already fits:
+
+- `InformationNeed`, `IntelligenceBudget`, `RetrievalPlan`, `EvidencePackage`, `IntelligenceResult`, `ExecutionTrace`, and `EvidenceReference` remain the execution vocabulary.
+- `ArtifactQueryService` resolves canonical firm, artifact-type, and source-effective-date scope and reads exact content.
+- `SourceObjectReader`, `KnowledgeReader`, `RetrievalRepository`, and `EvidenceAssembler` remain the evidence gateway.
+- `IntelligenceOrchestrator` remains responsible for bounded planning, model disclosure, claim mapping validation, and stopping.
+- investigation/workspace contracts retain saved non-authoritative executions and notes.
+
+Add only the missing application concepts:
+
+- `ResearchScope`: canonical firm IDs, canonical artifact types, source-effective date interval, and optional repository-owned event kinds. It resolves to document/source identities through public query contracts.
+- `ResearchCorpusStatus`: source/retrieval generation IDs, authority fingerprint, eligible/indexed/unsupported/failed counts, freshness, and a typed ready/partial/stale/unavailable state.
+- `ResolvedCitation`: authority class, exact excerpt/context, human source label, source-object/document/artifact identities, provenance links, and stale/missing/superseded outcome.
+- a product investigation repository port if the current workspace repository cannot safely own product state as implemented.
+
+Do not create a parallel “research question,” “research claim,” transcript taxonomy, evidence package, or model result contract merely to make the browser convenient. UI projections should adapt the existing domain contracts.
+
+### 10.2 Composition and dependency direction
+
+```mermaid
+flowchart LR
+    UI["Browser / future CLI"] --> APP["ResearchApplicationService"]
+    APP --> SCOPE["ArtifactQueryService"]
+    APP --> CORPUS["ResearchCorpusCoordinator"]
+    APP --> INT["IntelligenceOrchestrator"]
+    APP --> INV["Investigation repository"]
+    APP --> CITE["CitationResolver"]
+    CORPUS --> SRC["Source-object builder and reader"]
+    CORPUS --> RET["Retrieval repository / evidence assembler"]
+    INT --> RET
+    INT --> MODEL["Replaceable planner/reasoner ports"]
+    CITE --> SCOPE
+    CITE --> SRC
+    CITE --> K["KnowledgeReader"]
+    REP["Immutable repository authority"] --> SCOPE
+    REP --> SRC
+    K --> RET
+    WEB["Future external-research gateway"] -. "reserved adapter seam; absent in Stage 1" .-> APP
+```
+
+Dependency rules:
+
+1. The UI sends operator intent and renders projections; it does not build retrieval queries, enforce evidence budgets, resolve artifact paths, or validate claim mappings.
+2. The model receives bounded evidence packages; it cannot query persistence, write investigation/repository state, classify authority, choose credentials, or decide acquisition.
+3. Corpus construction enumerates retained artifacts through public artifact queries and reads bytes through public content contracts. It records generation/failure state explicitly and never rebuilds silently during a question.
+4. Each execution snapshots normalized scope, generation identities, authority fingerprint, runtime/prompt identity, evidence references, gaps, and stopping reason. Raw conversation and raw model exchange remain ephemeral by default.
+5. Thin `/research` browser routes may live in the existing local admin server, but the current broad request handler must delegate to the application facade rather than absorb orchestration logic.
+
+### 10.3 Execution flow
+
 ```mermaid
 sequenceDiagram
     actor O as Operator
@@ -450,7 +569,7 @@ sequenceDiagram
     O->>UI: Inspect, pin, annotate, compare, or export
 ```
 
-### 10.1 Visibility levels
+### 10.4 Visibility levels
 
 | Execution concept | Normal view | On demand | Diagnostic only |
 |---|---|---|---|
@@ -465,7 +584,7 @@ sequenceDiagram
 | Stop reason | Always visible | Related failures and bounds | Ordered execution trace |
 | Raw model exchange | No | Only for privileged audit if retention permits | Diagnostic, redacted, policy controlled |
 
-### 10.2 Follow-up semantics
+### 10.5 Follow-up semantics
 
 A follow-up question can either:
 
@@ -557,7 +676,7 @@ Freshness should be an explicit timestamp and source property, not a confidence 
 | Research run/execution | Yes | Non-authoritative historical projection | Re-executable when referenced authorities/runtime remain available; difference is visible |
 | Operator question/information need | Yes when run or explicitly saved | Operator request | Exact text and normalized scope retained |
 | Transient drafting conversation | No by default | None | None |
-| Evidence set | Yes when pinned/named | References only; does not own evidence | Resolve current repository evidence and retain historical identities |
+| Evidence set | Later, when explicitly pinned/named | References only; does not own evidence | Resolve current repository evidence and retain historical identities |
 | External evidence set | Ephemeral by default; explicit keep | Ungoverned investigation material | Capture-dependent and clearly limited |
 | Model conclusion | Within execution; separately saved only as labeled note/hypothesis | Model inference | Re-run may differ; source mapping retained |
 | Operator note | Yes | Operator-authored | Exact append-only record |
@@ -569,9 +688,11 @@ Freshness should be an explicit timestamp and source property, not a confidence 
 
 ### 13.2 First-class objects to add cautiously
 
-The existing investigation, execution, annotation, and export objects are enough for the first repository-only slice. Add only one new durable concept initially: a **named evidence set of typed references**. It is necessary for deliberate operator selection, follow-up scope, and later deliverables.
+The first vertical slice needs only three durable first-class concepts: **investigation**, **execution**, and **operator note**. An execution retains the exact question, normalized scope, corpus/runtime fingerprints, structured result, evidence-reference identities, gaps, failures, and stopping reason. This is sufficient to save and reopen the Seagate HAMR investigation without making a conversation transcript or generated conclusion authoritative.
 
-Hypotheses, unresolved questions, comparisons, and timelines should first be represented through typed annotations or projection definitions. Promote them to richer contracts only after observing repeated operator workflows. This avoids turning the study into speculative persistence or creating an ontology that competes with derived repository knowledge.
+Named evidence sets, hypotheses, unresolved questions, comparisons, and timelines should first be projections or typed annotations over executions. Promote them to richer contracts only after observing repeated operator workflows. This avoids speculative persistence and a competing ontology. In particular, a saved citation is a reference to repository authority, not a copy that acquires its own truth status.
+
+The product-integrated investigation repository should participate in the application's normal structured-state lifecycle, backup, and recovery. If the existing filesystem journal is not reused directly, its append-only execution meaning, integrity checks, explicit terminal outcomes, and immutable historical reference snapshots remain requirements of the replacement port.
 
 ### 13.3 Raw conversation history
 
@@ -664,27 +785,28 @@ The current `RuntimePolicy` is a useful start: provider names, retention mode, s
 | Current contract/subsystem | What it already supports | Gap for the recommended product |
 |---|---|---|
 | `ArtifactQueryService` | Typed browsing, chronology, observations, exact content, isolated preview | No content search; no unified citation resolver; adjacent filter model differs from research retrieval |
-| `SourceObjectReader` | Stable exact spans, hierarchy, document navigation, bounded context | SEC SGML-only structure; no common segmentation for transcripts, filings prose, press releases, feeds, or mailing lists |
+| Transcript acquisition and classification | Historical bounded backfill; canonical earnings versus management artifact classes; repository event kind; raw observation retained | Provider coverage and completeness remain bounded/indeterminate; event kind is not a first-class artifact-query filter |
+| `SourceObjectReader` | Stable exact spans, hierarchy, document navigation, bounded context | SEC SGML-only structure; no transcript turn/paragraph segmentation |
 | `KnowledgeReader` / `DerivedObject` | Versioned status, confidence, provenance, corrections, reverse navigation | Very narrow issuer/filing ontology; no research-ready topic, claim, event, speaker, or temporal semantics |
 | `RetrievalQuery` / `RetrievalRepository` | Source/derived classes, metadata filters, bounded ranked results, trace, health | POC ranking; no validated recall/precision; no operator-friendly canonical scope facade; not integrated with live application lifecycle |
 | `EvidenceAssembler` / `EvidencePackage` | Verified contexts, budgets, gaps, omissions, contradictions | No cross-package evidence-set contract; no external evidence package class; artifact-reader composition is script-specific |
 | `IntelligenceOrchestrator` | Structured plan, bounded follow-up, claim mapping, inference labels, failure/stop semantics | Deterministic planner/reasoner only; external authority absent; no async job/cancel/progress application boundary; no eval harness for research quality |
-| `WorkspaceRepository` / `WorkspaceService` | Durable investigations, append-only executions, annotations, comparison, export, backup | Thin investigation model; no evidence sets; no browser/API; separate state/composition; later evidence rehydration contract incomplete |
+| `WorkspaceRepository` / `WorkspaceService` | Durable investigations, append-only executions, annotations, comparison, export, backup | POC filesystem authority is not product-composed; no browser/API; later evidence rehydration contract incomplete |
 | Admin server and HTML pages | Local operator shell, progressive detail, acquisition UI, artifact inspection | No research routes or service composition; large handler is already broad and should not absorb research orchestration logic |
-| Acquisition contracts | Governed ingress, immutable artifacts/observations, explicit interval outcomes | No generic proposal/status bridge from external research to supported acquisition; intentionally should remain independent |
+| Acquisition contracts | Governed ingress, immutable artifacts/observations, explicit interval outcomes, management transcript retention | No generic proposal/status bridge from future external research; intentionally independent of Stage 1 |
 
 ### 16.1 Most important gaps
 
 1. **Application composition and lifecycle.** Source construction, knowledge derivation, retrieval indexing, intelligence, and workspace are proof-script compositions rather than a live application vertical slice over the main repository state.
-2. **Semantic evidence coverage.** The research layer cannot answer the motivating questions while source objects contain mostly SEC header structure and derived knowledge contains issuer/filing metadata.
+2. **Transcript semantic evidence coverage.** RFI retains the right artifact classes but cannot cite or retrieve exact transcript turns/paragraphs while source objects remain SEC-header-specific.
 3. **Research application boundary.** There is no repository-independent facade for investigation commands, async executions, citation resolution, evidence pinning, run comparison, or UI-ready progress.
 4. **Integrated operator inspection.** The existing browser can inspect artifacts but cannot inspect the same source objects, derived objects, evidence packages, and intelligence mappings a model consumes.
 5. **Retrieval quality and evaluation.** Contracts are strong; ranking quality, recall, result diversity, temporal comparison, and realistic consulting-answer evaluation are unproven.
-6. **Live model adapter and runtime governance.** No provider adapter, prompt/version registry, model-quality evaluation, cost policy, or production retention policy exists.
+6. **Live model adapter and runtime governance.** No provider adapter, prompt/version registry, transcript research evaluation, cost policy, or production retention policy exists.
 7. **Citation resolution after save.** Workspace snapshots retain identities rather than source context. A stable resolver must rehydrate current evidence, report missing/stale authorities, and preserve historical meaning.
-8. **External evidence semantics.** There is no typed external evidence, discovery trace, combined authority mapping, retention policy, or acquisition-proposal bridge.
+8. **Product investigation persistence.** The POC journal semantics exist, but the product must decide how investigation state participates in the application's structured-state, backup, restore, and integrity lifecycle.
 9. **Canonical research constraints.** Firm IDs, entity IDs, artifact types, document types, source kinds, periods, and publication chronology need one operator-facing translation layer rather than leaking subsystem vocabularies.
-10. **Governance drift.** Roadmap and ticket status do not reflect committed TASK-007/008 implementations, which can mislead later planning.
+10. **External evidence semantics, later.** There is no typed external evidence, discovery trace, combined authority mapping, retention policy, or acquisition-proposal bridge. These are intentional later gaps, not blockers for repository-only research.
 
 ### 16.2 Boundaries that must remain outside the UI
 
@@ -711,64 +833,102 @@ The UI owns interaction state, presentation, explicit operator intent, and view 
 
 ## 17. Recommended staged implementation
 
-This is a proposed sequence for later bounded task design, not authorization to implement.
+This is a proposed decomposition from which bounded task tickets can be written after architectural review. It is not authorization to implement, and no tickets are created by this study. The first four tasks form the repository-only vertical slice; each has a useful verification boundary and does not depend on the browser to prove its contracts.
 
-### Stage 0 — Research-readiness vertical slice
+### Task 1 — Product-composed transcript research corpus
 
-Compose current public contracts against one actual main application repository. Establish source/knowledge/retrieval lifecycle, health reporting, a stable citation resolver, and one application-level research service. Prove that no consumer reads SQLite, artifact paths, or workspace files directly.
+**Objective:** Make governed Seagate transcript evidence research-addressable with exact provenance.
 
-Exit evidence: one realistic multi-document repository question can produce and resolve a complete evidence package from the same state the artifact browser inspects.
+**In scope:**
 
-### Stage 1 — Repository-only investigation workspace
+- enumerate retained artifacts through `ArtifactQueryService` using canonical firm, `earnings_transcript`/`management_transcript`, and source-effective-date constraints;
+- implement deterministic transcript source-object segmentation at an agreed paragraph or speaker-turn granularity, with exact retained-byte spans/digests and event/date/speaker metadata where available;
+- add the minimal `ResearchScope`, corpus build/rebuild/status, generation, failure, staleness, and authority-fingerprint application contracts;
+- compose existing source-object, retrieval, and evidence-package implementations against live application state; and
+- add a headless corpus/retrieval proof for the Seagate trailing-two-year scope.
 
-Add the integrated local Research surface with:
+**Out of scope:** browser UI, model calls, investigation persistence, derived HAMR claims, web research, new acquisition, or a new transcript taxonomy.
 
-- investigation create/open/list;
-- natural-language need plus explicit scope editor;
-- bounded plan summary and progress;
-- answer with source/derived/inference claim labels;
-- persistent evidence desk and claim-level citation traversal;
-- contradictions, gaps, truncation, failures, and stop reason;
-- durable execution history, notes, and one named evidence-set concept;
-- reopen and compare executions; and
-- repository-only mode enforced in contracts and UI.
+**Acceptance evidence:** all eligible retained Seagate earnings and management transcripts in the chosen interval are accounted for as indexed, unsupported, or failed; exact excerpts round-trip to verified immutable artifact bytes; repeated builds have deterministic identities; stale/partial/unavailable states are distinguishable; and a bounded HAMR retrieval returns inspectable source contexts through public contracts.
 
-A replaceable live planner/reasoner adapter is needed to validate the actual experience, alongside deterministic offline tests. Stage 1 should remain single-operator and local; it does not need collaboration, a general agent, report authoring, or broad source coverage.
+**Primary risks:** exact span mapping in provider HTML, speaker-boundary ambiguity, and confusing research-index coverage with acquisition completeness.
 
-**What Stage 1 proves:** RFI's repository contracts can support useful, honest, inspectable research; an investigation is a better durable object than chat; model output can remain non-authoritative while still being usable; and the operator can independently verify everything the model consumed.
+### Task 2 — Repository-only research application execution
 
-### Stage 2 — Evidence organization and consulting projections
+**Objective:** Establish the stable application facade and prove grounded question-to-claim execution without a browser.
 
-Based on operator use, add typed unresolved questions/hypotheses only where warranted, reusable comparison and timeline definitions, selected reruns, richer run diffs, and a briefing/report outline generated from explicitly selected claims and evidence. Preserve all authority labels in exports.
+**In scope:**
 
-### Stage 3 — Governed internet-research pilot
+- implement `ResearchApplicationService` execution and citation-resolution operations over existing retrieval, evidence, and intelligence contracts;
+- translate `ResearchScope` to repository-owned retrieval identities through public queries;
+- add a replaceable planner/reasoner adapter behind the existing ports, deterministic test doubles, prompt/runtime identity, disclosure policy, budgets, and failure normalization;
+- execute the representative Seagate HAMR question and return source facts, model inference, claim-to-evidence mappings, gaps, contradictions, uncertainty, and stopping reason; and
+- resolve every visible citation to exact source context and artifact provenance, including explicit stale/missing outcomes.
 
-Introduce `ExternalResearchGateway`, one search adapter, deterministic fetch for ordinary pages, external evidence inspection, combined authority-aware synthesis, explicit retention controls, and prompt-injection protections. Keep external evidence ephemeral by default. Do not add acquisition mutation in the first external pilot.
+**Out of scope:** durable investigations, browser UI, general agents, report generation, web search, or repository writes from the model.
 
-### Stage 4 — Acquisition proposal bridge
+**Acceptance evidence:** a headless execution cannot return unsupported or unmapped claims; model inference is distinct from source evidence; every claim citation resolves to the same corpus generation or reports why it cannot; budget exhaustion and insufficient evidence are usable results; and no application component reads SQLite, artifact paths, or index internals directly.
 
-Add **Propose Add to RFI** for supported source types. The research layer submits a proposal; existing acquisition/application services validate and execute. Display proposal, acquisition outcome, and the later link to the new repository artifact. Unsupported sources remain external and visibly so.
+**Primary risks:** structural grounding without semantic entailment, model data-egress policy, and retrieval recall for temporal language change.
 
-### Stage 5 — Operational scale only when justified
+### Task 3 — Product-integrated durable investigations
 
-Authentication, multi-user collaboration, server persistence, distributed execution, scheduling, richer cost controls, and signed audit guarantees should be driven by observed deployment needs, not included in the initial research architecture.
+**Objective:** Save and reopen non-authoritative research work without creating a second source of repository truth.
+
+**In scope:**
+
+- compose or adapt the current workspace contracts behind a product investigation repository;
+- create/list/get investigations and append execution-started plus terminal outcomes and operator notes;
+- retain exact information need, normalized scope, corpus/runtime fingerprints, structured result, evidence references, gaps/failures, and stop reason;
+- reopen an investigation and rehydrate citations through `CitationResolver`, visibly reporting upstream change; and
+- integrate investigation state with the application's backup, restore, integrity, and partial-write expectations.
+
+**Out of scope:** raw conversation as durable truth, named evidence sets, hypotheses/claim graphs, comparison/timeline builders, collaboration, or reports.
+
+**Acceptance evidence:** create → execute the HAMR question → save → terminate/restart → reopen produces the same historical execution projection and evidence identities; changed/missing upstream state is honest; failed or interrupted executions have explicit terminal semantics; and model output remains labeled non-authoritative.
+
+**Primary risks:** persistence migration, preserving append-only meaning, and historical citation rehydration across corpus rebuilds.
+
+### Task 4 — Operator research vertical slice
+
+**Objective:** Deliver the smallest useful `/research` experience over the facade and validate it with an expert operator.
+
+**In scope:**
+
+- a thin local browser surface for investigation create/list/open;
+- editable repository-only scope, corpus readiness, question execution, progress/stop state, answer and claim cards;
+- an evidence desk with expandable citations, exact excerpt/context, event/date/speaker, provenance traversal, and deep link to the stored artifact;
+- visible source-versus-inference labels, contradictions, gaps, truncation, partial failure, and insufficient-evidence behavior; and
+- save, close, and reopen of the representative investigation.
+
+**Out of scope:** web mode, autonomous planning controls, acquisition mutation, cross-firm comparison UI, generated timelines, named evidence sets, deliverable authoring, or product-wide visual redesign.
+
+**Acceptance evidence:** an operator completes the entire Seagate HAMR flow without raw JSON or persistence knowledge; everything available to the model is inspectable; repository-only mode is enforced; the UI cannot bypass application budgets or authority validation; and a small qualitative evaluation records whether the result is useful, misleading, or insufficient.
+
+**Primary risks:** UI density, long-running synchronous requests, and visually implying more corpus completeness than RFI can establish.
+
+### Later stages — consulting projections and governed internet augmentation
+
+Only after the vertical slice is useful should RFI consider named evidence sets, reusable comparisons/timelines, selected reruns, report or briefing projections, and richer claim/hypothesis workflows. The first internet pilot then introduces `ExternalResearchGateway`, one bounded search/fetch composition, typed external evidence, external inspection, explicit retention, and injection controls. A later **Propose Add to RFI** bridge may submit supported discoveries to existing acquisition services. Authentication, multi-user collaboration, distributed execution, and general browser agents remain need-driven rather than assumed milestones.
 
 ## 18. Key architectural decisions required before implementation
 
-1. **Application composition:** What is the supported lifecycle that builds source objects, knowledge generations, and retrieval indexes from the live repository, and how is freshness surfaced?
-2. **Citation resolver:** What stable application contract resolves a historical evidence reference to current exact context, artifact inspection, derived status, and missing/stale outcomes?
-3. **Stage-1 corpus:** Which firms, artifact families, and source types have enough semantic source-object coverage to support a genuinely useful research pilot?
-4. **Planner/reasoner runtime:** Which replaceable provider is allowed, what repository content may be disclosed, and what prompt/runtime/usage metadata is retained?
-5. **Research job boundary:** Should executions be synchronous for the local POC or exposed as durable asynchronous jobs with progress and cancellation from the start?
-6. **Evidence-set semantics:** Are pinned sets snapshot identities, live queries, or both? How do they report authority changes between runs?
-7. **Workspace evolution:** Extend the existing hash-chained journal or introduce a different application repository while preserving its append-only and authority invariants?
-8. **External retention:** What may be kept in an investigation, for how long, and under what copyright, privacy, and security policy?
-9. **Search/fetch provider policy:** Which capabilities must be provider-neutral and which provider-specific diagnostics may remain in execution traces?
-10. **Acquisition proposal:** Which existing source types can accept a discovered URL or seed without weakening deterministic validation and canonical identity?
+1. **Transcript citation unit:** Is a paragraph, speaker turn, or hybrid the stable source-object unit, and what exact-byte behavior is required when retained HTML splits or annotates text?
+2. **Corpus lifecycle:** Are builds explicitly operator-triggered at first, post-acquisition, or both? This study recommends explicit build/rebuild/status for the first slice and no hidden rebuild during a question.
+3. **Scope semantics:** Is `TranscriptEventKind` needed as a typed Stage-1 query constraint, or is canonical artifact type plus date sufficient while event kind remains display metadata? This study recommends the latter unless retrieval evaluation proves otherwise.
+4. **Planner/reasoner runtime:** Which replaceable provider is allowed, what retained content may leave the local system, and what prompt, runtime, usage, cost, and raw-exchange metadata may be kept?
+5. **Investigation persistence:** Should the existing hash-chained filesystem journal be adapted, or should a new port implementation place equivalent append-only semantics in the application's SQLite structured-state authority? This study recommends the latter direction unless a concrete integrity requirement favors the journal.
+6. **Historical citation semantics:** On corpus rebuild, should a saved citation prefer the historical generation, current matching source identity, or both? What operator wording distinguishes stale, missing, and superseded?
+7. **Research job boundary:** Is the first local execution short enough to be synchronous, or must the application facade expose durable jobs, progress polling, and cancellation from Task 2? The UI must not invent a separate job protocol.
+8. **HAMR evaluation threshold:** What evidence set and human rubric establish that temporal retrieval and synthesis are sufficiently useful, not merely structurally grounded?
+9. **Corpus availability:** Does the intended operational state contain enough licensed/retained Seagate evidence across the trailing two years, and how should indeterminate provider coverage constrain product claims?
+10. **Internet hook shape:** Should Stage 1 reserve an external evidence variant in public results now or add it later through a versioned contract? No external provider or retention choice is required for the repository-only tasks.
 
 ## 19. Risks and unresolved questions
 
 - **Usefulness risk:** strong contracts do not compensate for shallow source segmentation. The first corpus must contain substantive text and realistic multi-document questions.
+- **Transcript-span risk:** provider HTML may make speaker turns visually obvious but hard to map to exact retained byte ranges without normalization drift.
+- **Coverage-claim risk:** successful historical pulls prove bounded retained results, not completeness of all Seagate management remarks during the interval.
 - **Retrieval-quality risk:** current deterministic tests prove bounds and provenance, not recall, ranking, or consulting relevance.
 - **UX-density risk:** claims, evidence, gaps, plans, history, and diagnostics can overwhelm. Progressive disclosure and role-based defaults require operator testing.
 - **Authority-comprehension risk:** too many badges can become visual noise. Language and interaction tests must verify that operators understand the distinctions.
@@ -779,9 +939,9 @@ Authentication, multi-user collaboration, server persistence, distributed execut
 - **Promotion confusion:** “Add to RFI” may be misread as immediate trust. The UI must show proposed, acquired, rejected, incomplete, indeterminate, and governed states separately.
 - **Product-boundary risk:** integrating Research into the current admin server may entrench a monolithic handler. The UI can share a shell while using a separate research application service.
 - **State-model risk:** making hypotheses and claims first-class too early could create a competing knowledge system inside the workspace.
-- **Governance risk:** stale roadmap/status material could cause duplicated or conflicting task design.
+- **Composition risk:** copying the workspace POC's filesystem store directly into the product could create an awkward second structured-state authority and backup path.
 
-Human architectural judgment is especially required on the Stage-1 corpus, live-model disclosure policy, evidence-set snapshot semantics, workspace evolution strategy, and default external-evidence retention.
+Human architectural judgment is especially required on transcript citation granularity, corpus lifecycle, live-model disclosure policy, investigation persistence, historical citation behavior, and the HAMR usefulness rubric.
 
 ## 20. Rejected alternatives and reasons
 
@@ -811,30 +971,31 @@ Rejected because research discovery does not satisfy acquisition validation, ide
 
 ## 21. Recommended next step
 
-Hold an architectural review of this study and decide the ten items in section 18, with special focus on:
+Hold a focused architectural review of this reconciliation and decide the items in section 18 that block Task 1 and Task 2, with special focus on:
 
-1. the Stage-1 corpus and source-object coverage needed for a useful pilot;
-2. the research application/citation-resolver boundary;
-3. live-model disclosure and retention policy;
-4. evidence-set and historical rehydration semantics; and
-5. whether to extend the current workspace journal or replace only its persistence behind preserved contracts.
+1. transcript citation granularity and exact-byte requirements;
+2. explicit corpus build/rebuild/status lifecycle;
+3. live-model provider, disclosure, retention, and evaluation policy;
+4. historical citation rehydration semantics; and
+5. whether product investigation persistence should use the main structured-state authority behind preserved append-only workspace contracts.
 
-After those decisions, define one bounded architectural milestone for the repository-only vertical slice. Do not combine internet search, acquisition promotion, rich report authoring, collaboration, or a general agent into that milestone.
+After those decisions, write the bounded ticket for **Task 1 — Product-composed transcript research corpus** using section 17 as its scope and acceptance baseline. Do not start implementation from this study, and do not combine model integration, browser work, internet search, acquisition promotion, rich report authoring, collaboration, or a general agent into that first ticket.
 
 ## 22. Architectural Status Summary
 
 | Subsystem | Status | Research-relevant responsibility and limitation |
 |---|---|---|
-| Repository foundation | Complete | Governing principles, immutable identity, public contracts, and verification discipline are established; roadmap status needs reconciliation |
-| Acquisition substrate and engine | Complete contracts; usable with limitations | Multiple deterministic sources and immutable observations exist; operational coverage varies by provider |
+| Repository foundation | Complete | Governing principles, immutable identity, public contracts, verification discipline, and current-state status language are reconciled |
+| Acquisition substrate and engine | Product-integrated; usable with limitations | Multiple deterministic sources and immutable observations exist; historical transcript backfill is bounded and operational coverage varies by provider |
 | Artifact query and inspection | Complete for current operator use | Strong normalized read/preview boundary; no research search or unified citation resolution |
-| Source-object subsystem | Usable with major semantic limitations | Stable exact spans and rebuild exist; only SEC submission structure is research-indexed |
+| Transcript classification | Product-integrated | Earnings and broader management events are canonically distinct while provider observations remain inspectable |
+| Source-object subsystem | Implemented POC with major semantic limitations | Stable exact spans and rebuild exist; only SEC submission structure is research-indexed and transcript segmentation is missing |
 | Derived-knowledge subsystem | Usable with major ontology limitations | Versioning, status, provenance, and correction exist; current issuer/filing knowledge is too narrow for most workflows |
 | Governed retrieval and evidence assembly | Complete contracts; provisional quality | Typed results, packages, traces, budgets, and fail-closed health exist; realistic ranking quality and application lifecycle are unproven |
 | Model-guided intelligence | Complete POC contracts; provisional quality | Plans, bounds, mappings, failures, and replaceability exist; no live model or external evidence class |
-| Consulting workspace | Complete local POC; not integrated | Durable investigations, runs, annotations, comparison, and export exist; browser/API and richer research objects are absent |
+| Consulting workspace | Implemented local POC; not product-composed | Durable investigations, runs, annotations, comparison, and export exist; product persistence, browser/API, and citation rehydration are unresolved |
 | Current browser product | Complete for local administration; research not started | Reusable artifact-inspection and failure-visibility patterns exist; no research surface consumes TASK-006 through TASK-008 |
-| Repository-only research workspace | Not started | Recommended next architectural milestone after the pre-implementation decisions above |
+| Repository-only research workspace | Not started | Decomposed into four proposed bounded tasks: corpus, application execution, durable investigations, and operator vertical slice |
 | Internet augmentation | Not started | Requires external evidence authority, gateway, security, retention, and acquisition-proposal decisions |
 
-The next architectural milestone should prove one useful repository-only investigation end to end through existing public contracts, with a real evidence-inspection experience and a replaceable model runtime. Internet augmentation should follow only after that authority and interaction model is validated.
+The next architectural milestone should be Task 1's product-composed transcript corpus, verified independently of model and UI behavior. The four-task sequence then proves one useful repository-only Seagate HAMR investigation end to end through public contracts. Internet augmentation should follow only after that authority and interaction model is validated.
