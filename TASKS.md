@@ -28,7 +28,7 @@ milestones.
 
 | Task | Architectural milestone | Current status |
 |---|---|---|
-| [TASK-069](tasks/TASK-069-expose-first-in-date-range-cli.md) | Expose earnings transcript `first_in_date_range` selection in `rfi pull` | Complete |
+| [TASK-070](tasks/TASK-070-classify-management-transcripts.md) | Classify management transcripts without polluting earnings calls | Complete |
 
 ## Historical and authorized milestones
 
@@ -102,6 +102,7 @@ milestones.
 | [TASK-066](tasks/TASK-066-Western-Digital-BusinessWire-Press-Release-Adapter.md) | WDC Business Wire press-release adapter | Implemented, operationally blocked by transport viability |
 | [TASK-067](tasks/TASK-067-repository-owned-feed-sources.md) | Repository-owned feed sources and feed-driven acquisition | Complete |
 | [TASK-068](tasks/TASK-068_Reconcile_Repository_Design_Guidance_and_Current_Architectural_State.md) | Reconcile repository design guidance and current architectural state | Complete |
+| [TASK-069](tasks/TASK-069-expose-first-in-date-range-cli.md) | Expose earnings transcript `first_in_date_range` selection in `rfi pull` | Complete |
 
 ## Governing progression
 

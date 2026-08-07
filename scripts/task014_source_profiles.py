@@ -123,7 +123,7 @@ def fixture_proof() -> dict[str, Any]:
             item.artifact_id for item in default.items if item.enabled
         }
         checks = {
-            "template_loads": len(template.artifacts) == 48,
+            "template_loads": len(template.artifacts) == 49,
             "canonical_identifiers_unique": len(
                 {item.artifact_id for item in template.artifacts}
             )

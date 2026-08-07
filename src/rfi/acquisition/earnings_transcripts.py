@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import re
 import socket
 import urllib.parse
@@ -25,6 +26,8 @@ from rfi.acquisition.contracts import (
     IntervalCoverage,
     RetrievalResult,
     SourceProfile,
+    TranscriptEventDisposition,
+    TranscriptMetadataObservation,
 )
 from rfi.storage.sqlite import utc_now
 from rfi.acquisition.url_identity import normalize_discovery_url
@@ -561,6 +564,12 @@ class EarningsCallTranscriptAcquisition:
         normalized = self._normalize_url(response.url)
         digest = hashlib.sha256(normalized.encode()).hexdigest()
         discovered_at = self.clock()
+        event_label, label_source = self._trusted_event_label(response, proposal.label)
+        observation = TranscriptMetadataObservation(
+            event_label,
+            artifact_date,
+            TranscriptEventDisposition.EXPLICIT_EARNINGS,
+        )
         return IntervalArtifactEnvelope(
             CandidateDocument(
                 f"candidate-{digest}", self.source.source_id, f"document-{digest}",
@@ -578,9 +587,36 @@ class EarningsCallTranscriptAcquisition:
             artifact_date,
             RetrievalResult(
                 response.content, response.media_type, discovered_at, self.mechanism,
-                diagnostics={"http_status": response.status, "final_url": response.url},
+                diagnostics={
+                    "http_status": response.status,
+                    "final_url": response.url,
+                    "event_disposition": (
+                        TranscriptEventDisposition.EXPLICIT_EARNINGS.value
+                    ),
+                    "transcript_event_label": event_label,
+                    "transcript_event_label_source": label_source,
+                    "trusted_event_date": artifact_date.isoformat(),
+                    "trusted_event_date_available": True,
+                },
+                trusted_event_date=artifact_date,
+                transcript_metadata_observation=observation,
             ),
         )
+
+    @staticmethod
+    def _trusted_event_label(
+        response: EarningsTranscriptHttpResponse, proposal_label: str
+    ) -> tuple[str, str]:
+        """Prefer artifact-local HTML title, retaining governed listing metadata for PDFs."""
+        if response.media_type.casefold() in {"text/html", "application/xhtml+xml"}:
+            text = response.content.decode("utf-8", "replace")
+            match = re.search(r"<title(?:\s[^>]*)?>(.*?)</title>", text, re.I | re.S)
+            if match is not None:
+                title = html.unescape(re.sub(r"<[^>]+>", " ", match.group(1)))
+                normalized = " ".join(title.split())
+                if normalized:
+                    return normalized, "artifact_html_title"
+        return " ".join(proposal_label.split()), "governed_discovery_label"
 
     def _fetch(self, url: str, allowed_hosts: set[str]) -> EarningsTranscriptHttpResponse:
         normalized = self._normalize_url(url)

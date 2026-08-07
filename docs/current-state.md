@@ -60,8 +60,9 @@ are `rfi.cli`, `rfi.admin.server.create_admin_server()`, and
 - immutable acquisition evidence, append-only observations and attempts, content deduplication,
   and repository-owned artifact inspection;
 - deterministic SEC Form 10-K, 10-Q, 8-K, 20-F, and 6-K retrieval;
-- bounded earnings-call transcript acquisition with explicit StockAnalysis provider dispatch,
-  retained discovery learning, seed injection, and conservative coverage;
+- bounded management-transcript acquisition with explicit StockAnalysis provider dispatch,
+  deterministic earnings/non-earnings classification, precise earnings-call projection, retained
+  discovery learning, seed injection, and conservative coverage;
 - repository-owned RSS/Atom sources, polling, unavailable-entry tombstones, fulfillment, firm-pull
   association, and aggregate RSS projection;
 - bounded Linux/Lore mailing-list acquisition, resumable relationship closure, canonical
@@ -85,7 +86,7 @@ Rebuildable indexes and UI projections are not independent authorities.
 | Artifact query and isolated preview | Complete for retained evidence | Integrated | `rfi.artifacts`, admin artifact browser, TASK-018/019 tests |
 | SEC numbered forms | Usable with recent-submissions and form-policy limits | Integrated | artifact-specific adapters; exact accession and older-history traversal remain deferred |
 | SEC authoritative 10-K workflow | Complete as a bounded vertical slice | Integrated in CLI | `rfi.sec`; no continuous scheduler |
-| Earnings transcripts | Usable with limitations | Integrated | StockAnalysis is the only provider; selection and discovery are bounded and coverage may be indeterminate |
+| Management and earnings transcripts | Usable with limitations | Integrated | One broad non-earnings management corpus and a narrow earnings-call corpus; StockAnalysis is the only provider, deterministic title vocabulary is bounded, and coverage may be indeterminate |
 | WDC Business Wire press releases | Implemented but operationally blocked | Registered in Pull Workflow, unsupported for live operation | fixture/browser-capture parsing passes; direct production transport is denied or times out |
 | RSS/Atom feeds | Complete for public credential-free feeds | Integrated | `rfi.feeds`; external recurrence only, no authenticated feeds or redirect DNS pinning |
 | Mailing-list evidence and workflow | Usable with bounded Lore/local-operation limits | Integrated | `rfi.mailing_lists`; no durable scheduler or global rate coordination |
@@ -128,6 +129,9 @@ guide explicitly identifies them as routine application commands.
 - Derived layers depend on public upstream contracts and retain provenance; upstream packages do
   not depend on intelligence or workspace code.
 - Coverage is explicit and conservative. Successful candidates do not imply interval completeness.
+- A provider's opaque transcript event observation is distinct from repository-owned canonical
+  classification. Only deterministic earnings events enter `earnings_transcript`; other
+  substantial management transcripts remain immutable evidence under `management_transcript`.
 - Stored external content is untrusted and inspected through repository-owned bounded reads and an
   isolated browser preview.
 - Model output is non-authoritative. Every accepted claim must expose its authority class,
@@ -159,3 +163,6 @@ and scale evidence. These are roadmap or backlog concerns until a task ticket au
   Their public contracts are real; their absence from the stable application is also real.
 - The design study under `docs/design/` is research input, not proof that its proposed product
   composition exists.
+- Transcript event classification is deterministic and intentionally fails closed for the narrow
+  earnings corpus. Unrecognized substantial events remain available as broad management
+  transcripts; the current event-kind vocabulary is useful but not an exhaustive ontology.

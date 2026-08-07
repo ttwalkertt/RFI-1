@@ -584,6 +584,10 @@ class PullWorkflow:
             policy={
                 "firm_id": firm.firm.firm_id,
                 "artifact_id": artifact.artifact_id,
+                **(
+                    {"alternate_artifact_ids": ["management_transcript"]}
+                    if artifact.artifact_id == "earnings_transcript" else {}
+                ),
                 "source_profile_revision_id": revision_id,
                 "retrieval_adapter_id": adapter_id,
                 "document_id": f"document-{firm.firm.firm_id}-{artifact.artifact_id}",

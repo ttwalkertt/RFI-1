@@ -43,10 +43,10 @@ from rfi.acquisition.contracts import (
     SourceProfile,
     TranscriptAcquisitionSelection,
     TranscriptAcquisitionTarget,
-    TranscriptEventDisposition,
     TranscriptSeed,
     TranscriptSelectionMode,
 )
+from rfi.acquisition.transcript_classification import classify_transcript_event
 from rfi.acquisition.repository import AcquisitionRepository
 from rfi.acquisition.engine import (
     AdapterAcquisitionTrial,
@@ -1517,7 +1517,7 @@ class TranscriptAcquisitionOrchestrator:
 
 @dataclass(frozen=True)
 class TranscriptTerminalSelectionPolicy:
-    """Qualify and globally reduce validated transcripts for a date-range target."""
+    """Classify, qualify, and globally reduce validated transcript events."""
 
     selection: TranscriptAcquisitionSelection
 
@@ -1525,22 +1525,26 @@ class TranscriptTerminalSelectionPolicy:
         self, candidate: AdapterCandidate, retrieval: RetrievalResult
     ) -> AdapterSelectionDecision:
         observation = retrieval.transcript_metadata_observation
-        if (
-            observation is not None
-            and observation.event_disposition
-            is TranscriptEventDisposition.EXPLICIT_NON_EARNINGS
-        ):
+        classification = classify_transcript_event(observation)
+        classification_evidence: dict[str, JsonValue] = {
+            "resolved_canonical_artifact_id": classification.canonical_artifact_id,
+            "transcript_event_kind": classification.event_kind.value,
+            "transcript_classification_basis": classification.basis,
+            "observed_event_disposition": (
+                observation.event_disposition.value if observation is not None else "unavailable"
+            ),
+            "trusted_event_date_available": (
+                observation.trusted_event_date is not None if observation is not None else False
+            ),
+        }
+        if not classification.qualifies_as_earnings:
             return AdapterSelectionDecision(
                 False,
                 "validation_rejected",
-                "explicit_non_earnings_event",
+                "non_earnings_management_transcript",
                 {
-                    "event_disposition": (
-                        TranscriptEventDisposition.EXPLICIT_NON_EARNINGS.value
-                    ),
-                    "trusted_event_date_available": (
-                        observation.trusted_event_date is not None
-                    ),
+                    **classification_evidence,
+                    "retain_as_canonical_artifact_id": classification.canonical_artifact_id,
                 },
             )
         event_date = retrieval.trusted_event_date
@@ -1558,12 +1562,13 @@ class TranscriptTerminalSelectionPolicy:
                 False,
                 "validation_rejected",
                 "event_date_unavailable",
-                {"trusted_event_date_available": False},
+                {**classification_evidence, "trusted_event_date_available": False},
             )
         value = event_date.isoformat()
         rank = self._deterministic_rank(candidate)
         period = ((event_date.month - 1) // 3) + 1
         evidence = {
+            **classification_evidence,
             "validated_event_date": value,
             "validated_position": event_date.year * 4 + period,
             "validated_revision": f"published-{value}",
@@ -1592,6 +1597,11 @@ class TranscriptTerminalSelectionPolicy:
         return min(candidates, key=self._selection_key)
 
     def attribution(self) -> dict[str, JsonValue]:
+        if self.selection.mode == TranscriptSelectionMode.LATEST:
+            return {
+                "effective_selection_mode": self.selection.mode.value,
+                "requested_date_range": None,
+            }
         if self.selection.start_date is None or self.selection.end_date is None:
             raise ContractError("terminal transcript selection range is malformed")
         return {
@@ -1609,6 +1619,12 @@ class TranscriptTerminalSelectionPolicy:
         digest = item.decision.diagnostics.get("validated_content_sha256")
         if not isinstance(event_date, str) or not isinstance(digest, str):
             raise ContractError("qualified transcript selection evidence is malformed")
+        if self.selection.mode == TranscriptSelectionMode.LATEST:
+            return (
+                -date.fromisoformat(event_date).toordinal(),
+                self._deterministic_rank(item.candidate),
+                digest,
+            )
         return (event_date, self._deterministic_rank(item.candidate), digest)
 
     @staticmethod
@@ -1725,7 +1741,10 @@ class EarningsTranscriptPullAdapter:
             trial.acquisition_target.selection != self._selection for trial in trials
         ):
             raise ContractError("terminal transcript selection target changed")
-        if self._selection.mode == TranscriptSelectionMode.FIRST_IN_DATE_RANGE:
+        if (
+            self._selection.mode == TranscriptSelectionMode.FIRST_IN_DATE_RANGE
+            or bool(profile.configuration.get("provider"))
+        ):
             return TranscriptTerminalSelectionPolicy(self._selection)
         return None
 

@@ -234,7 +234,7 @@ class SourceProfileRepository:
                     raise SourceProfileError(
                         f"source-profile revision chain mismatch: {revision_id}"
                     )
-                if self.normalize(self.to_draft(revision)) != self.to_draft(revision):
+                if not self._matches_current_template_order(revision):
                     raise SourceProfileError(
                         f"source-profile revision ordering mismatch: {revision_id}"
                     )
@@ -251,6 +251,24 @@ class SourceProfileRepository:
             "revisions": revisions,
             "result": "PASS",
         }
+
+    def _matches_current_template_order(self, revision: SourceProfileRevision) -> bool:
+        """Validate an immutable historical subset against the current artifact catalog."""
+        draft = self.to_draft(revision)
+        artifact_ids = tuple(item.artifact_id for item in draft.items)
+        if len(set(artifact_ids)) != len(artifact_ids) or any(
+            artifact_id not in self._artifacts for artifact_id in artifact_ids
+        ):
+            return False
+        normalized = self.normalize(draft)
+        retained = tuple(
+            item for item in normalized.items if item.artifact_id in set(artifact_ids)
+        )
+        return SourceProfileDraft(
+            normalized.firm_id,
+            retained,
+            normalized.operator_notes,
+        ) == draft
 
     @staticmethod
     def to_draft(revision: SourceProfileRevision) -> SourceProfileDraft:

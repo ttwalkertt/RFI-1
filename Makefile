@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 VENV_STAMP := .venv/.rfi-installed
 
-.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task014-proof task015-proof task016-proof task017-proof task018-proof task019-proof task022-proof task023-proof task052-proof task053-proof task054-proof task055-proof task057-proof task058-proof task059-proof task060-proof task065-proof task054-review task055-review task056-review task057-review task058-review task059-review task060-review task061-review task062-review task063-review task064-review task065-review task066-review task067-review task068-review task069-review task021-test task022-test task023-test task031-test task039-test task041-test task052-test task053-test task054-test task055-test task056-test task057-test task058-test task059-test task060-test task061-test task062-test task063-test task064-test task065-test task066-test task067-test task069-test task012-test task013-test task015-test task016-test task017-test task018-test task019-test lint format-check typecheck import-check docs-check baseline-check build validate review-package
+.PHONY: setup test focused-test acquisition-demo engine-demo edgar-offline sec-api-offline task005-proof task006-proof task007-proof task008-proof task009-proof task010-proof task011-proof task014-proof task015-proof task016-proof task017-proof task018-proof task019-proof task022-proof task023-proof task052-proof task053-proof task054-proof task055-proof task057-proof task058-proof task059-proof task060-proof task065-proof task054-review task055-review task056-review task057-review task058-review task059-review task060-review task061-review task062-review task063-review task064-review task065-review task066-review task067-review task068-review task069-review task070-review task021-test task022-test task023-test task031-test task039-test task041-test task052-test task053-test task054-test task055-test task056-test task057-test task058-test task059-test task060-test task061-test task062-test task063-test task064-test task065-test task066-test task067-test task069-test task070-test task012-test task013-test task015-test task016-test task017-test task018-test task019-test lint format-check typecheck import-check docs-check baseline-check build validate review-package
 
 setup: $(VENV_STAMP)
 
@@ -151,11 +151,17 @@ task068-review: setup
 task069-review: setup
 	PYTHONPATH=src $(VENV_PYTHON) scripts/generate_task069_review.py
 
+task070-review: setup
+	PYTHONPATH=src $(VENV_PYTHON) scripts/generate_task070_review.py
+
 task067-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task067 -v
 
 task069-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task069 tests.test_task065 tests.test_task064 tests.test_task063 tests.test_task062 tests.test_task061 tests.test_task060 tests.test_task059 tests.test_task058 tests.test_task057 tests.test_task056 tests.test_task053 tests.test_task052 tests.test_task048 tests.test_task048a tests.test_task015 -v
+
+task070-test: setup
+	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task070 tests.test_task069 tests.test_task065 tests.test_task064 tests.test_task063 tests.test_task062 tests.test_task061 tests.test_task060 tests.test_task059 tests.test_task058 tests.test_task057 tests.test_task056 tests.test_task053 tests.test_task052 tests.test_task048 tests.test_task048a tests.test_task019 tests.test_task018 tests.test_task015 tests.test_source_profile_digest_compatibility -v
 
 task056-test: setup
 	PYTHONPATH=src $(VENV_PYTHON) -m unittest tests.test_task056 -v

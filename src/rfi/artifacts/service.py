@@ -479,7 +479,24 @@ class ArtifactQueryService:
         canonical_short_name: str | None = None
         if projection == ArtifactAssociation.FIRM_CANONICAL:
             firm_id = str(policy["firm_id"])
-            canonical_id = str(policy["artifact_id"])
+            primary_id = str(policy["artifact_id"])
+            alternates = policy.get("alternate_artifact_ids", [])
+            if not isinstance(alternates, list) or any(
+                not isinstance(item, str) or not item for item in alternates
+            ):
+                raise ArtifactQueryError(
+                    "malformed_source_reference",
+                    "repository source alternate artifact authority is malformed",
+                )
+            observed_id = record.get("canonical_artifact_id", primary_id)
+            if not isinstance(observed_id, str) or observed_id not in {
+                primary_id, *alternates
+            }:
+                raise ArtifactQueryError(
+                    "malformed_source_reference",
+                    "artifact observation exceeds governed canonical artifact authority",
+                )
+            canonical_id = observed_id
             if canonical_id not in self._artifacts:
                 raise ArtifactQueryError(
                     "unknown_canonical_artifact",

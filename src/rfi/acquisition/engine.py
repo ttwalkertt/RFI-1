@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from enum import StrEnum
 from typing import Any, Callable, Protocol, runtime_checkable
 
@@ -670,6 +670,7 @@ class AcquisitionEngine:
 
         acquisition_trials: tuple[AdapterAcquisitionTrial, ...] | None = None
         selection_policy: AdapterTerminalSelectionPolicy | None = None
+        selection_latest = False
         selection_checkpoint_eligible = True
         selection_retained_filtered = False
         retained_qualified_selection_candidates = 0
@@ -715,6 +716,13 @@ class AcquisitionEngine:
                     )) for name in ("qualify", "select", "attribution")):
                         raise ContractError("adapter terminal selection policy is malformed")
                     selection_checkpoint_eligible = selection_policy is None
+                    if selection_policy is not None:
+                        selection_latest = (
+                            profile.mechanism == "earnings_transcript"
+                            and selection_policy.attribution().get(
+                                "effective_selection_mode"
+                            ) == "latest"
+                        )
         except (ContractError, TypeError, AttributeError) as error:
             failures += 1
             status = RunStatus.FAILED
@@ -741,6 +749,9 @@ class AcquisitionEngine:
             success_before_trial = last_success
             failures_before_trial = failures
             qualified_before_trial = len(qualified_selection_candidates)
+            retained_qualified_before_trial = (
+                retained_qualified_selection_candidates
+            )
             retained_replays_before_trial = retained_replays
             continued_candidate_status: RunStatus | None = None
             try:
@@ -995,6 +1006,8 @@ class AcquisitionEngine:
                                     ),
                                     validated_position=validated_position,
                                 ))
+                                if selection_latest:
+                                    break
                                 continue
                             qualified_selection_candidates.append(AdapterSelectionCandidate(
                                 candidate,
@@ -1004,25 +1017,98 @@ class AcquisitionEngine:
                                 retained.attempt_id if retained is not None else None,
                                 retained.artifact_id if retained is not None else None,
                             ))
+                            if selection_latest:
+                                break
                         else:
                             skips += 1
-                            outcomes.append(CandidateRunOutcome(
-                                candidate.candidate_id,
-                                candidate.document_id,
-                                candidate.position,
-                                candidate.revision,
-                                "selection_rejected",
-                                None,
-                                False,
-                                decision.validation_outcome,
-                                validated_position=(
-                                    decision.diagnostics.get("validated_position")
-                                    if isinstance(
-                                        decision.diagnostics.get("validated_position"), int
+                            alternate_id = decision.diagnostics.get(
+                                "retain_as_canonical_artifact_id"
+                            )
+                            authorized_alternates = profile.policy.get(
+                                "alternate_artifact_ids", []
+                            )
+                            if (
+                                isinstance(alternate_id, str)
+                                and isinstance(authorized_alternates, list)
+                                and alternate_id in authorized_alternates
+                            ):
+                                retained_result = replace(
+                                    result,
+                                    retrieved_at=(
+                                        self._clock()
+                                        if retained is not None
+                                        and retained.canonical_artifact_id != alternate_id
+                                        else result.retrieved_at
+                                    ),
+                                    diagnostics={
+                                        **result.diagnostics,
+                                        **decision.diagnostics,
+                                    },
+                                )
+                                if (
+                                    retained is not None
+                                    and retained.canonical_artifact_id == alternate_id
+                                ):
+                                    retained_attempt_id = None
+                                    retained_durable = False
+                                    retained_message = (
+                                        f"retained artifact {retained.artifact_id} remains "
+                                        f"classified as {alternate_id}"
                                     )
-                                    else None
-                                ),
-                            ))
+                                else:
+                                    retained_attempt_id = self._attempt_id(
+                                        run_id, candidate, f"retain-{alternate_id}"
+                                    )
+                                    receipt = self._repository.record_success(
+                                        retained_attempt_id,
+                                        repository_candidate,
+                                        retained_result,
+                                        canonical_artifact_id=alternate_id,
+                                    )
+                                    retained_durable = not receipt.idempotent
+                                    retained_message = (
+                                        f"artifact {receipt.artifact_id} retained as "
+                                        f"{alternate_id}"
+                                    )
+                                retained_count = diagnostics[trial_diagnostic_index].get(
+                                    "retained_non_target_count", 0
+                                )
+                                diagnostics[trial_diagnostic_index][
+                                    "retained_non_target_count"
+                                ] = (
+                                    retained_count + 1
+                                    if isinstance(retained_count, int) else 1
+                                )
+                                outcomes.append(CandidateRunOutcome(
+                                    candidate.candidate_id,
+                                    candidate.document_id,
+                                    candidate.position,
+                                    candidate.revision,
+                                    "retained_non_target",
+                                    retained_attempt_id,
+                                    retained_durable,
+                                    retained_message,
+                                ))
+                            else:
+                                outcomes.append(CandidateRunOutcome(
+                                    candidate.candidate_id,
+                                    candidate.document_id,
+                                    candidate.position,
+                                    candidate.revision,
+                                    "selection_rejected",
+                                    None,
+                                    False,
+                                    decision.validation_outcome,
+                                    validated_position=(
+                                        decision.diagnostics.get("validated_position")
+                                        if isinstance(
+                                            decision.diagnostics.get(
+                                                "validated_position"
+                                            ), int
+                                        )
+                                        else None
+                                    ),
+                                ))
                         continue
                     if deferred_evaluation:
                         validated_position = result.diagnostics.get("validated_position")
@@ -1335,10 +1421,23 @@ class AcquisitionEngine:
             )
             trial_validated = (
                 active_trial is not None
-                and selection_policy is None
                 and (
-                    last_success != success_before_trial
-                    or retained_replays > retained_replays_before_trial
+                    (
+                        selection_policy is None
+                        and (
+                            last_success != success_before_trial
+                            or retained_replays > retained_replays_before_trial
+                        )
+                    )
+                    or (
+                        selection_latest
+                        and (
+                            len(qualified_selection_candidates)
+                            > qualified_before_trial
+                            or retained_qualified_selection_candidates
+                            > retained_qualified_before_trial
+                        )
+                    )
                 )
             )
             if (
@@ -1445,6 +1544,13 @@ class AcquisitionEngine:
                 candidate = selected_selection_candidate.candidate
                 repository_candidate = selected_selection_candidate.repository_candidate
                 result = selected_selection_candidate.retrieval
+                result = replace(
+                    result,
+                    diagnostics={
+                        **result.diagnostics,
+                        **selected_selection_candidate.decision.diagnostics,
+                    },
+                )
                 validated_position = selected_selection_candidate.decision.diagnostics.get(
                     "validated_position"
                 )
@@ -1766,7 +1872,18 @@ class AcquisitionEngine:
             page["candidate_disposition_counts"] = dispositions
         current = dispositions.get(decision.disposition, 0)
         dispositions[decision.disposition] = current + 1 if isinstance(current, int) else 1
-        if decision.validation_outcome != "validated":
+        expected_non_target = (
+            decision.validation_outcome == "non_earnings_management_transcript"
+        )
+        if expected_non_target:
+            classifications = page.get("transcript_classification_counts")
+            if not isinstance(classifications, dict):
+                classifications = {}
+                page["transcript_classification_counts"] = classifications
+            kind = decision.diagnostics.get("transcript_event_kind", "other_management")
+            current = classifications.get(str(kind), 0)
+            classifications[str(kind)] = current + 1 if isinstance(current, int) else 1
+        if decision.validation_outcome != "validated" and not expected_non_target:
             validation_failures = page.get("validation_failure_counts")
             if not isinstance(validation_failures, dict):
                 validation_failures = {}
@@ -1796,7 +1913,7 @@ class AcquisitionEngine:
                 **decision.diagnostics,
             }
             samples.append(sample)
-            if decision.validation_outcome != "validated":
+            if decision.validation_outcome != "validated" and not expected_non_target:
                 failure_samples = page.get("candidate_failure_samples")
                 if not isinstance(failure_samples, list):
                     failure_samples = []

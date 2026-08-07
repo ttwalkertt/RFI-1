@@ -57,6 +57,14 @@ Artifact-family policy remains artifact-specific. Shared SEC transport does not 
 10-Q, 8-K, 20-F, and 6-K one configurable semantic artifact. Transcript and press-release
 discovery do not weaken deterministic admission or repository evidence authority.
 
+Transcript acquisition separates provider observation, deterministic event classification,
+terminal qualification, and canonical mapping. A governed earnings source may explicitly
+authorize `management_transcript` as an alternate retained output. The repository validates that
+authority on every success; provider metadata cannot assign canonical identity. The narrow
+`earnings_transcript` corpus requires deterministic earnings semantics, while other substantial
+management speech remains queryable through one broad alternate corpus with bounded event-kind
+metadata.
+
 Date-delimited retrievers use the observable contract in
 [`docs/date-delimited-acquisition-contract.md`](docs/date-delimited-acquisition-contract.md).
 Coverage is conservative: candidate success cannot establish completeness unless an authoritative
@@ -71,6 +79,11 @@ and provenance do not redefine or copy content identity.
 Repository-owned query contracts expose normalized summary/detail records and exact stored bytes.
 Source-effective chronology and ingestion chronology remain distinct. External provider URLs are
 provenance, not substitute read paths.
+
+Canonical association is an immutable observation fact constrained by the governed source's
+primary and explicitly allowed alternate artifact IDs. Historical observations retain their exact
+classification; a later correction is append-only and never rewrites artifact bytes or prior
+observations.
 
 ### Structural source objects
 

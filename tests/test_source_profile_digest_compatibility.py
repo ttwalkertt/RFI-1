@@ -220,6 +220,7 @@ class SourceProfileDigestCompatibilityTests(unittest.TestCase):
                     sec_candidates.get(artifact.artifact_id, ()),
                 )
                 for artifact in self.template.artifacts
+                if artifact.artifact_id != "management_transcript"
             ),
         )
         material: dict[str, object] = {
@@ -229,6 +230,10 @@ class SourceProfileDigestCompatibilityTests(unittest.TestCase):
             "updated_at": "2026-07-26T21:37:31.836815+00:00",
             "supersedes_revision_id": None,
         }
+        material["items"] = [
+            item for item in material["items"]  # type: ignore[index]
+            if item["artifact_id"] != "management_transcript"
+        ]
         self._strip_provider_fields(material)
         for item in material["items"]:  # type: ignore[index]
             for candidate in item["retrieval_candidates"]:

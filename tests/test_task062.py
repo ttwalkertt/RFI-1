@@ -27,6 +27,8 @@ from rfi.acquisition import (
     SourceProfile,
     TranscriptAcquisitionSelection,
     TranscriptAcquisitionTarget,
+    TranscriptEventDisposition,
+    TranscriptMetadataObservation,
 )
 from rfi.acquisition.earnings_transcripts import ReportingPeriod
 from rfi.discovery import TranscriptTerminalSelectionPolicy
@@ -239,6 +241,12 @@ class SelectionAdapter:
                 "validated_position": value.position,
                 "validated_revision": value.revision,
             },
+            trusted_event_date=date.fromisoformat(event_date),
+            transcript_metadata_observation=TranscriptMetadataObservation(
+                "Earnings Call",
+                date.fromisoformat(event_date),
+                TranscriptEventDisposition.EXPLICIT_EARNINGS,
+            ),
         )
 
 

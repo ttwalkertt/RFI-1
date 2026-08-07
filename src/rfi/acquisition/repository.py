@@ -144,12 +144,16 @@ class AcquisitionRepository:
         result: RetrievalResult,
         checkpoint: Checkpoint | None = None,
         fail_at: FailurePoint | None = None,
+        canonical_artifact_id: str | None = None,
     ) -> AcquisitionReceipt:
         """Write bytes first, then publish all structured success facts atomically."""
         require_identifier(attempt_id, "attempt_id")
         source = self.source(candidate.source_id)
         if not source["enabled"]:
             raise ContractError(f"source is disabled: {candidate.source_id}")
+        canonical_artifact_id = self._authorized_canonical_artifact_id(
+            source, canonical_artifact_id
+        )
         if checkpoint is not None:
             self._validate_checkpoint(candidate.source_id, checkpoint)
         digest = sha256_bytes(result.content)
@@ -194,6 +198,9 @@ class AcquisitionRepository:
             ),
             "retrieval_adapter_id": source.get("policy", {}).get("retrieval_adapter_id"),
         }
+        if canonical_artifact_id is not None:
+            attempt["canonical_artifact_id"] = canonical_artifact_id
+            observation["canonical_artifact_id"] = canonical_artifact_id
         attempt_payload = canonical_json(attempt)
         observation_payload = canonical_json(observation)
         with self._database.connect(read_only=True) as connection:
@@ -377,7 +384,7 @@ class AcquisitionRepository:
         self, candidate: CandidateDocument
     ) -> RetainedRetrievalResult | None:
         """Hydrate selection-relevant retrieval semantics from immutable authority."""
-        self.source(candidate.source_id)
+        source = self.source(candidate.source_id)
         with self._database.connect(read_only=True) as connection:
             rows = connection.execute(
                 "SELECT attempts.attempt_id,attempts.artifact_id,attempts.canonical_json,"
@@ -404,6 +411,19 @@ class AcquisitionRepository:
             or record.get("outcome") != RetrievalOutcome.SUCCESS.value
         ):
             raise IntegrityError("retained acquisition identity is inconsistent")
+        canonical_artifact_id = record.get("canonical_artifact_id")
+        if canonical_artifact_id is None:
+            policy = source.get("policy", {})
+            canonical_artifact_id = policy.get("artifact_id") if isinstance(policy, dict) else None
+        try:
+            canonical_artifact_id = self._authorized_canonical_artifact_id(
+                source,
+                str(canonical_artifact_id) if canonical_artifact_id is not None else None,
+            )
+            if canonical_artifact_id is None:
+                raise ContractError("retained source lacks canonical artifact authority")
+        except ContractError as error:
+            raise IntegrityError("retained canonical artifact classification is invalid") from error
         content = self.read_artifact(str(artifact_id))
         digest = sha256_bytes(content)
         diagnostics = record.get("diagnostics")
@@ -467,8 +487,38 @@ class AcquisitionRepository:
             transcript_metadata_observation=metadata,
         )
         return RetainedRetrievalResult(
-            str(attempt_id), str(artifact_id), candidate.document_id, retrieval
+            str(attempt_id),
+            str(artifact_id),
+            candidate.document_id,
+            retrieval,
+            canonical_artifact_id,
         )
+
+    @staticmethod
+    def _authorized_canonical_artifact_id(
+        source: dict[str, Any], requested: str | None
+    ) -> str | None:
+        """Resolve only canonical mappings explicitly governed by the source policy."""
+        policy = source.get("policy")
+        if not isinstance(policy, dict):
+            raise ContractError("source policy is malformed")
+        primary = policy.get("artifact_id")
+        if primary is None and requested is None:
+            return None
+        if not isinstance(primary, str) or not primary:
+            raise ContractError("source policy lacks canonical artifact authority")
+        alternates = policy.get("alternate_artifact_ids", [])
+        if not isinstance(alternates, list) or any(
+            not isinstance(item, str) or not item for item in alternates
+        ):
+            raise ContractError("source alternate artifact authority is malformed")
+        resolved = requested or primary
+        require_identifier(resolved, "canonical_artifact_id")
+        if resolved not in {primary, *alternates}:
+            raise ContractError(
+                f"source is not authorized for canonical artifact: {resolved}"
+            )
+        return resolved
 
     def has_retained_artifact(
         self, candidate: CandidateDocument, result: RetrievalResult
@@ -567,6 +617,10 @@ class AcquisitionRepository:
             event_label = ""
             if isinstance(provider_metadata, dict):
                 observed = provider_metadata.get("document_title")
+                if isinstance(observed, str):
+                    event_label = observed
+            if not event_label:
+                observed = diagnostics.get("transcript_event_label")
                 if isinstance(observed, str):
                     event_label = observed
             return (), (), TranscriptMetadataObservation(

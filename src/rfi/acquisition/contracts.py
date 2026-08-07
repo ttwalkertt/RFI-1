@@ -299,11 +299,22 @@ class RelatedArtifactObservation:
 
 
 class TranscriptEventDisposition(StrEnum):
-    """Provider-explicit event authority; unknown is deliberately admissible."""
+    """Provider-explicit observation; unknown is admissible before qualification."""
 
     EXPLICIT_EARNINGS = "explicit_earnings"
     EXPLICIT_NON_EARNINGS = "explicit_non_earnings"
     UNKNOWN = "unknown"
+
+
+class TranscriptEventKind(StrEnum):
+    """Provider-neutral deterministic transcript event semantics."""
+
+    EARNINGS_CALL = "earnings_call"
+    CONFERENCE = "conference"
+    INVESTOR_DAY = "investor_day"
+    FIRESIDE_CHAT = "fireside_chat"
+    ANALYST_EVENT = "analyst_event"
+    OTHER_MANAGEMENT = "other_management"
 
 
 @dataclass(frozen=True)
@@ -672,11 +683,13 @@ class RetainedRetrievalResult:
     artifact_id: str
     document_id: str
     retrieval: RetrievalResult
+    canonical_artifact_id: str = "earnings_transcript"
 
     def __post_init__(self) -> None:
         require_identifier(self.attempt_id, "attempt_id")
         require_identifier(self.artifact_id, "artifact_id")
         require_identifier(self.document_id, "document_id")
+        require_identifier(self.canonical_artifact_id, "canonical_artifact_id")
         if not isinstance(self.retrieval, RetrievalResult):
             raise ContractError("retained retrieval result is malformed")
 
