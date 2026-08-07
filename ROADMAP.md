@@ -1,213 +1,123 @@
-# ROADMAP.md
+# RFI-1 roadmap
 
-# Repository-First Intelligence (RFI) Roadmap
+This roadmap describes intended engineering direction from the implemented repository. It is not a
+task plan or authorization. `TASKS.md` and an applicable ticket authorize work; `BACKLOG.md`
+records unscheduled candidates. Repository evidence, not the historical phase model or design
+study, determines the starting point.
 
-> This roadmap communicates the intended direction of the project.
->
-> It is intentionally lightweight and is **not** a project plan or a commitment.
-> Implementation will be guided by experience gained in each preceding phase.
->
-> Unscheduled candidates belong in `BACKLOG.md`. Authorized implementation work belongs in
-> `TASKS.md` and its governing task tickets.
+## Current baseline
 
----
+RFI-1 already contains more than an acquisition POC:
 
-# Phase 0 — Acquisition POC (Current)
+- a product-integrated local evidence acquisition and inspection application;
+- governed configuration, immutable evidence, artifact streams, feeds, SEC and transcript
+  retrieval, mailing-list workflows, and operational maintenance;
+- implemented POCs for structural source objects, derived knowledge, governed retrieval,
+  grounded intelligence, and durable consulting workspaces.
 
-Objective:
+The main gap is that the downstream POCs are not composed with the operating product. See
+[`docs/current-state.md`](docs/current-state.md) for the capability matrix and evidence.
 
-Establish a trustworthy acquisition substrate.
+## Engineering frontier
 
-Focus areas:
+The following frontiers are ordered by dependency, not committed delivery date. Each requires a
+new or refined ticket before implementation.
 
-- Source Registry
-- Deterministic source profiles
-- Acquisition engine
-- Immutable artifact storage
-- Append-only retrieval ledger
-- Rebuildable document index
-- Replay capability
-- Initial commercial SEC provider evaluation
-- Initial direct Investor Relations retrievers
+### 1. Compose evidence into governed research workflows
 
-Success is measured by reliable acquisition and replay rather than downstream intelligence.
+Define how product-retained artifacts enter source-object parsing, knowledge construction,
+retrieval-index rebuild/freshness, bounded intelligence execution, and workspace retention.
 
-Storage foundation after TASK-021: fresh application repositories use SQLite as authoritative
-structured state and content-addressed filesystem evidence for exact artifact bytes. Legacy POC
-state is not migrated or retained as a fallback authority. Public contracts, verified hybrid
-backup/restore, and explicit schema versions preserve the boundary. A server database remains
-trigger-driven rather than a current prerequisite.
+The milestone should establish:
 
----
+- explicit triggers and lifecycle for build, rebuild, failure, retry, and staleness;
+- one product composition root over existing public contracts;
+- operator-visible inspection from artifact through evidence package and conclusion;
+- preservation of independent evidence, derived, intelligence, and annotation authorities; and
+- truthful partial operation when an artifact or derived layer is unsupported.
 
-# Phase 1 — Observations
+This is composition work, not permission to collapse the layers or rewrite established POCs into
+one repository abstraction.
 
-Transform source artifacts into explicit observations.
+### 2. Evaluate and broaden knowledge/retrieval quality
 
-Potential capabilities:
+The existing source-object parser and derived ontology principally cover SEC submission/header
+facts. Retrieval uses bounded deterministic local vectorizers, and intelligence uses deterministic
+planner/reasoner substitutes.
 
-- text extraction
-- document segmentation
-- observation records
-- evidence references
-- observation provenance
-- confidence where appropriate
+Operating evidence should decide which semantic expansion matters first. Candidate concerns are:
 
-Primary goal:
+- filing body sections, tables, XBRL, PDFs, transcripts, feeds, and email semantics;
+- measurable retrieval recall/ranking quality under metadata and provenance constraints;
+- a governed replaceable frontier-model planner/reasoner adapter;
+- semantic-grounding evaluation beyond structural evidence-ID validation; and
+- cost, disclosure, retention, correction, and operator-review policies.
 
-Represent what the evidence says without introducing interpretation.
+Do not equate adding an embedding or model API with completing this frontier.
 
----
+### 3. Establish usable consulting product composition
 
-# Phase 2 — Derivations
+The workspace journal already proves append-only investigations, execution capture, comparison,
+notes, exports, backup, and restore through a public executor port. It remains a proof-script
+workflow.
 
-Compute reproducible knowledge from observations.
+A product milestone should be driven by real operator work and decide:
 
-Potential capabilities:
+- investigation and question entry in the stable application;
+- evidence/result inspection and correction workflow;
+- rerun, comparison, export, and incomplete-evidence experience;
+- workspace-to-repository availability and retention behavior; and
+- which client deliverables are genuine product projections.
 
-- calculations
-- rankings
-- timelines
-- trends
-- comparisons
-- consistency checks
+### 4. Resolve source-specific acquisition gaps
 
-Primary goal:
+The most concrete blocked gap is official press releases. The WDC Business Wire adapter is
+implemented and registered but direct production transport is not viable from the tested
+environment. A future task must choose and validate an authorized issuer archive, licensed
+full-text source, or explicit deferral. Registration and browser-capture replay are not acceptance.
 
-Generate deterministic knowledge that can always be reproduced from repository state.
+Other source expansion should remain artifact-specific and evidence-driven. Current backlog items
+cover exact-accession and older SEC filing retrieval. Broad crawling is not the default next step.
 
----
+### 5. Harden operations when usage proves the need
 
-# Phase 3 — Enrichments
+The product is local, foreground, and primarily single-writer. Operational candidates include:
 
-Attach additional semantic structure to repository objects.
+- external or internal recurrence with recoverable coordination;
+- authentication and remote/multi-user threat boundaries;
+- redirect-aware network policy and credentialed source policy;
+- monitoring, repository health, retention, and cost instrumentation;
+- multi-process or multi-host writer coordination; and
+- scale/performance evidence and any server-database decision.
 
-Potential capabilities:
+Select mechanisms only after a workload or deployment target supplies requirements. SQLite and
+local operation remain correct until evidence establishes otherwise.
 
-- classifications
-- technology taxonomy
-- market segments
-- entity relationships
-- cross-document linking
-- AI-assisted tagging
+## Completed architectural foundation
 
-Primary goal:
+The following progression is implemented, though not all layers are product-composed:
 
-Improve organization and retrieval while preserving provenance.
-
----
-
-# Phase 4 — Claims
-
-Develop evidence-backed assertions.
-
-Potential capabilities:
-
-- claim lifecycle
-- supporting evidence
-- confidence
-- review workflow
-- contradiction detection
-
-Primary goal:
-
-Represent reasoned conclusions while remaining traceable to supporting evidence.
-
----
-
-# Phase 5 — Positions
-
-Develop higher-level viewpoints from multiple claims.
-
-Examples:
-
-- competitive assessments
-- technology outlooks
-- market interpretations
-- strategic analyses
-
-Primary goal:
-
-Capture the repository's current understanding while preserving the underlying evidence chain.
-
----
-
-# Phase 6 — Projections
-
-Generate consumable outputs.
-
-Potential capabilities:
-
-- consulting briefs
-- research reports
-- dashboards
-- presentations
-- interactive question answering
-- social media content
-
-Primary goal:
-
-Produce high-quality outputs from repository state without embedding business logic in the acquisition layer.
-
----
-
-# Future Exploration
-
-Possible future areas include:
-
-- exploratory web-search scouts
-- multi-provider reconciliation
-- knowledge graph support
-- agent-assisted enrichment
-- citation-aware report generation
-- domain-specific RFI implementations
-- collaborative review workflows
-- repository health metrics
-- long-term knowledge evolution
-
-These items are intentionally exploratory and should not influence near-term architectural decisions.
-
----
-
-# Guiding Principle
-
-The roadmap is expected to evolve.
-
-The architectural principles are intended to remain comparatively stable, while implementation priorities should be driven by operational experience and evidence gathered during each preceding phase.
-
-## Implemented acquisition verticals
-
-TASK-023 adds a bounded Linux block-layer mailing-list stream. It proves connected discussion
-admission, lossless email evidence, offline relationship reconstruction, and multiple semantic
-projections in the shared artifact browser without archive mirroring or graph persistence. Future
-mailing-list work should be driven by observed needs for archive queries, incremental cursors,
-patch-series semantics, or cross-list relationships.
-
-TASK-025 generalizes retained evidence selection into revisioned materialized artifact streams.
-External and derived streams form a validated DAG, fan out, apply bounded typed policies, retain
-membership lineage, rebuild offline, and appear in the shared artifact browser. Mail discussion
-expansion and SEC filing filtering demonstrate the same generic execution substrate across two
-schemas without a workflow engine or second persistence authority.
-
-TASK-025 hardening places Lore identity and transport policy in governed external-source profiles,
-adds truthful retry/partial/failure acquisition outcomes, and routes schema projection and context
-through a finite registry. Durable archive cursors, multi-process/global rate coordination, and
-production polling remain future operational work; the current live path is explicit and bounded.
-
-TASK-028 turns the Linux mailing-list vertical into a coherent operator workflow. One task-specific
-façade coordinates known/custom Lore selection, non-persistent review, deterministic source and
-stream creation, live bounded Atom search, connected-context retention, stream verification, and
-evidence inspection without exposing the repository decomposition. Existing source, stream,
-acquisition, artifact, provenance, and SQLite authorities remain unchanged.
-
-TASK-031 makes bounded Lore relationship work durable across runs. Ancestry-first depth-first
-frames and provider-page offsets live in append-only SQLite acquisition manifests. Seed pages and
-date windows wait for terminal relationship state, coverage remains withheld while continuation is
-pending, and valid retained artifacts remain structurally classified from their own header paths.
-Per-request adapter limits remain unchanged.
-
-TASK-039 separates that bounded acquisition contract from saved-stream publication. Canonical
-`bounds.total_artifacts` remains the deterministic per-run acquisition allowance. Completed
-connected components publish under an independent all-or-none component-integrity policy, with
-atomic repository publication and paginated membership delivery; no repository migration is
-required.
+```text
+Acquisition and immutable evidence                 product-integrated
+    -> structural source objects                   implemented POC
+    -> versioned derived knowledge                 implemented POC
+    -> governed retrieval/evidence packages        implemented POC
+    -> grounded intelligence                       implemented POC
+    -> consulting workspace                        implemented POC
+```
+
+Parallel product-integrated capabilities include concepts/firms/source profiles, Pull Workflow,
+artifact inspection, feeds, mailing-list evidence, revisioned streams, backup/restore, and operator
+help. Historical task sequencing remains in `TASKS.md` and completed review records; it is not
+repeated here as a current roadmap.
+
+## Decision rules
+
+- Prefer composition and evaluated operator value over additional isolated POCs.
+- Preserve evidence and authority boundaries while changing implementations.
+- Treat source/provider availability and model quality as evidence questions, not documentation
+  assumptions.
+- Keep architecture, bounded milestone completion, product integration, production readiness, and
+  roadmap authorization separate.
+- Record newly discovered work in `BACKLOG.md` until explicitly authorized.
+- Update `docs/current-state.md` when a completed task changes maturity or product composition.

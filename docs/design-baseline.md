@@ -1,71 +1,64 @@
-# Governing design baseline
+# Governing design provenance and authority
 
-Eight Markdown documents at the repository root form the authoritative RFI-1 design baseline.
-Seven originated with the imported baseline; `BACKLOG.md` is the repository-authored durable
-record for unscheduled candidates. `README.md` remains the primary entry point. The other
-governing inputs are:
+TASK-001 imported seven root design documents and added the repository-authored `BACKLOG.md`.
+Their source/destination provenance and current integrity hashes are recorded in
+[`design-baseline.json`](design-baseline.json). The hash manifest proves which files formed the
+baseline and how their repository copies evolved. It is not a rule that imported planning prose
+overrides later executable repository facts.
+
+The eight tracked root records are:
 
 - `RFI_MANIFESTO.md`
+- `README.md`
 - `DESIGN_PRINCIPLES.md`
-- `ARCHITECTURE.md`
 - `ACQUISITION_POC_GUIDANCE.md`
 - `BACKLOG.md`
-- `ROADMAP.md`
 - `TASKS.md`
+- `ROADMAP.md`
+- `ARCHITECTURE.md`
 
-The machine-readable provenance and integrity record is
-[`docs/design-baseline.json`](design-baseline.json). The manifest distinguishes unchanged imported
-documents, reconciled project records, and the repository-authored backlog.
+## Current authority model
 
-Task tickets in `tasks/` govern implementation scope. If a ticket and the lightweight task
-roadmap differ, the detailed ticket is authoritative.
+For claims about current behavior, use public contracts and committed implementation first, then
+executable tests and validation evidence. Accepted ADRs and completed task evidence establish
+architectural intent and bounded acceptance. Current orientation documents reconcile those facts.
+Historical plans, reviews, and research inputs preserve provenance but cannot override executable
+facts.
 
-TASK-018 extends the current architectural baseline with repository-owned artifact read contracts,
-source-effective ordering, and isolated stored-content inspection. The durable detail is recorded
-in [`artifact-query-service-and-browser.md`](artifact-query-service-and-browser.md) and
-[`ADR-0014`](decisions/0014-repository-owned-artifact-query-and-isolated-preview.md).
+The complete ordering and maturity vocabulary are maintained in
+[`current-state.md`](current-state.md#documentation-authority). In particular:
 
-TASK-019 corrects acquisition identity by separating immutable artifact observations from
-content-addressed artifacts and run-bound acquisition attempts. Detail and browser contracts now
-support exact snapshot-bound observation selection and navigation. See
-[`multiple-artifact-observations.md`](multiple-artifact-observations.md) and
-[`ADR-0015`](decisions/0015-multiple-immutable-artifact-observations.md).
+- `README.md` is the efficient entry point;
+- `current-state.md` is the concise current implementation/composition orientation;
+- `ARCHITECTURE.md` owns stable layers, authority boundaries, dependency direction, and invariants;
+- `ROADMAP.md` owns intended direction but does not authorize work;
+- `TASKS.md` and the active ticket own work authorization and current task status;
+- `BACKLOG.md` records unscheduled candidates only; and
+- ADRs, completed reviews, and ticket records preserve accepted decisions and history.
 
-TASK-020 selects the storage direction for a later migration: SQLite authority for structured
-runtime records, content-addressed filesystem authority for immutable bytes, and unchanged public
-repository/query contracts. No migration is implemented. See
-[`storage_architecture_design_draft.md`](storage_architecture_design_draft.md) and
-[`ADR-0016`](decisions/0016-hybrid-sqlite-structured-state.md).
+If these records conflict about implementation, expose the conflict and reconcile the current
+orientation to repository evidence. Do not change production behavior merely to satisfy a stale
+document.
 
-TASK-021 implements that direction for fresh repositories without migrating disposable POC state.
-The database owns structured application state, the content-addressed filesystem owns artifact
-bytes, and verified backup/restore covers both authorities. See
-[`sqlite-structured-state-repository.md`](sqlite-structured-state-repository.md) and
-[`ADR-0017`](decisions/0017-fresh-sqlite-structured-state-foundation.md).
+## Historical identifier ambiguity
 
-TASK-022 adds artifact-specific Form 10-Q, Form 8-K, Form 20-F, and Form 6-K retrieval while
-preserving Form 10-K and the SQLite-independent acquisition boundary. See
-[`additional-sec-numbered-form-adapters.md`](additional-sec-numbered-form-adapters.md) and
-[`ADR-0018`](decisions/0018-artifact-specific-sec-numbered-form-adapters.md).
+Accepted history contains two ADR-0024 filenames and two ADR-0026 filenames. It also contains two
+unrelated TASK-058 tickets. The collisions are preserved to avoid rewriting provenance. Cite the
+filename or title with the identifier. A future governance task may add a unique registry, but
+must not silently renumber accepted records.
 
-TASK-023 adds bounded, connected development-mailing-list evidence and a sibling browser
-projection. See [`linux-kernel-mailing-list-intelligence-stream.md`](linux-kernel-mailing-list-intelligence-stream.md)
-and [`ADR-0019`](decisions/0019-bounded-mailing-list-discussion-projection.md).
+## Evolution record
 
-TASK-025 adds revisioned external and derived artifact streams, validated DAG topology, typed
-schema capabilities, durable membership lineage, offline rebuild, and shared operator surfaces.
-See [`revisioned-artifact-streams.md`](revisioned-artifact-streams.md) and
-[`ADR-0020`](decisions/0020-revisioned-artifact-stream-dag.md).
+Detailed subsystem history lives in the task reviews and accepted ADRs. The current architecture
+now includes the following broad accepted additions beyond the imported acquisition baseline:
 
-TASK-026 makes that established subsystem operable through a progressive browser editor and one
-strict, versioned canonical YAML contract shared by browser, CLI, preview, revision persistence,
-and execution. See [`stream-configuration-and-yaml.md`](stream-configuration-and-yaml.md) and
-[`ADR-0021`](decisions/0021-canonical-stream-definition-yaml.md).
+- independent source-object and derived-knowledge contracts;
+- governed retrieval/evidence packages and bounded intelligence contracts;
+- a consulting workspace/execution-journal POC;
+- revisioned concepts, target firms, source profiles, Pull Workflow, and local operator surfaces;
+- hybrid SQLite/content-addressed persistence and repository-owned artifact queries;
+- deterministic SEC forms, transcripts, mailing-list evidence, streams, and feeds.
 
-TASK-028 adds a first-class Linux mailing-list workflow façade over those existing authorities and
-production Lore Atom discovery/thread enumeration. See
-[`linux-mailing-list-workflow.md`](linux-mailing-list-workflow.md) and
-[`ADR-0022`](decisions/0022-linux-mailing-list-workflow-facade.md).
-
-`BACKLOG.md` cannot authorize implementation or imply sequence. Backlog candidates move into
-`ROADMAP.md` or `TASKS.md` only through explicit triage and governance decisions.
+The capability matrix and precise composition status are intentionally centralized in
+[`current-state.md`](current-state.md#capability-maturity-and-composition) rather than repeated in
+this provenance note.

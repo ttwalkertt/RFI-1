@@ -3,6 +3,11 @@
 RFI-1 requires Python 3.11 or newer, `make`, Git, and the runtime dependencies declared in
 `pyproject.toml`. PyYAML provides standards-compliant external catalog parsing for TASK-013.
 
+Before changing the repository, read [`current-state.md`](current-state.md), the root
+`ARCHITECTURE.md`, `TASKS.md`, and the active ticket. Task scripts below preserve milestone proof
+and diagnostic workflows; their existence does not mean that a subsystem is composed into the
+stable application. The stable product boundary is the `rfi` CLI and local admin/API server.
+
 ## Setup
 
 From the repository root:

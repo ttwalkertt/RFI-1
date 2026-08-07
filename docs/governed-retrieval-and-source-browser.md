@@ -157,8 +157,9 @@ There is no reranker, synonym model, query planner, distributed index, increment
 concurrency control, or performance claim. Source text search is limited to structural metadata
 and normalized field values because TASK-005 does not yet expose semantic body sections. Context
 uses byte windows rather than HTML-aware section expansion. Contradiction detection is bounded to
-explicit conflicted status and competing retrieved semantic keys. Saved investigations, LLM
-reasoning, and consulting outputs remain downstream milestones.
+explicit conflicted status and competing retrieved semantic keys. Later TASK-007 and TASK-008 POCs
+now consume this boundary, but no stable application composition invokes the retrieval-to-workspace
+chain.
 
 ## Architectural Status Summary
 
@@ -182,13 +183,16 @@ reasoning, and consulting outputs remain downstream milestones.
 - **Retrieval quality — Provisional.** The deterministic token and character vectorizers prove the
   boundary and failure behavior, not learned semantic recall, ranking quality, or production-scale
   relevance. Quality evaluation and implementation selection remain future work.
-- **Source/knowledge inspection experience — Complete.** The console browser spans governed
-  sources, documents, artifacts, source objects, derived objects, bidirectional provenance,
-  retrieval decisions, and evidence packages.
-- **Model-guided intelligence — Not Started.** TASK-007 can now consume stable evidence packages
-  and traces without access to storage internals.
-- **Consulting workspace — Not Started.** Saved work and consulting projections remain TASK-008.
+- **Source/knowledge inspection experience — Complete for the POC.** The TASK-006 proof browser
+  spans governed sources, documents, artifacts, source objects, derived objects, bidirectional
+  provenance, retrieval decisions, and evidence packages; it is not the integrated admin artifact
+  browser.
+- **Model-guided intelligence — Implemented POC.** TASK-007 consumes stable evidence packages and
+  traces without storage-internal access. Its deterministic planner/reasoner do not prove model
+  quality and are not product-composed.
+- **Consulting workspace — Implemented POC.** TASK-008 provides saved work and an execution journal
+  through proof-script/public Python contracts; it is not product-composed.
 
 TASK-006 introduces a fourth architectural layer: disposable governed access state. It does not
-create a fourth authority. The next milestone is TASK-007 model-guided intelligence with explicit
-citations, uncertainty, and reproducible retrieval traces.
+create a fourth authority. Current cross-layer composition status is maintained in
+[`current-state.md`](current-state.md), rather than inferred from this historical subsystem record.

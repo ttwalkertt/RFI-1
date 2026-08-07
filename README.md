@@ -1,180 +1,144 @@
-# Repository-First Intelligence (RFI)
+# Repository-First Intelligence (RFI-1)
 
-> **An architectural pattern for building persistent, evidence-backed AI knowledge systems.**
+RFI-1 is a local, evidence-first research repository and architectural proof of concept. Its
+operating product acquires and preserves governed public evidence, maintains revisioned source
+configuration and materialized views, and exposes shared CLI, browser, and REST workflows. The
+repository also contains implemented downstream POCs for source parsing, derived knowledge,
+retrieval, grounded intelligence, and consulting workspaces; those downstream POCs are not yet
+composed into the operating product.
 
----
+The distinction matters: RFI-1 is no longer acquisition-only, but it is not yet an end-to-end
+research product.
 
-## Vision
+## Start here
 
-Repository-First Intelligence (RFI) is an engineering approach for building AI systems whose primary long-term product is a curated knowledge repository rather than a collection of one-time reports or chat sessions.
+Read these in order before changing the repository:
 
-RFI separates **information acquisition** from **knowledge development** and from **information presentation**. Public sources are collected into a durable repository with explicit provenance. Over time, additional processing may extract observations, derive relationships, enrich metadata, develop claims, and formulate positions. Reports, consulting briefs, dashboards, and interactive question answering are treated as projections generated from the current repository state.
+1. [`AGENTS.md`](AGENTS.md) — mandatory working instructions.
+2. [`docs/current-state.md`](docs/current-state.md) — current capabilities, maturity, product
+   composition, evidence locations, and documentation authority.
+3. [`ARCHITECTURE.md`](ARCHITECTURE.md) — stable layers, authorities, dependencies, and invariants.
+4. [`TASKS.md`](TASKS.md) and the active ticket under [`tasks/`](tasks/) — authorized scope and
+   acceptance evidence.
+5. [`docs/framework-task-operating-model.md`](docs/framework-task-operating-model.md) — completion,
+   review-package, and Architectural Status Summary requirements.
 
-The repository is intended to become the durable foundation for information ingress, knowledge development, and downstream outputs.
+Use [`ROADMAP.md`](ROADMAP.md) for intended direction and [`BACKLOG.md`](BACKLOG.md) for
+unscheduled candidates. Neither authorizes implementation. Completed task reviews and the design
+study preserve useful provenance, but repository contracts, implementation, and tests determine
+current behavior.
 
----
+## What is integrated today
 
-# Core Philosophy
+The stable `rfi` application provides:
 
-RFI is built around a small number of architectural principles.
+- local SQLite initialization, explicit seed/import, configuration backup/restore, and integrity
+  verification;
+- revisioned concepts, target firms, firm source profiles, and externally managed firm
+  configuration;
+- a Pull Workflow shared by the CLI, local admin/API server, and browser;
+- immutable, content-addressed acquisition evidence with append-only observations and attempts;
+- deterministic SEC Form 10-K, 10-Q, 8-K, 20-F, and 6-K retrieval;
+- bounded StockAnalysis earnings-transcript acquisition and inspection;
+- repository-owned RSS/Atom sources, polling, unavailable-entry handling, and aggregate RSS;
+- bounded Linux/Lore mailing-list acquisition and canonical lineage; and
+- revisioned artifact streams plus a repository-owned artifact browser.
 
-## Repository First
+The registered WDC Business Wire adapter is fixture-backed but operationally blocked by live
+transport viability. It must not be described or operated as accepted production retrieval.
 
-The repository is the system of record.
+The source-object, derived-knowledge, retrieval, intelligence, and consulting-workspace packages
+have public contracts and executable proofs. They are currently invoked by task scripts and tests,
+not by the stable CLI/admin composition. See the capability matrix in
+[`docs/current-state.md`](docs/current-state.md#capability-maturity-and-composition).
 
-It preserves source evidence, provenance, and the evolving knowledge model independently of any individual report or AI conversation.
-
-## Evidence Before Interpretation
-
-Evidence is collected before conclusions are formed.
-
-The architecture distinguishes between:
-
-- source artifacts
-- observations
-- derivations
-- enrichments
-- claims
-- positions
-
-Each layer should be traceable to supporting evidence.
-
-## Provenance Is Mandatory
-
-Every meaningful repository object should be traceable to its origin.
-
-The objective is not merely to answer questions, but to explain why an answer was produced.
-
-## Acquisition and Projection Are Independent
-
-Information acquisition operates continuously as public sources evolve.
-
-Reports and question answering operate on demand against repository state.
-
-Neither process depends on the timing of the other.
-
-## Evolution Through Evidence
-
-The repository architecture is expected to evolve.
-
-New abstractions should emerge from observed source behavior rather than speculative design.
-
----
-
-# What RFI Is Not
-
-RFI is **not**:
-
-- a replacement for Large Language Models
-- another Retrieval-Augmented Generation (RAG) framework
-- a web crawler
-- an autonomous research agent
-- a vector database
-- a reporting engine
-- a competitive intelligence product
-
-Instead, RFI provides an architectural foundation upon which those capabilities may be built.
-
-Commercial APIs, AI models, search systems, and storage technologies are considered replaceable implementation components rather than architectural dependencies.
-
----
-
-# High-Level Architecture
+## Architecture at a glance
 
 ```text
-Public Sources
-        |
-        v
-Acquisition
-        |
-        v
-Repository (System of Record)
-    - Source Registry
-    - Immutable Artifacts
-    - Retrieval Ledger
-    - Document Index
-        |
-        +-------------------------------+
-        |                               |
-        v                               v
-Knowledge Development            Projections
-(observations, claims, etc.)     (reports, briefs, Q&A)
+Operating product
+  governed configuration
+          |
+          v
+  acquisition services ---> immutable bytes + SQLite evidence/operations
+          |                                  |
+          +--> artifact browser              +--> streams/feed/mail projections
+
+Implemented downstream POCs (not product-composed)
+  immutable evidence -> source objects -> derived knowledge -> governed retrieval
+                    -> grounded intelligence -> consulting workspace
 ```
 
-The current implementation effort is focused exclusively on the acquisition layer.
+The repository keeps these authority classes distinct. Model output, workspace history, stream
+membership, and browser projections never replace exact source evidence.
 
-Knowledge development and projection are intentionally deferred until a representative corpus has been collected.
+## Run the local application
 
----
+RFI-1 requires Python 3.11 or newer, `make`, and Git.
 
-# Current Status
+```sh
+make setup
+.venv/bin/rfi init
+.venv/bin/rfi seed       # optional starter data
+.venv/bin/rfi admin
+```
 
-RFI is an acquisition-focused proof of concept with a fresh authoritative SQLite structured-state
-foundation and immutable content-addressed artifact bytes.
+Later runs normally need only `.venv/bin/rfi admin`. Use a consistent `--state PATH` to select a
+different repository. Discover the supported operator surface with:
 
-The immediate objectives are:
+```sh
+.venv/bin/rfi --help
+.venv/bin/rfi pull --help
+.venv/bin/rfi feeds --help
+.venv/bin/rfi mailing-list --help
+.venv/bin/rfi stream --help
+```
 
-- establish immutable source storage
-- implement deterministic acquisition
-- maintain append-only retrieval history
-- support replay of archived artifacts
-- validate the architecture against real public sources
+The full stable workflow and failure semantics are in
+[`docs/application-cli.md`](docs/application-cli.md). The integrated browser guide is
+[`docs/operator-guide.md`](docs/operator-guide.md). Task-specific scripts are evidence and
+diagnostic tools unless those guides explicitly say otherwise.
 
-The first reference implementation is expected to use a small number of high-value deterministic source profiles, including SEC filings and selected investor-relations sources.
+Live SEC access requires a governed SEC user agent. Other live paths have their own explicit
+gates and bounded policies. Normal repository validation is local and must not require credentials
+or network access.
 
-The acquisition subsystem is intentionally being developed before downstream knowledge modeling.
+## Validate changes
 
----
+```sh
+make docs-check
+make baseline-check
+git diff --check
+make validate
+```
 
-# Documentation
+`make validate` runs the repository-standard tests, static policy checks, documentation/link
+checks, design-baseline verification, source archive build, and integrity checks. Each task ticket
+may require additional focused or live evidence. A task is not complete merely because the full
+test suite passes; the ticket's review package and documented limitations remain required.
 
-The following documents define the project.
+## Documentation map
 
-| Document | Purpose |
-|----------|---------|
-| `RFI_MANIFESTO.md` | Statement of philosophy and intent |
-| `ARCHITECTURE.md` *(planned)* | Stable architectural concepts |
-| `ACQUISITION_POC_GUIDANCE.md` | Design guidance and hard invariants for the acquisition proof of concept |
-| `docs/deterministic-sec-form-10k-retrieval.md` | Current artifact-semantic SEC Form 10-K retrieval boundary and operator proof |
-| `docs/additional-sec-numbered-form-adapters.md` | TASK-022 Form 10-Q, 8-K, 20-F, and 6-K adapter policies, identity, live proof, and limits |
-| `docs/linux-kernel-mailing-list-intelligence-stream.md` | TASK-023 bounded Linux block-layer email acquisition, connectivity, replay, query, and shared-browser projection |
-| `docs/linux-mailing-list-workflow.md` | TASK-028 first-class Lore workflow façade, live bounded test, operator feedback, and preserved service authorities |
-| `docs/linux-mailing-list-operator-console.md` | TASK-029 operations-first summary/editor workflow, catch-up coverage, FIFO queue, API, and status design |
-| `docs/decisions/0023-resumable-lore-relationship-acquisition.md` | TASK-031 durable depth-first Lore ancestry, reply, pagination, status, and coverage continuation |
-| `docs/decisions/0024-split-acquisition-batch-and-publication-limits.md` | TASK-039 independent Lore acquisition-batch and complete-component publication policies |
-| `docs/revisioned-artifact-streams.md` | TASK-025 revisioned stream DAGs, typed capabilities, bounded execution, lineage, rebuild, and operator workflow |
-| `docs/storage_architecture_design_draft.md` | TASK-020 structured storage comparison and hybrid SQLite/file recommendation |
-| `docs/sqlite-structured-state-repository.md` | TASK-021 SQLite schema, transactions, initialization, integrity, and hybrid backup/restore |
-| `DESIGN_PRINCIPLES.md` *(planned)* | Enduring engineering principles |
-| `docs/admin-preferences.md` | Browser-local admin preference contract and authority boundary |
-| `docs/artifact-query-service-and-browser.md` | Repository-owned artifact query, browser, content, and preview-security contracts |
-| `docs/multiple-artifact-observations.md` | Artifact, acquisition-observation, attempt identity, replay, and navigation contracts |
-| `BACKLOG.md` | Unscheduled candidates, review observations, deferred improvements, and future ideas |
-| `ROADMAP.md` *(planned)* | Capability roadmap |
-| `TASKS.md` | Authorized implementation work and task status |
-| `TASK-029` | Simplified Linux mailing-list operator workflow |
-| `TASK-031` | Resumable Lore relationship acquisition |
-| `TASK-039` | Split acquisition batch limits from stream publication limits |
+| Document | Role |
+|---|---|
+| [`docs/current-state.md`](docs/current-state.md) | Current implementation, maturity, composition, authority, and evidence orientation |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stable architectural layers, authorities, dependencies, and invariants |
+| [`ROADMAP.md`](ROADMAP.md) | Intended engineering frontier; not authorization |
+| [`TASKS.md`](TASKS.md) | Current task index and authorization/status guidance |
+| [`BACKLOG.md`](BACKLOG.md) | Unscheduled candidates and deferred observations |
+| [`docs/decisions/`](docs/decisions/) | Accepted architectural decisions; cite filename because historical numbers collide |
+| [`docs/development.md`](docs/development.md) | Development and validation workflow |
+| [`docs/operator-guide.md`](docs/operator-guide.md) | Integrated local browser workflow and help topics |
+| [`docs/design-baseline.md`](docs/design-baseline.md) | Provenance and interpretation of the imported root guidance |
+| [`docs/design/`](docs/design/) | Research/design inputs, not current implementation evidence |
 
----
+## Enduring principles
 
-# Design Goals
-
-The project seeks to produce an architecture that is:
-
-- evidence-backed
-- reproducible
-- replayable
-- extensible
-- implementation-independent
-- suitable for long-lived knowledge repositories
-
-Success will be measured by the repository's ability to preserve, explain, and reuse knowledge over time rather than by the quality of any individual generated report.
-
----
-
-# Project Status
-
-Repository-First Intelligence is an active engineering exploration.
-
-The architecture should be considered a working design that is expected to improve as implementation experience and operational evidence accumulate.
+- The repository, not a chat or generated report, is the durable record.
+- Evidence is preserved before interpretation and remains inspectable.
+- Provenance and conservative coverage are explicit contracts.
+- Acquisition, knowledge, retrieval, intelligence, and projection/workspace state are separate
+  layers with one-way dependencies.
+- Replaceable providers, retrieval techniques, models, and interfaces do not become architectural
+  authorities.
+- Architecture, implementation maturity, product composition, and roadmap status must be stated
+  separately.

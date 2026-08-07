@@ -102,11 +102,11 @@ Title: Additional artifact-specific SEC form adapters
 Status: Candidate  
 Area: Retrieval-adapter extensions  
 Source: TASK-016 extension analysis and registry hardening review  
-Problem: Form 10-Q, Form 8-K, proxy, ownership, exhibit, and foreign-issuer semantics are not implemented.  
+Problem: TASK-022 implemented Form 10-Q, Form 8-K, Form 20-F, and Form 6-K. Proxy, ownership, exhibit, amended-form, and other artifact-specific semantics remain unimplemented.
 Potential value: Extend authoritative deterministic acquisition to other high-value canonical artifacts.  
 Trigger: A canonical artifact and concrete operator workflow establish form-specific eligibility, selection, multiplicity, and primary-artifact requirements.  
 Constraints: Use unique adapter identity and non-overlapping artifact/mode claims; shared provider services or acquisition mechanisms are allowed, but a universal configurable SEC policy adapter is not.  
-Disposition: Retain as a family of unscheduled candidates; authorize each artifact contract separately.  
+Disposition: Partially satisfied by TASK-022; retain only the unimplemented artifact families as unscheduled candidates and authorize each contract separately.
 Comments: Shared transport does not imply shared artifact semantics.
 
 ### BLG-005 — Scheduled or concurrent pull operation
@@ -149,3 +149,55 @@ Potential value: Make structured publication transactional and index-backed, red
 Trigger: Explicit authorization of a migration milestone, or the addition of another structured authority, material query latency, concurrent-writer need, cross-file integrity incident, or unmet backup/restore objective.
 Constraints: SQLite structured authority plus content-addressed filesystem byte authority; no database BLOB migration; no permanent dual-write; offline shadow import and differential validation; verified backup/restore; one atomic authority cutover; preserve repository/query contracts and authority classes; PostgreSQL only on documented scale or operations triggers.
 Disposition: TASK-021 implemented the hybrid authority as a fresh-state foundation rather than a legacy migration; any future import of material retained repositories requires a new ticket.
+
+### BLG-008 — Compose downstream research POCs into the operating product
+
+Backlog ID: BLG-008
+Title: Compose downstream research POCs into the operating product
+Status: Moved to ROADMAP
+Area: Product composition
+Source: TASK-068 repository architectural inventory
+Problem: Source-object parsing, derived knowledge, governed retrieval, bounded intelligence, and consulting workspaces are implemented and tested but are composed only by task proof scripts and tests. Product-retained artifacts do not enter that chain through the stable CLI or admin application.
+Potential value: Turn established architectural contracts into an inspectable end-to-end research workflow without recreating their authorities.
+Trigger: A task defines lifecycle, rebuild/freshness, partial failure, retention, and operator-review behavior over actual product evidence.
+Constraints: Preserve immutable evidence, independent derived authority, provenance-complete evidence packages, non-authoritative model output, operator inspectability, and one-way dependencies.
+Disposition: Direction is recorded in ROADMAP; a task ticket is still required before implementation.
+
+### BLG-009 — Evaluate semantic, retrieval, and model quality
+
+Backlog ID: BLG-009
+Title: Evaluate semantic, retrieval, and model quality
+Status: Moved to ROADMAP
+Area: Knowledge, retrieval, and intelligence quality
+Source: TASK-005 through TASK-008 limitations confirmed by TASK-068 inventory
+Problem: Current parsing and ontology are narrow, retrieval uses deterministic local vector substitutes, intelligence uses deterministic planner/reasoner substitutes, and structural grounding checks do not establish general semantic entailment or answer quality.
+Potential value: Select semantic expansion and replaceable model/retrieval implementations using measurable operator value and governed evaluation.
+Trigger: Product composition supplies representative evidence needs, queries, and quality criteria.
+Constraints: Do not bypass evidence packages, provenance, disclosure/retention policy, explicit inference, budgets, or fail-closed output validation.
+Disposition: Direction is recorded in ROADMAP; retain concrete implementation choice until evaluation requirements are authorized.
+
+### BLG-010 — Resolve official press-release source and transport viability
+
+Backlog ID: BLG-010
+Title: Resolve official press-release source and transport viability
+Status: Candidate
+Area: Artifact-specific acquisition
+Source: TASK-066 blocked operational review
+Problem: The WDC Business Wire adapter is implemented and Pull-registered, but direct Business Wire transport is denied or times out and the tested feed cannot supply complete release text. The issuer archive is a candidate but was not reachable from the tested execution edge.
+Potential value: Deliver genuinely operable official press-release acquisition or explicitly retire an unusable registered path.
+Trigger: An authorized issuer archive, licensed source, or production network can be tested through the real acquisition path.
+Constraints: Preserve complete official document bytes, issuer attribution, conservative interval coverage, bounded transport, normal repository ingress, and lawful access; browser capture is not an operational fallback.
+Disposition: Require a source/transport decision and live acceptance ticket; do not enable or schedule the existing adapter meanwhile.
+
+### BLG-011 — Unique registry for collided historical identifiers
+
+Backlog ID: BLG-011
+Title: Unique registry for collided historical identifiers
+Status: Candidate
+Area: Documentation governance
+Source: TASK-068 documentation-authority inventory
+Problem: Accepted history contains duplicate ADR-0024, ADR-0026, and TASK-058 identifiers. Filenames and titles disambiguate them, but numeric-only references remain ambiguous.
+Potential value: Reduce citation and agent-orientation errors without renumbering or rewriting accepted records.
+Trigger: Another collision occurs or tooling needs a unique decision/task key.
+Constraints: Preserve historical filenames and provenance; add aliases or a registry rather than silently renumbering accepted records.
+Disposition: Retain as documentation maintenance; current guidance requires filename/title-qualified citations.

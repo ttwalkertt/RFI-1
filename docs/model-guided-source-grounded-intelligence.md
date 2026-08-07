@@ -157,10 +157,11 @@ registry, cost router, long-lived investigation, operator correction workflow, o
   authority separation, inference/uncertainty, contradictions, gaps, replaceable reasoners, and
   fail-closed output validation are established. Answer quality and semantic entailment evaluation
   remain immature.
-- **Consulting workspace — Not Started.** Saved investigations, review/correction, and consulting
-  projections remain TASK-008.
+- **Consulting workspace — Implemented POC.** TASK-008 supplies saved investigations, append-only
+  execution history, comparison, notes, export, backup, and restore through public contracts. It
+  remains outside the stable application composition and has no consulting UI.
 
 TASK-007 introduces a fifth architectural layer: governed intelligence execution. It consumes
-retrieval projections and produces non-authoritative, inspectable analysis. The next milestone is
-TASK-008 consulting workflow and operational hardening, informed by explicit planning and answer
-quality evaluation rather than contract work alone.
+retrieval projections and produces non-authoritative, inspectable analysis. The remaining frontier
+is product composition plus planning, retrieval, and answer-quality evaluation; see
+[`current-state.md`](current-state.md) and the root roadmap.

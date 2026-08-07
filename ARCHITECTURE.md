@@ -1,384 +1,226 @@
-# ARCHITECTURE.md
+# Repository-First Intelligence architecture
 
-# Repository-First Intelligence (RFI) Architecture
+RFI-1 is an evidence-first repository architecture with a local operating product and several
+implemented downstream architectural POCs. This document describes the stable structure and
+invariants. [`docs/current-state.md`](docs/current-state.md) records current maturity, product
+composition, evidence, and limitations; those properties must not be inferred from an architecture
+diagram alone.
 
-> **This document describes the architectural model of Repository-First Intelligence.**
->
-> It intentionally avoids implementation details. Those belong in design guidance, task tickets, and code.
+## Purpose
 
----
+The repository is the durable system of record for source evidence and the governed objects built
+from it. Acquisition, knowledge development, retrieval, intelligence, and operator projections
+have distinct authority and lifecycle. Any of their implementations may evolve without allowing a
+downstream convenience layer to replace upstream evidence.
 
-# Purpose
+RFI-1 is designed to outlive an individual provider, vector technique, model, report format, or
+user interface.
 
-Repository-First Intelligence (RFI) is an architectural pattern for building persistent, evidence-backed knowledge systems.
-
-Its defining characteristic is the separation of three concerns:
-
-1. Information acquisition
-2. Knowledge development
-3. Information projection
-
-Each concern evolves independently while sharing a common repository.
-
-Date-delimited artifact-family retrievers share the observable contract in
-`docs/date-delimited-acquisition-contract.md`. The application validates canonical firm and artifact
-references and applies later retry policy; acquisition implementations own discovery and bounded
-within-invocation retries; repository persistence continues to own immutable evidence, duplicates,
-identity, observations, and interval outcome history. Execution strategy is deliberately
-unspecified.
-
-TASK-048 supplies the first production consumer of that boundary: an artifact-specific, bounded
-official earnings-call transcript retriever. Discovery proposals remain non-authoritative inputs;
-deterministic source-host, date, media, and transcript validation gates the existing ingress, and
-coverage remains indeterminate unless an authoritative interval-spanning listing is affirmatively
-and completely evaluated.
-
-Transcript discovery is a bounded deterministic graph exploration layer between configured source
-intent and transcript retrieval. Pages are nodes; hyperlinks and observed redirects are edges;
-shared conservative URL normalization supplies graph identity while exact observed URLs remain
-provenance. Retained successful anchors precede configured hints, which precede bounded search and
-graph traversal. Explicit ranking and normalized queued/visited/redirect-chain sets choose which
-unique URLs are proposed. The transcript retriever remains independently responsible for candidate
-HTTP retrieval and validation, so graph exploration does not become an alternate evidence gate.
-
----
-
-# Repository-First Philosophy
-
-The repository is the system of record.
-
-It preserves:
-
-- immutable source evidence
-- provenance
-- evolving knowledge
-- historical context
-
-The repository is not merely a cache for AI prompts. It is intended to become the durable foundation for information ingress, knowledge development, and downstream outputs.
-
-The repository is expected to outlive any individual AI model, retrieval technique, reporting format, or user interface.
-
-## Structured storage direction
-
-Structured runtime state and immutable source bytes have distinct storage authority. TASK-021
-implements the explicit hybrid model for fresh application repositories: SQLite owns authoritative
-structured records and relationships, while content-addressed filesystem objects own exact
-acquired bytes. Version-controlled governance and configuration remain files; rebuildable indexes
-remain non-authoritative.
-
-Public repository and query contracts isolate consumers from physical storage. Legacy POC state is
-not imported or operated as a fallback authority. A future server database is justified only by
-demonstrated multi-host writers, sustained write concurrency, high availability, or point-in-time
-recovery requirements.
-
-Artifact-specific deterministic SEC retrieval now covers Form 10-K, Form 10-Q, Form 8-K, Form
-20-F, and Form 6-K. Concrete adapters own canonical form and amendment policy; a shared bounded
-provider owns SEC transport mechanics. All retrieved bytes enter through public acquisition and
-repository contracts, and no adapter depends on SQLite or persistence layout.
-
-Repository-owned RSS and Atom definitions are revisioned structured discovery configuration,
-independent of externally managed firm files. Normalized entry observations, unavailable-entry
-tombstones, fulfillment history, and bounded poll-run instrumentation remain SQLite authority;
-successfully retrieved entry content enters the ordinary acquisition engine and content-addressed
-artifact store. Optional firm associations select feeds during a pull but neither assign entry
-ownership nor grant acquisition authority. UI, CLI, and firm-pull entry points share one polling
-service, and aggregate RSS is a read-only projection of durable observations.
-
----
-
-# Architectural Separation
-
-## Acquisition
-
-Acquisition is responsible for discovering and preserving information from trusted sources.
-
-Its responsibilities include:
-
-- source discovery
-- document retrieval
-- immutable artifact storage
-- provenance capture
-- acquisition history
-
-Acquisition records **what became available**.
-
-It does not determine what the information means.
-
----
-
-## Knowledge Development
-
-Knowledge development transforms evidence into increasingly useful forms.
-
-Each layer is expected to remain traceable to supporting evidence.
-
-Knowledge development may involve deterministic processing, AI-assisted processing, or human review.
-
----
-
-## Projection
-
-Projection consumes repository state to produce outputs.
-
-Examples include:
-
-- consulting briefs
-- competitive analyses
-- dashboards
-- interactive Q&A
-- research reports
-- social media posts
-
-Projection should not modify repository history as part of routine operation.
-
----
-
-# Reference Knowledge Pipeline
-
-The conceptual flow of information is:
+## Architectural layers
 
 ```text
-Sources
-    ↓
-Artifacts
-    ↓
-Observations
-    ↓
-Derivations
-    ↓
-Enrichments
-    ↓
-Claims
-    ↓
-Positions
-    ↓
-Projections
+External sources
+      |
+      v
+Governed acquisition ------------------------------+
+      |                                             |
+      v                                             v
+Immutable evidence + acquisition history     Operational projections
+      |                                       (feeds, streams, browser,
+      v                                        mailing-list views)
+Structural source objects
+      |
+      v
+Versioned derived knowledge
+      |
+      v
+Governed retrieval + evidence packages
+      |
+      v
+Grounded intelligence execution
+      |
+      v
+Consulting workspace and projections
 ```
 
-Each layer has a distinct purpose.
+The operating product currently composes the first two rows and the operational projections. The
+lower source-object-through-workspace chain is implemented and tested as bounded POCs but is not
+part of the stable application workflow.
 
----
+### Governed acquisition
 
-## Sources
+Acquisition owns bounded source discovery and retrieval. Provider adapters propose candidates and
+return exact bytes plus provenance; repository contracts own canonical persistence, duplicate
+handling, observations, attempts, checkpoints, interval outcomes, and replay.
 
-External publishers and information providers.
+Artifact-family policy remains artifact-specific. Shared SEC transport does not make Form 10-K,
+10-Q, 8-K, 20-F, and 6-K one configurable semantic artifact. Transcript and press-release
+discovery do not weaken deterministic admission or repository evidence authority.
 
-Examples:
+Date-delimited retrievers use the observable contract in
+[`docs/date-delimited-acquisition-contract.md`](docs/date-delimited-acquisition-contract.md).
+Coverage is conservative: candidate success cannot establish completeness unless an authoritative
+interval-spanning surface was affirmatively and fully evaluated.
 
-- SEC filings
-- investor relations sites
-- standards organizations
-- conference presentations
-- technical papers
-- regulatory publications
+### Immutable evidence
 
----
+An artifact is exact immutable content. One content-addressed artifact can have multiple immutable
+acquisition observations and multiple run-bound attempts. Observation time, adapter, diagnostics,
+and provenance do not redefine or copy content identity.
 
-## Artifacts
+Repository-owned query contracts expose normalized summary/detail records and exact stored bytes.
+Source-effective chronology and ingestion chronology remain distinct. External provider URLs are
+provenance, not substitute read paths.
 
-Exact immutable representations of acquired source material.
+### Structural source objects
 
-Artifacts are preserved as evidence.
+Source objects identify exact structure and byte spans in immutable artifacts. They are evidence
+location metadata, not semantic conclusions. Their identities must be stable across deterministic
+rebuilds and verifiable against exact artifact bytes.
 
-Examples:
+The current parser is deliberately narrow: SEC submission/header structure. This narrowness is a
+maturity fact, not a change to the architectural role.
 
-- PDF
-- HTML
-- transcript
-- slide deck
-- JSON
-- audio
+### Versioned derived knowledge
 
-Artifacts retain provenance and are never modified.
+Derived knowledge represents normalized or interpreted meaning. Every version carries status,
+confidence, derivation identity, and provenance to source objects. Corrections and supersession do
+not rewrite prior versions. The knowledge subsystem consumes a source-object reader contract and
+does not open acquisition persistence directly.
 
-One artifact may have many immutable `ArtifactObservation` records describing separate successful
-acquisition events for the same bytes. These acquisition observations own retrieval time,
-adapter, diagnostics, and provenance; they never redefine or copy artifact content. They are
-distinct from the extracted knowledge observations in the next section.
+### Governed retrieval and evidence packages
 
----
+Retrieval uses typed queries, explicit metadata constraints, bounded candidate generation,
+traceable ranking/filter decisions, and fail-closed freshness/integrity checks. Vector similarity
+is a replaceable candidate-generation mechanism, not the authority or the complete retrieval
+architecture.
 
-## Observations
+Evidence packages retain source and derived authority classes, exact bounded contexts,
+provenance, omissions, budgets, truncation, and retrieval traces. The same package must be
+inspectable by an operator and consumable by downstream reasoning.
 
-Explicit statements extracted from artifacts.
+### Grounded intelligence
 
-Observations describe facts present in the evidence without introducing interpretation.
+Intelligence converts an information need into bounded retrieval activity and a non-authoritative
+result. Plans, budgets, package consumption, model-facing evidence, claims, uncertainty,
+contradictions, gaps, failures, and stopping reasons remain explicit.
 
-Examples:
+Every accepted claim is labeled as source evidence, derived knowledge, or model inference and maps
+to consumed evidence. A model adapter cannot become an evidence authority. The current
+deterministic planner/reasoner implementations prove contracts and failure behavior; they do not
+prove frontier-model quality.
 
-- announced capacity
-- release date
-- product name
-- quoted shipment volume
+### Consulting workspace and projections
 
----
+The workspace retains investigations, executions, comparisons, notes, exports, and append-only
+operator history through a public intelligence-executor port. Its reference snapshots are audit
+history, not copies of source authority. Operator annotations remain labeled separately from
+source facts, derived knowledge, and model inference.
 
-## Derivations
+Reports, briefs, dashboards, answers, and presentations are projections. Routine projection must
+not mutate repository history or silently promote an analysis into evidence.
 
-Information computed from observations.
+## Authority model
 
-Examples:
+RFI-1 uses a hybrid local repository:
 
-- year-over-year growth
-- rankings
-- timelines
-- trend calculations
-- consistency checks
+- **SQLite:** authoritative structured runtime records and relationships.
+- **Content-addressed filesystem:** authoritative exact acquired bytes.
+- **Version-controlled files:** governance, canonical schemas/templates, and selected
+  configuration.
+- **Rebuildable indexes/projections:** disposable or reproducible state; never an alternate
+  evidence authority.
 
-Derivations should be reproducible from repository state.
+The POC source-object catalog, knowledge generations, retrieval generations, and workspace journal
+retain deliberately independent publication/lifecycle mechanics behind public contracts. They are
+not yet integrated into the operating product's SQLite lifecycle. Product composition must decide
+that lifecycle explicitly; incidental file locations in proof scripts are not a migration plan.
 
----
+A server database becomes justified only by evidence such as multi-host writers, sustained write
+concurrency, high availability, or point-in-time recovery requirements.
 
-## Enrichments
+## Product composition
 
-Additional semantic structure attached to repository objects.
+The stable application composition roots are:
 
-Examples:
-
-- technology classification
-- market segment
-- workload type
-- customer category
-- relationship mapping
-
-Enrichments may be deterministic, AI-assisted, or human-curated.
-
----
-
-## Claims
-
-Evidence-backed assertions supported by observations and derivations.
-
-Claims express conclusions that remain traceable to supporting evidence.
-
-Claims are expected to evolve as repository knowledge grows.
-
----
-
-## Positions
-
-Higher-level viewpoints developed from multiple claims.
-
-Positions represent the repository's current understanding of a topic.
-
-Examples:
-
-- competitive assessment
-- technology outlook
-- market interpretation
-
----
-
-## Projections
-
-Consumable outputs generated from repository state.
-
-Projections include:
-
-- reports
-- presentations
-- consulting briefs
-- interactive answers
-- dashboards
-
-Projections are intentionally ephemeral.
-
-The repository remains the durable foundation.
-
----
-
-# Architectural Characteristics
-
-## Repository read and inspection
-
-Durable evidence is consumed through repository-owned read contracts rather than physical storage
-or provider-specific metadata. Typed query, normalized summary/detail, and exact stored-content
-contracts separate repository semantics from browser, planning, reporting, and intelligence
-projections. Source-effective chronology defines latest and oldest; ingestion time remains an
-operational fact. Operator inspection uses the same contracts future automated consumers use.
-
-Stored external content remains untrusted even after retention. Exact repository bytes are the
-authoritative inspection copy and execute behind a capability-denying sandbox. Original provider
-locations are provenance, not a substitute read path.
-
-## Development mailing-list evidence
-
-Selected development email is retained as ordinary immutable repository evidence. Bounded seed
-discovery is distinct from connected ancestor closure and bounded descendant expansion. Durable
-SQLite acquisition manifests retain why each message was selected; reply edges and discussions are
-rebuildable header-derived state. Every connected member has one complete acyclic path to its stored
-root. Missing connectors and cycles fail closed, and descendant limits remain visible frontiers.
-
-Relationship acquisition is resumable rather than limited to one context batch. Append-only run
-manifests own an ancestry-first, depth-first continuation frontier and Lore provider-page offsets.
-One seed page reaches complete, policy-truncated, or failed relationship state before seed
-pagination or date-window coverage proceeds. Successful budget exhaustion is
-`continuation_pending`, not artifact incompleteness. Coverage remains withheld, while already closed
-message paths remain connected and inspectable. SQLite remains the only continuation authority.
-
-The artifact browser is one repository browser with sibling firm-artifact and development-mailing-
-list projections. Both consume repository-owned query and exact-content contracts. SQLite remains
-the sole structured authority; no graph persistence or browser-owned threading exists.
-
-## Revisioned artifact streams
-
-Streams are governed materialized repository projections over external-source artifacts or other
-streams. Stable identities retain immutable configuration revisions; dependency edges form a
-validated DAG; explicit bounded runs publish membership and lineage transactionally. An artifact
-may belong to many streams, but all memberships reference the same immutable content identity.
-
-Generic selection evaluates bounded typed Boolean policies over schema-registered projections.
-The finite schema registry owns capability declarations, projection providers, and context
-expansion handlers. Schema adapters retain native typing. The mailing-list adapter reuses
-authoritative connected discussions, while SEC filings use no expansion. Successful execution
-plans make memberships and lineage reproducible offline. Admin, CLI, REST, and browser consumers
-share repository/service contracts; none owns policy or topology state.
-
-Governed external-source profiles are the authority for provider identity, protocol endpoint, and
-transport policy. Stream revisions reference a source and own selection, expansion, dependencies,
-and output bounds only. Any future acquisition cursor also belongs to the governed source and
-acquisition boundary. Acquisition/evidence storage exclusively owns artifact lifetime; stream
-memberships, lineage, and derived counts never trigger artifact deletion. Stream publication is
-atomic and preserves the last successful view until a replacement run fully commits.
-
-The bounded Lore adapter applies per-source pacing, source-wide in-process concurrency, time and
-response bounds, capped retry/backoff, `Retry-After`, and explicit 429/503 handling. Durable Lore
-cursors and production polling are deferred; the active stream contract exposes no inert
-incremental or initial-date controls.
-
-The first-class Linux Mailing Lists surface is a task-specific orchestration façade rather than a
-new authority. It converts operator intent into provisional source validation, deterministic
-governed-source and stream identities, immutable revision creation, bounded Lore Atom acquisition,
-stream publication, and run-bound evidence inspection through existing public services. The normal
-path does not expose repository identifiers or schema mechanics. Generic source and stream editors
-remain advanced administration surfaces. No browser-only configuration or persistence exists.
-
----
-
-An RFI implementation should strive for:
-
-- evidence-backed reasoning
-- explicit provenance
-- replayability
-- reproducibility
-- incremental evolution
-- implementation independence
-- separation of concerns
-
----
-
-# Expected Evolution
-
-The architecture is intended to evolve through implementation experience.
-
-Early development focuses on acquisition.
-
-Later work will refine:
-
-- observation models
-- derivation pipelines
-- enrichment models
-- claim lifecycle
-- projection architecture
-
-The architectural boundaries described in this document are expected to remain substantially more stable than any individual implementation.
+- `rfi.cli` for initialization, operation, and maintenance;
+- `rfi.admin.server.create_admin_server()` for the local browser and REST API; and
+- `rfi.pull.create_pull_workflow()` for shared firm-oriented acquisition.
+
+They compose concepts, firms, source profiles, external firm configuration, acquisition, Pull
+Workflow, feeds, SEC workflow, mailing lists, streams, artifacts, backup/restore, and help. They do
+not compose source objects, derived knowledge, retrieval, intelligence, or workspace services.
+
+Package-level public contracts for those lower layers are nevertheless established and supported
+by executable tests. Product absence must not be described as implementation absence, and POC
+completion must not be described as product completion.
+
+## Integrated operational projections
+
+### Artifact browser
+
+The artifact browser consumes repository-owned query and exact-content contracts. Firm/canonical
+artifacts, unassociated feed evidence, and mailing-list projections remain distinguishable. Stored
+external content is untrusted and executes only behind a capability-denying preview sandbox.
+
+### Feeds
+
+Revisioned RSS/Atom definitions are repository-owned discovery configuration, independent of
+externally managed firm files. Normalized entry observations, unavailable-entry tombstones,
+fulfillment, and bounded run history remain SQLite authority. Successfully retrieved content uses
+the normal acquisition engine and artifact store. Firm association selects feeds for a pull but
+does not assign evidence ownership or canonical artifact identity.
+
+### Mailing lists
+
+Selected development email is ordinary immutable evidence. Source-scoped observations preserve
+where a message was seen; canonical message identity and relationship evidence support cross-list
+lineage without graph persistence. Connected paths fail closed on unresolved connectors or cycles.
+
+Relationship acquisition retains a durable ancestry-first continuation frontier. Budget exhaustion
+can be `continuation_pending` without declaring retained messages incomplete; interval coverage is
+withheld until the applicable relationship boundary is terminal.
+
+### Revisioned artifact streams
+
+Streams are bounded materialized projections over artifacts or other streams. Stable identities
+have immutable revisions, dependencies form a validated DAG, and successful runs publish
+membership and lineage atomically. Stream membership never owns artifact lifetime or creates an
+alternate copy of content.
+
+Typed schema capabilities and context-expansion handlers are finite repository registrations. The
+Linux mailing-list workflow is a task-specific façade over mailing-list, stream, source, artifact,
+and SQLite authorities—not a second workflow authority.
+
+## Established invariants
+
+1. Exact source evidence remains distinct from structural descriptions, derived knowledge,
+   intelligence, and operator annotations.
+2. Acquired bytes are immutable and content-addressed; repeated retrieval adds history rather than
+   mutating content.
+3. Provider adapters use public ingress contracts and do not write repository storage directly.
+4. SQLite is the sole structured authority for the operating product; UIs and projections do not
+   own hidden state.
+5. Dependencies point downstream: acquisition does not import knowledge, and upstream layers do
+   not import intelligence or workspaces.
+6. Provenance, uncertainty, omissions, failures, and conservative coverage remain explicit.
+7. Bounded execution and fail-closed validation apply at external, retrieval, and model
+   boundaries.
+8. Whatever a downstream model can consume must also be inspectable through repository-owned
+   contracts.
+9. Product integration, architectural existence, task completion, and production readiness are
+   separate claims.
+
+## Known limitations and evolution
+
+The present operating model is local, foreground, single-operator, and predominantly
+single-writer. Authentication, durable internal scheduling, remote multi-user operation,
+monitoring, signed audit guarantees, and scale testing are deferred.
+
+The downstream POCs have narrow SEC structure/ontology, deterministic local retrieval and
+reasoning substitutes, and no product UI. The WDC Business Wire adapter is operationally blocked
+despite its fixture-backed implementation and Pull registration.
+
+The next architectural frontier is described in [`ROADMAP.md`](ROADMAP.md). Current maturity and
+evidence are maintained in [`docs/current-state.md`](docs/current-state.md), so this document can
+remain focused on boundaries that should change slowly.
