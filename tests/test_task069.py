@@ -47,16 +47,48 @@ ROOT = Path(__file__).resolve().parents[1]
 ARCHIVE_URL = "https://stockanalysis.com/stocks/orcl/transcripts/"
 Q4_URL = "https://stockanalysis.com/stocks/orcl/transcripts/592465-q4-2026/"
 Q3_URL = "https://stockanalysis.com/stocks/orcl/transcripts/581200-q3-2026/"
+Q2_URL = "https://stockanalysis.com/stocks/orcl/transcripts/570100-q2-2026/"
+Q1_URL = "https://stockanalysis.com/stocks/orcl/transcripts/560100-q1-2026/"
+Q4_2025_URL = "https://stockanalysis.com/stocks/orcl/transcripts/550100-q4-2025/"
 ARCHIVE = (ROOT / "fixtures/transcripts/stockanalysis-orcl-archive.html").read_bytes()
+ARCHIVE = ARCHIVE.replace(
+    b"  </ul>",
+    b'''    <li class="rounded-lg border border-sharp bg-contrast">
+      <a href="/stocks/orcl/transcripts/570100-q2-2026/">
+        Oracle Corporation (ORCL) Q2 2026 Earnings Call Transcript</a>
+    </li>
+    <li class="rounded-lg border border-sharp bg-contrast">
+      <a href="/stocks/orcl/transcripts/560100-q1-2026/">
+        Oracle Corporation (ORCL) Q1 2026 Earnings Call Transcript</a>
+    </li>
+    <li class="rounded-lg border border-sharp bg-contrast">
+      <a href="/stocks/orcl/transcripts/550100-q4-2025/">
+        Oracle Corporation (ORCL) Q4 2025 Earnings Call Transcript</a>
+    </li>
+  </ul>''',
+)
 Q4_DOCUMENT = (
     ROOT / "fixtures/transcripts/stockanalysis-orcl-q4-2026.html"
 ).read_bytes()
-Q3_DOCUMENT = (
-    Q4_DOCUMENT.replace(b"Q4 2026", b"Q3 2026")
-    .replace(b"2026-06-15", b"2026-03-10")
-    .replace(b"June 15, 2026", b"March 10, 2026")
-    .replace(b"fourth quarter", b"third quarter")
-    .replace(b"q4-2026", b"q3-2026")
+
+
+def transcript_document(
+    period: str, event_date: str, display_date: str, period_words: str
+) -> bytes:
+    return (
+        Q4_DOCUMENT.replace(b"Q4 2026", period.encode())
+        .replace(b"2026-06-15", event_date.encode())
+        .replace(b"June 15, 2026", display_date.encode())
+        .replace(b"fourth quarter", period_words.encode())
+        .replace(b"q4-2026", period.casefold().replace(" ", "-").encode())
+    )
+
+
+Q3_DOCUMENT = transcript_document("Q3 2026", "2026-03-10", "March 10, 2026", "third quarter")
+Q2_DOCUMENT = transcript_document("Q2 2026", "2025-12-09", "December 9, 2025", "second quarter")
+Q1_DOCUMENT = transcript_document("Q1 2026", "2025-09-08", "September 8, 2025", "first quarter")
+Q4_2025_DOCUMENT = transcript_document(
+    "Q4 2025", "2025-06-03", "June 3, 2025", "fourth quarter"
 )
 
 
@@ -74,6 +106,15 @@ class Transport:
             ),
             Q3_URL: EarningsTranscriptHttpResponse(
                 Q3_URL, 200, "text/html", Q3_DOCUMENT
+            ),
+            Q2_URL: EarningsTranscriptHttpResponse(
+                Q2_URL, 200, "text/html", Q2_DOCUMENT
+            ),
+            Q1_URL: EarningsTranscriptHttpResponse(
+                Q1_URL, 200, "text/html", Q1_DOCUMENT
+            ),
+            Q4_2025_URL: EarningsTranscriptHttpResponse(
+                Q4_2025_URL, 200, "text/html", Q4_2025_DOCUMENT
             ),
         }
 
@@ -278,7 +319,9 @@ class TranscriptSelectionWorkflowTests(unittest.TestCase):
         self.assertEqual(adapter.selections, [selection])
         self.assertIsInstance(adapter.selections[0], TranscriptAcquisitionSelection)
 
-    def test_repeated_public_pulls_advance_to_next_eligible_transcript(self) -> None:
+    def test_retained_newest_does_not_block_three_repeated_public_range_pulls(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             transport = Transport()
             root = Path(directory)
@@ -302,40 +345,59 @@ class TranscriptSelectionWorkflowTests(unittest.TestCase):
                 ),)),
                 PullRunRepository(root / "pull-workflows"),
                 lambda: "2026-08-07T12:00:00+00:00",
-                iter(("first", "second")).__next__,
+                iter(("latest", "first", "second", "third")).__next__,
             )
             selection = TranscriptAcquisitionSelection.first_in_date_range(
-                date(2026, 3, 10), date(2026, 6, 15)
+                date(2025, 6, 3), date(2026, 6, 15)
             )
             request = PullRequest(("oracle",), False, selection)
 
+            latest = workflow.run(PullRequest(("oracle",)))
             first = workflow.run(request)
             second = workflow.run(request)
+            third = workflow.run(request)
             success_records = tuple(
                 item for item in repository.history() if item.get("outcome") == "success"
             )
             checkpoint = next(iter(repository.checkpoints()["sources"].values()))
 
+        self.assertEqual(latest.summary.success, 1)
         self.assertEqual(first.summary.success, 1)
         self.assertEqual(second.summary.success, 1)
+        self.assertEqual(third.summary.success, 1)
         selected_dates = []
-        for result in (first, second):
+        learned_direct_trials = []
+        for result in (first, second, third):
             diagnostics = result.firms[0].artifacts[0].attempts[0].details
             assert diagnostics is not None
+            engine_diagnostics = diagnostics["engine_diagnostics"]
             terminal = next(
-                item for item in diagnostics["engine_diagnostics"]
+                item for item in engine_diagnostics
                 if item.get("terminal_selection_outcome") == "selected"
             )
             selected_dates.append(terminal["selected_validated_event_date"])
-        self.assertEqual(selected_dates, ["2026-03-10", "2026-06-15"])
+            self.assertGreaterEqual(terminal["retained_qualified_candidate_count"], 1)
+            learned_direct_trials.extend(
+                item for item in engine_diagnostics
+                if item.get("provider_surface") == "direct_document"
+            )
+        self.assertEqual(
+            selected_dates, ["2025-06-03", "2025-09-08", "2025-12-09"]
+        )
         self.assertEqual(
             {
                 item["candidate"]["provenance"]["metadata"]["requested_url"]
                 for item in success_records
             },
-            {Q3_URL, Q4_URL},
+            {Q4_URL, Q4_2025_URL, Q1_URL, Q2_URL},
         )
-        self.assertEqual(len({item["artifact_id"] for item in success_records}), 2)
+        self.assertEqual(len({item["artifact_id"] for item in success_records}), 4)
+        self.assertEqual(transport.requests.count(Q4_URL), 1)
+        self.assertTrue(learned_direct_trials)
+        self.assertTrue(
+            all(item["candidate_evaluated_count"] == 0 for item in learned_direct_trials)
+        )
+        self.assertNotIn("2026-06-15", selected_dates)
         self.assertEqual(checkpoint["position"], 2026 * 4 + 2)
 
 

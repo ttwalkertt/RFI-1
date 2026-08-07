@@ -671,7 +671,8 @@ class AcquisitionEngine:
         acquisition_trials: tuple[AdapterAcquisitionTrial, ...] | None = None
         selection_policy: AdapterTerminalSelectionPolicy | None = None
         selection_checkpoint_eligible = True
-        selection_checkpoint_filtered = False
+        selection_retained_filtered = False
+        retained_qualified_selection_candidates = 0
         selection_incomplete_status: RunStatus | None = None
         qualified_selection_candidates: list[AdapterSelectionCandidate] = []
         selected_selection_candidate: AdapterSelectionCandidate | None = None
@@ -965,14 +966,21 @@ class AcquisitionEngine:
                             validated_position = decision.diagnostics.get(
                                 "validated_position"
                             )
+                            # A latest-mode checkpoint can be newer than an entire
+                            # historical range. Candidate-level repository authority,
+                            # not that monotonic position, establishes completion here.
                             if (
                                 profile.mechanism == "earnings_transcript"
-                                and checkpoint_before is not None
-                                and isinstance(validated_position, int)
-                                and validated_position <= checkpoint_before.position
+                                and retained is not None
                             ):
-                                checkpoint_confirmed = True
-                                selection_checkpoint_filtered = True
+                                retained_qualified_selection_candidates += 1
+                                selection_retained_filtered = True
+                                if (
+                                    checkpoint_before is not None
+                                    and isinstance(validated_position, int)
+                                    and validated_position <= checkpoint_before.position
+                                ):
+                                    checkpoint_confirmed = True
                                 outcomes.append(CandidateRunOutcome(
                                     candidate.candidate_id,
                                     candidate.document_id,
@@ -982,8 +990,8 @@ class AcquisitionEngine:
                                     None,
                                     False,
                                     (
-                                        "validated candidate is at or before durable "
-                                        "source progress"
+                                        "qualified transcript is already retained by "
+                                        "repository authority"
                                     ),
                                     validated_position=validated_position,
                                 ))
@@ -1544,7 +1552,7 @@ class AcquisitionEngine:
         if (
             selection_policy is not None
             and selected_selection_candidate is None
-            and selection_checkpoint_filtered
+            and selection_retained_filtered
             and status == RunStatus.COMPLETE
         ):
             unchanged += 1
@@ -1641,6 +1649,9 @@ class AcquisitionEngine:
                 "terminal_run_status": status.value,
                 "validation_outcome": validation_outcome,
                 "qualified_candidate_count": len(qualified_selection_candidates),
+                "retained_qualified_candidate_count": (
+                    retained_qualified_selection_candidates
+                ),
                 **selected_diagnostics,
             })
 

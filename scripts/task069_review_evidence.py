@@ -26,7 +26,12 @@ from rfi.pull import (  # noqa: E402
     RetrievalAdapterRegistration,
     RetrievalAdapterRegistry,
 )
-from tests.test_task069 import Transport, configured_state, policies  # noqa: E402
+from tests.test_task069 import (  # noqa: E402
+    Q4_URL,
+    Transport,
+    configured_state,
+    policies,
+)
 
 
 class Ids:
@@ -51,6 +56,14 @@ def selected_date(result: dict[str, object]) -> str:
         if item.get("terminal_selection_outcome") == "selected"
     )
     return str(terminal["selected_validated_event_date"])
+
+
+def engine_diagnostics(result: dict[str, object]) -> list[dict[str, object]]:
+    firms = result["firms"]
+    assert isinstance(firms, list)
+    artifacts = firms[0]["artifacts"]
+    attempts = artifacts[0]["attempts"]
+    return attempts[0]["details"]["engine_diagnostics"]
 
 
 def invoke(arguments: list[str]) -> tuple[int, str, str]:
@@ -92,28 +105,55 @@ def generate(output: Path) -> dict[str, object]:
         lambda: "2026-08-07T12:00:00+00:00",
         Ids(),
     )
+    latest_command = ["pull", "--state", str(state), "--firm", "oracle"]
     command = [
         "pull", "--state", str(state), "--firm", "oracle",
         "--selection", "first_in_date_range",
-        "--start-date", "2026-03-10", "--end-date", "2026-06-15",
+        "--start-date", "2025-06-03", "--end-date", "2026-06-15",
     ]
     display = (
         "rfi pull --state STATE --firm oracle --selection first_in_date_range "
-        "--start-date 2026-03-10 --end-date 2026-06-15"
+        "--start-date 2025-06-03 --end-date 2026-06-15"
     )
     with patch("rfi.cli._open_state"), patch(
         "rfi.cli.create_pull_workflow", return_value=workflow
     ):
+        latest_code, latest_stdout, latest_stderr = invoke(latest_command)
+        staged_successes = tuple(
+            item for item in repository.history() if item.get("outcome") == "success"
+        )
+        if len(staged_successes) != 1:
+            raise RuntimeError("default latest staging did not retain exactly one transcript")
+        newest_success = staged_successes[0]
         first_code, first_stdout, first_stderr = invoke(command)
         second_code, second_stdout, second_stderr = invoke(command)
+        third_code, third_stdout, third_stderr = invoke(command)
+    latest = json.loads(latest_stdout)
     first = json.loads(first_stdout)
     second = json.loads(second_stdout)
+    third = json.loads(third_stdout)
     successes = tuple(
         item for item in repository.history() if item.get("outcome") == "success"
     )
     checkpoint = next(iter(repository.checkpoints()["sources"].values()))
+    direct_trials = tuple(
+        item
+        for result in (first, second, third)
+        for item in engine_diagnostics(result)
+        if item.get("provider_surface") == "direct_document"
+    )
+    selected_dates = [selected_date(result) for result in (first, second, third)]
     repeated = {
         "command": display,
+        "precondition": {
+            "command": "rfi pull --state STATE --firm oracle",
+            "exit_code": latest_code,
+            "stderr": latest_stderr,
+            "summary": latest["summary"],
+            "retained_newest_trusted_event_date": newest_success["diagnostics"][
+                "trusted_event_date"
+            ],
+        },
         "first": {
             "exit_code": first_code,
             "stderr": first_stderr,
@@ -126,12 +166,35 @@ def generate(output: Path) -> dict[str, object]:
             "selected_validated_event_date": selected_date(second),
             "summary": second["summary"],
         },
+        "third": {
+            "exit_code": third_code,
+            "stderr": third_stderr,
+            "selected_validated_event_date": selected_date(third),
+            "summary": third["summary"],
+        },
         "retained_artifact_ids": [item["artifact_id"] for item in successes],
         "checkpoint": checkpoint,
+        "learned_direct_document": {
+            "trial_count": len(direct_trials),
+            "candidate_evaluated_counts": [
+                item["candidate_evaluated_count"] for item in direct_trials
+            ],
+            "newest_document_http_request_count": transport.requests.count(Q4_URL),
+            "conclusion": (
+                "learned direct-document occurrences were deduplicated before "
+                "retrieval; the newest transcript was fetched only during staging"
+            ),
+        },
         "same_command_advanced": (
-            selected_date(first) == "2026-03-10"
-            and selected_date(second) == "2026-06-15"
-            and len({item["artifact_id"] for item in successes}) == 2
+            latest_code == 0
+            and latest_stderr == ""
+            and latest["summary"]["success"] == 1
+            and newest_success["diagnostics"]["trusted_event_date"] == "2026-06-15"
+            and selected_dates == ["2025-06-03", "2025-09-08", "2025-12-09"]
+            and len({item["artifact_id"] for item in successes}) == 4
+            and transport.requests.count(Q4_URL) == 1
+            and bool(direct_trials)
+            and all(item["candidate_evaluated_count"] == 0 for item in direct_trials)
         ),
     }
     (output / "successful-cli.txt").write_text(
@@ -186,7 +249,9 @@ def generate(output: Path) -> dict[str, object]:
     }
     if (
         first_code != 0
+        or latest_code != 0
         or second_code != 0
+        or third_code != 0
         or not repeated["same_command_advanced"]
         or not validation["all_failed_before_acquisition"]
     ):
