@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
-from rfi.acquisition.contracts import JsonValue
+from rfi.acquisition.contracts import (
+    JsonValue,
+    TranscriptAcquisitionSelection,
+)
 
 
 class PullError(RuntimeError):
@@ -54,6 +57,9 @@ class PullRequest:
 
     firm_ids: tuple[str, ...] = ()
     all_configured: bool = False
+    transcript_selection: TranscriptAcquisitionSelection = field(
+        default_factory=TranscriptAcquisitionSelection.latest
+    )
 
     def __post_init__(self) -> None:
         if self.all_configured == bool(self.firm_ids):
@@ -62,6 +68,8 @@ class PullRequest:
             raise PullError("firm identifiers must not be blank")
         if len(set(self.firm_ids)) != len(self.firm_ids):
             raise PullError("firm identifiers must not be repeated")
+        if not isinstance(self.transcript_selection, TranscriptAcquisitionSelection):
+            raise PullError("transcript acquisition selection is invalid")
 
 
 @dataclass(frozen=True)

@@ -18,6 +18,8 @@ rfi seed [--state PATH] [-f FILE | --file FILE ...]
 rfi seed --print-schema
 rfi admin [--state PATH] [--host HOST] [--port PORT]
 rfi pull (--firm FIRM_ID ... | --all-configured) [--state PATH]
+  [--selection {latest,first_in_date_range}]
+  [--start-date YYYY-MM-DD --end-date YYYY-MM-DD]
 rfi verify [--state PATH]
 rfi backup [--state PATH] --output ZIP
 rfi restore --input ZIP [--state FRESH_PATH]
@@ -121,9 +123,19 @@ Run enabled source-profile artifacts through the same durable workflow used by R
 
 ```sh
 rfi pull --firm seagate
+rfi pull --firm seagate --selection first_in_date_range \
+  --start-date 2024-08-07 --end-date 2026-08-07
 rfi pull --firm seagate --firm ibm
 rfi pull --all-configured
 ```
+
+Earnings-transcript selection defaults to `latest`, so existing pull commands retain their prior
+behavior and require no dates. `first_in_date_range` requires both inclusive boundaries and
+selects at most one qualifying earnings-call transcript per invocation. Repeat the identical
+command to walk forward through eligible historical transcripts; the durable repository
+checkpoint excludes already-completed reporting periods. The CLI only constructs the existing
+typed transcript selection and sends it through the shared Pull Workflow. Other artifact types,
+retrieval modes, and provider dispatch are unchanged.
 
 The complete structured result is printed as JSON. Unsupported retrieval modes are retained as
 explicit skipped results with an operator diagnostic; they do not trigger hidden fallback logic.

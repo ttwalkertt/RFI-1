@@ -162,6 +162,29 @@ class TranscriptAcquisitionSelection:
     ) -> TranscriptAcquisitionSelection:
         return cls(TranscriptSelectionMode.FIRST_IN_DATE_RANGE, start_date, end_date)
 
+    @classmethod
+    def from_dict(cls, value: Any) -> TranscriptAcquisitionSelection:
+        """Restore the canonical serialized selection used by durable workflows."""
+        if not isinstance(value, dict) or set(value) != {
+            "mode", "start_date", "end_date"
+        }:
+            raise ContractError("transcript acquisition selection is malformed")
+        try:
+            mode = TranscriptSelectionMode(value["mode"])
+            start = (
+                date.fromisoformat(value["start_date"])
+                if isinstance(value["start_date"], str)
+                else value["start_date"]
+            )
+            end = (
+                date.fromisoformat(value["end_date"])
+                if isinstance(value["end_date"], str)
+                else value["end_date"]
+            )
+            return cls(mode, start, end)
+        except (TypeError, ValueError) as error:
+            raise ContractError("transcript acquisition selection is malformed") from error
+
     def contains(self, event_date: date) -> bool:
         """Qualify only normalized validated dates, with inclusive boundaries."""
         if self.mode == TranscriptSelectionMode.LATEST:

@@ -18,6 +18,7 @@ from rfi.acquisition import (
     RunStatus,
     SourceProfile,
     PressReleaseAcquisitionTarget,
+    TranscriptAcquisitionSelection,
     TranscriptAcquisitionTarget,
 )
 from rfi.firms.contracts import FirmCatalog
@@ -119,6 +120,7 @@ class PullWorkflow:
                 "request": {
                     "firm_ids": list(request.firm_ids),
                     "all_configured": request.all_configured,
+                    "transcript_selection": request.transcript_selection.to_dict(),
                 },
                 "completed_stages": [PullStage.RECEIVED.value],
                 "stage_events": [
@@ -151,6 +153,13 @@ class PullWorkflow:
             request = PullRequest(
                 tuple(record["request"]["firm_ids"]),
                 bool(record["request"]["all_configured"]),
+                (
+                    TranscriptAcquisitionSelection.from_dict(
+                        record["request"]["transcript_selection"]
+                    )
+                    if "transcript_selection" in record["request"]
+                    else TranscriptAcquisitionSelection.latest()
+                ),
             )
             try:
                 firms = self._resolve_firms(request)
@@ -207,7 +216,11 @@ class PullWorkflow:
                 firm_results = []
                 for plan in plans:
                     result = self._execute_firm(
-                        run_id, plan, artifact_started, artifact_completed
+                        run_id,
+                        plan,
+                        request.transcript_selection,
+                        artifact_started,
+                        artifact_completed,
                     )
                     firm_results.append(result)
                     record["firms"] = [asdict(item) for item in firm_results]
@@ -396,6 +409,7 @@ class PullWorkflow:
         self,
         run_id: str,
         plan: PlannedFirm,
+        transcript_selection: TranscriptAcquisitionSelection,
         artifact_started: Callable[[PlannedFirm, PlannedArtifact], None] | None = None,
         artifact_completed: Callable[[PlannedFirm, PlannedArtifact], None] | None = None,
     ) -> FirmPullResult:
@@ -403,7 +417,11 @@ class PullWorkflow:
         for artifact in plan.artifacts:
             if artifact_started is not None:
                 artifact_started(plan, artifact)
-            artifacts.append(self._execute_artifact(run_id, plan, artifact))
+            artifacts.append(
+                self._execute_artifact(
+                    run_id, plan, artifact, transcript_selection
+                )
+            )
             if artifact_completed is not None:
                 artifact_completed(plan, artifact)
         artifact_results = tuple(artifacts)
@@ -417,7 +435,11 @@ class PullWorkflow:
         )
 
     def _execute_artifact(
-        self, run_id: str, firm: PlannedFirm, artifact: PlannedArtifact
+        self,
+        run_id: str,
+        firm: PlannedFirm,
+        artifact: PlannedArtifact,
+        transcript_selection: TranscriptAcquisitionSelection,
     ) -> ArtifactPullResult:
         if not artifact.candidates:
             return ArtifactPullResult(
@@ -440,7 +462,9 @@ class PullWorkflow:
         terminal = ArtifactOutcome.RETRIEVAL_FAILURE
         terminal_diagnostic = "No runnable retrieval candidate established an artifact outcome."
         for candidate in artifact.runnable_candidates:
-            attempt, outcome = self._execute_candidate(run_id, firm, artifact, candidate)
+            attempt, outcome = self._execute_candidate(
+                run_id, firm, artifact, candidate, transcript_selection
+            )
             attempts.append(attempt)
             if outcome in {
                 ArtifactOutcome.SUCCESS,
@@ -468,6 +492,7 @@ class PullWorkflow:
         firm: PlannedFirm,
         artifact: PlannedArtifact,
         candidate: RetrievalCandidate,
+        transcript_selection: TranscriptAcquisitionSelection,
     ) -> tuple[RetrievalAttemptResult, ArtifactOutcome]:
         registration = self._adapters.select(artifact.artifact_id, candidate)
         adapter_id = registration.capability.adapter_id
@@ -475,9 +500,17 @@ class PullWorkflow:
         source_id = source.source_id
         try:
             self._acquisition.register_source(source)
+            acquisition_registry = self._adapters.acquisition_registry(adapter_id)
+            if artifact.artifact_id == "earnings_transcript":
+                with_selection = getattr(
+                    registration.source_adapter, "with_selection", None
+                )
+                if callable(with_selection):
+                    invocation_adapter = with_selection(transcript_selection)
+                    acquisition_registry = AdapterRegistry((invocation_adapter,))
             engine = AcquisitionEngine(
                 self._acquisition,
-                self._adapters.acquisition_registry(adapter_id),
+                acquisition_registry,
                 self._clock,
             )
             result = self._run_engine_source(

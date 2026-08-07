@@ -111,6 +111,8 @@ the editor returns to the result that initiated the repair.
 
 ```sh
 rfi pull --firm seagate
+rfi pull --firm seagate --selection first_in_date_range \
+  --start-date 2024-08-07 --end-date 2026-08-07
 rfi pull --firm seagate --firm ibm
 rfi pull --all-configured
 ```
@@ -118,6 +120,13 @@ rfi pull --all-configured
 Use `--state PATH` to select application state. The CLI prints the complete JSON-compatible typed
 result. Completed runs exit zero; partial or failed business runs exit one; invalid application or
 request state exits two.
+
+Omitting transcript-selection arguments preserves `latest`. Selecting `first_in_date_range`
+requires both inclusive ISO-date boundaries. One invocation retains at most one qualifying
+earnings-call transcript; repeating the same command advances with the existing repository
+checkpoint. The CLI performs syntax conversion only. The immutable typed selection is durably
+recorded on `PullRequest`, restored by the workflow, and applied by the selection-aware transcript
+adapter without CLI qualification logic or provider branching.
 
 ### REST API
 

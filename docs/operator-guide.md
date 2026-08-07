@@ -431,9 +431,16 @@ idempotent while each materially distinct successful acquisition creates its own
 
 ```sh
 rfi pull --state STATE --firm FIRM_ID
+rfi pull --state STATE --firm FIRM_ID --selection first_in_date_range \
+  --start-date 2024-08-07 --end-date 2026-08-07
 rfi pull --state STATE --firm FIRM_A --firm FIRM_B
 rfi pull --state STATE --all-configured
 ```
+
+The default earnings-transcript selection is `latest`. Historical selection uses an inclusive
+range and acquires at most one qualifying transcript per invocation. Repeat the same
+`first_in_date_range` command to advance through successive eligible transcripts using durable
+repository/checkpoint state; there is no automatic backfill loop.
 
 Related topics: [Target Firms](#firms), [source readiness](#source-readiness),
 [Artifacts](#artifacts), and [troubleshooting](#troubleshooting).
@@ -1033,6 +1040,8 @@ rfi seed [--state PATH] [-f FILE | --file FILE ...]
 rfi seed --print-schema
 rfi admin [--state PATH] [--host HOST] [--port PORT]
 rfi pull (--firm FIRM_ID ... | --all-configured) [--state PATH]
+  [--selection {latest,first_in_date_range}]
+  [--start-date YYYY-MM-DD --end-date YYYY-MM-DD]
 rfi verify [--state PATH]
 rfi backup [--state PATH] --output ZIP
 rfi restore --input ZIP [--state FRESH_PATH]

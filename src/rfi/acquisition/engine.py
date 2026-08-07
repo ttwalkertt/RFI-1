@@ -671,6 +671,7 @@ class AcquisitionEngine:
         acquisition_trials: tuple[AdapterAcquisitionTrial, ...] | None = None
         selection_policy: AdapterTerminalSelectionPolicy | None = None
         selection_checkpoint_eligible = True
+        selection_checkpoint_filtered = False
         selection_incomplete_status: RunStatus | None = None
         qualified_selection_candidates: list[AdapterSelectionCandidate] = []
         selected_selection_candidate: AdapterSelectionCandidate | None = None
@@ -961,6 +962,32 @@ class AcquisitionEngine:
                             diagnostics[trial_diagnostic_index], candidate, decision
                         )
                         if decision.qualifies:
+                            validated_position = decision.diagnostics.get(
+                                "validated_position"
+                            )
+                            if (
+                                profile.mechanism == "earnings_transcript"
+                                and checkpoint_before is not None
+                                and isinstance(validated_position, int)
+                                and validated_position <= checkpoint_before.position
+                            ):
+                                checkpoint_confirmed = True
+                                selection_checkpoint_filtered = True
+                                outcomes.append(CandidateRunOutcome(
+                                    candidate.candidate_id,
+                                    candidate.document_id,
+                                    candidate.position,
+                                    candidate.revision,
+                                    "checkpoint_filtered",
+                                    None,
+                                    False,
+                                    (
+                                        "validated candidate is at or before durable "
+                                        "source progress"
+                                    ),
+                                    validated_position=validated_position,
+                                ))
+                                continue
                             qualified_selection_candidates.append(AdapterSelectionCandidate(
                                 candidate,
                                 repository_candidate,
@@ -1513,6 +1540,14 @@ class AcquisitionEngine:
                 diagnostics.append(self._diagnostic(
                     FailureClass.REPOSITORY_INTEGRITY, str(error), False
                 ))
+
+        if (
+            selection_policy is not None
+            and selected_selection_candidate is None
+            and selection_checkpoint_filtered
+            and status == RunStatus.COMPLETE
+        ):
+            unchanged += 1
 
         if status == RunStatus.COMPLETE and not (
             selection_policy is not None and selected_selection_candidate is None

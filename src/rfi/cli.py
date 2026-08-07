@@ -6,14 +6,16 @@ import argparse
 import json
 import sys
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Sequence
 
 from rfi.acquisition import (
     AcquisitionRepository, SecForm10KAdapter, SecProviderClient,
+    TranscriptAcquisitionSelection, TranscriptSelectionMode,
     user_agent_from_environment,
 )
+from rfi.acquisition.contracts import ContractError
 from rfi.admin import create_admin_server
 from rfi.catalog_import import (
     CatalogImportError,
@@ -72,6 +74,16 @@ class ApplicationError(RuntimeError):
 def _state(value: str) -> Path:
     """Return a normalized operator-selected state path."""
     return Path(value).expanduser().resolve()
+
+
+def _iso_date(value: str) -> date:
+    """Parse one strict ISO calendar date for an operator-facing selector."""
+    try:
+        return date.fromisoformat(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            f"invalid date {value!r}; expected YYYY-MM-DD"
+        ) from error
 
 
 def _add_state(parser: argparse.ArgumentParser) -> None:
@@ -159,8 +171,13 @@ def parser() -> argparse.ArgumentParser:
         epilog=(
             "examples:\n"
             "  rfi pull --firm seagate\n"
+            "  rfi pull --firm seagate --selection first_in_date_range "
+            "--start-date 2024-08-07 --end-date 2026-08-07\n"
             "  rfi pull --firm seagate --firm ibm\n"
-            "  rfi pull --all-configured"
+            "  rfi pull --all-configured\n\n"
+            "The default transcript selection is latest. first_in_date_range selects "
+            "at most one qualifying transcript per invocation; repeat the same command "
+            "to advance through the inclusive range using repository checkpoint state."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -177,6 +194,24 @@ def parser() -> argparse.ArgumentParser:
         "--all-configured",
         action="store_true",
         help="pull every firm with a saved source profile",
+    )
+    pull.add_argument(
+        "--selection",
+        choices=tuple(item.value for item in TranscriptSelectionMode),
+        default=TranscriptSelectionMode.LATEST.value,
+        help="earnings-transcript selection mode (default: latest)",
+    )
+    pull.add_argument(
+        "--start-date",
+        type=_iso_date,
+        metavar="YYYY-MM-DD",
+        help="inclusive transcript range start; required for first_in_date_range",
+    )
+    pull.add_argument(
+        "--end-date",
+        type=_iso_date,
+        metavar="YYYY-MM-DD",
+        help="inclusive transcript range end; required for first_in_date_range",
     )
     feeds = commands.add_parser(
         "feeds", help="poll repository-owned RSS and Atom discovery sources",
@@ -454,10 +489,20 @@ def serve(state: Path, host: str, port: int) -> None:
         server.server_close()
 
 
-def pull_sources(state: Path, firm_ids: tuple[str, ...], all_configured: bool) -> int:
+def pull_sources(
+    state: Path,
+    firm_ids: tuple[str, ...],
+    all_configured: bool,
+    transcript_selection: TranscriptAcquisitionSelection | None = None,
+) -> int:
     """Run the shared Pull Workflow and print its durable structured result."""
     _open_state(state)
-    result = create_pull_workflow(state).run(PullRequest(firm_ids, all_configured))
+    request = PullRequest(
+        firm_ids,
+        all_configured,
+        transcript_selection or TranscriptAcquisitionSelection.latest(),
+    )
+    result = create_pull_workflow(state).run(request)
     print(json.dumps(asdict(result), indent=2, sort_keys=True))
     return 0 if result.status == PullStatus.COMPLETED else 1
 
@@ -699,10 +744,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif arguments.command == "admin":
             serve(arguments.state, arguments.host, arguments.port)
         elif arguments.command == "pull":
+            try:
+                transcript_selection = TranscriptAcquisitionSelection(
+                    TranscriptSelectionMode(arguments.selection),
+                    arguments.start_date,
+                    arguments.end_date,
+                )
+            except ContractError as error:
+                raise ApplicationError(str(error)) from error
             return pull_sources(
                 arguments.state,
                 tuple(arguments.firm),
                 arguments.all_configured,
+                transcript_selection,
             )
         elif arguments.command == "feeds":
             return poll_feeds(arguments.state, arguments.feed_id, arguments.json)
