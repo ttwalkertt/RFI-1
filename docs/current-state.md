@@ -87,6 +87,7 @@ Rebuildable indexes and UI projections are not independent authorities.
 | SEC numbered forms | Usable with recent-submissions and form-policy limits | Integrated | artifact-specific adapters; exact accession and older-history traversal remain deferred |
 | SEC authoritative 10-K workflow | Complete as a bounded vertical slice | Integrated in CLI | `rfi.sec`; no continuous scheduler |
 | Management and earnings transcripts | Usable with limitations | Integrated | One broad non-earnings management corpus and a narrow earnings-call corpus; StockAnalysis is the only provider, deterministic title vocabulary is bounded, and coverage may be indeterminate |
+| Retained-transcript knowledge access and investigation | Useful experimental vertical slice; access/model quality provisional | Implemented POC | `rfi.research`; public artifact reads, disposable lexical/temporal index, exact expansion, bounded live-model loop, insufficiency, and traces; no stable CLI/UI or workspace composition |
 | WDC Business Wire press releases | Implemented but operationally blocked | Registered in Pull Workflow, unsupported for live operation | fixture/browser-capture parsing passes; direct production transport is denied or times out |
 | RSS/Atom feeds | Complete for public credential-free feeds | Integrated | `rfi.feeds`; external recurrence only, no authenticated feeds or redirect DNS pinning |
 | Mailing-list evidence and workflow | Usable with bounded Lore/local-operation limits | Integrated | `rfi.mailing_lists`; no durable scheduler or global rate coordination |
@@ -111,7 +112,9 @@ most important slow-moving contracts are:
 - retrieval queries, traces, evidence packages, and budgets in `src/rfi/retrieval/`;
 - intelligence plans, claim authority, execution traces, and executor ports in
   `src/rfi/intelligence/`; and
-- workspace journal and executor ports in `src/rfi/workspace/`.
+- workspace journal and executor ports in `src/rfi/workspace/`; and
+- retained-transcript corpus, search/expansion, investigation result/trace, model-session, and hard
+  budget contracts in `src/rfi/research/`.
 
 The stable operator surface is documented in `docs/application-cli.md` and
 `docs/operator-guide.md`. Task scripts are acceptance and diagnostic tools unless the stable CLI
@@ -147,8 +150,9 @@ build governed retrieval state, execute model-guided analysis, or save that work
 workspace. The next composition task must define lifecycle, rebuild, freshness, error, and operator
 review behavior rather than merely call the existing proof scripts.
 
-Other genuine gaps are broader semantic extraction, evaluated retrieval quality, a real governed
-model adapter, polished investigation workflows, viable official press-release transport,
+Other genuine gaps are broader semantic extraction, evaluated retrieval quality beyond the narrow
+TASK-071 transcript slice, governed disclosure/model routing, polished investigation workflows,
+viable official press-release transport,
 deployment/authentication, durable scheduling, multi-user/multi-writer coordination, monitoring,
 and scale evidence. These are roadmap or backlog concerns until a task ticket authorizes work.
 
@@ -163,6 +167,14 @@ and scale evidence. These are roadmap or backlog concerns until a task ticket au
   Their public contracts are real; their absence from the stable application is also real.
 - The design study under `docs/design/` is research input, not proof that its proposed product
   composition exists.
+- The TASK-071 transcript IQA, bounded generator, non-retrieving closed-record adjudicator, and
+  single evaluator-scoped recovery cycle are implemented POCs, not the stable research product.
+  Deterministic invalid identifiers receive actionable protocol feedback, while semantic
+  entailment and evidence-derived recovery scope still require evaluation. Historical retained
+  transcripts lack event-kind and speaker metadata, and the
+  evaluation corpus includes titles that look like conference events while remaining canonically
+  classified as `earnings_transcript`. Access reports that conflict but does not reinterpret
+  retained authority.
 - Transcript event classification is deterministic and intentionally fails closed for the narrow
   earnings corpus. Unrecognized substantial events remain available as broad management
   transcripts; the current event-kind vocabulary is useful but not an exhaustive ontology.

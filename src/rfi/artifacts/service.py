@@ -520,7 +520,12 @@ class ArtifactQueryService:
                 if isinstance(key, str) and isinstance(value, str)
             }
         )
-        effective_value, basis = self._effective(discovery_metadata, discovery, record)
+        diagnostics = record.get("diagnostics", {})
+        if not isinstance(diagnostics, dict):
+            diagnostics = {}
+        effective_value, basis = self._effective(
+            discovery_metadata, discovery, diagnostics, record
+        )
         secondary = str(
             discovery_metadata.get("accession_number")
             or provider_ids.get("sec_accession")
@@ -543,7 +548,11 @@ class ArtifactQueryService:
         original_location = next(
             (value for value in reversed(raw_locations) if isinstance(value, str) and value), None
         )
-        display_title = (
+        provider_metadata = diagnostics.get("provider_metadata", {})
+        if not isinstance(provider_metadata, dict):
+            provider_metadata = {}
+        provider_title = self._text(provider_metadata.get("document_title"))
+        display_title = provider_title or (
             f"{canonical_short_name} · {period_date or filing_date or effective_value[:10]}"
             if canonical_short_name is not None
             else self._text(discovery_metadata.get("title"))
@@ -573,6 +582,7 @@ class ArtifactQueryService:
     def _effective(
         metadata: dict[str, Any],
         discovery: dict[str, Any],
+        diagnostics: dict[str, Any],
         record: dict[str, Any],
     ) -> tuple[str, str]:
         candidates = (
@@ -580,6 +590,8 @@ class ArtifactQueryService:
             ("publication_datetime", metadata.get("publication_datetime")),
             ("filing_date", metadata.get("filing_date")),
             ("publication_date", metadata.get("publication_date")),
+            ("trusted_event_date", diagnostics.get("trusted_event_date")),
+            ("validated_event_date", diagnostics.get("validated_event_date")),
             ("source_observation", discovery.get("discovered_at")),
             ("retrieval_time_fallback", record.get("occurred_at")),
         )

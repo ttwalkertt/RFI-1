@@ -121,6 +121,8 @@ test suite passes; the ticket's review package and documented limitations remain
 | Document | Role |
 |---|---|
 | [`docs/current-state.md`](docs/current-state.md) | Current implementation, maturity, composition, authority, and evidence orientation |
+| [`docs/transcript-investigation-vertical-slice.md`](docs/transcript-investigation-vertical-slice.md) | Experimental retained-transcript IQA, investigating harness, operation, and limitations |
+| [`docs/TASK-071-retained-truth-catalog.md`](docs/TASK-071-retained-truth-catalog.md) | Substantive retained-truth types, common access semantics, and justified specialization |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stable architectural layers, authorities, dependencies, and invariants |
 | [`ROADMAP.md`](ROADMAP.md) | Intended engineering frontier; not authorization |
 | [`TASKS.md`](TASKS.md) | Current task index and authorization/status guidance |

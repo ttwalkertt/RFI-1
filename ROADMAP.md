@@ -13,7 +13,8 @@ RFI-1 already contains more than an acquisition POC:
 - governed configuration, immutable evidence, artifact streams, feeds, SEC and transcript
   retrieval, mailing-list workflows, and operational maintenance;
 - implemented POCs for structural source objects, derived knowledge, governed retrieval,
-  grounded intelligence, and durable consulting workspaces.
+  grounded intelligence, durable consulting workspaces, and a retained-transcript IQA plus
+  live-model investigation slice.
 
 The main gap is that the downstream POCs are not composed with the operating product. See
 [`docs/current-state.md`](docs/current-state.md) for the capability matrix and evidence.
@@ -37,7 +38,9 @@ The milestone should establish:
 - truthful partial operation when an artifact or derived layer is unsupported.
 
 This is composition work, not permission to collapse the layers or rewrite established POCs into
-one repository abstraction.
+one repository abstraction. TASK-071 demonstrates that composition may use a fit-for-evidence IQA
+over public retained-truth contracts rather than mechanically requiring every stage of the earlier
+SEC POC chain; a product task must choose that boundary from evaluated workload evidence.
 
 ### 2. Evaluate and broaden knowledge/retrieval quality
 
@@ -49,7 +52,8 @@ Operating evidence should decide which semantic expansion matters first. Candida
 
 - filing body sections, tables, XBRL, PDFs, transcripts, feeds, and email semantics;
 - measurable retrieval recall/ranking quality under metadata and provenance constraints;
-- a governed replaceable frontier-model planner/reasoner adapter;
+- broader evaluation and governance of the replaceable frontier-model adapter proven narrowly by
+  TASK-071;
 - semantic-grounding evaluation beyond structural evidence-ID validation; and
 - cost, disclosure, retention, correction, and operator-review policies.
 

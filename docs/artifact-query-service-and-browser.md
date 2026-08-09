@@ -33,10 +33,12 @@ media metadata.
 ## Source-effective ordering
 
 The primary value is chosen from source semantics in this order: acceptance datetime,
-publication datetime, filing date, publication date, source observation time, and finally an
-explicit retrieval-time fallback. Normalized values are UTC ISO timestamps. Equal primary values
-use provider-neutral secondary identity (for SEC, accession), document ID, then immutable artifact
-ID. Both ascending and descending sorts use that exact tuple.
+publication datetime, filing date, publication date, retained trusted or validated event date,
+source observation time, and finally an explicit retrieval-time fallback. The event-date step was
+added by TASK-071 because transcript observations retained deterministic event chronology even
+when ordinary discovery publication fields were absent. Normalized values are UTC ISO timestamps.
+Equal primary values use provider-neutral secondary identity (for SEC, accession), document ID,
+then immutable artifact ID. Both ascending and descending sorts use that exact tuple.
 
 One logical document is represented once. If it has multiple retained content revisions, the
 current summary selects the latest ingested immutable revision for that document only. Ingestion

@@ -397,6 +397,12 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "pull/planning.py",
                 "pull/repository.py",
                 "pull/workflow.py",
+                "research/__init__.py",
+                "research/access.py",
+                "research/adjudication.py",
+                "research/contracts.py",
+                "research/harness.py",
+                "research/openai.py",
                 "retrieval/__init__.py",
                 "retrieval/contracts.py",
                 "retrieval/evidence.py",
@@ -448,15 +454,22 @@ class ScopeBoundaryTests(unittest.TestCase):
         for term in ("requests", "urllib.request", "http.client", "socket"):
             with self.subTest(provider_neutral_term=term):
                 self.assertNotIn(term, provider_neutral)
-        content = "\n".join(
-            path.read_text(encoding="utf-8") for path in (SRC / "rfi").rglob("*.py")
+        non_research = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (SRC / "rfi").rglob("*.py")
+            if "research" not in path.relative_to(SRC / "rfi").parts
         ).lower()
-        for term in (
-            "openai",
-            "consulting-workspace",
-        ):
+        for term in ("openai", "consulting-workspace"):
             with self.subTest(term=term):
-                self.assertNotIn(term, content)
+                self.assertNotIn(term, non_research)
+        model_neutral_research = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (SRC / "rfi" / "research").glob("*.py")
+            if path.name != "openai.py"
+        ).lower()
+        for term in ("urllib.request", "api.openai.com"):
+            with self.subTest(model_boundary_term=term):
+                self.assertNotIn(term, model_neutral_research)
 
 
 if __name__ == "__main__":

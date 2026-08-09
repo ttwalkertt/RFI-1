@@ -80,6 +80,15 @@ Repository-owned query contracts expose normalized summary/detail records and ex
 Source-effective chronology and ingestion chronology remain distinct. External provider URLs are
 provenance, not substitute read paths.
 
+TASK-071 proves a parallel experimental access path over this boundary. A disposable
+transcript-specific index rebuilds from public artifact summaries/details/content and exposes
+corpus orientation, lexical and temporal discovery, and exact retained-byte expansion to a
+bounded investigative harness. The index, model, prompt, trace, and answer are not repository
+authority. Search candidates become citable only after exact expansion is verified against public
+artifact bytes and provenance. This selectively reuses the source-object locator and intelligence
+trace principles without requiring every evidence type to share the SEC parser or TASK-006 index
+lifecycle.
+
 Canonical association is an immutable observation fact constrained by the governed source's
 primary and explicitly allowed alternate artifact IDs. Historical observations retain their exact
 classification; a later correction is append-only and never rewrites artifact bytes or prior
@@ -223,6 +232,9 @@ and SQLite authorities—not a second workflow authority.
    contracts.
 9. Product integration, architectural existence, task completion, and production readiness are
    separate claims.
+10. A knowledge-access/IQA may be generic or evidence-type-specific, but it must preserve upstream
+    identity, authority, provenance, time, integrity, and explicit coverage while remaining
+    replaceable.
 
 ## Known limitations and evolution
 
@@ -230,9 +242,11 @@ The present operating model is local, foreground, single-operator, and predomina
 single-writer. Authentication, durable internal scheduling, remote multi-user operation,
 monitoring, signed audit guarantees, and scale testing are deferred.
 
-The downstream POCs have narrow SEC structure/ontology, deterministic local retrieval and
-reasoning substitutes, and no product UI. The WDC Business Wire adapter is operationally blocked
-despite its fixture-backed implementation and Pull registration.
+The downstream POCs have narrow SEC structure/ontology, deterministic local retrieval substitutes,
+and no product UI. TASK-071 adds a bounded live-model transcript investigation proof, but lexical
+recall, semantic grounding evaluation, disclosure policy, speaker metadata, and product
+composition remain provisional. The WDC Business Wire adapter is operationally blocked despite
+its fixture-backed implementation and Pull registration.
 
 The next architectural frontier is described in [`ROADMAP.md`](ROADMAP.md). Current maturity and
 evidence are maintained in [`docs/current-state.md`](docs/current-state.md), so this document can

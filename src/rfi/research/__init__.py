@@ -1,0 +1,57 @@
+"""Retained-truth access and headless transcript investigation vertical slice."""
+
+from rfi.research.access import TranscriptKnowledgeAccess
+from rfi.research.contracts import (
+    ClaimAssessment,
+    ConsistencyAssessment,
+    CorpusDescription,
+    EvidenceExcerpt,
+    InvestigationClaim,
+    InvestigationModel,
+    InvestigationRecord,
+    InvestigationResult,
+    InvestigationRun,
+    InvestigationSession,
+    InvestigationStatus,
+    ModelBudget,
+    ModelToolCall,
+    ModelTurn,
+    RecoveryRequest,
+    ResearchError,
+    SearchHit,
+    SearchResult,
+    TraceEntry,
+    TranscriptDocument,
+    TranscriptScope,
+    TranscriptSegment,
+)
+from rfi.research.harness import TranscriptInvestigator
+from rfi.research.openai import OpenAIResponsesInvestigator
+
+__all__ = [
+    "ClaimAssessment",
+    "ConsistencyAssessment",
+    "CorpusDescription",
+    "EvidenceExcerpt",
+    "InvestigationClaim",
+    "InvestigationModel",
+    "InvestigationRecord",
+    "InvestigationResult",
+    "InvestigationRun",
+    "InvestigationSession",
+    "InvestigationStatus",
+    "ModelBudget",
+    "ModelToolCall",
+    "ModelTurn",
+    "OpenAIResponsesInvestigator",
+    "RecoveryRequest",
+    "ResearchError",
+    "SearchHit",
+    "SearchResult",
+    "TraceEntry",
+    "TranscriptDocument",
+    "TranscriptInvestigator",
+    "TranscriptKnowledgeAccess",
+    "TranscriptScope",
+    "TranscriptSegment",
+]

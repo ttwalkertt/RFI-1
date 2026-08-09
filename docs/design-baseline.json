@@ -17,10 +17,10 @@
       "source": "README.md",
       "destination": "README.md",
       "source_size": 5104,
-      "destination_size": 6869,
+      "destination_size": 7243,
       "source_sha256": "fa65e921c2716d562136ebe5a6d91bf596f62687512b51210132d35cc48ac197",
-      "destination_sha256": "eb0d91c47d2f7324aa5ef264302547f9f6a40212bbc7b7ad77017f33307d6ff7",
-      "content_change": "current product and POC orientation reconciled by TASK-068"
+      "destination_sha256": "277b668077df0696393fffc7e79a1a2ea408fc6c6fc065196a96de6e031edf19",
+      "content_change": "current product and POC orientation reconciled by TASK-068 and transcript investigation documented by TASK-071"
     },
     {
       "source": "DESIGN_PRINCIPLES.md",
@@ -53,28 +53,28 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 11911,
+      "destination_size": 12117,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "adf38022fd0ecf2419cc6a8bbaa45d89db19ccb3cbf54fbe5ee9d7ace6291ade",
-      "content_change": "complete extant task index reconciled by TASK-068 and advanced through TASK-070"
+      "destination_sha256": "d28e696c16d86a86afa9b0a056438d4378d3be49e20627dc1e7fc841e57bb0ff",
+      "content_change": "complete extant task index reconciled by TASK-068 and advanced through TASK-071"
     },
     {
       "source": "ROADMAP.md",
       "destination": "ROADMAP.md",
       "source_size": 3371,
-      "destination_size": 6220,
+      "destination_size": 6587,
       "source_sha256": "1de0192a023e8c046f2cdedc2fe61592345d2e06b324c9b49b2c2b25424dfdad",
-      "destination_sha256": "fe76807cf48ca23cccc077498c93c03cf78c9921d5a60a9bebe1922f4be5aa0a",
-      "content_change": "actual composition, quality, product, source, and operations frontier reconciled by TASK-068"
+      "destination_sha256": "6846ba7a08b6c92a945785ba3a586b4071bfc0c248d4d9532a58846a6d264457",
+      "content_change": "actual composition, quality, product, source, and operations frontier reconciled by TASK-068 and TASK-071 evidence"
     },
     {
       "source": "ARCHITECTURE.md",
       "destination": "ARCHITECTURE.md",
       "source_size": 4889,
-      "destination_size": 12264,
+      "destination_size": 13326,
       "source_sha256": "b1035d87d8f620ace89e3aaae5ca65b0c21cf93c6e1ca91c824c1e623b20aa9f",
-      "destination_sha256": "892fc289c04ef3884580d7d8e29c32647692240c4780d7dc5f04267c7572cdb1",
-      "content_change": "stable layers and authorities reconciled by TASK-068; transcript classification boundary advanced by TASK-070"
+      "destination_sha256": "0ca919e3b77e89442da6b8eae700d01ac0b20a017cb2310c2fc610cd2f576303",
+      "content_change": "stable layers and authorities reconciled by TASK-068; transcript classification and knowledge-access boundaries advanced through TASK-071"
     }
   ]
 }
