@@ -298,3 +298,61 @@ class InvestigationRun:
     result: InvestigationResult
     trace: tuple[TraceEntry, ...]
     model_usage: dict[str, int]
+
+
+@dataclass(frozen=True)
+class ReportClaimMapping:
+    """Stable accepted-claim mapping for downstream report consumers."""
+
+    claim_index: int
+    evidence_ids: tuple[str, ...]
+    periods: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ReportRecovery:
+    """Recorded single-cycle recovery history, copied without reinterpretation."""
+
+    occurred: bool
+    deficiencies: tuple[str, ...]
+    required_periods: tuple[str, ...]
+    required_document_ids: tuple[str, ...]
+    covered_periods: tuple[str, ...]
+    additional_tool_calls: int
+    second_evaluation_performed: bool
+
+
+@dataclass(frozen=True)
+class ReportAuthority:
+    """Run and authority identities required for independent audit."""
+
+    run_id: str
+    repository_snapshot: str
+    runtime_identity: str
+    harness_identity: str
+    iqa_identity: str
+    repository_authority: str
+    model_usage: dict[str, int]
+
+
+@dataclass(frozen=True)
+class ResearchReport:
+    """Authoritative Stage-1 analytical output derived from final adjudication."""
+
+    schema_version: str
+    report_id: str
+    question: str
+    scope: TranscriptScope
+    status: InvestigationStatus
+    lead_paragraph: str
+    accepted_claims: tuple[InvestigationClaim, ...]
+    claim_to_evidence_mappings: tuple[ReportClaimMapping, ...]
+    evidence: tuple[EvidenceExcerpt, ...]
+    gaps: tuple[str, ...]
+    qualifications: tuple[str, ...]
+    corpus_limitations: tuple[str, ...]
+    support_calibration: str
+    completeness_calibration: str
+    recovery: ReportRecovery
+    authority: ReportAuthority
+    trace_reference: str

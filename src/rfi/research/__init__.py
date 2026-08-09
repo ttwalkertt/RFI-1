@@ -17,6 +17,10 @@ from rfi.research.contracts import (
     ModelToolCall,
     ModelTurn,
     RecoveryRequest,
+    ReportAuthority,
+    ReportClaimMapping,
+    ReportRecovery,
+    ResearchReport,
     ResearchError,
     SearchHit,
     SearchResult,
@@ -27,6 +31,7 @@ from rfi.research.contracts import (
 )
 from rfi.research.harness import TranscriptInvestigator
 from rfi.research.openai import OpenAIResponsesInvestigator
+from rfi.research.reporting import ResearchReportWriter
 
 __all__ = [
     "ClaimAssessment",
@@ -45,6 +50,11 @@ __all__ = [
     "ModelTurn",
     "OpenAIResponsesInvestigator",
     "RecoveryRequest",
+    "ReportAuthority",
+    "ReportClaimMapping",
+    "ReportRecovery",
+    "ResearchReport",
+    "ResearchReportWriter",
     "ResearchError",
     "SearchHit",
     "SearchResult",

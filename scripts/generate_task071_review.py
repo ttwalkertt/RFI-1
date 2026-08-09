@@ -22,6 +22,7 @@ ZIP_PATH = ROOT / ".artifacts/review/TASK-071-review.zip"
 VALIDATION = ROOT / ".artifacts/task071-validation"
 LIVE_STATE = ROOT / ".artifacts/task071-live-eval"
 TRACES = LIVE_STATE / "traces"
+REPORTS = LIVE_STATE / "reports"
 REPORT_PATH = ROOT / ".artifacts/review/TASK-071-review-report.json"
 EXPECTED_OPERATOR_FILES = {"pull-results.txt", "pull_stx.py"}
 
@@ -75,6 +76,17 @@ def generate(base: str | None) -> int:
     dirty_only_for_operator_files = review_tree_is_commit_exact()
     outcomes = [
         run(
+            "research-report-generation",
+            [
+                ".venv/bin/python",
+                "scripts/task071_emit_reports.py",
+                "--traces",
+                str(TRACES),
+                "--reports",
+                str(REPORTS),
+            ],
+        ),
+        run(
             "retained-corpus-and-traces",
             [
                 ".venv/bin/python",
@@ -83,6 +95,8 @@ def generate(base: str | None) -> int:
                 str(LIVE_STATE),
                 "--traces",
                 str(TRACES),
+                "--reports",
+                str(REPORTS),
                 "--output",
                 str(VALIDATION),
             ],
@@ -116,11 +130,13 @@ def generate(base: str | None) -> int:
         ),
         ("evidence/task071-tests.py", ROOT / "tests/test_task071.py"),
         ("evidence/research-contracts.py", ROOT / "src/rfi/research/contracts.py"),
+        ("evidence/research-report-writer.py", ROOT / "src/rfi/research/reporting.py"),
         ("evidence/transcript-access.py", ROOT / "src/rfi/research/access.py"),
         ("evidence/closed-record-adjudication.py", ROOT / "src/rfi/research/adjudication.py"),
         ("evidence/investigation-harness.py", ROOT / "src/rfi/research/harness.py"),
         ("evidence/openai-adapter.py", ROOT / "src/rfi/research/openai.py"),
         ("evidence/headless-operator.py", ROOT / "scripts/task071_investigate.py"),
+        ("evidence/report-emitter.py", ROOT / "scripts/task071_emit_reports.py"),
         ("evidence/review-evidence.py", ROOT / "scripts/task071_review_evidence.py"),
         ("evaluation/retained-corpus.json", VALIDATION / "retained-corpus.json"),
         ("evaluation/access-probes.json", VALIDATION / "access-probes.json"),
@@ -133,9 +149,14 @@ def generate(base: str | None) -> int:
             for case in ("sentiment", "demand", "technology", "chronology", "insufficient")
         ),
         *(
+            (f"evaluation/reports/{case}.json", REPORTS / f"{case}.json")
+            for case in ("sentiment", "demand", "technology", "chronology", "insufficient")
+        ),
+        *(
             (f"validation/{name}.txt", VALIDATION / f"{name}.txt")
             for name in (
                 "retained-corpus-and-traces",
+                "research-report-generation",
                 "focused-regressions",
                 "committed-diff-check",
                 "full-validation",

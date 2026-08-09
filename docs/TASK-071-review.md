@@ -52,6 +52,14 @@ remediable deficiencies. Recovery is limited to those periods/documents plus at 
 expanded-evidence-derived, topic-preserving follow-up. It closes and is evaluated once more, then
 stops. Supported and genuinely insufficient records bypass recovery.
 
+After final adjudication, every proving path crosses `ResearchReportWriter`. This thin,
+non-reasoning boundary copies the governed status and lead exactly into a versioned
+`ResearchReport`, together with accepted claims and mappings, evidence identity/date/context/
+provenance, gaps and qualifications, corpus limitations, recovery history, model/harness/IQA/
+repository authority identities, and a stable trace reference. It has no access or model
+dependency. The structured report is now the primary Stage-1 artifact; investigative internals
+remain alongside it for forensic review.
+
 ## Generic mechanisms retained
 
 - public artifact summary/detail/content as the common retained-evidence envelope;
@@ -98,6 +106,7 @@ source-object and TASK-006 vector-generation POCs.
 | A recovery request needed only a date | The first live recovery invented document identifiers and spent its bounded turns on invalid calls | Carry orientation-derived authoritative document IDs and return actionable protocol warnings with bounded allowlists |
 | Recovery must never leave evaluator target periods | Evidence can directly establish that an adjacent lookup is necessary to repair the approved deficiency | Permit one expanded-evidence-derived, rationale-bearing, topic-preserving follow-up search; keep fail-closed expansion and one-cycle stopping |
 | Generic exceptions were enough for invalid identifiers | An invented document ID looked like a failed investigative path and silently consumed recovery budget | Distinguish structured `tool_protocol_failure` warnings from valid empty searches; warn that protocol failure is not evidence absence and show authoritative IDs where bounded |
+| The final governed run object was an adequate Stage-1 handoff | Stage 2 would have to understand harness internals, while independently composed prose could drift from adjudication | Added deterministic `ResearchReportWriter`; all five proving cases now package a primary `ResearchReport` alongside the forensic run and trace |
 | `gpt-5-mini` was an available modest default | The selected project returned `model_not_found` because its organization is not verified for GPT-5 | Replaced the default with project-accessible `gpt-4.1-mini`; reasoning parameters are now capability-specific |
 | Existing normalized bytes retained speaker context | All 21 artifacts had paragraph text but no speaker labels, despite acquisition diagnostics proving the provider parser once observed turns | Report the gap, prohibit invented attribution, and recommend a bounded turn/speaker fidelity follow-on |
 
@@ -121,23 +130,25 @@ partial because the repository cannot distinguish the 2024-09-04 conference-titl
 an earnings call using absent historical event-kind metadata; the evaluator does not silently
 discard the authoritative corpus boundary.
 
-The review package retains every complete trace plus a condensed evaluator output that
-checks corpus snapshot, first-call orientation, search/expansion path, exact-byte hashes, citation
+The review package retains every primary `ResearchReport`, complete trace, and condensed evaluator output that
+checks report determinism and exact status/lead/claim/evidence preservation, corpus snapshot,
+first-call orientation, search/expansion path, exact-byte hashes, citation
 admission, per-claim periods, both closures/evaluations, recovery count/scope, status, gaps, failed
 searches, model usage, and stopping reason. Trace review evaluates whether searches were coherent
 and claims were supported, not merely whether prose sounded plausible.
 
 ## Validation
 
-- `tests.test_task071`: 13 focused contract/harness/provider-boundary tests pass, including
+- `tests.test_task071`: 17 focused contract/harness/provider/report-boundary tests pass, including
   closed-record adjudication, one-cycle recovery, supported-case bypass, and actionable invalid-ID
-  feedback.
-- `make task071-test`: 36 TASK-071, TASK-070, artifact-query/observation, and source-profile
+  feedback, deterministic output, exact governed-result preservation, and zero report-writer
+  retrieval/model calls.
+- `make task071-test`: 40 TASK-071, TASK-070, artifact-query/observation, and source-profile
   compatibility tests pass (with ephemeral localhost permission for existing browser tests).
 - retained-corpus evidence validation: 5/5 cases pass against 21 documents, 2,268 segments, exact
   retained byte hashes, admissible evidence, claimed periods, and recovery-loop limits.
 - lint, formatting, type checking, documentation links, design baseline, and diff checks pass.
-- full `make validate` passes 703 tests plus all offline proofs, quality checks, documentation,
+- full `make validate` passes 707 tests plus all offline proofs, quality checks, documentation,
   baseline, import, and source-archive build. Earlier runs found only stale explicit package
   inventories; those guardrails now admit the complete `rfi.research` package while confining
   OpenAI transport to `rfi.research.openai`.
@@ -161,22 +172,27 @@ and claims were supported, not merely whether prose sounded plausible.
   added.
 - The single evidence-derived scope-following search is structurally bounded but semantic
   necessity is model-stated rather than mechanically proven.
+- Deterministic report emission exposed a governed-output inconsistency in the demand case: the
+  second adjudication is `supported`, while two model-supplied first-pass gaps remain in the
+  merged record even though recovery repaired temporal coverage. The writer correctly preserves
+  both rather than silently resolving them; gap disposition across recovery needs its own governed
+  lifecycle.
 - The stable application and consulting workspace do not compose this slice.
 
 ## Recommended next bounded task
 
-The next task should establish **transcript structural fidelity and a durable evaluation corpus**:
+The next task should perform an **independent analytical-quality audit of `ResearchReport`**:
 
-1. retain speaker/role/section turn locators and exact byte relationships at acquisition ingress
-   without changing artifact content identity;
-2. backfill only metadata reproducible from retained bytes or explicitly reacquired observations,
-   never from model inference;
-3. define a checked diverse question/evidence/insufficiency benchmark for transcript IQA and
-   investigator changes; and
-4. evaluate lexical, hybrid, and richer transcript-structure access behind the TASK-071 boundary.
+1. judge claim entailment, materiality, comparison quality, and the usefulness of qualifications
+   from the five primary reports while using internals only for forensic verification;
+2. fail reports whose status, lead, gaps, or qualifications are mutually inconsistent, including
+   explicit disposition of first-pass gaps after recovery;
+3. turn the accepted cases and failures into a durable, checked analytical evaluation corpus; and
+4. recommend only then whether the next implementation milestone is transcript structural
+   fidelity, retrieval improvement, adjudicator refinement, or product composition.
 
-Product UI/workspace composition should follow that task, because current metadata and evaluation
-limits would otherwise become product behavior before they are well understood.
+Product UI/workspace composition should follow that audit, because current metadata and
+evaluation limits would otherwise become product behavior before they are well understood.
 
 ## Architectural Status Summary
 
@@ -194,10 +210,10 @@ limits would otherwise become product behavior before they are well understood.
 - **Transcript knowledge access/IQA — Implemented POC; provisional quality.** Disposable lexical
   and temporal discovery plus exact expansion are useful on the retained corpus; recall, scale,
   and structure are not final.
-- **Investigative harness — Implemented POC; usable with limitations.** Replaceable model control,
+- **Investigative harness and Stage-1 output — Implemented POC; usable with limitations.** Replaceable model control,
   hard initial budgets, closed-record adjudication, categorical calibration, one bounded recovery,
-  protocol feedback, trace, evidence admission, and insufficiency are established; semantic
-  grounding still requires evaluation.
+  protocol feedback, trace, evidence admission, insufficiency, and a deterministic governed
+  `ResearchReport` are established; semantic grounding still requires evaluation.
 - **Live model adapter — Implemented POC.** The project-accessible modest model passes the checked
   synthetic and five-case retained-corpus slices under explicit disclosure authorization.
 - **Consulting product composition — Missing/deferred.** No stable CLI/UI, workspace publication,

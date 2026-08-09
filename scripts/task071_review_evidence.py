@@ -14,7 +14,8 @@ from typing import Any
 from rfi.acquisition import AcquisitionRepository
 from rfi.artifacts import ArtifactQueryService
 from rfi.firms import FirmRepository
-from rfi.research import TranscriptKnowledgeAccess, TranscriptScope
+from rfi.research import ResearchReportWriter, TranscriptKnowledgeAccess, TranscriptScope
+from task071_emit_reports import scope_from_run
 from rfi.source_profiles import load_canonical_template
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,12 +42,14 @@ def imports(path: Path) -> tuple[str, ...]:
 
 def trace_summary(
     path: Path,
+    report_path: Path,
     expected_statuses: tuple[str, ...],
     repository_snapshot: str,
     artifacts: ArtifactQueryService,
 ) -> dict[str, Any]:
     """Validate one complete trace against public retained artifact bytes."""
     value = json.loads(path.read_text(encoding="utf-8"))
+    report = json.loads(report_path.read_text(encoding="utf-8"))
     if value["repository_snapshot"] != repository_snapshot:
         raise ValueError(f"trace uses a different repository snapshot: {path.name}")
     if not str(value["runtime_identity"]).startswith("openai:"):
@@ -132,6 +135,32 @@ def trace_summary(
         raise ValueError("demand proving case did not exercise one bounded recovery")
     if path.stem in {"technology", "chronology", "insufficient"} and rework:
         raise ValueError(f"unnecessary recovery triggered for {path.name}")
+    if report["status"] != result["status"]:
+        raise ValueError(f"ResearchReport changed final status: {path.name}")
+    if report["lead_paragraph"] != assessment["lead_paragraph"]:
+        raise ValueError(f"ResearchReport changed adjudicated lead: {path.name}")
+    if report["accepted_claims"] != result["claims"]:
+        raise ValueError(f"ResearchReport broadened accepted claims: {path.name}")
+    if report["evidence"] != result["evidence"]:
+        raise ValueError(f"ResearchReport changed governed evidence: {path.name}")
+    expected_mappings = [
+        {
+            "claim_index": index,
+            "evidence_ids": claim["evidence_ids"],
+            "periods": claim["periods"],
+        }
+        for index, claim in enumerate(result["claims"])
+    ]
+    if report["claim_to_evidence_mappings"] != expected_mappings:
+        raise ValueError(f"ResearchReport changed claim mappings: {path.name}")
+    if bool(rework) != report["recovery"]["occurred"]:
+        raise ValueError(f"ResearchReport changed recovery history: {path.name}")
+    regenerated = ResearchReportWriter().write_serialized(
+        value, scope_from_run(value), report["trace_reference"]
+    )
+    regenerated_json = json.loads(json.dumps(asdict(regenerated), default=str))
+    if regenerated_json != report:
+        raise ValueError(f"ResearchReport is not deterministic: {path.name}")
     return {
         "case": path.stem,
         "question": result["question"],
@@ -156,6 +185,7 @@ def trace_summary(
         "model_usage": value["model_usage"],
         "stopping_reason": result["stopping_reason"],
         "validation": "PASS",
+        "research_report_id": report["report_id"],
     }
 
 
@@ -164,6 +194,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--state", type=Path, required=True)
     parser.add_argument("--traces", type=Path, required=True)
+    parser.add_argument("--reports", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
     arguments.output.mkdir(parents=True, exist_ok=True)
@@ -201,6 +232,7 @@ def main() -> int:
         summaries = [
             trace_summary(
                 arguments.traces / f"{case}.json",
+                arguments.reports / f"{case}.json",
                 status,
                 access.repository_snapshot,
                 artifacts,
@@ -211,12 +243,19 @@ def main() -> int:
         access.close()
     harness_imports = imports(ROOT / "src/rfi/research/harness.py")
     access_imports = imports(ROOT / "src/rfi/research/access.py")
+    reporting_imports = imports(ROOT / "src/rfi/research/reporting.py")
     forbidden = {
         "rfi.acquisition", "rfi.storage", "rfi.mailing_lists.repository",
         "rfi.artifacts.repository",
     }
     if forbidden.intersection((*harness_imports, *access_imports)):
         raise ValueError("investigator or IQA imports a forbidden repository implementation")
+    report_forbidden = {
+        "rfi.research.access", "rfi.research.adjudication",
+        "rfi.research.harness", "rfi.research.openai",
+    }
+    if report_forbidden.intersection(reporting_imports):
+        raise ValueError("ResearchReportWriter imports an IQA, model, or reasoning layer")
     evaluation = {
         "result": "PASS",
         "corpus": {
@@ -231,7 +270,9 @@ def main() -> int:
             "result": "PASS",
             "harness_imports": harness_imports,
             "access_imports": access_imports,
+            "reporting_imports": reporting_imports,
             "forbidden_repository_implementation_imports": [],
+            "forbidden_report_writer_dependencies": [],
         },
         "trace_cases": summaries,
     }

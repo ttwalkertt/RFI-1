@@ -42,7 +42,12 @@ leak persistence layout and weaken the existing artifact authority.
    Supported and genuinely insufficient records bypass recovery.
 9. Return actionable structured warnings for deterministic invalid identifiers so tool/protocol
    failure cannot be misread as evidence absence or silently consume the bounded investigation.
-10. Treat all investigation conclusions and traces as non-authoritative analysis. TASK-071 does not
+10. Pass the final adjudicated outcome through a thin, non-retrieving `ResearchReportWriter` into
+    a versioned `ResearchReport`. The writer may normalize and preserve the outcome but cannot
+    investigate, adjudicate, repair, reinterpret, or broaden it. The structured report is the
+    authoritative Stage-1 analytical output; deterministic human rendering may only derive from
+    that same representation.
+11. Treat all investigation conclusions and traces as non-authoritative analysis. TASK-071 does not
    persist them into artifact, source-object, knowledge, stream, or workspace authority.
 
 ## Consequences
@@ -62,5 +67,8 @@ leak persistence layout and weaken the existing artifact authority.
 - Recovery can repair a known incomplete evidence path without an open-ended convergence loop.
   Allowing one evidence-derived follow-up introduces a bounded but real scope-control risk that
   traces and future evaluations must test.
+- Stage 2 and independent audit receive a stable report contract without depending on harness
+  internals. The complete trace, closure, adjudication, and recovery records remain available for
+  forensic review and cannot be silently replaced by separately composed prose.
 - A future product task must decide lifecycle, disclosure policy, operator review, evaluation,
   correction, and workspace retention before composing this POC into the stable application.

@@ -15,6 +15,7 @@ from rfi.firms import FirmRepository
 from rfi.research import (
     ModelBudget,
     OpenAIResponsesInvestigator,
+    ResearchReportWriter,
     TranscriptInvestigator,
     TranscriptKnowledgeAccess,
     TranscriptScope,
@@ -71,6 +72,8 @@ def main() -> int:
     parser.add_argument("--max-output-tokens", type=int, default=1_800)
     parser.add_argument("--max-tool-output-chars", type=int, default=75_000)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--report-output", type=Path)
+    parser.add_argument("--trace-reference")
     arguments = parser.parse_args()
     iqa = access(arguments)
     try:
@@ -87,7 +90,19 @@ def main() -> int:
         )
         model = OpenAIResponsesInvestigator(arguments.model)
         run = TranscriptInvestigator(iqa, model, budget).investigate(arguments.question)
+        trace_reference = arguments.trace_reference or f"run:{run.run_id}"
+        report = ResearchReportWriter().write(run, iqa.scope, trace_reference)
+        if arguments.output is None:
+            render(
+                {"research_report": asdict(report), "investigation_run": asdict(run)},
+                None,
+            )
+            return 0
         render(asdict(run), arguments.output)
+        report_output = arguments.report_output or arguments.output.with_suffix(
+            ".report.json"
+        )
+        render(asdict(report), report_output)
         return 0
     finally:
         iqa.close()

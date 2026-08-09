@@ -29,6 +29,10 @@ ClosedRecordAdjudicator
                          |
                optional one-cycle rework
         evaluator-scoped recovery -> second closure -> final adjudication
+                         |
+                         v
+ResearchReportWriter -> ResearchReport
+        non-reasoning Stage-1 output boundary
 ```
 
 `TranscriptKnowledgeAccess` imports the public artifact-query boundary, not acquisition tables or
@@ -44,6 +48,16 @@ model. Its answers and traces are non-authoritative and
 are written only when the operator supplies `--output`. It cannot use the web, unrelated artifact
 families, physical storage, or model memory as evidence. TASK-070 canonical transcript
 classification remains repository authority.
+
+Every live proving run passes its final adjudicated result through `ResearchReportWriter` before
+packaging. The writer has no model or IQA dependency and performs no retrieval, adjudication,
+repair, synthesis, or conclusion broadening. It copies the final status and lead exactly and
+normalizes accepted claims, mappings, exact evidence and provenance, gaps, qualifications, corpus
+limitations, recovery history, authority identities, and a trace reference into the versioned
+`ResearchReport` contract. A content-derived report ID makes repeated emission from the same
+governed input deterministic. This structured report is the authoritative Stage-1 output for
+Stage 2 and independent analytical-quality audit; the trace and intermediate records remain
+forensic material rather than competing reports.
 
 ## Model-facing data dictionary and capabilities
 
@@ -108,7 +122,9 @@ PYTHONPATH=src .venv/bin/python scripts/task071_investigate.py ask \
   --max-tool-calls 10 \
   --max-model-turns 8 \
   --max-output-tokens 1200 \
-  --output TRACE.json
+  --output TRACE.json \
+  --report-output REPORT.json \
+  --trace-reference evaluation/traces/CASE.json
 ```
 
 The state root must already contain the operating product's `acquisition` and `firm-catalog`
@@ -174,6 +190,11 @@ The retained Seagate corpus changed the initial design in several material ways:
     invented document IDs and consumed its budget. Work orders now carry orientation-derived IDs,
     and invalid identifiers receive structured warnings that distinguish protocol failure from a
     valid no-match result.
+11. **Final adjudication still needed an explicit output boundary.** A governed result embedded in
+    the investigative run was inspectable but left Stage 2 coupled to harness internals and made a
+    separately composed human answer possible. `ResearchReportWriter` now performs only
+    deterministic normalization after final adjudication, and all five proving packages carry the
+    primary `ResearchReport` alongside their forensic records.
 
 ## Limits
 
@@ -192,6 +213,11 @@ The retained Seagate corpus changed the initial design in several material ways:
 - Initial limits remain hard. Recovery is a separately evaluated and budgeted cycle, not a hidden
   grace turn. Evidence-derived scope-following is limited to one justified search and remains a
   new semantic-control risk requiring further evaluation.
+- `ResearchReport` stabilizes the Stage-1 handoff but is not an analytical-quality guarantee;
+  independent audit must still test semantic entailment, materiality, and usefulness.
+- The demand report exposes a recovery-lifecycle gap: its supported second adjudication retains
+  first-pass model gaps, because the current merge has no governed resolved/unresolved gap
+  disposition. The writer preserves this conflict for audit rather than repairing it.
 
 ## Architectural Status Summary
 
@@ -206,10 +232,11 @@ The retained Seagate corpus changed the initial design in several material ways:
 - **Transcript knowledge access/IQA — Implemented POC; provisional quality.** Public artifact
   reads, rebuildable lexical discovery, temporal ordering, exact expansion, and transparent gaps
   are established over the retained corpus. Recall and scale quality are not final.
-- **Investigative harness — Implemented POC; usable with limitations.** Bounded generation,
+- **Investigative harness and Stage-1 report boundary — Implemented POC; usable with limitations.**
+  Bounded generation,
   closed-record adjudication, categorical calibration, actionable protocol feedback, one scoped
-  recovery cycle, evidence validation, insufficiency, and complete traces are established without
-  making model behavior repository semantics.
+  recovery cycle, evidence validation, insufficiency, complete traces, and deterministic governed
+  `ResearchReport` output are established without making model behavior repository semantics.
 - **Live model adapter — Implemented POC.** OpenAI Responses is replaceable and credential-safe;
   its demonstrated proficiency is bounded to the retained-corpus TASK-071 evaluation.
 - **Consulting product composition — Missing/deferred.** The stable application does not expose or

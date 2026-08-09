@@ -157,6 +157,7 @@ def main() -> int:
         "research/contracts.py",
         "research/harness.py",
         "research/openai.py",
+        "research/reporting.py",
         "resources/firm-config-v1.schema.json",
         "resources/reference-identities-v1.json",
         "resources/source-profile-template.yaml",

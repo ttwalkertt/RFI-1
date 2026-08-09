@@ -6,6 +6,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+from dataclasses import asdict, replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,7 @@ from rfi.research import (
     ModelToolCall,
     ModelTurn,
     OpenAIResponsesInvestigator,
+    ResearchReportWriter,
     ResearchError,
     TranscriptInvestigator,
     TranscriptKnowledgeAccess,
@@ -521,6 +523,99 @@ class TranscriptInvestigationTests(unittest.TestCase):
         self.assertEqual(
             recovery_calls[0].detail["arguments"]["date_from"], "2024-10-22"
         )
+
+    def test_report_writer_preserves_final_governed_outcome_and_is_deterministic(
+        self,
+    ) -> None:
+        run = TranscriptInvestigator(self.access, RecoveryAwareModel()).investigate(
+            "How did demand change across the retained calls?"
+        )
+        writer = ResearchReportWriter()
+        report = writer.write(run, self.access.scope, "trace:test-recovery")
+        repeated = writer.write(run, self.access.scope, "trace:test-recovery")
+        self.assertEqual(report, repeated)
+        self.assertEqual(report.status, run.result.status)
+        self.assertEqual(
+            report.lead_paragraph, run.result.assessment.lead_paragraph
+        )
+        self.assertEqual(report.accepted_claims, run.result.claims)
+        self.assertEqual(report.evidence, run.result.evidence)
+        self.assertEqual(
+            tuple(item.evidence_ids for item in report.claim_to_evidence_mappings),
+            tuple(item.evidence_ids for item in run.result.claims),
+        )
+        self.assertEqual(
+            tuple(item.periods for item in report.claim_to_evidence_mappings),
+            tuple(item.periods for item in run.result.claims),
+        )
+        self.assertEqual(
+            [item.provenance_locations for item in report.evidence],
+            [item.provenance_locations for item in run.result.evidence],
+        )
+        self.assertTrue(report.recovery.occurred)
+        self.assertTrue(report.recovery.deficiencies)
+        self.assertTrue(report.recovery.second_evaluation_performed)
+        self.assertEqual(report.authority.model_usage, run.model_usage)
+
+    def test_report_writer_preserves_insufficiency_without_promoting_conclusions(
+        self,
+    ) -> None:
+        run = TranscriptInvestigator(
+            self.access, ScriptedModel(cite_unknown=True)
+        ).investigate("How did cloud demand change?")
+        report = ResearchReportWriter().write(
+            run, self.access.scope, "trace:test-insufficient"
+        )
+        self.assertEqual(report.status, InvestigationStatus.INSUFFICIENT)
+        self.assertEqual(report.accepted_claims, ())
+        self.assertEqual(report.claim_to_evidence_mappings, ())
+        self.assertEqual(report.gaps, run.result.gaps)
+        self.assertFalse(report.recovery.occurred)
+        self.assertEqual(report.completeness_calibration, "insufficient")
+
+    def test_report_writer_preserves_partial_qualifications(self) -> None:
+        supported = TranscriptInvestigator(
+            self.access, ScriptedModel()
+        ).investigate("How did demand change across the retained calls?")
+        assessment = replace(
+            supported.result.assessment,
+            completeness_calibration="partial",
+            lead_paragraph="The governed record supports only a partial answer.",
+        )
+        result = replace(
+            supported.result,
+            status=InvestigationStatus.PARTIAL,
+            gaps=("The earliest retained boundary remains uncovered.",),
+            assessment=assessment,
+        )
+        run = replace(supported, result=result)
+        report = ResearchReportWriter().write(
+            run, self.access.scope, "trace:test-partial"
+        )
+        self.assertEqual(report.status, InvestigationStatus.PARTIAL)
+        self.assertEqual(
+            report.qualifications,
+            tuple(dict.fromkeys(
+                claim.limitations for claim in run.result.claims
+                if claim.limitations
+            )),
+        )
+        self.assertEqual(report.gaps, run.result.gaps)
+
+    def test_report_writer_performs_no_retrieval_or_model_call(self) -> None:
+        model = ScriptedModel()
+        run = TranscriptInvestigator(self.access, model).investigate(
+            "How did cloud demand change?"
+        )
+        with mock.patch.object(
+            self.access, "dispatch", side_effect=AssertionError("retrieval")
+        ), mock.patch.object(
+            model, "start", side_effect=AssertionError("model")
+        ):
+            report = ResearchReportWriter().write(
+                run, self.access.scope, "trace:no-external-call"
+            )
+        self.assertEqual(asdict(report)["status"], run.result.status)
 
     def test_harness_enforces_tool_budget(self) -> None:
         with self.assertRaisesRegex(ResearchError, "tool-call budget"):

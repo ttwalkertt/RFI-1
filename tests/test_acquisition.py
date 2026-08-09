@@ -403,6 +403,7 @@ class ScopeBoundaryTests(unittest.TestCase):
                 "research/contracts.py",
                 "research/harness.py",
                 "research/openai.py",
+                "research/reporting.py",
                 "retrieval/__init__.py",
                 "retrieval/contracts.py",
                 "retrieval/evidence.py",
