@@ -28,7 +28,7 @@ milestones.
 
 | Task | Architectural milestone | Current status |
 |---|---|---|
-| [TASK-071](tasks/TASK-071-retained-truth-access-and-transcript-investigation-vertical-slice.md) | Retained-truth access baseline and transcript investigation vertical slice | Complete; experimental POC |
+| [TASK-072](tasks/TASK-072-design-agent-legible-rfi-mcp-surface.md) | Design agent-legible RFI MCP retained-truth surface | Complete; design only, implementation not started |
 
 ## Historical and authorized milestones
 
@@ -104,6 +104,7 @@ milestones.
 | [TASK-068](tasks/TASK-068_Reconcile_Repository_Design_Guidance_and_Current_Architectural_State.md) | Reconcile repository design guidance and current architectural state | Complete |
 | [TASK-069](tasks/TASK-069-expose-first-in-date-range-cli.md) | Expose earnings transcript `first_in_date_range` selection in `rfi pull` | Complete |
 | [TASK-070](tasks/TASK-070-classify-management-transcripts.md) | Classify management transcripts without polluting earnings calls | Complete |
+| [TASK-071](tasks/TASK-071-retained-truth-access-and-transcript-investigation-vertical-slice.md) | Retained-truth access baseline and transcript investigation vertical slice | Complete; experimental POC |
 
 ## Governing progression
 
