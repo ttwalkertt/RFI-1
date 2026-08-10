@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 12294,
+      "destination_size": 12527,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "78cc7814d8ac67a47bb7416b61b4bf1974e2572d6d2c4be6f431c2873e2afcb7",
-      "content_change": "complete extant task index reconciled by TASK-068 and advanced through TASK-072"
+      "destination_sha256": "42a6c5483c23e92a597a170222640b7467964e76987c501c290f6f115e2f3cb7",
+      "content_change": "complete extant task index reconciled by TASK-068 and advanced through TASK-073"
     },
     {
       "source": "ROADMAP.md",

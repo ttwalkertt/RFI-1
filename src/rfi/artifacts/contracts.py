@@ -163,6 +163,8 @@ class ArtifactPage:
     repository_snapshot: str
     total_items: int
     diagnostics: tuple[ArtifactReadDiagnostic, ...] = ()
+    diagnostics_total: int = 0
+    diagnostics_truncated: bool = False
 
 
 @dataclass(frozen=True)
@@ -170,6 +172,29 @@ class ArtifactContent:
     """Exact immutable bytes served separately from query and detail models."""
 
     document_id: str
+    artifact_id: str
+    content: bytes
+    media_type: str
+    checksum_sha256: str
+
+
+@dataclass(frozen=True)
+class ImmutableArtifact:
+    """Normalized metadata and repository links for immutable retained content."""
+
+    artifact_id: str
+    checksum_sha256: str
+    media_type: str
+    content_size: int
+    stored_content_available: bool
+    document_ids: tuple[str, ...]
+    observation_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ImmutableArtifactContent:
+    """Exact bytes resolved directly through immutable artifact identity."""
+
     artifact_id: str
     content: bytes
     media_type: str

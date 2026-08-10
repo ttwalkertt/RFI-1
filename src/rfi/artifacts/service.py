@@ -22,6 +22,8 @@ from rfi.artifacts.contracts import (
     ArtifactQueryError,
     ArtifactReadDiagnostic,
     ArtifactSummary,
+    ImmutableArtifact,
+    ImmutableArtifactContent,
     ObservationSelection,
     ProvenanceLocation,
     SourceEffectiveOrder,
@@ -59,7 +61,15 @@ class ArtifactQueryService:
         next_cursor = None
         if next_offset < len(filtered):
             next_cursor = self._encode_cursor(snapshot, self._fingerprint(query), next_offset)
-        return ArtifactPage(page, next_cursor, snapshot, len(filtered), diagnostics)
+        return ArtifactPage(
+            page,
+            next_cursor,
+            snapshot,
+            len(filtered),
+            diagnostics[:100],
+            len(diagnostics),
+            len(diagnostics) > 100,
+        )
 
     def latest(self, firm_id: str, canonical_artifact_id: str) -> ArtifactSummary | None:
         """Project newest durable state through the ordinary query contract."""
@@ -155,7 +165,7 @@ class ArtifactQueryService:
     def diagnostics(self) -> tuple[ArtifactReadDiagnostic, ...]:
         """Expose bounded malformed-state diagnostics without blocking valid reads."""
         _snapshot, _summaries, diagnostics = self._snapshot_summaries()
-        return diagnostics
+        return diagnostics[:100]
 
     def detail(
         self,
@@ -348,6 +358,71 @@ class ArtifactQueryService:
             detail.summary.checksum_sha256,
         )
 
+    def repository_snapshot(self) -> str:
+        """Return the normalized authoritative snapshot used by public reads."""
+        return self._snapshot_summaries()[0]
+
+    def firm_exists(self, firm_id: str) -> bool:
+        """Return whether a governed firm identity exists, independent of artifact matches."""
+        return self._firm_exists(firm_id)
+
+    def artifact(self, artifact_id: str) -> ImmutableArtifact:
+        """Resolve immutable artifact metadata without a mutable document projection."""
+        _snapshot, _summaries, _records, observations, _sources, metadata, _diagnostics = (
+            self._state()
+        )
+        record = metadata.get(artifact_id)
+        if record is None:
+            raise ArtifactQueryError("unknown_artifact_id", f"unknown artifact ID: {artifact_id}")
+        matching = [item for item in observations if item.get("artifact_id") == artifact_id]
+        return ImmutableArtifact(
+            artifact_id=artifact_id,
+            checksum_sha256=str(record.get("sha256", "")),
+            media_type=str(record.get("media_type", "application/octet-stream")),
+            content_size=int(record.get("size", 0)),
+            stored_content_available=True,
+            document_ids=tuple(sorted({str(item.get("document_id", "")) for item in matching})),
+            observation_ids=tuple(
+                str(item.get("observation_id", ""))
+                for item in sorted(matching, key=self._observation_key)
+            ),
+        )
+
+    def artifact_content(self, artifact_id: str) -> ImmutableArtifactContent:
+        """Return checksum-verified bytes addressed only by immutable artifact identity."""
+        artifact = self.artifact(artifact_id)
+        try:
+            content = self._repository.read_artifact(artifact_id)
+        except IntegrityError as error:
+            code = "integrity_failure" if "mismatch" in str(error) else "exact_evidence_unavailable"
+            raise ArtifactQueryError(
+                code, "stored artifact content is unavailable or corrupt"
+            ) from error
+        return ImmutableArtifactContent(
+            artifact_id=artifact_id,
+            content=content,
+            media_type=artifact.media_type,
+            checksum_sha256=artifact.checksum_sha256,
+        )
+
+    def observation(self, observation_id: str) -> ArtifactObservation:
+        """Resolve one immutable acquisition observation by repository identity."""
+        try:
+            observations = self._repository.observations()
+        except IntegrityError as error:
+            raise ArtifactQueryError(
+                "repository_read_failure", "repository observations cannot be read"
+            ) from error
+        record = next(
+            (item for item in observations if item.get("observation_id") == observation_id),
+            None,
+        )
+        if record is None:
+            raise ArtifactQueryError(
+                "unknown_observation_id", f"unknown observation ID: {observation_id}"
+            )
+        return self._observation(record)
+
     def _snapshot_summaries(
         self,
     ) -> tuple[str, tuple[ArtifactSummary, ...], tuple[ArtifactReadDiagnostic, ...]]:
@@ -415,7 +490,7 @@ class ArtifactQueryService:
         diagnostics.sort(key=lambda item: (item.source_id, item.document_id, item.artifact_id))
         return (
             snapshot, tuple(summaries), records, observations, sources, metadata,
-            tuple(diagnostics[:100]),
+            tuple(diagnostics),
         )
 
     @staticmethod

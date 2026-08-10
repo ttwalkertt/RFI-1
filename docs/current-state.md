@@ -175,6 +175,13 @@ and scale evidence. These are roadmap or backlog concerns until a task ticket au
   evaluation corpus includes titles that look like conference events while remaining canonically
   classified as `earnings_transcript`. Access reports that conflict but does not reinterpret
   retained authority.
+- TASK-073 implements a transcript-only local read-only MCP experiment surface with immutable
+  artifact-ID exact reads, explicit access-generation health/staleness/bounds, typed outcomes, and a
+  standalone data dictionary. The five-case Codex Work experiment used the unchanged TASK-071
+  Seagate corpus. It did not justify replacing TASK-071 investigative behavior: Codex selected false
+  first/latest chronology boundaries and produced weaker evidence mappings even though MCP exposed
+  the correct candidates. The surface is an evaluated POC, not stable product composition or a
+  general MCP catalog.
 - Transcript event classification is deterministic and intentionally fails closed for the narrow
   earnings corpus. Unrecognized substantial events remain available as broad management
   transcripts; the current event-kind vocabulary is useful but not an exhaustive ontology.

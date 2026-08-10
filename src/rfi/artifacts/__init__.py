@@ -11,6 +11,8 @@ from rfi.artifacts.contracts import (
     ArtifactQueryError,
     ArtifactReadDiagnostic,
     ArtifactSummary,
+    ImmutableArtifact,
+    ImmutableArtifactContent,
     ObservationSelection,
     ProvenanceLocation,
     SourceEffectiveOrder,
@@ -21,5 +23,6 @@ __all__ = [
     "ArtifactAssociation", "ArtifactContent", "ArtifactDetail", "ArtifactObservation",
     "ArtifactOrder", "ArtifactPage", "ArtifactQuery", "ArtifactQueryError",
     "ArtifactQueryService", "ArtifactReadDiagnostic", "ArtifactSummary",
+    "ImmutableArtifact", "ImmutableArtifactContent",
     "ObservationSelection", "ProvenanceLocation", "SourceEffectiveOrder",
 ]

@@ -28,7 +28,7 @@ milestones.
 
 | Task | Architectural milestone | Current status |
 |---|---|---|
-| [TASK-072](tasks/TASK-072-design-agent-legible-rfi-mcp-surface.md) | Design agent-legible RFI MCP retained-truth surface | Complete; design only, implementation not started |
+| [TASK-073](tasks/TASK-073-implement-evaluate-minimal-read-only-rfi-mcp-transcript-surface.md) | Implement and evaluate minimal read-only RFI MCP transcript surface | Implemented and evaluated; general runtime not proficient; external comparator unavailable |
 
 ## Historical and authorized milestones
 
@@ -105,6 +105,7 @@ milestones.
 | [TASK-069](tasks/TASK-069-expose-first-in-date-range-cli.md) | Expose earnings transcript `first_in_date_range` selection in `rfi pull` | Complete |
 | [TASK-070](tasks/TASK-070-classify-management-transcripts.md) | Classify management transcripts without polluting earnings calls | Complete |
 | [TASK-071](tasks/TASK-071-retained-truth-access-and-transcript-investigation-vertical-slice.md) | Retained-truth access baseline and transcript investigation vertical slice | Complete; experimental POC |
+| [TASK-072](tasks/TASK-072-design-agent-legible-rfi-mcp-surface.md) | Design agent-legible RFI MCP retained-truth surface | Complete; design only |
 
 ## Governing progression
 
