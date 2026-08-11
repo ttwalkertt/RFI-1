@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/rfi-qa-candidate-case.schema.json",
+  "title": "RFI QA candidate case",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "pair_id",
+    "title",
+    "fixture_id",
+    "difficulty",
+    "adjudicability",
+    "investigation_question",
+    "answer_requirements",
+    "submitted_answer",
+    "reference_qa"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "case_id": {"type": "string", "pattern": "^RFIQA-[0-9]{3}$"},
+    "pair_id": {
+      "anyOf": [
+        {"type": "string", "pattern": "^PAIR-[0-9]{3}$"},
+        {"type": "null"}
+      ]
+    },
+    "title": {"type": "string", "minLength": 1},
+    "fixture_id": {"type": "string", "pattern": "^FX-(?:[0-9]{3}|B[0-9]{2})$"},
+    "difficulty": {
+      "enum": ["atomic", "cross_evidence", "evidence_limits", "judgment_dependent"]
+    },
+    "adjudicability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "human_review_required", "note"],
+      "properties": {
+        "status": {"enum": ["objective", "borderline"]},
+        "human_review_required": {"type": "boolean"},
+        "note": {"type": "string", "minLength": 1}
+      }
+    },
+    "investigation_question": {"type": "string", "minLength": 1},
+    "answer_requirements": {"type": "string", "minLength": 1},
+    "submitted_answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "evidence_locators"],
+      "properties": {
+        "text": {"type": "string", "minLength": 1},
+        "evidence_locators": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^fixture://"},
+          "uniqueItems": true
+        }
+      }
+    },
+    "reference_qa": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disposition",
+        "material_findings",
+        "defect_classes",
+        "rationale",
+        "adjudication_evidence"
+      ],
+      "properties": {
+        "disposition": {"enum": ["supported", "defective", "indeterminate"]},
+        "material_findings": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/finding"}
+        },
+        "defect_classes": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/defect_class"},
+          "uniqueItems": true
+        },
+        "rationale": {"type": "string", "minLength": 1},
+        "adjudication_evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/adjudication_item"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "defect_class": {
+      "enum": [
+        "absence_overstatement",
+        "aggregation_error",
+        "ambiguous_reference_overresolved",
+        "attribution_unsupported",
+        "boundary_inclusion_error",
+        "causal_overstatement",
+        "chronology_basis_mismatch",
+        "chronology_boundary_incorrect",
+        "claim_strength_overstatement",
+        "conflicting_evidence_omitted",
+        "corpus_completeness_overstatement",
+        "date_imputation",
+        "denominator_error",
+        "duplicate_counting",
+        "entity_conflation",
+        "evidence_mapping_incorrect",
+        "evidence_mapping_missing",
+        "false_absence",
+        "insufficiency_miscalibrated",
+        "internal_inconsistency",
+        "numeric_mismatch",
+        "provenance_authority_error",
+        "qualification_omitted",
+        "quote_context_distortion",
+        "record_eligibility_error",
+        "status_mischaracterized",
+        "temporal_scope_mismatch",
+        "timezone_conversion_error",
+        "undefined_evaluation_criterion",
+        "unit_mismatch",
+        "unsupported_claim",
+        "version_supersession_ignored"
+      ]
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finding_id",
+        "defect_class",
+        "affected_claim",
+        "finding",
+        "evidence_locators"
+      ],
+      "properties": {
+        "finding_id": {"type": "string", "pattern": "^RFIQA-[0-9]{3}-F[1-9][0-9]*$"},
+        "defect_class": {"$ref": "#/$defs/defect_class"},
+        "affected_claim": {"type": "string", "minLength": 1},
+        "finding": {"type": "string", "minLength": 1},
+        "evidence_locators": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "pattern": "^fixture://"},
+          "uniqueItems": true
+        }
+      }
+    },
+    "adjudication_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locator", "role", "fact"],
+      "properties": {
+        "locator": {"type": "string", "pattern": "^fixture://"},
+        "role": {"type": "string", "minLength": 1},
+        "fact": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

@@ -1,0 +1,329 @@
+{
+  "schema_version": "1.0",
+  "fixtures": [
+    {
+      "fixture_id": "FX-001",
+      "title": "Quarterly pump shipments",
+      "authority": {"mode": "complete", "scope": "These three signed quarterly shipment records are the complete shipment evidence for product PX-4 for Q1-Q3 2025.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-001/E1#shipments", "content": "PX-4 signed shipment ledger — Q1 2025 — units shipped: 184."},
+        {"evidence_id": "E2", "locator": "fixture://FX-001/E2#shipments", "content": "PX-4 signed shipment ledger — Q2 2025 — units shipped: 217."},
+        {"evidence_id": "E3", "locator": "fixture://FX-001/E3#shipments", "content": "PX-4 signed shipment ledger — Q3 2025 — units shipped: 203."}
+      ]
+    },
+    {
+      "fixture_id": "FX-002",
+      "title": "Completed outage chronology",
+      "authority": {"mode": "complete", "scope": "These are all completed outage records for Site North during March 2025; the event_date field is authoritative.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-002/E1#event_date", "content": "Outage ON-17; event_date: 2025-03-04; restored."},
+        {"evidence_id": "E2", "locator": "fixture://FX-002/E2#event_date", "content": "Outage ON-18; event_date: 2025-03-19; restored."},
+        {"evidence_id": "E3", "locator": "fixture://FX-002/E3#event_date", "content": "Outage ON-19; event_date: 2025-03-27; restored."}
+      ]
+    },
+    {
+      "fixture_id": "FX-003",
+      "title": "Permit approval and meeting minutes",
+      "authority": {"mode": "complete", "scope": "These are the complete retained records relevant to the Harbor permit decision; the permit record is the authoritative decision record.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-003/E1#decision", "content": "Permit HP-22 decision record; approved: yes; approval_date: 2025-05-02; approving_body: Harbor Board."},
+        {"evidence_id": "E2", "locator": "fixture://FX-003/E2#discussion", "content": "Planning meeting minutes, 2025-04-16: members discussed HP-22 and deferred a vote."}
+      ]
+    },
+    {
+      "fixture_id": "FX-004",
+      "title": "Anonymized hearing transcript",
+      "authority": {"mode": "dimension_complete", "scope": "The transcript extract and its retained speaker metadata are complete for this fixture. The source labels speakers only as Speaker 1 and Speaker 2 and contains no identity mapping.", "absence_claims": "permitted_only_for_identity_metadata_in_this_fixture"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-004/E1#turn-12", "content": "Speaker 1: The north gate remained closed throughout the inspection."},
+        {"evidence_id": "E2", "locator": "fixture://FX-004/E2#turn-13", "content": "Speaker 2: I recorded the closure at 09:20."},
+        {"evidence_id": "E3", "locator": "fixture://FX-004/E3#metadata", "content": "Retained speaker metadata: labels = [Speaker 1, Speaker 2]; names = not supplied; roles = not supplied."}
+      ]
+    },
+    {
+      "fixture_id": "FX-005",
+      "title": "Retail pilot complaint analysis",
+      "authority": {"mode": "complete", "scope": "This final analysis is the complete retained evaluation of the pilot. Its population, comparison, and caveat text are authoritative.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-005/E1#result", "content": "Final pilot analysis: customer complaints were 30% lower in the 12 pilot stores during the six-week observation window than in those stores' prior six weeks."},
+        {"evidence_id": "E2", "locator": "fixture://FX-005/E2#limitations", "content": "Limitations: results have not been measured outside the 12 pilot stores; seasonal and staffing differences were not controlled; the analysis does not establish causation."}
+      ]
+    },
+    {
+      "fixture_id": "FX-006",
+      "title": "Verified cabinet inventory",
+      "authority": {"mode": "complete", "scope": "The signed count is the complete and authoritative cabinet inventory at close on 2025-06-30.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-006/E1#count", "content": "Signed cabinet inventory, 2025-06-30 close: 18 sealed kits."}
+      ]
+    },
+    {
+      "fixture_id": "FX-007",
+      "title": "40-TB prototype chronology",
+      "authority": {"mode": "complete", "scope": "These are all retained dated 40-TB-class prototype events through 2025-12-31; prototype_event_date is authoritative.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-007/E1#date", "content": "40-TB-class prototype event; prototype_event_date: 2024-11-10; lab read test."},
+        {"evidence_id": "E2", "locator": "fixture://FX-007/E2#date", "content": "40-TB-class prototype event; prototype_event_date: 2025-03-03; thermal validation."},
+        {"evidence_id": "E3", "locator": "fixture://FX-007/E3#date", "content": "40-TB-class prototype event; prototype_event_date: 2025-07-28; customer qualification sample shipped."}
+      ]
+    },
+    {
+      "fixture_id": "FX-008",
+      "title": "Retained safety inspection records",
+      "authority": {"mode": "complete", "scope": "These are all retained 2025 safety inspection records for Plant Red, including findings text.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-008/E1#finding", "content": "Inspection PR-2025-01, 2025-01-14: emergency exit 3 was obstructed by two pallets."},
+        {"evidence_id": "E2", "locator": "fixture://FX-008/E2#finding", "content": "Inspection PR-2025-02, 2025-04-22: no emergency-exit obstruction observed."},
+        {"evidence_id": "E3", "locator": "fixture://FX-008/E3#finding", "content": "Inspection PR-2025-03, 2025-08-09: no emergency-exit obstruction observed."}
+      ]
+    },
+    {
+      "fixture_id": "FX-009",
+      "title": "Sample of regional maintenance files",
+      "authority": {"mode": "partial", "scope": "These two files are a convenience sample from an unenumerated regional archive. Archive coverage and completeness are unknown.", "absence_claims": "not_permitted"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-009/E1#summary", "content": "Maintenance file MF-81, West depot, pump seal replacement, 2023-02-11."},
+        {"evidence_id": "E2", "locator": "fixture://FX-009/E2#summary", "content": "Maintenance file MF-94, Central depot, valve inspection, 2024-07-03."}
+      ]
+    },
+    {
+      "fixture_id": "FX-010",
+      "title": "Sensor diagnostic conclusion",
+      "authority": {"mode": "complete", "scope": "This signed diagnostic report is the complete retained analysis of the vibration episode.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-010/E1#analysis", "content": "Observed vibration is consistent with either bearing wear or shaft imbalance; available measurements do not distinguish between those explanations."}
+      ]
+    },
+    {
+      "fixture_id": "FX-011",
+      "title": "Warehouse temperature excursion",
+      "authority": {"mode": "complete", "scope": "The signed logger export and incident record are the complete evidence for excursion WX-5.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-011/E1#maximum", "content": "Logger L7 export for WX-5: maximum temperature 11.8 C at 2025-02-08T14:12Z."},
+        {"evidence_id": "E2", "locator": "fixture://FX-011/E2#duration", "content": "WX-5 incident record: temperature exceeded 8 C for 47 minutes."}
+      ]
+    },
+    {
+      "fixture_id": "FX-012",
+      "title": "Training and defect observations",
+      "authority": {"mode": "dimension_complete", "scope": "The two monthly observations are complete, but the fixture contains no control group, randomization, or causal analysis.", "absence_claims": "permitted_only_for_listed_study_design_metadata"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-012/E1#january", "content": "January: 2 training hours per operator; defect rate 4.1%."},
+        {"evidence_id": "E2", "locator": "fixture://FX-012/E2#february", "content": "February: 6 training hours per operator; defect rate 3.4%."},
+        {"evidence_id": "E3", "locator": "fixture://FX-012/E3#design", "content": "Study design metadata: observational monthly totals only; no control group; no attribution analysis."}
+      ]
+    },
+    {
+      "fixture_id": "FX-013",
+      "title": "Audit exception rate",
+      "authority": {"mode": "complete", "scope": "The audit summary gives the authoritative numerator and denominator for the reviewed sample.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-013/E1#sample", "content": "Audit sample: 80 invoices reviewed; 12 invoices contained at least one coding exception."}
+      ]
+    },
+    {
+      "fixture_id": "FX-014",
+      "title": "Remediation budget",
+      "authority": {"mode": "complete", "scope": "The approved budget record is the authoritative amount and unit for remediation project R-9.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-014/E1#amount", "content": "Approved remediation budget R-9: USD 4.2 million."}
+      ]
+    },
+    {
+      "fixture_id": "FX-015",
+      "title": "Incident revisions and distinct identity",
+      "authority": {"mode": "complete", "scope": "These are all retained documents for the period. Incident ID is the authoritative distinct-incident identity; documents sharing an incident ID are revisions of one incident.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-015/E1#identity", "content": "Incident ID IN-44; revision 1; leak at Line A; opened 2025-01-05."},
+        {"evidence_id": "E2", "locator": "fixture://FX-015/E2#identity", "content": "Incident ID IN-44; revision 2; leak at Line A; corrected volume; opened 2025-01-05."},
+        {"evidence_id": "E3", "locator": "fixture://FX-015/E3#identity", "content": "Incident ID IN-45; revision 1; sensor fault at Line B; opened 2025-01-20."}
+      ]
+    },
+    {
+      "fixture_id": "FX-016",
+      "title": "Similar entity names",
+      "authority": {"mode": "complete", "scope": "The registry entries and award notice are complete for the named entities and award A-77; legal_entity_id is authoritative.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-016/E1#registry", "content": "Alpha Labs LLC; legal_entity_id AL-100; biomedical testing; Boise, Idaho."},
+        {"evidence_id": "E2", "locator": "fixture://FX-016/E2#registry", "content": "Alpha Logistics LLC; legal_entity_id AL-900; freight services; Boise, Idaho."},
+        {"evidence_id": "E3", "locator": "fixture://FX-016/E3#awardee", "content": "Award A-77 recipient: legal_entity_id AL-900; amount USD 310,000."}
+      ]
+    },
+    {
+      "fixture_id": "FX-017",
+      "title": "Corrected milestone notice",
+      "authority": {"mode": "complete", "scope": "Both versions are retained. The correction explicitly supersedes version 1 for the milestone date.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-017/E1#date", "content": "Milestone notice MN-3, version 1, issued 2025-04-01: launch date 2025-06-12."},
+        {"evidence_id": "E2", "locator": "fixture://FX-017/E2#correction", "content": "Milestone notice MN-3, version 2 correction, issued 2025-04-09: version 1 launch date was erroneous; corrected launch date 2025-06-21; version 2 supersedes version 1."}
+      ]
+    },
+    {
+      "fixture_id": "FX-018",
+      "title": "Year-bounded grant awards",
+      "authority": {"mode": "complete", "scope": "These are all grants in the retained award register from 2024-12-01 through 2025-12-31; award_date is authoritative.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-018/E1#award", "content": "Grant G-8; award_date 2024-12-28; amount USD 90,000."},
+        {"evidence_id": "E2", "locator": "fixture://FX-018/E2#award", "content": "Grant G-9; award_date 2025-01-08; amount USD 110,000."},
+        {"evidence_id": "E3", "locator": "fixture://FX-018/E3#award", "content": "Grant G-10; award_date 2025-09-14; amount USD 75,000."}
+      ]
+    },
+    {
+      "fixture_id": "FX-019",
+      "title": "Planned and completed migrations",
+      "authority": {"mode": "complete", "scope": "These are all migration records for the program through 2025-08-31; the status field is authoritative.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-019/E1#status", "content": "Migration M-1; planned_date 2025-07-01; status completed; completion_date 2025-07-02."},
+        {"evidence_id": "E2", "locator": "fixture://FX-019/E2#status", "content": "Migration M-2; planned_date 2025-08-15; status scheduled; completion_date null."}
+      ]
+    },
+    {
+      "fixture_id": "FX-020",
+      "title": "Committee vote positions",
+      "authority": {"mode": "complete", "scope": "The roll-call and minutes are the complete authoritative record of the committee vote and stated positions.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-020/E1#rollcall", "content": "Proposal P-6 roll-call: A. Singh — yes; B. Ortiz — yes; C. Webb — no."},
+        {"evidence_id": "E2", "locator": "fixture://FX-020/E2#minutes", "content": "Minutes: C. Webb opposed P-6 because the cost estimate lacked contingency."}
+      ]
+    },
+    {
+      "fixture_id": "FX-021",
+      "title": "Draft and final regulatory decisions",
+      "authority": {"mode": "complete", "scope": "These are all draft and final decisions for applications A1-A3. Only records with status final are decisions for the question's stated inclusion rule.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-021/E1#status", "content": "Application A1; status final; decision approved; date 2025-02-01."},
+        {"evidence_id": "E2", "locator": "fixture://FX-021/E2#status", "content": "Application A2; status draft; proposed decision denied; date 2025-02-05."},
+        {"evidence_id": "E3", "locator": "fixture://FX-021/E3#status", "content": "Application A3; status final; decision denied; date 2025-02-12."}
+      ]
+    },
+    {
+      "fixture_id": "FX-022",
+      "title": "Negotiation transcript with negation",
+      "authority": {"mode": "complete", "scope": "This verbatim extract is the complete retained statement by the director about accepting the proposed price.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-022/E1#statement", "content": "Director: We are not prepared to accept the proposed price without a two-year service guarantee."}
+      ]
+    },
+    {
+      "fixture_id": "FX-023",
+      "title": "Ambiguous pronoun in approval note",
+      "authority": {"mode": "dimension_complete", "scope": "The note and recipient metadata are complete, but no antecedent annotation or follow-up identifying 'they' is retained.", "absence_claims": "permitted_only_for_antecedent_metadata_in_this_fixture"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-023/E1#note", "content": "Note from project lead to finance and operations: They approved the extension yesterday."},
+        {"evidence_id": "E2", "locator": "fixture://FX-023/E2#metadata", "content": "Recipient metadata: finance-team list; operations-team list. No named approver or pronoun antecedent is recorded."}
+      ]
+    },
+    {
+      "fixture_id": "FX-024",
+      "title": "Partial index search result",
+      "authority": {"mode": "partial", "scope": "The search covered only indexed email from January-March 2025. Retention before January, after March, and unindexed attachments is unknown.", "absence_claims": "not_permitted"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-024/E1#query", "content": "Search query: exact phrase 'Project Lantern'; scope: indexed email dated 2025-01-01 through 2025-03-31; results: 0."},
+        {"evidence_id": "E2", "locator": "fixture://FX-024/E2#coverage", "content": "Index coverage notice: email attachments not indexed; records outside 2025-01-01 through 2025-03-31 not searched; total archive size unknown."}
+      ]
+    },
+    {
+      "fixture_id": "FX-025",
+      "title": "Undated minutes between dated records",
+      "authority": {"mode": "dimension_complete", "scope": "Document order and supplied date fields are authoritative. The middle record has no date metadata, and no rule permits inferring its date from file order.", "absence_claims": "permitted_only_for_supplied_date_metadata"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-025/E1#date", "content": "Record R1; meeting_date 2025-04-03; topic budget."},
+        {"evidence_id": "E2", "locator": "fixture://FX-025/E2#date", "content": "Record R2; meeting_date null; topic vendor review; stored between R1 and R3 in the export."},
+        {"evidence_id": "E3", "locator": "fixture://FX-025/E3#date", "content": "Record R3; meeting_date 2025-04-21; topic staffing."}
+      ]
+    },
+    {
+      "fixture_id": "FX-026",
+      "title": "Event dates and ingestion timestamps",
+      "authority": {"mode": "complete", "scope": "These are all retained notices for the question. event_date is the occurrence date; ingested_at records repository arrival only.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-026/E1#dates", "content": "Notice N1; event_date 2025-01-14; ingested_at 2025-06-01T10:00Z."},
+        {"evidence_id": "E2", "locator": "fixture://FX-026/E2#dates", "content": "Notice N2; event_date 2025-03-09; ingested_at 2025-04-02T10:00Z."},
+        {"evidence_id": "E3", "locator": "fixture://FX-026/E3#dates", "content": "Notice N3; event_date 2025-02-20; ingested_at 2025-07-11T10:00Z."}
+      ]
+    },
+    {
+      "fixture_id": "FX-027",
+      "title": "Complete sanctions register slice",
+      "authority": {"mode": "complete", "scope": "These are all entries in the authoritative sanctions register for legal entities AL-1 through AL-4 as of 2025-10-01.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-027/E1#entry", "content": "AL-1 — status clear."},
+        {"evidence_id": "E2", "locator": "fixture://FX-027/E2#entry", "content": "AL-2 — status sanctioned."},
+        {"evidence_id": "E3", "locator": "fixture://FX-027/E3#entry", "content": "AL-3 — status clear."},
+        {"evidence_id": "E4", "locator": "fixture://FX-027/E4#entry", "content": "AL-4 — status clear."}
+      ]
+    },
+    {
+      "fixture_id": "FX-028",
+      "title": "Preliminary and audited revenue",
+      "authority": {"mode": "complete", "scope": "Both records are retained. The later audited statement explicitly supersedes the preliminary release for FY2025 revenue.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-028/E1#revenue", "content": "Preliminary unaudited release, issued 2025-12-05: FY2025 revenue USD 51.0 million; subject to audit adjustment."},
+        {"evidence_id": "E2", "locator": "fixture://FX-028/E2#revenue", "content": "Signed audited statement, issued 2026-01-20: FY2025 revenue USD 49.6 million; this final amount supersedes the preliminary release."}
+      ]
+    },
+    {
+      "fixture_id": "FX-029",
+      "title": "UTC incident and authoritative local zone",
+      "authority": {"mode": "complete", "scope": "The timestamp and site time-zone metadata are complete. Site-local dates must use America/Los_Angeles, UTC-08:00 on the event date.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-029/E1#timestamp", "content": "Incident Z9 occurred_at 2025-02-01T02:30:00Z."},
+        {"evidence_id": "E2", "locator": "fixture://FX-029/E2#timezone", "content": "Site Z authoritative time zone: America/Los_Angeles; offset at occurrence: UTC-08:00."}
+      ]
+    },
+    {
+      "fixture_id": "FX-030",
+      "title": "Inclusive reporting window",
+      "authority": {"mode": "complete", "scope": "These are all payments from 2025-05-01 through 2025-05-31. The question's window is explicitly inclusive at both boundaries.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-030/E1#payment", "content": "Payment P1; posted_date 2025-05-01; amount USD 10."},
+        {"evidence_id": "E2", "locator": "fixture://FX-030/E2#payment", "content": "Payment P2; posted_date 2025-05-15; amount USD 20."},
+        {"evidence_id": "E3", "locator": "fixture://FX-030/E3#payment", "content": "Payment P3; posted_date 2025-05-31; amount USD 30."}
+      ]
+    },
+    {
+      "fixture_id": "FX-031",
+      "title": "Regional headcount rollup",
+      "authority": {"mode": "complete", "scope": "The three region rows are mutually exclusive and collectively exhaustive for the 2025-09-30 headcount; headcount is additive.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-031/E1#headcount", "content": "Americas headcount: 41."},
+        {"evidence_id": "E2", "locator": "fixture://FX-031/E2#headcount", "content": "EMEA headcount: 28."},
+        {"evidence_id": "E3", "locator": "fixture://FX-031/E3#headcount", "content": "APAC headcount: 36."}
+      ]
+    },
+    {
+      "fixture_id": "FX-B01",
+      "title": "Undefined substantial reduction",
+      "authority": {"mode": "complete", "scope": "The before-and-after measurements are complete, but neither the question nor evidence defines a threshold for 'substantial'.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-B01/E1#before", "content": "Average wait before change: 10.2 minutes."},
+        {"evidence_id": "E2", "locator": "fixture://FX-B01/E2#after", "content": "Average wait after change: 9.2 minutes."}
+      ]
+    },
+    {
+      "fixture_id": "FX-B02",
+      "title": "Small exception with undefined materiality",
+      "authority": {"mode": "complete", "scope": "The result distribution is complete, but no materiality threshold is supplied.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-B02/E1#distribution", "content": "Of 1,000 processed requests, 980 completed within target and 20 exceeded target by 1-3 minutes."}
+      ]
+    },
+    {
+      "fixture_id": "FX-B03",
+      "title": "Indirectly reported executive view",
+      "authority": {"mode": "complete", "scope": "The analyst note is the only retained evidence. There is no recording, transcript, or direct statement from the executive.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-B03/E1#note", "content": "Analyst note: Dana told me that the CEO seemed comfortable with the revised schedule."}
+      ]
+    },
+    {
+      "fixture_id": "FX-B04",
+      "title": "Undefined near-term forecast",
+      "authority": {"mode": "complete", "scope": "The forecast statement is complete, but neither source nor question defines 'near term'.", "absence_claims": "permitted_within_scope"},
+      "records": [
+        {"evidence_id": "E1", "locator": "fixture://FX-B04/E1#forecast", "content": "Operations forecast issued 2025-01-10: output should improve in the near term."},
+        {"evidence_id": "E2", "locator": "fixture://FX-B04/E2#result", "content": "Measured output first exceeded the 2025-01-10 baseline on 2025-04-18."}
+      ]
+    }
+  ]
+}
