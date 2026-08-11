@@ -1,0 +1,73 @@
+{
+  "benchmark_version": "rfi-qa-independent-v2.0.0",
+  "fixtures": [
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-Q001/@authority",
+        "mode": "complete",
+        "scope": "The planned and actual completion dates are complete, but neither the evidence nor question defines a threshold for a material delay."
+      },
+      "fixture_id": "R2F-Q001",
+      "records": [
+        {
+          "content": "Planned completion 2026-03-01; actual completion 2026-03-13; elapsed delay 12 calendar days.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-Q001/R1#dates"
+        }
+      ],
+      "title": "Undefined material schedule delay"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-Q002/@authority",
+        "mode": "complete",
+        "scope": "The alarm count and observation duration are complete, but no operational threshold defines 'frequent'."
+      },
+      "fixture_id": "R2F-Q002",
+      "records": [
+        {
+          "content": "Cooling-loop alarms: 3 alarms during a 90-day observation window.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-Q002/R1#count"
+        }
+      ],
+      "title": "Undefined frequent-alarm category"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-Q003/@authority",
+        "mode": "complete",
+        "scope": "The completeness distribution is authoritative, but no use case or permitted missingness threshold is supplied."
+      },
+      "fixture_id": "R2F-Q003",
+      "records": [
+        {
+          "content": "Dataset rows: 100; rows with every required field populated: 98; rows missing one required field: 2.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-Q003/R1#distribution"
+        }
+      ],
+      "title": "Dataset use-readiness exception"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-Q004/@authority",
+        "mode": "complete",
+        "scope": "The liaison note is the only retained evidence; no recording, transcript, or direct director statement is available."
+      },
+      "fixture_id": "R2F-Q004",
+      "records": [
+        {
+          "content": "Liaison note: Morgan told me the program director appeared confident that the autumn launch date was achievable.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-Q004/R1#liaison-note"
+        }
+      ],
+      "title": "Indirect program-director confidence note"
+    }
+  ]
+}

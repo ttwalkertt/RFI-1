@@ -1,0 +1,184 @@
+{
+  "benchmark_version": "rfi-qa-independent-v2.0.0",
+  "digests": {
+    "algorithm": "SHA-256 over raw UTF-8 file bytes; partition digest hashes labeled cases/fixtures digests; corpus digest hashes sorted relative-path/file-digest lines.",
+    "corpus_files": {
+      "authoring-metadata.json": "aa7c07f84f1c09da75507cac0404356ba8bcc6b1988e3d8ae5d4fb397089a627",
+      "calibration/cases.jsonl": "9395e173bdd8452cacbb5551f1186bab5edf0feffe8b91404d693882b78a718e",
+      "calibration/fixtures.json": "1791d055577ec7742cdefb37db95238095003db054e1b706a1de4051fc4f99da",
+      "case.schema.json": "6547d94ad380de460154ef5b7e21d165c9a292406efbc0580fa29ce0e0225047",
+      "fixture.schema.json": "6315fbac1263742a005d7666c423d551ca30b9de93cb69234bb27ac903aef78a",
+      "quarantine/cases.jsonl": "11588876eb42109d098dfe7926f4a498be4e02660a38f527ff3e7407f261687c",
+      "quarantine/fixtures.json": "9b007d2bd8e6989941e2307e62913806b9bd0980b7cb412d07e1bf8ad0d68784",
+      "taxonomy.json": "af2a056319315e1c09450022d1752dd7bf4e95663fb6633086854fffa1887973",
+      "validation/cases.jsonl": "22e98803f86c36fc1009ce8c16b153e3e4bc871b31740f2620bab13a16fb899d",
+      "validation/fixtures.json": "9afb3a99090a85574f6c2a5effaf8a56fe93648eb85bbe280e21ccd84fbb0bbf"
+    },
+    "corpus_sha256": "09ec5ab31d4f9683e7ce7f9064fb294f388d4846b5f75a68875f69a6c740c54a",
+    "partitions": {
+      "calibration": {
+        "cases_sha256": "9395e173bdd8452cacbb5551f1186bab5edf0feffe8b91404d693882b78a718e",
+        "fixtures_sha256": "1791d055577ec7742cdefb37db95238095003db054e1b706a1de4051fc4f99da",
+        "partition_sha256": "34228f0be36ecaf5360d68920fa3d4d8743d611fa0d00010cc0272f5abc99299"
+      },
+      "quarantine": {
+        "cases_sha256": "11588876eb42109d098dfe7926f4a498be4e02660a38f527ff3e7407f261687c",
+        "fixtures_sha256": "9b007d2bd8e6989941e2307e62913806b9bd0980b7cb412d07e1bf8ad0d68784",
+        "partition_sha256": "171f406e93ba48f061a71ef35b22b010d6693b55a0b78a457d67982cb7cb0613"
+      },
+      "validation": {
+        "cases_sha256": "22e98803f86c36fc1009ce8c16b153e3e4bc871b31740f2620bab13a16fb899d",
+        "fixtures_sha256": "9afb3a99090a85574f6c2a5effaf8a56fe93648eb85bbe280e21ccd84fbb0bbf",
+        "partition_sha256": "d8980c606db2ff4d01d7449c3a02a5a264232c23d89d4d749fa228d34e1d6109"
+      }
+    }
+  },
+  "generation_date": "2026-08-11",
+  "generation_revision": "independent-authoring-1",
+  "held_out_confidentiality": {
+    "manifest_validation_metadata_is_aggregate_only": true,
+    "validation_case_ids_listed": false,
+    "validation_case_labels_listed": false,
+    "validation_evidence_or_questions_listed": false,
+    "validation_expected_findings_listed": false,
+    "validation_pair_ids_listed": false
+  },
+  "integrity_checks": {
+    "calibration_and_validation_contain_all_objective_dispositions": true,
+    "fixtures_partition_local": true,
+    "no_rerandomization": true,
+    "pair_assignment_complete": true,
+    "pair_assignment_disjoint": true,
+    "pair_members_colocated": true,
+    "quarantine_excluded_from_objective_partitions": true
+  },
+  "objective_totals": {
+    "case_count": 72,
+    "disposition_counts": {
+      "defective": 29,
+      "indeterminate": 7,
+      "supported": 36
+    },
+    "pair_count": 36
+  },
+  "partitions": {
+    "calibration": {
+      "authority_mode_counts": {
+        "complete": 19,
+        "dimension_complete": 2,
+        "partial": 1
+      },
+      "case_count": 44,
+      "defect_class_case_counts": {
+        "absence_overstatement": 1,
+        "aggregation_error": 1,
+        "ambiguous_reference_overresolved": 1,
+        "chronology_basis_mismatch": 1,
+        "chronology_boundary_incorrect": 1,
+        "claim_strength_overstatement": 1,
+        "conflicting_evidence_omitted": 1,
+        "denominator_error": 1,
+        "evidence_mapping_incorrect": 1,
+        "evidence_mapping_missing": 1,
+        "false_absence": 1,
+        "insufficiency_miscalibrated": 1,
+        "internal_inconsistency": 1,
+        "numeric_mismatch": 1,
+        "provenance_authority_error": 1,
+        "qualification_omitted": 1,
+        "quote_context_distortion": 1,
+        "record_eligibility_error": 1,
+        "temporal_scope_mismatch": 1,
+        "timezone_conversion_error": 1,
+        "unit_mismatch": 1,
+        "version_supersession_ignored": 1
+      },
+      "difficulty_counts": {
+        "atomic": 12,
+        "authority_boundary": 6,
+        "multi_record": 26
+      },
+      "disposition_counts": {
+        "defective": 19,
+        "indeterminate": 3,
+        "supported": 22
+      },
+      "fixture_count": 22,
+      "pair_count": 22,
+      "pair_set_sha256": "dcee2085b2f5b493fc2f0a84a665414f466f4a06f00d7aa1dc4d2762cd4badf9"
+    },
+    "quarantine": {
+      "authority_mode_counts": {
+        "complete": 4
+      },
+      "case_count": 4,
+      "defect_class_case_counts": {
+        "provenance_authority_error": 1,
+        "undefined_evaluation_criterion": 3
+      },
+      "difficulty_counts": {
+        "judgment_dependent": 4
+      },
+      "disposition_counts": {
+        "defective": 1,
+        "indeterminate": 3
+      },
+      "fixture_count": 4,
+      "pair_count": 0,
+      "pair_set_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    "validation": {
+      "authority_mode_counts": {
+        "complete": 10,
+        "dimension_complete": 3,
+        "partial": 1
+      },
+      "case_count": 28,
+      "defect_class_case_counts": {
+        "attribution_unsupported": 1,
+        "boundary_inclusion_error": 1,
+        "causal_overstatement": 1,
+        "chronology_boundary_incorrect": 1,
+        "claim_strength_overstatement": 1,
+        "corpus_completeness_overstatement": 1,
+        "date_imputation": 1,
+        "denominator_error": 1,
+        "duplicate_counting": 1,
+        "entity_conflation": 1,
+        "evidence_mapping_incorrect": 1,
+        "provenance_authority_error": 1,
+        "qualification_omitted": 2,
+        "status_mischaracterized": 1,
+        "unsupported_claim": 1
+      },
+      "difficulty_counts": {
+        "atomic": 4,
+        "authority_boundary": 8,
+        "multi_record": 16
+      },
+      "disposition_counts": {
+        "defective": 10,
+        "indeterminate": 4,
+        "supported": 14
+      },
+      "fixture_count": 14,
+      "pair_count": 14,
+      "pair_set_sha256": "ec5b15779060adc4abf509735a491162ab2f9eef5bea907f194756afe7ff5f0e"
+    }
+  },
+  "split": {
+    "algorithm": "lexicographically sort R2P-001 through R2P-036; Python random.Random(seed).shuffle; first 22 pairs calibration; remaining 14 validation",
+    "calibration_pair_target": 22,
+    "objective_pair_id_population": {
+      "count": 36,
+      "first": 1,
+      "format": "R2P-NNN",
+      "last": 36
+    },
+    "random_seed": 20260811,
+    "randomization_unit": "matched_pair",
+    "rerandomization_performed": false,
+    "validation_pair_target": 14
+  },
+  "taxonomy_version": "rfi-qa-defects-v2.0.0"
+}

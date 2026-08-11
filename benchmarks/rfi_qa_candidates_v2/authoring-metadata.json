@@ -1,0 +1,30 @@
+{
+  "benchmark_version": "rfi-qa-independent-v2.0.0",
+  "generation_date": "2026-08-11",
+  "generation_revision": "independent-authoring-1",
+  "taxonomy_version": "rfi-qa-defects-v2.0.0",
+  "authoring_method": "Fresh synthetic evidence fixtures and reference truth authored from repository evidence-authority, locator, schema, and taxonomy conventions.",
+  "independence_boundary": {
+    "qa_implementation_inspected": false,
+    "task_074_or_075_qa_implementation_inspected": false,
+    "task_075_calibration_ledgers_or_optimization_results_inspected": false,
+    "qa_runtime_outputs_inspected": false,
+    "observed_qa_failures_or_performance_used": false,
+    "previous_candidate_case_contents_used_as_examples": false
+  },
+  "split": {
+    "randomization_unit": "matched_pair",
+    "random_seed": 20260811,
+    "algorithm": "Sort objective pair IDs lexicographically; shuffle with Python random.Random(seed).shuffle using MT19937; assign the first 22 pairs to calibration and the remaining 14 pairs to validation.",
+    "rerandomization_performed": false
+  },
+  "scope_exclusions": [
+    "RFI implementation changes",
+    "MCP changes",
+    "investigator changes",
+    "QA runtime changes",
+    "TASK-075 optimization changes",
+    "QA execution or scoring",
+    "RBF optimization"
+  ]
+}

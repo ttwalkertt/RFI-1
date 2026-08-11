@@ -1,0 +1,494 @@
+{
+  "benchmark_version": "rfi-qa-independent-v2.0.0",
+  "fixtures": [
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-001/@authority",
+        "mode": "complete",
+        "scope": "The signed certificate is the complete and current authority for permit WC-17's annual withdrawal cap for water year 2026."
+      },
+      "fixture_id": "R2F-001",
+      "records": [
+        {
+          "content": "Signed certificate WC-17; water year 2026; annual withdrawal cap: 6,480 acre-feet; status: effective.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-001/R1#annual-cap"
+        }
+      ],
+      "title": "Willow Creek water-allocation certificate"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-002/@authority",
+        "mode": "complete",
+        "scope": "The agenda and signed resolution are the complete retained records for the East Loop fare change; the signed resolution governs adoption and effective date."
+      },
+      "fixture_id": "R2F-002",
+      "records": [
+        {
+          "content": "Transit agenda, 2026-02-03: proposal to make the East Loop fare change effective 2026-04-01; action listed as discussion only.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-002/R1#agenda-item"
+        },
+        {
+          "content": "Signed resolution TR-88, adopted 2026-02-10: East Loop fare change approved; effective date 2026-05-01.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-002/R2#resolution"
+        }
+      ],
+      "title": "East Loop fare resolution"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-005/@authority",
+        "mode": "complete",
+        "scope": "The signed intake sheet is the complete and authoritative close-of-day count for sealed blanket cartons at Depot 6 on 2026-01-18."
+      },
+      "fixture_id": "R2F-005",
+      "records": [
+        {
+          "content": "Signed Depot 6 intake, 2026-01-18 close: 73 sealed blanket cartons received and on hand.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-005/R1#sealed-cartons"
+        }
+      ],
+      "title": "Flood-relief blanket count"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-006/@authority",
+        "mode": "complete",
+        "scope": "These are all filed shoreline-restoration applications in the 2026 spring round; filed_at is the authoritative submission chronology."
+      },
+      "fixture_id": "R2F-006",
+      "records": [
+        {
+          "content": "Application SR-61; filed_at 2026-05-12T09:10Z; status filed.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-006/R1#filed-at"
+        },
+        {
+          "content": "Application SR-58; filed_at 2026-04-29T16:45Z; status filed.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-006/R2#filed-at"
+        },
+        {
+          "content": "Application SR-67; filed_at 2026-06-01T08:00Z; status filed.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v2://R2F-006/R3#filed-at"
+        }
+      ],
+      "title": "Shoreline restoration applications"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-007/@authority",
+        "mode": "complete",
+        "scope": "These are all final 2026 first-quarter allergen inspection findings for Facility M."
+      },
+      "fixture_id": "R2F-007",
+      "records": [
+        {
+          "content": "Inspection FM-A11, 2026-01-09: lot L18 labels matched declared allergens; no exception.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-007/R1#finding"
+        },
+        {
+          "content": "Inspection FM-A14, 2026-02-22: lot L22 contained undeclared sesame protein; corrective hold issued.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-007/R2#finding"
+        },
+        {
+          "content": "Inspection FM-A19, 2026-03-17: lot L27 labels matched declared allergens; no exception.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v2://R2F-007/R3#finding"
+        }
+      ],
+      "title": "Packaged-food allergen inspections"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-010/@authority",
+        "mode": "complete",
+        "scope": "The signed bench summary gives the authoritative tested-unit denominator and failure numerator for batch PV-9."
+      },
+      "fixture_id": "R2F-010",
+      "records": [
+        {
+          "content": "Batch PV-9 bench summary: 120 valves tested; 9 valves failed the seal-pressure criterion.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-010/R1#batch-summary"
+        }
+      ],
+      "title": "Pressure-valve bench results"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-013/@authority",
+        "mode": "complete",
+        "scope": "Both notices are retained. Notice version 2 explicitly corrects and supersedes version 1 for the maximum permitted sound level."
+      },
+      "fixture_id": "R2F-013",
+      "records": [
+        {
+          "content": "Auditorium notice AN-5 version 1, issued 2026-01-04: maximum sound level 82 dBA.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-013/R1#limit"
+        },
+        {
+          "content": "Auditorium notice AN-5 version 2, issued 2026-01-11: version 1 contained a transcription error; corrected maximum 85 dBA; version 2 supersedes version 1.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-013/R2#correction"
+        }
+      ],
+      "title": "Revised auditorium noise limit"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-014/@authority",
+        "mode": "complete",
+        "scope": "These are all conservation grants awarded from 2025-09-01 through 2026-09-30. Fiscal year 2026 is explicitly 2025-10-01 through 2026-09-30 inclusive; award_date governs inclusion."
+      },
+      "fixture_id": "R2F-014",
+      "records": [
+        {
+          "content": "Grant CG-31; award_date 2025-09-30; amount USD 40,000.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-014/R1#award"
+        },
+        {
+          "content": "Grant CG-32; award_date 2025-10-01; amount USD 60,000.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-014/R2#award"
+        },
+        {
+          "content": "Grant CG-39; award_date 2026-08-20; amount USD 90,000.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v2://R2F-014/R3#award"
+        }
+      ],
+      "title": "Fiscal-year conservation grants"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-016/@authority",
+        "mode": "complete",
+        "scope": "These are all final load-test records for relays RS-1 through RS-3 in campaign LT-26."
+      },
+      "fixture_id": "R2F-016",
+      "records": [
+        {
+          "content": "LT-26 relay RS-1: final outcome pass at 110% rated load.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-016/R1#outcome"
+        },
+        {
+          "content": "LT-26 relay RS-2: final outcome fail; trip delay exceeded limit by 180 ms.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-016/R2#outcome"
+        },
+        {
+          "content": "LT-26 relay RS-3: final outcome pass at 110% rated load.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v2://R2F-016/R3#outcome"
+        }
+      ],
+      "title": "Substation relay load tests"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-017/@authority",
+        "mode": "complete",
+        "scope": "These are all submitted crane sighting reports for April 2026. The question's confirmed count includes only records whose verification_status is confirmed."
+      },
+      "fixture_id": "R2F-017",
+      "records": [
+        {
+          "content": "Sighting CS-7; verification_status confirmed; observer photo geolocated.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-017/R1#status"
+        },
+        {
+          "content": "Sighting CS-8; verification_status withdrawn; observer identified a heron after review.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-017/R2#status"
+        },
+        {
+          "content": "Sighting CS-9; verification_status unverified; no photo or second observer.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v2://R2F-017/R3#status"
+        }
+      ],
+      "title": "Marsh crane sighting reports"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-018/@authority",
+        "mode": "complete",
+        "scope": "This verbatim statement is the complete retained expression of the chair's position on lease renewal during the hearing."
+      },
+      "fixture_id": "R2F-018",
+      "records": [
+        {
+          "content": "Chair: I support renewal only if the reserve reaches two million dollars; the reserve has not reached that level.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-018/R1#chair-statement"
+        }
+      ],
+      "title": "Library lease-renewal hearing"
+    },
+    {
+      "authority": {
+        "absence_semantics": "not_permitted",
+        "locator": "rfiqa-v2://R2F-019/@authority",
+        "mode": "partial",
+        "scope": "The query searched OCR text for 60% of scanned zoning pages dated 1970-1990. Handwritten pages and the remaining 40% were not searchable; total mention coverage is unknown."
+      },
+      "fixture_id": "R2F-019",
+      "records": [
+        {
+          "content": "OCR query exact token 'quarry'; date filter 1970-01-01 through 1990-12-31; searchable-page results: 0.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-019/R1#query"
+        },
+        {
+          "content": "Index report: 60% of pages have OCR text; handwritten pages excluded; 40% lack searchable text.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-019/R2#coverage"
+        }
+      ],
+      "title": "Partially OCR-indexed zoning archive"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-021/@authority",
+        "mode": "complete",
+        "scope": "These are all retained policy notices through 2026-08-31. effective_date governs which policy is later in force; uploaded_at records repository arrival only."
+      },
+      "fixture_id": "R2F-021",
+      "records": [
+        {
+          "content": "Policy TA-4; effective_date 2026-06-01; uploaded_at 2026-08-12T09:00Z; bicycles permitted weekdays.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-021/R1#dates"
+        },
+        {
+          "content": "Policy TA-5; effective_date 2026-07-15; uploaded_at 2026-07-20T09:00Z; bicycles permitted daily before 10:00.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-021/R2#dates"
+        }
+      ],
+      "title": "Trail-access policy notices"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-023/@authority",
+        "mode": "complete",
+        "scope": "The alarm timestamp and facility time-zone metadata are complete. Facility-local dates use Asia/Tokyo, UTC+09:00 at the event."
+      },
+      "fixture_id": "R2F-023",
+      "records": [
+        {
+          "content": "Cold-room alarm CR-12 occurred_at 2026-01-31T18:30:00Z.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-023/R1#timestamp"
+        },
+        {
+          "content": "Facility time zone: Asia/Tokyo; event offset UTC+09:00.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-023/R2#timezone"
+        }
+      ],
+      "title": "Tokyo cold-room alarm"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-025/@authority",
+        "mode": "complete",
+        "scope": "The three inverter rows are mutually exclusive and collectively exhaustive for Array S during June 2026; net_kwh is additive."
+      },
+      "fixture_id": "R2F-025",
+      "records": [
+        {
+          "content": "Inverter S-A; June net_kwh 128,450.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-025/R1#net-kwh"
+        },
+        {
+          "content": "Inverter S-B; June net_kwh 97,820.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-025/R2#net-kwh"
+        },
+        {
+          "content": "Inverter S-C; June net_kwh 113,730.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v2://R2F-025/R3#net-kwh"
+        }
+      ],
+      "title": "Solar-array inverter output"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-026/@authority",
+        "mode": "complete",
+        "scope": "The signed risk register is the complete retained basis for Lock 7's schedule and cost ratings."
+      },
+      "fixture_id": "R2F-026",
+      "records": [
+        {
+          "content": "Lock 7 risk SR-4: schedule exposure rating high; basis: custom gate actuator lead time.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-026/R1#schedule-risk"
+        },
+        {
+          "content": "Lock 7 risk CR-2: cost exposure rating moderate; basis: steel escalation allowance already budgeted.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-026/R2#cost-risk"
+        }
+      ],
+      "title": "Canal lock risk register"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-027/@authority",
+        "mode": "complete",
+        "scope": "The signed treatment log is the authoritative applied mass and unit for Orchard Block H on 2026-05-06."
+      },
+      "fixture_id": "R2F-027",
+      "records": [
+        {
+          "content": "Block H treatment, 2026-05-06: active ingredient applied 2.4 kilograms.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-027/R1#active-mass"
+        }
+      ],
+      "title": "Orchard treatment log"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_only_as_stated",
+        "locator": "rfiqa-v2://R2F-028/@authority",
+        "mode": "dimension_complete",
+        "scope": "The note, addressees, and retained referent metadata are complete. No annotation or follow-up resolves the pronoun 'it' to either named body."
+      },
+      "fixture_id": "R2F-028",
+      "records": [
+        {
+          "content": "Coordinator note: After speaking with the Delta Committee and the Standards Review Panel, it approved the six-week extension.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-028/R1#note"
+        },
+        {
+          "content": "Named bodies: Delta Committee; Standards Review Panel. Approving_body field absent; pronoun antecedent unannotated.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-028/R2#metadata"
+        }
+      ],
+      "title": "Committee extension note"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-029/@authority",
+        "mode": "complete",
+        "scope": "The validation summary is the complete retained evidence about test OB-Screen's performance for orchid blight."
+      },
+      "fixture_id": "R2F-029",
+      "records": [
+        {
+          "content": "OB-Screen validation: sensitivity 82% among 200 reference-positive samples; 36 reference-positive samples tested negative.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-029/R1#sensitivity"
+        },
+        {
+          "content": "Use limitation: a negative OB-Screen result does not rule out orchid blight and requires confirmatory culture when symptoms persist.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-029/R2#use-limit"
+        }
+      ],
+      "title": "Orchid blight screening validation"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_only_as_stated",
+        "locator": "rfiqa-v2://R2F-030/@authority",
+        "mode": "dimension_complete",
+        "scope": "The manifest fields, redaction state, and delivery telemetry are complete. Recipient identity is lawfully redacted and no unredacted name or identity key is retained in the fixture."
+      },
+      "fixture_id": "R2F-030",
+      "records": [
+        {
+          "content": "Delivery MD-771; recipient_name [REDACTED]; recipient_id [REDACTED]; destination Clinic 4 receiving dock.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-030/R1#manifest"
+        },
+        {
+          "content": "Courier scan: MD-771 delivered 2026-06-14T15:22Z at Clinic 4 receiving dock; signer field [REDACTED].",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-030/R2#telemetry"
+        }
+      ],
+      "title": "Redacted medical-supply delivery"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_only_as_stated",
+        "locator": "rfiqa-v2://R2F-031/@authority",
+        "mode": "complete",
+        "scope": "The report is the complete retained analysis of warranty claims filed for model HP-2 in 2025. It does not enumerate installed units or estimate population failure rate."
+      },
+      "fixture_id": "R2F-031",
+      "records": [
+        {
+          "content": "HP-2 warranty claims filed in 2025: 600; compressor-related claims approved: 48; share of filed claims: 8%.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-031/R1#claim-analysis"
+        },
+        {
+          "content": "Installed HP-2 population and units without claims are outside this report; no product-population failure rate is calculated.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-031/R2#population-limit"
+        }
+      ],
+      "title": "Heat-pump warranty claims"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v2://R2F-035/@authority",
+        "mode": "complete",
+        "scope": "The negotiation draft and signed final settlement are both retained. The signed settlement governs the required mitigation payment and supersedes draft terms."
+      },
+      "fixture_id": "R2F-035",
+      "records": [
+        {
+          "content": "Negotiation draft D3: proposed mitigation payment USD 5.0 million; unsigned; subject to revision.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v2://R2F-035/R1#draft"
+        },
+        {
+          "content": "Signed final settlement FS-12: required mitigation payment USD 2.5 million; all prior draft payment terms superseded.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v2://R2F-035/R2#final"
+        }
+      ],
+      "title": "Wetland mitigation settlement"
+    }
+  ]
+}
