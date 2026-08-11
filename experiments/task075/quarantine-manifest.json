@@ -1,0 +1,26 @@
+{
+  "cases": [
+    {
+      "case_id": "RFIQA-063",
+      "human_review_required": true,
+      "sha256": "ce9daa84cd79f7bd579bc18d91ac88b1a1bbc1cc49515cd4edd45ce6d03bb825"
+    },
+    {
+      "case_id": "RFIQA-064",
+      "human_review_required": true,
+      "sha256": "6dd701eba52986151c367b39685a85d81bfd2a38388f40b2abe78b11dd27276e"
+    },
+    {
+      "case_id": "RFIQA-065",
+      "human_review_required": true,
+      "sha256": "b1053cbe4d1c00b6bf86a2e9e4db296f02552f450e3f9085df296881df95ec44"
+    },
+    {
+      "case_id": "RFIQA-066",
+      "human_review_required": true,
+      "sha256": "564de0ca9ea04e8ded1c808b0ae142196d0aa79805b32222bbeb61978746c185"
+    }
+  ],
+  "manifest_version": "task075.quarantine.v1",
+  "reason": "judgment-dependent; excluded unchanged from calibration, validation, scoring, RBF feedback, and success criteria"
+}
