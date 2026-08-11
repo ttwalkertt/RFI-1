@@ -1,0 +1,82 @@
+{
+  "contract_version": "task075.scoring.v1",
+  "frozen_before_partition": true,
+  "population": {
+    "adjudicability": "objective",
+    "borderline_cases_excluded": true,
+    "matched_pair_is_randomization_unit": true
+  },
+  "evaluation": {
+    "terminal_independent_runs_per_case": 3,
+    "diagnostic_runs_per_case": 1,
+    "consensus": {
+      "disposition": "strict majority of valid independent runs; no majority is invalid",
+      "finding": "include a defect class only when at least two valid runs report it",
+      "evidence_locators": "for a consensus defect class, include the sorted union of resolving locators reported by the agreeing runs"
+    },
+    "invalid_conditions": [
+      "missing or non-zero runtime result",
+      "structured output schema failure",
+      "evaluation identifier mismatch",
+      "a reported locator does not resolve in the supplied fixture",
+      "reference_qa, adjudicability, pair_id, or title appears in reviewer input",
+      "reviewer context is not fresh and isolated",
+      "corpus, scoring, partition, design, model, or dependency identity differs from the applicable freeze",
+      "a post-freeze validation invocation attempts a retry for a substantive judgment"
+    ]
+  },
+  "finding_matching": {
+    "materiality": "Every reference material_findings entry is material. Minor findings are outside this benchmark contract and must not be emitted.",
+    "match_key": "defect_class within one case; duplicate classes use maximum one-to-one matching by locator overlap and then stable finding order",
+    "partial_finding": "A class match without grounding counts for class attribution and material recall but fails evidence grounding.",
+    "grounded_match": "All predicted locators resolve in the case fixture and at least one predicted locator is in the matched reference finding evidence_locators.",
+    "unsupported_finding": "A predicted consensus finding that cannot be one-to-one matched to a reference finding by defect_class.",
+    "extra_resolving_locator": "Permitted only when the finding has at least one decisive reference locator; it does not improve the grounding score."
+  },
+  "primary_metrics": {
+    "valid_evaluation_rate": "valid consensus cases divided by all cases",
+    "disposition_accuracy": "exact whole-answer consensus disposition matches divided by all valid cases",
+    "material_false_accept_rate": "reference defective cases predicted supported divided by reference defective cases",
+    "supported_false_reject_rate": "reference supported cases predicted defective or indeterminate divided by reference supported cases",
+    "material_finding_recall": "one-to-one class-matched reference material findings divided by all reference material findings",
+    "defect_class_attribution_f1": "micro F1 over one-to-one exact defect-class matches",
+    "evidence_grounding_rate": "grounded matched findings divided by all matched findings",
+    "unsupported_finding_rate": "unmatched predicted findings divided by all predicted findings; zero when no findings are predicted",
+    "indeterminate_accuracy": "reference indeterminate cases with exact consensus disposition divided by reference indeterminate cases",
+    "matched_pair_discrimination": "pairs with both dispositions exact and at least one grounded expected finding on the non-supported member divided by all pairs"
+  },
+  "secondary_metrics": {
+    "defect_class_recall": "per-class exact-match recall",
+    "defect_class_precision": "per-class exact-match precision",
+    "evidence_locator_precision": "resolving predicted locators that occur in the matched reference finding divided by predicted locators on matched findings",
+    "whole_answer_confusion_matrix": "reference by consensus disposition counts",
+    "calibration_to_validation_degradation": "validation minus calibration for benefit metrics and validation minus calibration for error metrics"
+  },
+  "repeatability_metrics": {
+    "disposition_full_agreement": "cases whose three independent dispositions are identical divided by valid repeated cases",
+    "disposition_pairwise_agreement": "agreeing disposition run-pairs divided by all disposition run-pairs",
+    "material_detection_full_agreement": "cases whose three runs agree on whether any material finding exists divided by valid repeated cases",
+    "defect_class_mean_jaccard": "mean pairwise Jaccard similarity of predicted defect-class sets; two empty sets score one",
+    "evidence_reference_mean_jaccard": "mean pairwise Jaccard similarity of locator sets for defect classes common to the run pair; no common predicted class is omitted from this metric",
+    "supported_false_positive_count_variance": "mean population variance across the three finding counts for reference supported cases"
+  },
+  "success_thresholds": {
+    "valid_evaluation_rate": {"operator": ">=", "value": 1.0},
+    "disposition_accuracy": {"operator": ">=", "value": 0.9},
+    "material_false_accept_rate": {"operator": "<=", "value": 0.1},
+    "supported_false_reject_rate": {"operator": "<=", "value": 0.1},
+    "material_finding_recall": {"operator": ">=", "value": 0.85},
+    "defect_class_attribution_f1": {"operator": ">=", "value": 0.85},
+    "evidence_grounding_rate": {"operator": ">=", "value": 0.95},
+    "unsupported_finding_rate": {"operator": "<=", "value": 0.1},
+    "indeterminate_accuracy": {"operator": ">=", "value": 1.0},
+    "matched_pair_discrimination": {"operator": ">=", "value": 0.9},
+    "disposition_full_agreement": {"operator": ">=", "value": 0.9},
+    "disposition_pairwise_agreement": {"operator": ">=", "value": 0.95},
+    "material_detection_full_agreement": {"operator": ">=", "value": 0.9},
+    "defect_class_mean_jaccard": {"operator": ">=", "value": 0.9},
+    "evidence_reference_mean_jaccard": {"operator": ">=", "value": 0.8},
+    "supported_false_positive_count_variance": {"operator": "<=", "value": 0.1}
+  },
+  "threshold_policy": "Every threshold is conjunctive. Undefined denominator metrics make the evaluation invalid. Thresholds may not be changed after partition creation or validation observation; a future contract version is required."
+}

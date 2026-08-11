@@ -1,0 +1,63 @@
+{
+  "config_version": "task075.rbf-optimization.v1",
+  "objective": "Improve the RFI investigation-QA capability until it meets the predetermined calibration success criteria while preserving reference truth, architectural authority boundaries, and benchmark integrity.",
+  "partition": {
+    "random_seed": 75020260811,
+    "calibration_pairs": 20,
+    "validation_pairs": 11,
+    "coverage_preflight": {
+      "required_dispositions_in_each_partition": ["supported", "defective", "indeterminate"],
+      "minimum_difficulty_groups_in_each_partition": 3,
+      "minimum_defect_families_in_each_partition": 4,
+      "defect_families": {
+        "source_value_and_computation": ["numeric_mismatch", "denominator_error", "unit_mismatch", "aggregation_error", "duplicate_counting"],
+        "time_boundaries_status_eligibility": ["chronology_boundary_incorrect", "chronology_basis_mismatch", "date_imputation", "timezone_conversion_error", "boundary_inclusion_error", "temporal_scope_mismatch", "status_mischaracterized", "record_eligibility_error", "version_supersession_ignored"],
+        "identity_attribution_provenance_mapping": ["entity_conflation", "attribution_unsupported", "ambiguous_reference_overresolved", "provenance_authority_error", "evidence_mapping_incorrect", "evidence_mapping_missing"],
+        "scope_qualification_epistemic": ["qualification_omitted", "claim_strength_overstatement", "causal_overstatement", "insufficiency_miscalibrated", "corpus_completeness_overstatement", "absence_overstatement", "false_absence", "undefined_evaluation_criterion"],
+        "whole_answer_integrity": ["internal_inconsistency", "conflicting_evidence_omitted", "quote_context_distortion", "unsupported_claim"]
+      }
+    },
+    "rerandomization": "Permitted only before any calibration outcome if the recorded seed fails coverage_preflight. Each rejected seed and reason must be preserved."
+  },
+  "visibility": {
+    "rbf_allowed": ["calibration cases", "calibration reference truth", "calibration outputs", "calibration scores", "TASK-074 prior evidence", "QA implementation and prompts"],
+    "rbf_prohibited_until_freeze": ["validation case payloads", "validation reference truth", "validation outputs", "validation scores"],
+    "reviewer_withheld_fields": ["reference_qa", "adjudicability", "pair_id", "title"]
+  },
+  "runtime": {
+    "adapter": "fresh ephemeral codex exec context per independent run",
+    "model": "Codex CLI default; no model override",
+    "user_configuration_loaded": false,
+    "rules_loaded": false,
+    "sandbox": "read-only",
+    "concurrency": 4,
+    "transport_retry_limit": 1,
+    "substantive_judgment_retry_limit": 0
+  },
+  "optimization_budget": {
+    "maximum_material_design_changes": 3,
+    "maximum_calibration_model_calls": 240,
+    "maximum_terminal_calibration_assessments": 1,
+    "diagnostic_runs_per_case": 1,
+    "terminal_runs_per_case": 3
+  },
+  "stopping_rules": {
+    "success": "Stop and freeze when one terminal three-run calibration assessment satisfies every scoring-contract threshold.",
+    "budget": "Stop and freeze the best predeclared design when any optimization budget is exhausted.",
+    "stall": "Stop after two consecutive full diagnostic calibration iterations improve weighted diagnostic utility by less than 0.02 and do not turn any previously failing primary threshold into a pass.",
+    "diagnostic_utility": "0.20 disposition_accuracy + 0.15 (1-material_false_accept_rate) + 0.10 (1-supported_false_reject_rate) + 0.15 material_finding_recall + 0.10 defect_class_attribution_f1 + 0.10 evidence_grounding_rate + 0.05 (1-unsupported_finding_rate) + 0.05 indeterminate_accuracy + 0.10 matched_pair_discrimination",
+    "reference_defect": "Quarantine the affected case from further optimization feedback without changing it; report it for independent adjudication. It remains a scored failure unless an independently issued benchmark version replaces the corpus in a future task."
+  },
+  "freeze": {
+    "required_before_validation": true,
+    "includes": ["QA code", "prompts", "roles", "orchestration", "contracts", "deterministic checks", "MCP/access surface", "scoring implementation and contract", "corpus and partition digests", "calibration results", "Codex/runtime identity", "dependency versions"],
+    "validation_attempts": 1,
+    "post_validation_tuning": false
+  },
+  "live_transfer": {
+    "permitted_only_if_validation_passes_all_thresholds": true,
+    "case_count": 3,
+    "human_reference_adjudication_required": true,
+    "post_live_tuning": false
+  }
+}
