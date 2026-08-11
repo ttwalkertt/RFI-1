@@ -1,0 +1,164 @@
+{
+  "schema_version": "task074.finding-adjudication.v1",
+  "experiment_manifest_sha256": "67056b6fc303160629e8c5f9dde13f07eebf6219278d1ff2e3b72d087dde8a2f",
+  "method": "Post-run diagnostic adjudication. This file and the known-target catalog were not supplied to QA or repair agents.",
+  "qa1_findings": {
+    "TASK074-SENTIMENT-Q1-F001": {
+      "validation": "supported",
+      "rationale": "Exact reads show that several factual details exceeded the single segment displayed beside the relevant bullet. QA #2 independently confirmed residual instances.",
+      "reference_integrity": "valid"
+    },
+    "TASK074-SENTIMENT-Q1-F002": {
+      "validation": "supported",
+      "rationale": "The ordinal 'strongest' conclusion lacked a stated comparison criterion and was not established by the mapped Q4 FY2026 segment.",
+      "reference_integrity": "valid"
+    },
+    "TASK074-SENTIMENT-Q1-F003": {
+      "validation": "supported",
+      "rationale": "The retained corpus has 21 canonically classified items, null historical event_kind metadata, mixed display titles, and indeterminate acquisition completeness; the submitted seven-call universe was title-selected and overbroadly described.",
+      "reference_integrity": "valid"
+    },
+    "TASK074-DEMAND-Q1-F001": {
+      "validation": "supported",
+      "rationale": "The original answer supplied dates but no stable artifact or exact segment locator for its many material period claims.",
+      "reference_integrity": "valid"
+    },
+    "TASK074-TECHNOLOGY-Q1-F001": {
+      "validation": "supported",
+      "rationale": "The unqualified phrase 'qualification and ramp were finished' was materially ambiguous beside evidence that only three of eight named customer qualifications were complete.",
+      "reference_integrity": "valid"
+    },
+    "TASK074-CHRONOLOGY-Q1-F001": {
+      "validation": "supported",
+      "rationale": "Exact retained evidence on 2024-09-04 predates the submitted 2024-12-11 first boundary.",
+      "reference_integrity": "valid"
+    },
+    "TASK074-CHRONOLOGY-Q1-F002": {
+      "validation": "supported",
+      "rationale": "The submitted citations did not map the December volume-timing claim or the March cost/pricing claim to exact supporting evidence.",
+      "reference_integrity": "valid"
+    },
+    "TASK074-INSUFFICIENT-Q1-F001": {
+      "validation": "supported",
+      "rationale": "A complete lexical no-match for the term 'attrition' cannot establish semantic or real-world absence.",
+      "reference_integrity": "invalid_rfi_uri",
+      "reference_diagnostic": "rfi://repository-snapshots/sqlite-revision-8237 is not a resource exposed by the frozen TASK-073 MCP surface. The finding is substantively supported by the successful search trace and corpus resource, but the reviewer invented a locator."
+    }
+  },
+  "qa2_new_findings": {
+    "TASK074-SENTIMENT-Q2-F001": {
+      "validation": "supported_but_misclassified",
+      "rationale": "The two mapping defects are real residuals of QA #1 finding F001, not newly introduced repair defects; QA #2 also marked F001 partially resolved, so recording them again as new double-counts the residual failure."
+    },
+    "TASK074-SENTIMENT-Q2-F002": {
+      "validation": "supported_repair_induced_regression",
+      "rationale": "The repair displayed one conference artifact as inventory evidence. The correct corpus resource supports the scope statement, but the displayed citation does not."
+    }
+  },
+  "known_targets": [
+    {
+      "target_id": "sentiment_scope_and_event_metadata",
+      "case_id": "sentiment",
+      "status": "detected",
+      "qa1_finding_ids": ["TASK074-SENTIMENT-Q1-F003"],
+      "post_repair": "scope wording resolved; repair introduced a separate incorrect inventory citation"
+    },
+    {
+      "target_id": "demand_stable_evidence_mapping",
+      "case_id": "demand",
+      "status": "detected",
+      "qa1_finding_ids": ["TASK074-DEMAND-Q1-F001"],
+      "post_repair": "resolved"
+    },
+    {
+      "target_id": "technology_stable_evidence_mapping",
+      "case_id": "technology",
+      "status": "missed",
+      "qa1_finding_ids": [],
+      "post_repair": "unresolved; the answer remains predominantly date/title/ordinal referenced outside the repaired May section",
+      "attribution": "qa_reviewer_failure"
+    },
+    {
+      "target_id": "chronology_earliest_boundary",
+      "case_id": "chronology",
+      "status": "detected",
+      "qa1_finding_ids": ["TASK074-CHRONOLOGY-Q1-F001"],
+      "post_repair": "resolved to 2024-09-04"
+    },
+    {
+      "target_id": "chronology_latest_boundary",
+      "case_id": "chronology",
+      "status": "missed",
+      "qa1_finding_ids": [],
+      "post_repair": "unresolved; the answer still says 2026-03-03 although retained 2026-07-28 Mozaic 4+ evidence supports the latest 40-TB-class discussion",
+      "attribution": "qa_reviewer_failure"
+    },
+    {
+      "target_id": "insufficient_lexical_absence_calibration",
+      "case_id": "insufficient",
+      "status": "detected",
+      "qa1_finding_ids": ["TASK074-INSUFFICIENT-Q1-F001"],
+      "post_repair": "resolved"
+    },
+    {
+      "target_id": "insufficient_retained_coverage_qualification",
+      "case_id": "insufficient",
+      "status": "detected",
+      "qa1_finding_ids": ["TASK074-INSUFFICIENT-Q1-F001"],
+      "post_repair": "resolved consequentially in the repaired answer"
+    },
+    {
+      "target_id": "insufficient_speaker_metadata_qualification",
+      "case_id": "insufficient",
+      "status": "missed",
+      "qa1_finding_ids": [],
+      "post_repair": "unresolved; the repaired answer does not disclose that historical speaker labels are absent, so named-speaker attribution cannot be established",
+      "attribution": "qa_reviewer_failure"
+    }
+  ],
+  "aggregate": {
+    "qa1_findings": 8,
+    "supported_qa1_findings": 8,
+    "unsupported_qa1_findings_false_positives": 0,
+    "known_targets": 8,
+    "known_targets_detected": 5,
+    "known_targets_missed": 3,
+    "qa2_pass_dispositions": 4,
+    "diagnostically_sound_qa2_passes": 1,
+    "false_terminal_passes": ["technology", "chronology", "insufficient"],
+    "repair_induced_material_or_significant_regressions": 1,
+    "explicit_unresolved_repair_items": 1
+  },
+  "diagnostic_attribution": [
+    {
+      "case_id": "sentiment",
+      "attribution": "investigator_repair_failure",
+      "detail": "Two original claim-to-segment mismatches remained after repair."
+    },
+    {
+      "case_id": "sentiment",
+      "attribution": "repair_induced_regression",
+      "detail": "The repair used one conference artifact as the displayed citation for corpus-wide inventory facts."
+    },
+    {
+      "case_id": "technology",
+      "attribution": "qa_reviewer_failure",
+      "detail": "QA #1 and QA #2 missed the known lack of stable RFI locators across most of the answer."
+    },
+    {
+      "case_id": "chronology",
+      "attribution": "qa_reviewer_failure",
+      "detail": "Both reviewers accepted 2026-03-03 as latest despite accessible 2026-07-28 Mozaic 4+ evidence."
+    },
+    {
+      "case_id": "insufficient",
+      "attribution": "qa_reviewer_failure",
+      "detail": "Both reviewers omitted the named-speaker limitation and QA #1 invented an unsupported repository-snapshot URI."
+    },
+    {
+      "case_id": "insufficient",
+      "attribution": "repository_authority_limitation",
+      "detail": "The explicit unresolved item correctly preserves indeterminate semantic absence and historical acquisition completeness."
+    }
+  ]
+}

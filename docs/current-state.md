@@ -88,6 +88,7 @@ Rebuildable indexes and UI projections are not independent authorities.
 | SEC authoritative 10-K workflow | Complete as a bounded vertical slice | Integrated in CLI | `rfi.sec`; no continuous scheduler |
 | Management and earnings transcripts | Usable with limitations | Integrated | One broad non-earnings management corpus and a narrow earnings-call corpus; StockAnalysis is the only provider, deterministic title vocabulary is bounded, and coverage may be indeterminate |
 | Retained-transcript knowledge access and investigation | Useful experimental vertical slice; access/model quality provisional | Implemented POC | `rfi.research`; public artifact reads, disposable lexical/temporal index, exact expansion, bounded live-model loop, insufficiency, and traces; no stable CLI/UI or workspace composition |
+| Independent investigation QA and bounded repair | Useful experimental contracts; reviewer quality provisional | Implemented POC | `rfi.investigation_qa`; independent QA, one repair, terminal re-review, and complete traces over five fixed answers; three known misses and three false terminal passes |
 | WDC Business Wire press releases | Implemented but operationally blocked | Registered in Pull Workflow, unsupported for live operation | fixture/browser-capture parsing passes; direct production transport is denied or times out |
 | RSS/Atom feeds | Complete for public credential-free feeds | Integrated | `rfi.feeds`; external recurrence only, no authenticated feeds or redirect DNS pinning |
 | Mailing-list evidence and workflow | Usable with bounded Lore/local-operation limits | Integrated | `rfi.mailing_lists`; no durable scheduler or global rate coordination |
@@ -182,6 +183,12 @@ and scale evidence. These are roadmap or backlog concerns until a task ticket au
   first/latest chronology boundaries and produced weaker evidence mappings even though MCP exposed
   the correct candidates. The surface is an evaluated POC, not stable product composition or a
   general MCP catalog.
+- TASK-074 adds an experimental independent-QA and one-repair orchestration around preserved
+  TASK-073 answers without changing MCP or retained authority. QA found eight supported defects and
+  repairs improved several answers, but reviewers missed three of eight known targets and only one
+  of four terminal passes was diagnostically sound. This is an implemented POC, not a stable quality
+  gate or product-composed workflow; the evidence supports a future first-pass prompting experiment,
+  not additional repair/escalation machinery inside TASK-074.
 - Transcript event classification is deterministic and intentionally fails closed for the narrow
   earnings corpus. Unrecognized substantial events remain available as broad management
   transcripts; the current event-kind vocabulary is useful but not an exhaustive ontology.
