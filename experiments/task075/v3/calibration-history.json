@@ -173,6 +173,83 @@
       "runtime_selection_disposition": "The candidate achieved 100% valid reviews with one transport retry and used a 27% shorter static prompt. These are secondary operational observations and contributed no credit to methodology selection.",
       "mcp_access_disposition": "No MCP change justified. Every semantic miss had complete access to the benchmark-supplied authority and exact evidence.",
       "selection_decision": "Reject causal-admission v4 and select the unchanged epistemic-root-cause v3 starting design for the terminal assessment. Diagnostic utility fell by 0.00869; none of the failed semantic-primary thresholds became a pass; unsupported rate, recall, and class F1 did not improve; and indeterminate accuracy and pair discrimination worsened. Improved runtime validity and supported false-reject rate do not establish superior causal gauge quality."
+    },
+    {
+      "iteration": "v3-terminal-epistemic-root-cause",
+      "design": "task075.epistemic-root-cause-v3",
+      "runs_per_case": 3,
+      "logical_model_judgments": 240,
+      "transport_invocations": 251,
+      "retried_judgments": 11,
+      "timed_out_invocations": 15,
+      "invalid_judgments": 4,
+      "invalid_cases": ["R3C-055", "R3C-099", "R3C-108", "R3C-120"],
+      "manifest_sha256": "bdca76d785b8867bf9efc4ef2320cde16495f7990e96f82d1a8cde1909d28f31",
+      "score_sha256": "b9eb59a22a841416306e7ccb2e2aee452e386e80893bfe1f4536900fa6679b2a",
+      "all_thresholds_passed": false,
+      "metrics": {
+        "valid_evaluation_rate": 0.95,
+        "disposition_accuracy": 0.9736842105263158,
+        "material_false_accept_rate": 0.0,
+        "supported_false_reject_rate": 0.0,
+        "material_finding_recall": 0.775,
+        "defect_class_attribution_f1": 0.8157894736842106,
+        "evidence_grounding_rate": 1.0,
+        "unsupported_finding_rate": 0.1388888888888889,
+        "indeterminate_accuracy": 0.625,
+        "matched_pair_discrimination": 0.725,
+        "disposition_full_agreement": 0.0,
+        "disposition_pairwise_agreement": 0.0,
+        "material_detection_full_agreement": 0.0,
+        "defect_class_mean_jaccard": 0.0,
+        "evidence_reference_mean_jaccard": 0.0,
+        "supported_false_positive_count_variance": 1.0
+      },
+      "counts": {
+        "false_accepts": 0,
+        "false_rejects": 0,
+        "expected_findings": 40,
+        "matched_findings": 31,
+        "unsupported_findings": 5,
+        "invalid_cases": 4
+      },
+      "failure_attribution": {
+        "QA reasoning/prompt failure": [
+          {
+            "cases": ["R3C-030", "R3C-103"],
+            "cause": "The selected methodology again converted an unresolved assertion under missing-date or partial-search authority into defective instead of indeterminate."
+          },
+          {
+            "cases": ["R3C-043", "R3C-049"],
+            "cause": "The exact-class layer chose a nearby boundary or denominator symptom instead of the reference temporal-scope or record-eligibility mechanism."
+          },
+          {
+            "cases": ["R3C-063"],
+            "cause": "The exact-class layer chose ambiguous-reference resolution rather than unsupported attribution for an unevidenced named caller."
+          },
+          {
+            "cases": ["R3C-069", "R3C-072"],
+            "cause": "The exact-class layer reproducibly chose version supersession rather than provenance authority when lower-authority preliminary or unsigned sources were elevated over distinct governing sources."
+          }
+        ],
+        "QA orchestration failure": [
+          {
+            "cases": ["R3C-055", "R3C-099", "R3C-108", "R3C-120"],
+            "cause": "One of three independent judgments for each case exhausted both 180-second transport attempts. The frozen consensus and scoring rules therefore invalidated all four cases and set every repeatability metric to its failure value."
+          }
+        ],
+        "MCP/access gap": [],
+        "repository-authority limitation": [
+          {
+            "cases": ["R3C-030", "R3C-103"],
+            "cause": "The benchmark intentionally supplies authority that cannot resolve the asserted date or archive-wide absence. Correct gauge behavior is indeterminate; added repository access would violate the benchmark authority boundary."
+          }
+        ],
+        "suspected benchmark/reference-truth defect": []
+      },
+      "repeatability_assessment": "Repeatability is an independent conjunctive failure. Four incomplete three-run cases caused the preregistered repeatability regime to return 0 for all agreement/Jaccard measures and 1.0 supported false-positive variance. Aggregate accuracy cannot substitute for this result.",
+      "mcp_access_disposition": "No MCP change justified. All semantic misses supplied the evidence needed for the reference judgment, and the invalid cases were reviewer transport failures rather than evidence-access failures.",
+      "stopping_decision": "Stop V3 optimization without retry or retuning. The only terminal calibration assessment is consumed and all 400 mechanically preregistered V3 calibration calls are exhausted. Preserve the negative calibration result, run the required known V2 regression on this same selected design, then freeze."
     }
   ],
   "v2_regressions": [],
