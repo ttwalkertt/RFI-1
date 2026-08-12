@@ -1,0 +1,940 @@
+{
+  "benchmark_version": "rfi-qa-independent-v3.0.0",
+  "fixtures": [
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-001/@authority",
+        "mode": "complete",
+        "scope": "The signed ledger is complete for Brook K releases in May 2027."
+      },
+      "fixture_id": "R3F-001",
+      "records": [
+        {
+          "content": "Release BK-9; 2027-05-14; juvenile trout released: 12,640.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-001/R1#count"
+        }
+      ],
+      "title": "Fish hatchery release ledger"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-002/@authority",
+        "mode": "complete",
+        "scope": "The certified audit is the complete retained result for Gallery D on 2027-02-18."
+      },
+      "fixture_id": "R3F-002",
+      "records": [
+        {
+          "content": "Gallery D certified mean relative humidity: 47.8%.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-002/R1#humidity"
+        }
+      ],
+      "title": "Museum climate audit"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-006/@authority",
+        "mode": "complete",
+        "scope": "The approved specification governs usable energy capacity."
+      },
+      "fixture_id": "R3F-006",
+      "records": [
+        {
+          "content": "Battery bank MG-2 usable capacity: 7.2 megawatt-hours (MWh).",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-006/R1#capacity"
+        }
+      ],
+      "title": "Microgrid storage specification"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-007/@authority",
+        "mode": "complete",
+        "scope": "The three warehouse rows are mutually exclusive and exhaustive; doses_on_hand is additive."
+      },
+      "fixture_id": "R3F-007",
+      "records": [
+        {
+          "content": "North: 18,250 doses.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-007/R1#stock"
+        },
+        {
+          "content": "Central: 22,100 doses.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-007/R2#stock"
+        },
+        {
+          "content": "South: 16,650 doses.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-007/R3#stock"
+        }
+      ],
+      "title": "Regional vaccine inventory"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-008/@authority",
+        "mode": "complete",
+        "scope": "The three funding rows are non-overlapping and exhaustive for project GM-8."
+      },
+      "fixture_id": "R3F-008",
+      "records": [
+        {
+          "content": "Federal match: USD 1.25 million.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-008/R1#funding"
+        },
+        {
+          "content": "State match: USD 0.80 million.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-008/R2#funding"
+        },
+        {
+          "content": "Local match: USD 0.45 million.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-008/R3#funding"
+        }
+      ],
+      "title": "Three-source grant match"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-009/@authority",
+        "mode": "complete",
+        "scope": "All files are retained; animal_tag is the distinct animal identity, and corrected sightings are revisions."
+      },
+      "fixture_id": "R3F-009",
+      "records": [
+        {
+          "content": "animal_tag EL-7; sighting file v1.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-009/R1#identity"
+        },
+        {
+          "content": "animal_tag EL-7; corrected sighting file v2.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-009/R2#identity"
+        },
+        {
+          "content": "animal_tag EL-9; sighting file v1.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-009/R3#identity"
+        }
+      ],
+      "title": "Wildlife tag observations"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-010/@authority",
+        "mode": "complete",
+        "scope": "contract_id identifies a distinct contract; amendments remain part of the same contract."
+      },
+      "fixture_id": "R3F-010",
+      "records": [
+        {
+          "content": "contract_id CT-20; base agreement.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-010/R1#identity"
+        },
+        {
+          "content": "contract_id CT-20; amendment 1.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-010/R2#identity"
+        },
+        {
+          "content": "contract_id CT-23; base agreement.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-010/R3#identity"
+        },
+        {
+          "content": "contract_id CT-23; amendment 1.",
+          "evidence_id": "R4",
+          "locator": "rfiqa-v3://R3F-010/R4#identity"
+        }
+      ],
+      "title": "Contract amendment register"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-011/@authority",
+        "mode": "complete",
+        "scope": "These are all final alerts in the interval; issued_at governs alert chronology."
+      },
+      "fixture_id": "R3F-011",
+      "records": [
+        {
+          "content": "LA-2 issued_at 2027-03-04T08:00Z.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-011/R1#date"
+        },
+        {
+          "content": "LA-5 issued_at 2027-03-19T11:30Z.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-011/R2#date"
+        },
+        {
+          "content": "LA-8 issued_at 2027-03-27T06:10Z.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-011/R3#date"
+        }
+      ],
+      "title": "Landslide alerts"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-013/@authority",
+        "mode": "complete",
+        "scope": "event_date is occurrence chronology; archived_at is repository arrival only."
+      },
+      "fixture_id": "R3F-013",
+      "records": [
+        {
+          "content": "FB-1 event_date 2027-04-09; archived_at 2027-06-20.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-013/R1#dates"
+        },
+        {
+          "content": "FB-2 event_date 2027-05-12; archived_at 2027-05-13.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-013/R2#dates"
+        }
+      ],
+      "title": "Flood event bulletins"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-014/@authority",
+        "mode": "complete",
+        "scope": "effective_on governs protocol sequence; published_on is notice publication."
+      },
+      "fixture_id": "R3F-014",
+      "records": [
+        {
+          "content": "PN-A effective_on 2027-08-01; published_on 2027-08-20.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-014/R1#dates"
+        },
+        {
+          "content": "PN-B effective_on 2027-08-15; published_on 2027-08-16.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-014/R2#dates"
+        }
+      ],
+      "title": "Clinical protocol notices"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_only_as_stated",
+        "locator": "rfiqa-v3://R3F-015/@authority",
+        "mode": "dimension_complete",
+        "scope": "Caption and metadata are complete; capture_date is null and filename sequence is non-chronological."
+      },
+      "fixture_id": "R3F-015",
+      "records": [
+        {
+          "content": "Photo EX-7; caption: west trench after shoring; capture_date null.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-015/R1#photo"
+        },
+        {
+          "content": "Migration note: EX filenames were assigned in upload order and do not encode capture dates.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-015/R2#rule"
+        }
+      ],
+      "title": "Undated excavation photograph"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-017/@authority",
+        "mode": "complete",
+        "scope": "Timestamp and site zone are complete; use Pacific/Honolulu UTC-10."
+      },
+      "fixture_id": "R3F-017",
+      "records": [
+        {
+          "content": "Alarm H7 occurred_at 2027-06-01T04:20:00Z.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-017/R1#time"
+        },
+        {
+          "content": "Site offset at event: UTC-10:00.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-017/R2#zone"
+        }
+      ],
+      "title": "Honolulu sensor alarm"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-018/@authority",
+        "mode": "complete",
+        "scope": "Timestamp and authoritative facility zone are complete; offset is UTC+12."
+      },
+      "fixture_id": "R3F-018",
+      "records": [
+        {
+          "content": "Scan AK-4 occurred_at 2027-09-30T16:45:00Z.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-018/R1#time"
+        },
+        {
+          "content": "Facility offset at event: UTC+12:00.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-018/R2#zone"
+        }
+      ],
+      "title": "Auckland shipment scan"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-019/@authority",
+        "mode": "complete",
+        "scope": "All filings around the window are listed; interval [May 1, June 1) includes start and excludes end."
+      },
+      "fixture_id": "R3F-019",
+      "records": [
+        {
+          "content": "F1 filed May 1 00:00; fee USD 10.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-019/R1#filing"
+        },
+        {
+          "content": "F2 filed May 31 23:59; fee USD 20.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-019/R2#filing"
+        },
+        {
+          "content": "F3 filed June 1 00:00; fee USD 30.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-019/R3#filing"
+        }
+      ],
+      "title": "Half-open permit window"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-021/@authority",
+        "mode": "complete",
+        "scope": "All donations from Dec 2026-Jan 2028 are listed; received_date governs calendar 2027."
+      },
+      "fixture_id": "R3F-021",
+      "records": [
+        {
+          "content": "D1 received 2026-12-31; USD 5,000.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-021/R1#gift"
+        },
+        {
+          "content": "D2 received 2027-01-01; USD 7,000.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-021/R2#gift"
+        },
+        {
+          "content": "D3 received 2027-11-30; USD 8,000.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-021/R3#gift"
+        }
+      ],
+      "title": "Calendar-year donations"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-022/@authority",
+        "mode": "complete",
+        "scope": "All shipments around FY Q2 are listed; FY Q2 is Apr 1-Jun 30 inclusive."
+      },
+      "fixture_id": "R3F-022",
+      "records": [
+        {
+          "content": "S1 March 31; 40 units.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-022/R1#shipment"
+        },
+        {
+          "content": "S2 April 1; 60 units.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-022/R2#shipment"
+        },
+        {
+          "content": "S3 June 30; 70 units.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-022/R3#shipment"
+        },
+        {
+          "content": "S4 July 1; 80 units.",
+          "evidence_id": "R4",
+          "locator": "rfiqa-v3://R3F-022/R4#shipment"
+        }
+      ],
+      "title": "Fiscal-quarter shipments"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-024/@authority",
+        "mode": "complete",
+        "scope": "Only status approved is an approval; recommended items await board action."
+      },
+      "fixture_id": "R3F-024",
+      "records": [
+        {
+          "content": "Protocol E-2 status approved.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-024/R1#status"
+        },
+        {
+          "content": "Protocol E-3 status recommended; board_action null.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-024/R2#status"
+        }
+      ],
+      "title": "Research ethics decisions"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-025/@authority",
+        "mode": "complete",
+        "scope": "Only records with certification_status certified count as certified results."
+      },
+      "fixture_id": "R3F-025",
+      "records": [
+        {
+          "content": "Sample L1 certified; result pass.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-025/R1#status"
+        },
+        {
+          "content": "Sample L2 draft; result fail.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-025/R2#status"
+        },
+        {
+          "content": "Sample L3 certified; result pass.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-025/R3#status"
+        }
+      ],
+      "title": "Certified laboratory results"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-026/@authority",
+        "mode": "complete",
+        "scope": "Only verification_status verified counts for the question."
+      },
+      "fixture_id": "R3F-026",
+      "records": [
+        {
+          "content": "C1 verified; position support.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-026/R1#status"
+        },
+        {
+          "content": "C2 duplicate; position support.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-026/R2#status"
+        },
+        {
+          "content": "C3 unverified; position oppose.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-026/R3#status"
+        },
+        {
+          "content": "C4 verified; position oppose.",
+          "evidence_id": "R4",
+          "locator": "rfiqa-v3://R3F-026/R4#status"
+        }
+      ],
+      "title": "Verified public comments"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-028/@authority",
+        "mode": "complete",
+        "scope": "Correction B supersedes announcement A for the deadline."
+      },
+      "fixture_id": "R3F-028",
+      "records": [
+        {
+          "content": "Announcement A: deadline Oct 1.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-028/R1#old"
+        },
+        {
+          "content": "Correction B: deadline Oct 15; replaces Oct 1 deadline.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-028/R2#new"
+        }
+      ],
+      "title": "Corrected scholarship deadline"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-029/@authority",
+        "mode": "complete",
+        "scope": "vendor_id is authoritative for award PV-7."
+      },
+      "fixture_id": "R3F-029",
+      "records": [
+        {
+          "content": "Harbor Systems Inc.; HS-10.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-029/R1#registry"
+        },
+        {
+          "content": "Harbor Systematics LLC; HS-90.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-029/R2#registry"
+        },
+        {
+          "content": "PV-7 recipient vendor_id HS-90.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-029/R3#award"
+        }
+      ],
+      "title": "Port vendor award"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_only_as_stated",
+        "locator": "rfiqa-v3://R3F-032/@authority",
+        "mode": "dimension_complete",
+        "scope": "Call audio and caller metadata are complete; caller identity was not collected."
+      },
+      "fixture_id": "R3F-032",
+      "records": [
+        {
+          "content": "Caller 17: The west stairwell light failed again.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-032/R1#call"
+        },
+        {
+          "content": "Caller 17 identity: not collected; phone number suppressed.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-032/R2#metadata"
+        }
+      ],
+      "title": "Anonymous hotline recording"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_only_as_stated",
+        "locator": "rfiqa-v3://R3F-033/@authority",
+        "mode": "dimension_complete",
+        "scope": "Email and referent metadata are complete; \u201cthey\u201d is unresolved between two teams."
+      },
+      "fixture_id": "R3F-033",
+      "records": [
+        {
+          "content": "After meeting Safety and Operations, they approved the restart.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-033/R1#email"
+        },
+        {
+          "content": "Approving_team null; both teams addressed.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-033/R2#metadata"
+        }
+      ],
+      "title": "Joint review email"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_only_as_stated",
+        "locator": "rfiqa-v3://R3F-034/@authority",
+        "mode": "dimension_complete",
+        "scope": "The note and entity metadata are complete; \u201cit\u201d has no retained antecedent annotation."
+      },
+      "fixture_id": "R3F-034",
+      "records": [
+        {
+          "content": "Atlas Marine met Beacon Freight after it requested an extension.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-034/R1#note"
+        },
+        {
+          "content": "requesting_entity null; both entities possible.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-034/R2#metadata"
+        }
+      ],
+      "title": "Two-company meeting note"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-035/@authority",
+        "mode": "complete",
+        "scope": "The audited statement supersedes the preliminary press note."
+      },
+      "fixture_id": "R3F-035",
+      "records": [
+        {
+          "content": "Preliminary note: balance USD 9.1m; unaudited.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-035/R1#prelim"
+        },
+        {
+          "content": "Audited statement: balance USD 8.7m; supersedes preliminary.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-035/R2#final"
+        }
+      ],
+      "title": "Audited community fund balance"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-036/@authority",
+        "mode": "complete",
+        "scope": "Signed settlement governs over unsigned negotiation term sheet."
+      },
+      "fixture_id": "R3F-036",
+      "records": [
+        {
+          "content": "Unsigned term sheet: restore 120 acres.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-036/R1#draft"
+        },
+        {
+          "content": "Signed settlement: restore 95 acres; replaces drafts.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-036/R2#final"
+        }
+      ],
+      "title": "Signed habitat acreage settlement"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-037/@authority",
+        "mode": "complete",
+        "scope": "Each analyte has its own certified locator."
+      },
+      "fixture_id": "R3F-037",
+      "records": [
+        {
+          "content": "Nitrate 2.6 mg/L.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-037/R1#nitrate"
+        },
+        {
+          "content": "Phosphate 0.4 mg/L.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-037/R2#phosphate"
+        }
+      ],
+      "title": "River chemistry certificate"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-039/@authority",
+        "mode": "complete",
+        "scope": "The final test record governs runtime and load."
+      },
+      "fixture_id": "R3F-039",
+      "records": [
+        {
+          "content": "Generator G4 runtime 6.5 hours.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-039/R1#runtime"
+        },
+        {
+          "content": "Mean load 72%.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-039/R2#load"
+        }
+      ],
+      "title": "Hospital generator test"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-042/@authority",
+        "mode": "complete",
+        "scope": "The trial covers one cultivar under irrigated greenhouse conditions only."
+      },
+      "fixture_id": "R3F-042",
+      "records": [
+        {
+          "content": "Cultivar Z greenhouse plots: yield 9% higher with treatment.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-042/R1#result"
+        },
+        {
+          "content": "No field, dryland, or other-cultivar inference.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-042/R2#limit"
+        }
+      ],
+      "title": "Crop treatment trial"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-043/@authority",
+        "mode": "complete",
+        "scope": "The diagnostic is complete and says two causes remain compatible."
+      },
+      "fixture_id": "R3F-043",
+      "records": [
+        {
+          "content": "Pattern compatible with lubrication loss or shaft misalignment; tests do not distinguish.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-043/R1#analysis"
+        }
+      ],
+      "title": "Bearing diagnostic"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_only_as_stated",
+        "locator": "rfiqa-v3://R3F-047/@authority",
+        "mode": "dimension_complete",
+        "scope": "Signature and identity fields are fully redacted; no identity key remains."
+      },
+      "fixture_id": "R3F-047",
+      "records": [
+        {
+          "content": "Contract signed; signer_name REDACTED; signer_id REDACTED.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-047/R1#document"
+        },
+        {
+          "content": "Unredacted identity unavailable.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-047/R2#metadata"
+        }
+      ],
+      "title": "Redacted procurement signer"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-048/@authority",
+        "mode": "complete",
+        "scope": "The final incident report is complete and lists two unresolved mechanisms."
+      },
+      "fixture_id": "R3F-048",
+      "records": [
+        {
+          "content": "Failure mechanism could be insulation defect or external abrasion; recovered section insufficient to decide.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-048/R1#report"
+        }
+      ],
+      "title": "Unresolved cable failure"
+    },
+    {
+      "authority": {
+        "absence_semantics": "not_permitted",
+        "locator": "rfiqa-v3://R3F-050/@authority",
+        "mode": "partial",
+        "scope": "Four photos were selected from an unknown-size personal collection; selection coverage is undocumented."
+      },
+      "fixture_id": "R3F-050",
+      "records": [
+        {
+          "content": "Selected photo P1.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-050/R1#photo"
+        },
+        {
+          "content": "Selected photo P2.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-050/R2#photo"
+        },
+        {
+          "content": "Selected photo P3.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-050/R3#photo"
+        },
+        {
+          "content": "Selected photo P4.",
+          "evidence_id": "R4",
+          "locator": "rfiqa-v3://R3F-050/R4#photo"
+        }
+      ],
+      "title": "Selected shoreline photos"
+    },
+    {
+      "authority": {
+        "absence_semantics": "not_permitted",
+        "locator": "rfiqa-v3://R3F-052/@authority",
+        "mode": "partial",
+        "scope": "Only 70% of pages have OCR; damaged pages are unsearchable."
+      },
+      "fixture_id": "R3F-052",
+      "records": [
+        {
+          "content": "OCR token aerodrome; zero matches.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-052/R1#query"
+        },
+        {
+          "content": "70% searchable; damaged pages excluded.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-052/R2#coverage"
+        }
+      ],
+      "title": "Incomplete OCR newspaper search"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-053/@authority",
+        "mode": "complete",
+        "scope": "All final inspections for Building Q in 2027 are supplied."
+      },
+      "fixture_id": "R3F-053",
+      "records": [
+        {
+          "content": "Q-1: no obstruction.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-053/R1#finding"
+        },
+        {
+          "content": "Q-2: east exit blocked by crates.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-053/R2#finding"
+        },
+        {
+          "content": "Q-3: no obstruction.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-053/R3#finding"
+        }
+      ],
+      "title": "Final fire inspection set"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-054/@authority",
+        "mode": "complete",
+        "scope": "All final spill entries for Plant J in June are supplied."
+      },
+      "fixture_id": "R3F-054",
+      "records": [
+        {
+          "content": "June 3: no spill.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-054/R1#entry"
+        },
+        {
+          "content": "June 17: 12-liter solvent spill.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-054/R2#entry"
+        },
+        {
+          "content": "June 29: no spill.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-054/R3#entry"
+        }
+      ],
+      "title": "Complete spill log"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-056/@authority",
+        "mode": "complete",
+        "scope": "Signed status notice governs."
+      },
+      "fixture_id": "R3F-056",
+      "records": [
+        {
+          "content": "Bridge B4 status open to pedestrians; closed to vehicles.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-056/R1#status"
+        }
+      ],
+      "title": "Bridge opening status"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-057/@authority",
+        "mode": "complete",
+        "scope": "All final site outcomes are supplied."
+      },
+      "fixture_id": "R3F-057",
+      "records": [
+        {
+          "content": "Site A pass.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-057/R1#outcome"
+        },
+        {
+          "content": "Site B fail: coating blistered.",
+          "evidence_id": "R2",
+          "locator": "rfiqa-v3://R3F-057/R2#outcome"
+        },
+        {
+          "content": "Site C pass.",
+          "evidence_id": "R3",
+          "locator": "rfiqa-v3://R3F-057/R3#outcome"
+        }
+      ],
+      "title": "Three-site corrosion tests"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-059/@authority",
+        "mode": "complete",
+        "scope": "The sentence is the complete retained buyer position."
+      },
+      "fixture_id": "R3F-059",
+      "records": [
+        {
+          "content": "Buyer: We will not accept delivery after Friday unless the penalty is waived.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-059/R1#quote"
+        }
+      ],
+      "title": "Procurement negotiation transcript"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-060/@authority",
+        "mode": "complete",
+        "scope": "The sentence is the complete retained councilor position."
+      },
+      "fixture_id": "R3F-060",
+      "records": [
+        {
+          "content": "Councilor: I do not support the rezoning without a binding traffic cap.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-060/R1#quote"
+        }
+      ],
+      "title": "Council hearing transcript"
+    }
+  ]
+}

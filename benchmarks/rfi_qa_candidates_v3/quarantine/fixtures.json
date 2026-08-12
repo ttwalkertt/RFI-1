@@ -1,0 +1,107 @@
+{
+  "benchmark_version": "rfi-qa-independent-v3.0.0",
+  "fixtures": [
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-Q001/@authority",
+        "mode": "complete",
+        "scope": "The measurement is complete, but no threshold defines \u201cmaterial\u201d."
+      },
+      "fixture_id": "R3F-Q001",
+      "records": [
+        {
+          "content": "delay was 8 days.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-Q001/R1#measure"
+        }
+      ],
+      "title": "Undefined material criterion"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-Q002/@authority",
+        "mode": "complete",
+        "scope": "The measurement is complete, but no threshold defines \u201cfrequent\u201d."
+      },
+      "fixture_id": "R3F-Q002",
+      "records": [
+        {
+          "content": "4 alarms in 120 days.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-Q002/R1#measure"
+        }
+      ],
+      "title": "Undefined frequent criterion"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-Q003/@authority",
+        "mode": "complete",
+        "scope": "The measurement is complete, but no threshold defines \u201csubstantial\u201d."
+      },
+      "fixture_id": "R3F-Q003",
+      "records": [
+        {
+          "content": "cost fell 7%.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-Q003/R1#measure"
+        }
+      ],
+      "title": "Undefined substantial criterion"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-Q004/@authority",
+        "mode": "complete",
+        "scope": "The measurement is complete, but no threshold defines \u201cadequate\u201d."
+      },
+      "fixture_id": "R3F-Q004",
+      "records": [
+        {
+          "content": "92 of 100 fields populated.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-Q004/R1#measure"
+        }
+      ],
+      "title": "Undefined adequate criterion"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-Q005/@authority",
+        "mode": "complete",
+        "scope": "The measurement is complete, but no threshold defines \u201cprompt\u201d."
+      },
+      "fixture_id": "R3F-Q005",
+      "records": [
+        {
+          "content": "response arrived in 3 business days.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-Q005/R1#measure"
+        }
+      ],
+      "title": "Undefined prompt criterion"
+    },
+    {
+      "authority": {
+        "absence_semantics": "permitted_within_scope",
+        "locator": "rfiqa-v3://R3F-Q006/@authority",
+        "mode": "complete",
+        "scope": "The measurement is complete, but no threshold defines \u201cnear term\u201d."
+      },
+      "fixture_id": "R3F-Q006",
+      "records": [
+        {
+          "content": "improvement occurred after 75 days.",
+          "evidence_id": "R1",
+          "locator": "rfiqa-v3://R3F-Q006/R1#measure"
+        }
+      ],
+      "title": "Undefined near term criterion"
+    }
+  ]
+}

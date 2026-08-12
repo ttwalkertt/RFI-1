@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/rfi-qa-independent-v3-fixtures.schema.json",
+  "title": "Independent RFI QA benchmark fixtures v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["benchmark_version", "fixtures"],
+  "properties": {
+    "benchmark_version": {"const": "rfi-qa-independent-v3.0.0"},
+    "fixtures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fixture_id", "title", "authority", "records"],
+        "properties": {
+          "fixture_id": {"type": "string", "pattern": "^R3F-(?:[0-9]{3}|Q[0-9]{3})$"},
+          "title": {"type": "string", "minLength": 1},
+          "authority": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["locator", "mode", "scope", "absence_semantics"],
+            "properties": {
+              "locator": {"type": "string", "pattern": "^rfiqa-v3://[^/]+/@authority$"},
+              "mode": {"enum": ["complete", "partial", "dimension_complete"]},
+              "scope": {"type": "string", "minLength": 1},
+              "absence_semantics": {"enum": ["permitted_within_scope", "not_permitted", "permitted_only_as_stated"]}
+            }
+          },
+          "records": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["evidence_id", "locator", "content"],
+              "properties": {
+                "evidence_id": {"type": "string", "pattern": "^R[1-9][0-9]*$"},
+                "locator": {"type": "string", "pattern": "^rfiqa-v3://"},
+                "content": {"type": "string", "minLength": 1}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
