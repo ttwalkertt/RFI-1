@@ -1,234 +1,154 @@
 {
-  "algorithm": "sort pair IDs; Python random.Random(seed).shuffle; first 20 calibration, remaining 11 validation",
+  "algorithm": "lexicographically sort R2P-001 through R2P-036; Python random.Random(seed).shuffle; first 22 pairs calibration; remaining 14 validation",
   "calibration": {
+    "case_count": 44,
     "case_ids": [
-      "RFIQA-001",
-      "RFIQA-002",
-      "RFIQA-005",
-      "RFIQA-006",
-      "RFIQA-009",
-      "RFIQA-010",
-      "RFIQA-013",
-      "RFIQA-014",
-      "RFIQA-015",
-      "RFIQA-016",
-      "RFIQA-017",
-      "RFIQA-018",
-      "RFIQA-019",
-      "RFIQA-020",
-      "RFIQA-021",
-      "RFIQA-022",
-      "RFIQA-023",
-      "RFIQA-024",
-      "RFIQA-025",
-      "RFIQA-026",
-      "RFIQA-027",
-      "RFIQA-028",
-      "RFIQA-029",
-      "RFIQA-030",
-      "RFIQA-031",
-      "RFIQA-032",
-      "RFIQA-035",
-      "RFIQA-036",
-      "RFIQA-039",
-      "RFIQA-040",
-      "RFIQA-045",
-      "RFIQA-046",
-      "RFIQA-047",
-      "RFIQA-048",
-      "RFIQA-049",
-      "RFIQA-050",
-      "RFIQA-055",
-      "RFIQA-056",
-      "RFIQA-059",
-      "RFIQA-060"
+      "R2C-001",
+      "R2C-002",
+      "R2C-003",
+      "R2C-004",
+      "R2C-009",
+      "R2C-010",
+      "R2C-011",
+      "R2C-012",
+      "R2C-013",
+      "R2C-014",
+      "R2C-019",
+      "R2C-020",
+      "R2C-025",
+      "R2C-026",
+      "R2C-027",
+      "R2C-028",
+      "R2C-031",
+      "R2C-032",
+      "R2C-033",
+      "R2C-034",
+      "R2C-035",
+      "R2C-036",
+      "R2C-037",
+      "R2C-038",
+      "R2C-041",
+      "R2C-042",
+      "R2C-045",
+      "R2C-046",
+      "R2C-049",
+      "R2C-050",
+      "R2C-051",
+      "R2C-052",
+      "R2C-053",
+      "R2C-054",
+      "R2C-055",
+      "R2C-056",
+      "R2C-057",
+      "R2C-058",
+      "R2C-059",
+      "R2C-060",
+      "R2C-061",
+      "R2C-062",
+      "R2C-069",
+      "R2C-070"
     ],
     "coverage": {
-      "case_count": 40,
-      "defect_classes": [
-        "absence_overstatement",
-        "ambiguous_reference_overresolved",
-        "boundary_inclusion_error",
-        "causal_overstatement",
-        "chronology_boundary_incorrect",
-        "claim_strength_overstatement",
-        "conflicting_evidence_omitted",
-        "corpus_completeness_overstatement",
-        "date_imputation",
-        "denominator_error",
-        "duplicate_counting",
-        "entity_conflation",
-        "evidence_mapping_incorrect",
-        "evidence_mapping_missing",
-        "false_absence",
-        "insufficiency_miscalibrated",
-        "numeric_mismatch",
-        "provenance_authority_error",
-        "qualification_omitted",
-        "temporal_scope_mismatch",
-        "unit_mismatch"
-      ],
-      "defect_families": {
-        "identity_attribution_provenance_mapping": [
-          "ambiguous_reference_overresolved",
-          "entity_conflation",
-          "evidence_mapping_incorrect",
-          "evidence_mapping_missing",
-          "provenance_authority_error"
-        ],
-        "scope_qualification_epistemic": [
-          "absence_overstatement",
-          "causal_overstatement",
-          "claim_strength_overstatement",
-          "corpus_completeness_overstatement",
-          "false_absence",
-          "insufficiency_miscalibrated",
-          "qualification_omitted"
-        ],
-        "source_value_and_computation": [
-          "denominator_error",
-          "duplicate_counting",
-          "numeric_mismatch",
-          "unit_mismatch"
-        ],
-        "time_boundaries_status_eligibility": [
-          "boundary_inclusion_error",
-          "chronology_boundary_incorrect",
-          "date_imputation",
-          "temporal_scope_mismatch"
-        ],
-        "whole_answer_integrity": [
-          "conflicting_evidence_omitted"
-        ]
+      "authority_mode_counts": {
+        "complete": 19,
+        "dimension_complete": 2,
+        "partial": 1
       },
-      "difficulties": {
+      "case_count": 44,
+      "defect_class_case_counts": {
+        "absence_overstatement": 1,
+        "aggregation_error": 1,
+        "ambiguous_reference_overresolved": 1,
+        "chronology_basis_mismatch": 1,
+        "chronology_boundary_incorrect": 1,
+        "claim_strength_overstatement": 1,
+        "conflicting_evidence_omitted": 1,
+        "denominator_error": 1,
+        "evidence_mapping_incorrect": 1,
+        "evidence_mapping_missing": 1,
+        "false_absence": 1,
+        "insufficiency_miscalibrated": 1,
+        "internal_inconsistency": 1,
+        "numeric_mismatch": 1,
+        "provenance_authority_error": 1,
+        "qualification_omitted": 1,
+        "quote_context_distortion": 1,
+        "record_eligibility_error": 1,
+        "temporal_scope_mismatch": 1,
+        "timezone_conversion_error": 1,
+        "unit_mismatch": 1,
+        "version_supersession_ignored": 1
+      },
+      "difficulty_counts": {
         "atomic": 12,
-        "cross_evidence": 18,
-        "evidence_limits": 10
+        "authority_boundary": 6,
+        "multi_record": 26
       },
-      "dispositions": {
-        "defective": 15,
-        "indeterminate": 5,
-        "supported": 20
+      "disposition_counts": {
+        "defective": 19,
+        "indeterminate": 3,
+        "supported": 22
       },
-      "pair_count": 20
+      "fixture_count": 22,
+      "pair_count": 22,
+      "pair_set_sha256": "dcee2085b2f5b493fc2f0a84a665414f466f4a06f00d7aa1dc4d2762cd4badf9"
     },
-    "pair_ids": [
-      "PAIR-001",
-      "PAIR-003",
-      "PAIR-005",
-      "PAIR-007",
-      "PAIR-008",
-      "PAIR-009",
-      "PAIR-010",
-      "PAIR-011",
-      "PAIR-012",
-      "PAIR-013",
-      "PAIR-014",
-      "PAIR-015",
-      "PAIR-016",
-      "PAIR-018",
-      "PAIR-020",
-      "PAIR-023",
-      "PAIR-024",
-      "PAIR-025",
-      "PAIR-028",
-      "PAIR-030"
-    ]
+    "pair_count": 22,
+    "pair_set_sha256": "dcee2085b2f5b493fc2f0a84a665414f466f4a06f00d7aa1dc4d2762cd4badf9"
   },
   "disjoint": true,
-  "held_out_protection": "validation payloads, labels, outputs, and scores are inaccessible to run-calibration; run-validation requires a matching frozen-gauge manifest and one-shot marker",
-  "manifest_version": "task075.partition.v1",
+  "held_out_protection": "run-calibration loads only calibration/; run-validation requires a matching frozen gauge and the exact restored validation file digests; no validation IDs or content are present before restoration",
+  "manifest_version": "task075.partition.v2",
   "objective_population_exhausted": true,
-  "rejected_splits": [],
+  "quarantine_case_count": 4,
   "rerandomized": false,
-  "seed": 75020260811,
-  "unit": "matched pair",
+  "seed": 20260811,
+  "source": "independently authored split-manifest.json; not generated or rerandomized by RBF",
+  "source_split_manifest_sha256": "2ffaa67de75c556f38fdf5638f65e2a598fb193025997a79701001cb39d1cc56",
+  "unit": "matched_pair",
   "validation": {
-    "case_ids": [
-      "RFIQA-003",
-      "RFIQA-004",
-      "RFIQA-007",
-      "RFIQA-008",
-      "RFIQA-011",
-      "RFIQA-012",
-      "RFIQA-033",
-      "RFIQA-034",
-      "RFIQA-037",
-      "RFIQA-038",
-      "RFIQA-041",
-      "RFIQA-042",
-      "RFIQA-043",
-      "RFIQA-044",
-      "RFIQA-051",
-      "RFIQA-052",
-      "RFIQA-053",
-      "RFIQA-054",
-      "RFIQA-057",
-      "RFIQA-058",
-      "RFIQA-061",
-      "RFIQA-062"
-    ],
+    "case_count": 28,
+    "case_ids": null,
     "coverage": {
-      "case_count": 22,
-      "defect_classes": [
-        "aggregation_error",
-        "attribution_unsupported",
-        "chronology_basis_mismatch",
-        "chronology_boundary_incorrect",
-        "internal_inconsistency",
-        "quote_context_distortion",
-        "record_eligibility_error",
-        "status_mischaracterized",
-        "timezone_conversion_error",
-        "unsupported_claim",
-        "version_supersession_ignored"
-      ],
-      "defect_families": {
-        "identity_attribution_provenance_mapping": [
-          "attribution_unsupported"
-        ],
-        "source_value_and_computation": [
-          "aggregation_error"
-        ],
-        "time_boundaries_status_eligibility": [
-          "chronology_basis_mismatch",
-          "chronology_boundary_incorrect",
-          "record_eligibility_error",
-          "status_mischaracterized",
-          "timezone_conversion_error",
-          "version_supersession_ignored"
-        ],
-        "whole_answer_integrity": [
-          "internal_inconsistency",
-          "quote_context_distortion",
-          "unsupported_claim"
-        ]
+      "authority_mode_counts": {
+        "complete": 10,
+        "dimension_complete": 3,
+        "partial": 1
       },
-      "difficulties": {
-        "atomic": 10,
-        "cross_evidence": 10,
-        "evidence_limits": 2
+      "case_count": 28,
+      "defect_class_case_counts": {
+        "attribution_unsupported": 1,
+        "boundary_inclusion_error": 1,
+        "causal_overstatement": 1,
+        "chronology_boundary_incorrect": 1,
+        "claim_strength_overstatement": 1,
+        "corpus_completeness_overstatement": 1,
+        "date_imputation": 1,
+        "denominator_error": 1,
+        "duplicate_counting": 1,
+        "entity_conflation": 1,
+        "evidence_mapping_incorrect": 1,
+        "provenance_authority_error": 1,
+        "qualification_omitted": 2,
+        "status_mischaracterized": 1,
+        "unsupported_claim": 1
       },
-      "dispositions": {
+      "difficulty_counts": {
+        "atomic": 4,
+        "authority_boundary": 8,
+        "multi_record": 16
+      },
+      "disposition_counts": {
         "defective": 10,
-        "indeterminate": 1,
-        "supported": 11
+        "indeterminate": 4,
+        "supported": 14
       },
-      "pair_count": 11
+      "fixture_count": 14,
+      "pair_count": 14,
+      "pair_set_sha256": "ec5b15779060adc4abf509735a491162ab2f9eef5bea907f194756afe7ff5f0e"
     },
-    "pair_ids": [
-      "PAIR-002",
-      "PAIR-004",
-      "PAIR-006",
-      "PAIR-017",
-      "PAIR-019",
-      "PAIR-021",
-      "PAIR-022",
-      "PAIR-026",
-      "PAIR-027",
-      "PAIR-029",
-      "PAIR-031"
-    ]
+    "pair_count": 14,
+    "pair_set_sha256": "ec5b15779060adc4abf509735a491162ab2f9eef5bea907f194756afe7ff5f0e",
+    "physically_absent": true
   }
 }

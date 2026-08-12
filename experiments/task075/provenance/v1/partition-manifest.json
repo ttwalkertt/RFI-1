@@ -1,0 +1,234 @@
+{
+  "algorithm": "sort pair IDs; Python random.Random(seed).shuffle; first 20 calibration, remaining 11 validation",
+  "calibration": {
+    "case_ids": [
+      "RFIQA-001",
+      "RFIQA-002",
+      "RFIQA-005",
+      "RFIQA-006",
+      "RFIQA-009",
+      "RFIQA-010",
+      "RFIQA-013",
+      "RFIQA-014",
+      "RFIQA-015",
+      "RFIQA-016",
+      "RFIQA-017",
+      "RFIQA-018",
+      "RFIQA-019",
+      "RFIQA-020",
+      "RFIQA-021",
+      "RFIQA-022",
+      "RFIQA-023",
+      "RFIQA-024",
+      "RFIQA-025",
+      "RFIQA-026",
+      "RFIQA-027",
+      "RFIQA-028",
+      "RFIQA-029",
+      "RFIQA-030",
+      "RFIQA-031",
+      "RFIQA-032",
+      "RFIQA-035",
+      "RFIQA-036",
+      "RFIQA-039",
+      "RFIQA-040",
+      "RFIQA-045",
+      "RFIQA-046",
+      "RFIQA-047",
+      "RFIQA-048",
+      "RFIQA-049",
+      "RFIQA-050",
+      "RFIQA-055",
+      "RFIQA-056",
+      "RFIQA-059",
+      "RFIQA-060"
+    ],
+    "coverage": {
+      "case_count": 40,
+      "defect_classes": [
+        "absence_overstatement",
+        "ambiguous_reference_overresolved",
+        "boundary_inclusion_error",
+        "causal_overstatement",
+        "chronology_boundary_incorrect",
+        "claim_strength_overstatement",
+        "conflicting_evidence_omitted",
+        "corpus_completeness_overstatement",
+        "date_imputation",
+        "denominator_error",
+        "duplicate_counting",
+        "entity_conflation",
+        "evidence_mapping_incorrect",
+        "evidence_mapping_missing",
+        "false_absence",
+        "insufficiency_miscalibrated",
+        "numeric_mismatch",
+        "provenance_authority_error",
+        "qualification_omitted",
+        "temporal_scope_mismatch",
+        "unit_mismatch"
+      ],
+      "defect_families": {
+        "identity_attribution_provenance_mapping": [
+          "ambiguous_reference_overresolved",
+          "entity_conflation",
+          "evidence_mapping_incorrect",
+          "evidence_mapping_missing",
+          "provenance_authority_error"
+        ],
+        "scope_qualification_epistemic": [
+          "absence_overstatement",
+          "causal_overstatement",
+          "claim_strength_overstatement",
+          "corpus_completeness_overstatement",
+          "false_absence",
+          "insufficiency_miscalibrated",
+          "qualification_omitted"
+        ],
+        "source_value_and_computation": [
+          "denominator_error",
+          "duplicate_counting",
+          "numeric_mismatch",
+          "unit_mismatch"
+        ],
+        "time_boundaries_status_eligibility": [
+          "boundary_inclusion_error",
+          "chronology_boundary_incorrect",
+          "date_imputation",
+          "temporal_scope_mismatch"
+        ],
+        "whole_answer_integrity": [
+          "conflicting_evidence_omitted"
+        ]
+      },
+      "difficulties": {
+        "atomic": 12,
+        "cross_evidence": 18,
+        "evidence_limits": 10
+      },
+      "dispositions": {
+        "defective": 15,
+        "indeterminate": 5,
+        "supported": 20
+      },
+      "pair_count": 20
+    },
+    "pair_ids": [
+      "PAIR-001",
+      "PAIR-003",
+      "PAIR-005",
+      "PAIR-007",
+      "PAIR-008",
+      "PAIR-009",
+      "PAIR-010",
+      "PAIR-011",
+      "PAIR-012",
+      "PAIR-013",
+      "PAIR-014",
+      "PAIR-015",
+      "PAIR-016",
+      "PAIR-018",
+      "PAIR-020",
+      "PAIR-023",
+      "PAIR-024",
+      "PAIR-025",
+      "PAIR-028",
+      "PAIR-030"
+    ]
+  },
+  "disjoint": true,
+  "held_out_protection": "validation payloads, labels, outputs, and scores are inaccessible to run-calibration; run-validation requires a matching frozen-gauge manifest and one-shot marker",
+  "manifest_version": "task075.partition.v1",
+  "objective_population_exhausted": true,
+  "rejected_splits": [],
+  "rerandomized": false,
+  "seed": 75020260811,
+  "unit": "matched pair",
+  "validation": {
+    "case_ids": [
+      "RFIQA-003",
+      "RFIQA-004",
+      "RFIQA-007",
+      "RFIQA-008",
+      "RFIQA-011",
+      "RFIQA-012",
+      "RFIQA-033",
+      "RFIQA-034",
+      "RFIQA-037",
+      "RFIQA-038",
+      "RFIQA-041",
+      "RFIQA-042",
+      "RFIQA-043",
+      "RFIQA-044",
+      "RFIQA-051",
+      "RFIQA-052",
+      "RFIQA-053",
+      "RFIQA-054",
+      "RFIQA-057",
+      "RFIQA-058",
+      "RFIQA-061",
+      "RFIQA-062"
+    ],
+    "coverage": {
+      "case_count": 22,
+      "defect_classes": [
+        "aggregation_error",
+        "attribution_unsupported",
+        "chronology_basis_mismatch",
+        "chronology_boundary_incorrect",
+        "internal_inconsistency",
+        "quote_context_distortion",
+        "record_eligibility_error",
+        "status_mischaracterized",
+        "timezone_conversion_error",
+        "unsupported_claim",
+        "version_supersession_ignored"
+      ],
+      "defect_families": {
+        "identity_attribution_provenance_mapping": [
+          "attribution_unsupported"
+        ],
+        "source_value_and_computation": [
+          "aggregation_error"
+        ],
+        "time_boundaries_status_eligibility": [
+          "chronology_basis_mismatch",
+          "chronology_boundary_incorrect",
+          "record_eligibility_error",
+          "status_mischaracterized",
+          "timezone_conversion_error",
+          "version_supersession_ignored"
+        ],
+        "whole_answer_integrity": [
+          "internal_inconsistency",
+          "quote_context_distortion",
+          "unsupported_claim"
+        ]
+      },
+      "difficulties": {
+        "atomic": 10,
+        "cross_evidence": 10,
+        "evidence_limits": 2
+      },
+      "dispositions": {
+        "defective": 10,
+        "indeterminate": 1,
+        "supported": 11
+      },
+      "pair_count": 11
+    },
+    "pair_ids": [
+      "PAIR-002",
+      "PAIR-004",
+      "PAIR-006",
+      "PAIR-017",
+      "PAIR-019",
+      "PAIR-021",
+      "PAIR-022",
+      "PAIR-026",
+      "PAIR-027",
+      "PAIR-029",
+      "PAIR-031"
+    ]
+  }
+}

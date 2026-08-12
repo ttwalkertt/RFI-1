@@ -16,15 +16,23 @@ from rfi.qa_gauge import (
     gauge_output_schema,
     parse_gauge_review,
     prepare_control_manifests,
+    prepare_v2_control_manifests,
     score_partition,
 )
+from rfi.qa_gauge.prompts import DESIGN_GAUGE_V2, prompt_for_design
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS_ROOT = ROOT / "benchmarks/rfi_qa_candidates"
+V2_CORPUS_ROOT = ROOT / "benchmarks/rfi_qa_candidates_v2"
 CONTROL = ROOT / "experiments/task075"
 
 
-def review(evaluation_id: str, disposition: str, defect_class: str | None = None, locator: str = "fixture://FX-001/E1#value") -> GaugeReview:
+def review(
+    evaluation_id: str,
+    disposition: str,
+    defect_class: str | None = None,
+    locator: str = "fixture://FX-001/E1#value",
+) -> GaugeReview:
     findings = (
         GaugeFinding("F001", defect_class, "claim", "material defect", (locator,)),
     ) if defect_class else ()
@@ -32,7 +40,9 @@ def review(evaluation_id: str, disposition: str, defect_class: str | None = None
 
 
 class GaugeContractTests(unittest.TestCase):
-    def test_strict_schema_and_semantics_reject_invented_locator_and_findings_on_supported(self) -> None:
+    def test_strict_schema_and_semantics_reject_invented_locator_and_findings_on_supported(
+        self,
+    ) -> None:
         schema = gauge_output_schema("eval", ("fixture://FX-001/E1#value",))
         self.assertFalse(schema["additionalProperties"])
         payload = {
@@ -42,7 +52,11 @@ class GaugeContractTests(unittest.TestCase):
             "findings": [],
             "rationale": "All material claims are supported.",
         }
-        parsed = parse_gauge_review(payload, evaluation_id="eval", allowed_locators=("fixture://FX-001/E1#value",))
+        parsed = parse_gauge_review(
+            payload,
+            evaluation_id="eval",
+            allowed_locators=("fixture://FX-001/E1#value",),
+        )
         self.assertEqual(parsed.disposition, "supported")
         payload["findings"] = [{
             "finding_id": "F001",
@@ -52,11 +66,29 @@ class GaugeContractTests(unittest.TestCase):
             "evidence_locators": ["fixture://FX-001/E1#value"],
         }]
         with self.assertRaisesRegex(ValueError, "supported"):
-            parse_gauge_review(payload, evaluation_id="eval", allowed_locators=("fixture://FX-001/E1#value",))
+            parse_gauge_review(
+                payload,
+                evaluation_id="eval",
+                allowed_locators=("fixture://FX-001/E1#value",),
+            )
         payload["disposition"] = "defective"
+        payload["findings"][0]["evidence_locators"] = [
+            "fixture://FX-001/E1#value",
+            "fixture://FX-001/E1#value",
+        ]
+        with self.assertRaisesRegex(ValueError, "at most once"):
+            parse_gauge_review(
+                payload,
+                evaluation_id="eval",
+                allowed_locators=("fixture://FX-001/E1#value",),
+            )
         payload["findings"][0]["evidence_locators"] = ["fixture://invented/E1#value"]
         with self.assertRaisesRegex(ValueError, "not one of"):
-            parse_gauge_review(payload, evaluation_id="eval", allowed_locators=("fixture://FX-001/E1#value",))
+            parse_gauge_review(
+                payload,
+                evaluation_id="eval",
+                allowed_locators=("fixture://FX-001/E1#value",),
+            )
 
     def test_consensus_requires_all_runs_and_strict_majority(self) -> None:
         reviews = (
@@ -72,6 +104,35 @@ class GaugeContractTests(unittest.TestCase):
 
 
 class BenchmarkProtectionTests(unittest.TestCase):
+    def test_v2_visible_partition_is_exact_and_held_out_is_physically_absent(self) -> None:
+        calibration = BenchmarkCorpus.load(V2_CORPUS_ROOT, partition="calibration")
+        quarantine = BenchmarkCorpus.load(V2_CORPUS_ROOT, partition="quarantine")
+        self.assertEqual((len(calibration.objective), len(calibration.fixtures)), (44, 22))
+        self.assertEqual((len(quarantine.borderline), len(quarantine.fixtures)), (4, 4))
+        self.assertFalse((V2_CORPUS_ROOT / "validation/cases.jsonl").exists())
+        self.assertFalse((V2_CORPUS_ROOT / "validation/fixtures.json").exists())
+        with self.assertRaisesRegex(ValueError, "physically absent"):
+            BenchmarkCorpus.load(V2_CORPUS_ROOT, partition="validation")
+
+    def test_v2_control_adopts_author_split_without_rerandomization(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            result = prepare_v2_control_manifests(
+                corpus_root=V2_CORPUS_ROOT,
+                scoring_path=CONTROL / "scoring-contract.json",
+                config_path=CONTROL / "optimization-config.json",
+                output=target,
+                authoring_commit="ac2837034078ec101ea7e2a582916268b88663fb",
+            )
+            self.assertEqual(
+                result["corpus_digest"],
+                "09ec5ab31d4f9683e7ce7f9064fb294f388d4846b5f75a68875f69a6c740c54a",
+            )
+            partition = json.loads((target / "partition-manifest.json").read_text())
+            self.assertEqual(len(partition["calibration"]["case_ids"]), 44)
+            self.assertIsNone(partition["validation"]["case_ids"])
+            self.assertFalse(partition["rerandomized"])
+
     def test_projection_withholds_reference_pair_adjudicability_and_title(self) -> None:
         corpus = BenchmarkCorpus.load(CORPUS_ROOT)
         payload = corpus.reviewer_payload(str(corpus.objective[0]["case_id"]))
@@ -82,7 +143,10 @@ class BenchmarkProtectionTests(unittest.TestCase):
         self.assertEqual(len(corpus.borderline), 4)
 
     def test_seeded_split_is_reproducible_disjoint_pair_preserving_and_quarantined(self) -> None:
-        with tempfile.TemporaryDirectory() as left_name, tempfile.TemporaryDirectory() as right_name:
+        with (
+            tempfile.TemporaryDirectory() as left_name,
+            tempfile.TemporaryDirectory() as right_name,
+        ):
             left = Path(left_name)
             right = Path(right_name)
             for target in (left, right):
@@ -102,11 +166,22 @@ class BenchmarkProtectionTests(unittest.TestCase):
             self.assertTrue(calibration.isdisjoint(validation))
             corpus = BenchmarkCorpus.load(CORPUS_ROOT)
             for case in corpus.objective:
-                mate_ids = {str(item["case_id"]) for item in corpus.objective if item["pair_id"] == case["pair_id"]}
+                mate_ids = {
+                    str(item["case_id"])
+                    for item in corpus.objective
+                    if item["pair_id"] == case["pair_id"]
+                }
                 self.assertTrue(mate_ids <= calibration or mate_ids <= validation)
             quarantine = json.loads((left / "quarantine-manifest.json").read_text())
-            self.assertEqual([item["case_id"] for item in quarantine["cases"]], ["RFIQA-063", "RFIQA-064", "RFIQA-065", "RFIQA-066"])
-            self.assertTrue({item["case_id"] for item in quarantine["cases"]}.isdisjoint(calibration | validation))
+            self.assertEqual(
+                [item["case_id"] for item in quarantine["cases"]],
+                ["RFIQA-063", "RFIQA-064", "RFIQA-065", "RFIQA-066"],
+            )
+            self.assertTrue(
+                {item["case_id"] for item in quarantine["cases"]}.isdisjoint(
+                    calibration | validation
+                )
+            )
 
 
 class ScoringTests(unittest.TestCase):
@@ -132,10 +207,20 @@ class ScoringTests(unittest.TestCase):
                 item = review(evaluation_id, "supported")
             else:
                 finding = reference["material_findings"][0]
-                item = review(evaluation_id, str(reference["disposition"]), str(finding["defect_class"]), str(finding["evidence_locators"][0]))
+                item = review(
+                    evaluation_id,
+                    str(reference["disposition"]),
+                    str(finding["defect_class"]),
+                    str(finding["evidence_locators"][0]),
+                )
             reviews_by_case[case_id] = (item, item, item)
         contract = json.loads((CONTROL / "scoring-contract.json").read_text())
-        score = score_partition(cases=cases, reviews_by_case=reviews_by_case, contract=contract, required_runs=3)
+        score = score_partition(
+            cases=cases,
+            reviews_by_case=reviews_by_case,
+            contract=contract,
+            required_runs=3,
+        )
         self.assertEqual(score["metrics"]["disposition_accuracy"], 1.0)
         self.assertEqual(score["metrics"]["evidence_grounding_rate"], 1.0)
         self.assertEqual(score["metrics"]["matched_pair_discrimination"], 1.0)
@@ -154,24 +239,48 @@ class ScoringTests(unittest.TestCase):
                 item = review(evaluation_id, "supported")
             reviews_by_case[case_id] = (item,)
         contract = json.loads((CONTROL / "scoring-contract.json").read_text())
-        score = score_partition(cases=cases, reviews_by_case=reviews_by_case, contract=contract, required_runs=1)
+        score = score_partition(
+            cases=cases,
+            reviews_by_case=reviews_by_case,
+            contract=contract,
+            required_runs=1,
+        )
         self.assertEqual(score["counts"]["false_accepts"], 1)
         self.assertEqual(score["counts"]["false_rejects"], 2)
         self.assertEqual(score["counts"]["unsupported_findings"], 2)
 
 
 class HarnessBoundaryTests(unittest.TestCase):
+    def test_decomposed_design_separates_truth_state_from_defect_mechanism(self) -> None:
+        corpus = BenchmarkCorpus.load(CORPUS_ROOT)
+        prompt = prompt_for_design(
+            DESIGN_GAUGE_V2,
+            corpus.reviewer_payload("RFIQA-023"),
+        )
+        self.assertIn("EPISTEMIC STATE", prompt)
+        self.assertIn("neither establishable nor refutable", prompt)
+        self.assertIn("denominator_error", prompt)
+        self.assertNotIn("reference_qa", prompt)
+
     def test_validation_requires_freeze_and_one_shot_marker_is_implemented(self) -> None:
         source = (ROOT / "scripts/task075_qa_gauge_experiment.py").read_text(encoding="utf-8")
         self.assertIn('phase["phase"] != "frozen"', source)
         self.assertIn("held-out validation has already been attempted", source)
         self.assertIn("assert_frozen_gauge", source)
         self.assertIn("post-freeze mutation detected", source)
-        self.assertNotIn("reference_qa", (ROOT / "src/rfi/qa_gauge/prompts.py").read_text(encoding="utf-8"))
+        self.assertNotIn(
+            "reference_qa",
+            (ROOT / "src/rfi/qa_gauge/prompts.py").read_text(encoding="utf-8"),
+        )
 
     def test_harness_does_not_import_repair_or_task074_or_mcp(self) -> None:
         source = (ROOT / "scripts/task075_qa_gauge_experiment.py").read_text(encoding="utf-8")
-        for prohibited in ("parse_repair", "SingleRepairLifecycle", "rfi.investigation_qa", "rfi.mcp"):
+        for prohibited in (
+            "parse_repair",
+            "SingleRepairLifecycle",
+            "rfi.investigation_qa",
+            "rfi.mcp",
+        ):
             self.assertNotIn(prohibited, source)
 
 

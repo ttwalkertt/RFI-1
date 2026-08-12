@@ -1,0 +1,92 @@
+{
+  "resumption_version": "task075.benchmark-v2-resumption.v1",
+  "recorded_before_v2_calibration": true,
+  "benchmark": {
+    "version": "rfi-qa-independent-v2.0.0",
+    "authoring_commit": "ac2837034078ec101ea7e2a582916268b88663fb",
+    "root": "benchmarks/rfi_qa_candidates_v2",
+    "corpus_sha256": "09ec5ab31d4f9683e7ce7f9064fb294f388d4846b5f75a68875f69a6c740c54a",
+    "split_seed": 20260811,
+    "rerandomization": false,
+    "objective_pairs": 36,
+    "objective_cases": 72,
+    "calibration_pairs": 22,
+    "calibration_cases": 44,
+    "validation_pairs": 14,
+    "validation_cases": 28,
+    "quarantine_cases": 4,
+    "validation_files_physically_absent": true
+  },
+  "original_preregistration": {
+    "commit": "045ff69",
+    "scoring_contract": "task075.scoring.v1",
+    "scoring_contract_sha256": "79f6e5a5ef445d08880079f2c27a995e80ed16489bb7d823782c28795a197ae6",
+    "optimization_config": "task075.rbf-optimization.v1",
+    "optimization_config_sha256": "b0670449fc0f24ff28af98e69f0bfe995a6b9009d81154084ca1ecf3a4d70330",
+    "formulas_changed": false,
+    "thresholds_changed": false,
+    "terminal_independent_runs_per_case": 3,
+    "maximum_calibration_model_calls": 240,
+    "maximum_material_design_changes": 3,
+    "maximum_terminal_calibration_assessments": 1,
+    "stopping_rules_changed": false
+  },
+  "mechanical_population_effects": {
+    "reason": "Only ratio denominators and their integer pass equivalents change because benchmark v2 has 44 calibration and 28 validation cases. No observed QA result informed these calculations.",
+    "calibration": {
+      "case_count": 44,
+      "supported_cases": 22,
+      "defective_cases": 19,
+      "indeterminate_cases": 3,
+      "matched_pairs": 22,
+      "expected_material_findings": 22,
+      "disposition_accuracy_minimum_correct": 40,
+      "material_false_accept_maximum_count": 1,
+      "supported_false_reject_maximum_count": 2,
+      "indeterminate_minimum_correct": 3,
+      "matched_pair_minimum_correct": 20,
+      "disposition_full_agreement_minimum_cases": 40,
+      "material_detection_full_agreement_minimum_cases": 40,
+      "disposition_pairwise_comparisons": 132,
+      "disposition_pairwise_minimum_agreements": 126
+    },
+    "validation": {
+      "case_count": 28,
+      "supported_cases": 14,
+      "defective_cases": 10,
+      "indeterminate_cases": 4,
+      "matched_pairs": 14,
+      "disposition_accuracy_minimum_correct": 26,
+      "material_false_accept_maximum_count": 1,
+      "supported_false_reject_maximum_count": 1,
+      "indeterminate_minimum_correct": 4,
+      "matched_pair_minimum_correct": 13,
+      "disposition_full_agreement_minimum_cases": 26,
+      "material_detection_full_agreement_minimum_cases": 26,
+      "disposition_pairwise_comparisons": 84,
+      "disposition_pairwise_minimum_agreements": 80
+    }
+  },
+  "preserved_v1_provenance": {
+    "validation_invalidated_by_exposure": true,
+    "validation_run": false,
+    "calibration_model_call_budget_consumed": 80,
+    "material_design_changes_consumed": 1,
+    "retained_design": "task075.decomposed-gauge-v2",
+    "retained_architecture": [
+      "authority ledger",
+      "claim/obligation ledger",
+      "deterministic verification",
+      "three-state epistemic decision",
+      "exact-class precedence"
+    ],
+    "retained_failure_attribution": "QA reasoning/prompt failure; required evidence was available, so no MCP/access change was justified"
+  },
+  "remaining_budget_decision": {
+    "calibration_model_calls_remaining_before_v2": 160,
+    "v2_terminal_calls": 132,
+    "calibration_model_calls_remaining_after_terminal": 28,
+    "full_v2_diagnostic_iteration_calls": 44,
+    "decision": "Run the retained decomposed gauge as the single terminal three-run v2 calibration assessment. If every threshold passes, freeze for success. Otherwise the one-terminal-assessment limit and remaining call budget stop optimization and require freezing the tested design with a budget termination. No v2 result may change this decision."
+  }
+}

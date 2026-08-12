@@ -1,26 +1,28 @@
 {
   "cases": [
     {
-      "case_id": "RFIQA-063",
+      "case_id": "R2Q-001",
       "human_review_required": true,
-      "sha256": "ce9daa84cd79f7bd579bc18d91ac88b1a1bbc1cc49515cd4edd45ce6d03bb825"
+      "sha256": "82c87ec6dd57c4ada245a762cd744ef4c98307de54751ace3a507594b1c112aa"
     },
     {
-      "case_id": "RFIQA-064",
+      "case_id": "R2Q-002",
       "human_review_required": true,
-      "sha256": "6dd701eba52986151c367b39685a85d81bfd2a38388f40b2abe78b11dd27276e"
+      "sha256": "a8b5d1039e3175881d61b9f37af05ddbf0d5854b9ed0ff502e152cc3270122d5"
     },
     {
-      "case_id": "RFIQA-065",
+      "case_id": "R2Q-003",
       "human_review_required": true,
-      "sha256": "b1053cbe4d1c00b6bf86a2e9e4db296f02552f450e3f9085df296881df95ec44"
+      "sha256": "35685aca9bf8290657bebafbd5a7b2105c085e18f1716582f884163d2dcd27a3"
     },
     {
-      "case_id": "RFIQA-066",
+      "case_id": "R2Q-004",
       "human_review_required": true,
-      "sha256": "564de0ca9ea04e8ded1c808b0ae142196d0aa79805b32222bbeb61978746c185"
+      "sha256": "21602800130c08e7cd8c1fff3a6f665e16caf70d3f0c76f367cdff84ecfe7fd0"
     }
   ],
-  "manifest_version": "task075.quarantine.v1",
-  "reason": "judgment-dependent; excluded unchanged from calibration, validation, scoring, RBF feedback, and success criteria"
+  "manifest_version": "task075.quarantine.v2",
+  "reason": "judgment-dependent; excluded unchanged from calibration, validation, scoring, RBF feedback, and success criteria",
+  "source_cases_sha256": "11588876eb42109d098dfe7926f4a498be4e02660a38f527ff3e7407f261687c",
+  "source_fixtures_sha256": "9b007d2bd8e6989941e2307e62913806b9bd0980b7cb412d07e1bf8ad0d68784"
 }

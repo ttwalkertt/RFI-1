@@ -115,7 +115,6 @@ def gauge_output_schema(evaluation_id: str, allowed_locators: tuple[str, ...]) -
                         "evidence_locators": {
                             "type": "array",
                             "minItems": 1,
-                            "uniqueItems": True,
                             "items": {
                                 "type": "string",
                                 "enum": list(allowed_locators),
@@ -137,7 +136,10 @@ def parse_gauge_review(
 ) -> GaugeReview:
     """Validate semantics beyond JSON Schema and return an immutable review."""
     schema = gauge_output_schema(evaluation_id, allowed_locators)
-    errors = sorted(Draft202012Validator(schema).iter_errors(payload), key=lambda item: list(item.path))
+    errors = sorted(
+        Draft202012Validator(schema).iter_errors(payload),
+        key=lambda item: list(item.path),
+    )
     if errors:
         detail = "; ".join(error.message for error in errors[:3])
         raise ValueError(f"invalid gauge output: {detail}")
@@ -157,6 +159,8 @@ def parse_gauge_review(
     classes = tuple(item.defect_class for item in findings)
     if len(classes) != len(set(classes)):
         raise ValueError("one review may report each defect class at most once")
+    if any(len(item.evidence_locators) != len(set(item.evidence_locators)) for item in findings):
+        raise ValueError("one finding may report each evidence locator at most once")
     disposition = str(payload["disposition"])
     if disposition == "supported" and findings:
         raise ValueError("supported disposition cannot contain material findings")

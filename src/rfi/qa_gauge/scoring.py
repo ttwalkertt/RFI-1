@@ -49,7 +49,9 @@ def consensus_review(reviews: tuple[GaugeReview, ...], *, required_runs: int) ->
             defect_class=defect_class,
             affected_claim=min(item.affected_claim for item in items),
             finding=min(item.finding for item in items),
-            evidence_locators=tuple(sorted({locator for item in items for locator in item.evidence_locators})),
+            evidence_locators=tuple(
+                sorted({locator for item in items for locator in item.evidence_locators})
+            ),
         )
         for index, (defect_class, items) in enumerate(selected, start=1)
     )
@@ -68,7 +70,11 @@ def consensus_review(reviews: tuple[GaugeReview, ...], *, required_runs: int) ->
 
 def _match_findings(
     predicted: tuple[GaugeFinding, ...], reference: list[dict[str, Any]]
-) -> tuple[list[tuple[GaugeFinding, dict[str, Any], bool]], list[GaugeFinding], list[dict[str, Any]]]:
+) -> tuple[
+    list[tuple[GaugeFinding, dict[str, Any], bool]],
+    list[GaugeFinding],
+    list[dict[str, Any]],
+]:
     """Stable one-to-one class matching, preferring decisive-locator overlap."""
     unused = list(reference)
     matched: list[tuple[GaugeFinding, dict[str, Any], bool]] = []
@@ -106,7 +112,7 @@ def _repeatability(
             "material_detection_full_agreement": 0.0,
             "defect_class_mean_jaccard": 0.0,
             "evidence_reference_mean_jaccard": 0.0,
-            "supported_false_positive_count_variance": float("inf"),
+            "supported_false_positive_count_variance": 1.0,
         }
     full_disposition = 0
     disposition_agree = disposition_total = 0
@@ -128,20 +134,36 @@ def _repeatability(
             right_classes = {finding.defect_class for finding in right.findings}
             class_jaccards.append(_jaccard(left_classes, right_classes))
             for defect_class in sorted(left_classes.intersection(right_classes)):
-                left_refs = next(set(item.evidence_locators) for item in left.findings if item.defect_class == defect_class)
-                right_refs = next(set(item.evidence_locators) for item in right.findings if item.defect_class == defect_class)
+                left_refs = next(
+                    set(item.evidence_locators)
+                    for item in left.findings
+                    if item.defect_class == defect_class
+                )
+                right_refs = next(
+                    set(item.evidence_locators)
+                    for item in right.findings
+                    if item.defect_class == defect_class
+                )
                 evidence_jaccards.append(_jaccard(left_refs, right_refs))
         if case["reference_qa"]["disposition"] == "supported":
             supported_variances.append(pvariance([len(review.findings) for review in reviews]))
     return {
-        "disposition_full_agreement": _safe_ratio(full_disposition, len(cases), "disposition_full_agreement"),
-        "disposition_pairwise_agreement": _safe_ratio(disposition_agree, disposition_total, "disposition_pairwise_agreement"),
-        "material_detection_full_agreement": _safe_ratio(full_detection, len(cases), "material_detection_full_agreement"),
+        "disposition_full_agreement": _safe_ratio(
+            full_disposition, len(cases), "disposition_full_agreement"
+        ),
+        "disposition_pairwise_agreement": _safe_ratio(
+            disposition_agree, disposition_total, "disposition_pairwise_agreement"
+        ),
+        "material_detection_full_agreement": _safe_ratio(
+            full_detection, len(cases), "material_detection_full_agreement"
+        ),
         "defect_class_mean_jaccard": sum(class_jaccards) / len(class_jaccards),
         "evidence_reference_mean_jaccard": (
             sum(evidence_jaccards) / len(evidence_jaccards) if evidence_jaccards else 0.0
         ),
-        "supported_false_positive_count_variance": sum(supported_variances) / len(supported_variances),
+        "supported_false_positive_count_variance": (
+            sum(supported_variances) / len(supported_variances)
+        ),
     }
 
 
@@ -181,28 +203,32 @@ def score_partition(
     class_matched: Counter[str] = Counter()
     for case in case_list:
         case_id = str(case["case_id"])
+        reference = case["reference_qa"]
+        expected = list(reference["material_findings"])
+        expected_total += len(expected)
+        class_expected.update(str(item["defect_class"]) for item in expected)
         try:
             consensus = consensus_review(reviews_by_case[case_id], required_runs=required_runs)
         except (KeyError, ValueError) as exc:
             invalid[case_id] = str(exc)
             continue
         valid_consensus[case_id] = consensus
-        reference = case["reference_qa"]
         predicted = consensus.findings
-        expected = list(reference["material_findings"])
         matched, unsupported, missed = _match_findings(predicted, expected)
         matched_total += len(matched)
         grounded_total += sum(grounded for _, _, grounded in matched)
         unsupported_total += len(unsupported)
-        expected_total += len(expected)
         predicted_total += len(predicted)
         confusion[(str(reference["disposition"]), consensus.disposition)] += 1
-        class_expected.update(str(item["defect_class"]) for item in expected)
         class_predicted.update(item.defect_class for item in predicted)
         class_matched.update(item.defect_class for item, _, _ in matched)
         for predicted_finding, reference_finding, _ in matched:
             locator_total += len(predicted_finding.evidence_locators)
-            locator_hits += len(set(predicted_finding.evidence_locators).intersection(reference_finding["evidence_locators"]))
+            locator_hits += len(
+                set(predicted_finding.evidence_locators).intersection(
+                    reference_finding["evidence_locators"]
+                )
+            )
         per_case.append(
             {
                 "case_id": case_id,
@@ -213,7 +239,9 @@ def score_partition(
                 "expected_classes": list(reference["defect_classes"]),
                 "predicted_classes": [item.defect_class for item in predicted],
                 "matched_classes": [item.defect_class for item, _, _ in matched],
-                "grounded_matches": [item.defect_class for item, _, grounded in matched if grounded],
+                "grounded_matches": [
+                    item.defect_class for item, _, grounded in matched if grounded
+                ],
                 "unsupported_classes": [item.defect_class for item in unsupported],
                 "missed_classes": [str(item["defect_class"]) for item in missed],
             }
@@ -221,7 +249,11 @@ def score_partition(
     valid_count = len(valid_consensus)
     defective = [case for case in case_list if case["reference_qa"]["disposition"] == "defective"]
     supported = [case for case in case_list if case["reference_qa"]["disposition"] == "supported"]
-    indeterminate = [case for case in case_list if case["reference_qa"]["disposition"] == "indeterminate"]
+    indeterminate = [
+        case
+        for case in case_list
+        if case["reference_qa"]["disposition"] == "indeterminate"
+    ]
     disposition_correct = sum(item["disposition_correct"] for item in per_case)
     false_accepts = sum(
         valid_consensus.get(str(case["case_id"]), object()).disposition == "supported"
@@ -243,10 +275,16 @@ def score_partition(
         members = [item for item in per_case if str(item["pair_id"]) == pair_id]
         passed = False
         if len(members) == 2 and all(item["disposition_correct"] for item in members):
-            non_supported = next(item for item in members if item["reference_disposition"] != "supported")
+            non_supported = next(
+                item for item in members if item["reference_disposition"] != "supported"
+            )
             passed = bool(non_supported["grounded_matches"])
         pair_rows.append({"pair_id": pair_id, "passed": passed})
-    precision = _safe_ratio(matched_total, predicted_total, "defect precision") if predicted_total else 0.0
+    precision = (
+        _safe_ratio(matched_total, predicted_total, "defect precision")
+        if predicted_total
+        else 0.0
+    )
     recall = _safe_ratio(matched_total, expected_total, "material_finding_recall")
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     metrics = {
@@ -256,8 +294,12 @@ def score_partition(
             if valid_count
             else 0.0
         ),
-        "material_false_accept_rate": _safe_ratio(false_accepts, len(defective), "material_false_accept_rate"),
-        "supported_false_reject_rate": _safe_ratio(false_rejects, len(supported), "supported_false_reject_rate"),
+        "material_false_accept_rate": _safe_ratio(
+            false_accepts, len(defective), "material_false_accept_rate"
+        ),
+        "supported_false_reject_rate": _safe_ratio(
+            false_rejects, len(supported), "supported_false_reject_rate"
+        ),
         "material_finding_recall": recall,
         "defect_class_attribution_f1": f1,
         "evidence_grounding_rate": (
@@ -266,8 +308,14 @@ def score_partition(
             else 0.0
         ),
         "unsupported_finding_rate": unsupported_total / predicted_total if predicted_total else 0.0,
-        "indeterminate_accuracy": _safe_ratio(indeterminate_correct, len(indeterminate), "indeterminate_accuracy"),
-        "matched_pair_discrimination": _safe_ratio(sum(item["passed"] for item in pair_rows), len(pair_rows), "matched_pair_discrimination"),
+        "indeterminate_accuracy": _safe_ratio(
+            indeterminate_correct, len(indeterminate), "indeterminate_accuracy"
+        ),
+        "matched_pair_discrimination": _safe_ratio(
+            sum(item["passed"] for item in pair_rows),
+            len(pair_rows),
+            "matched_pair_discrimination",
+        ),
     }
     if required_runs == 3:
         metrics.update(_repeatability(case_list, reviews_by_case))
