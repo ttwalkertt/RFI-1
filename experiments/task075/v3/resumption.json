@@ -1,0 +1,152 @@
+{
+  "resumption_version": "task075.benchmark-v3-resumption.v1",
+  "recorded_before_v3_calibration": true,
+  "recorded_at_repository_commit": "8a44d4a13b69db443953d7162b659d4034b1b982",
+  "benchmark": {
+    "version": "rfi-qa-independent-v3.0.0",
+    "authoring_commit": "8a44d4a13b69db443953d7162b659d4034b1b982",
+    "root": "benchmarks/rfi_qa_candidates_v3",
+    "corpus_sha256": "52962392643587aab0ae6211e7f9dea21a181805fb0e25bf808dc4c877103968",
+    "split_seed": 20260812,
+    "rerandomization": false,
+    "objective_pairs": 60,
+    "objective_cases": 120,
+    "calibration_pairs": 40,
+    "calibration_cases": 80,
+    "verification_pairs": 20,
+    "verification_cases": 40,
+    "quarantine_cases": 6,
+    "verification_files_physically_absent": true,
+    "verification_cases_sha256": "8184454d4cfbec057b41fc2d460fc8cf1eb9a1174200be8ca9cc3f10d166a257",
+    "verification_fixtures_sha256": "a637f1dd86aebee72d435acf112f9a0014573ba99bcfc0fffa5d0703c8fd0b94"
+  },
+  "preserved_contract": {
+    "preregistration_commit": "045ff69",
+    "scoring_contract_path": "experiments/task075/scoring-contract.json",
+    "scoring_contract_version": "task075.scoring.v1",
+    "scoring_contract_sha256": "79f6e5a5ef445d08880079f2c27a995e80ed16489bb7d823782c28795a197ae6",
+    "base_optimization_config_path": "experiments/task075/optimization-config.json",
+    "base_optimization_config_version": "task075.rbf-optimization.v1",
+    "base_optimization_config_sha256": "b0670449fc0f24ff28af98e69f0bfe995a6b9009d81154084ca1ecf3a4d70330",
+    "formulas_changed": false,
+    "thresholds_changed": false,
+    "terminal_independent_runs_per_case": 3,
+    "maximum_material_design_changes": 3,
+    "maximum_terminal_calibration_assessments": 1,
+    "stopping_rules_changed": false,
+    "runtime_policy_changed": false,
+    "post_validation_tuning": false
+  },
+  "mechanical_population_effects": {
+    "reason": "Only case-count-dependent call quantities, split metadata, and integer pass equivalents change because V3 calibration contains 80 cases and held-out verification contains 40 cases. No V3 QA outcome informed these calculations.",
+    "calibration": {
+      "case_count": 80,
+      "supported_cases": 40,
+      "defective_cases": 32,
+      "indeterminate_cases": 8,
+      "matched_pairs": 40,
+      "expected_material_findings": 40,
+      "disposition_accuracy_minimum_correct": 72,
+      "material_false_accept_maximum_count": 3,
+      "supported_false_reject_maximum_count": 4,
+      "indeterminate_minimum_correct": 8,
+      "matched_pair_minimum_correct": 36,
+      "disposition_full_agreement_minimum_cases": 72,
+      "material_detection_full_agreement_minimum_cases": 72,
+      "disposition_pairwise_comparisons": 240,
+      "disposition_pairwise_minimum_agreements": 228
+    },
+    "verification": {
+      "case_count": 40,
+      "supported_cases": 20,
+      "defective_cases": 14,
+      "indeterminate_cases": 6,
+      "matched_pairs": 20,
+      "expected_material_findings": 20,
+      "disposition_accuracy_minimum_correct": 36,
+      "material_false_accept_maximum_count": 1,
+      "supported_false_reject_maximum_count": 2,
+      "indeterminate_minimum_correct": 6,
+      "matched_pair_minimum_correct": 18,
+      "disposition_full_agreement_minimum_cases": 36,
+      "material_detection_full_agreement_minimum_cases": 36,
+      "disposition_pairwise_comparisons": 120,
+      "disposition_pairwise_minimum_agreements": 114
+    }
+  },
+  "size_adjusted_optimization_budget": {
+    "maximum_v3_calibration_model_calls": 400,
+    "base_maximum_calibration_model_calls": 240,
+    "reason": "The V3 population mechanically requires 80 calls for the unchanged baseline, 80 for one full feedback-driven diagnostic iteration, and 240 for the single required three-run terminal assessment. The 400-call maximum preserves the V2 experiment's baseline -> one measured feedback iteration -> terminal structure; it does not add an outcome-driven iteration or relax any success criterion.",
+    "baseline_calls": 80,
+    "maximum_full_feedback_iterations_before_terminal": 1,
+    "feedback_iteration_calls": 80,
+    "terminal_calls": 240,
+    "maximum_planned_calls": 400,
+    "unallocated_contingency_calls": 0
+  },
+  "starting_design": {
+    "design": "task075.epistemic-root-cause-v3",
+    "selected_by_v2": true,
+    "prompt_sha256": "5702ee399de511d188cb11edb3d9275ac96d8b5e48002c9ad6dd8ea10c0fd486",
+    "contracts_sha256": "e8e0326fd906e5cd5d66072b553ce8d316a2274815eee6c05951e962ad325a21",
+    "scoring_implementation_sha256": "82ed15c59fed66f0c163a940b6f7f666135ab5a18871f0bcfc7a9f8241c1929f",
+    "runner_sha256": "13786eab72d73552f10d5c0aca7e0be21477676469dea371d6dc69ec38ac17d0",
+    "architecture_under_test": [
+      "authority ledger",
+      "claim/obligation ledger",
+      "deterministic verification",
+      "three-state epistemic decision",
+      "exact-class precedence"
+    ],
+    "methodology_may_be_replaced": true,
+    "material_change_requires_v3_calibration_evidence": true
+  },
+  "v2_provenance": {
+    "held_out_result_path": "experiments/task075/held-out-validation-result.json",
+    "held_out_result_sha256": "96e3d46bca063e4f9728df6eb094c5943a88fb6681853b71dcf16e63d288a9c8",
+    "frozen_gauge_path": "experiments/task075/frozen-gauge-manifest.json",
+    "frozen_gauge_sha256": "ef2a44d43288ee9273c2582d22a07e19cd03d8815ed8909ab1328c0e59231d86",
+    "known_regression_suite_not_optimization_truth": true,
+    "starting_design_reproduction_run_required": false,
+    "starting_design_reproduction_reason": "The unchanged starting design already has a complete one-shot V2 held-out result with 84 valid judgments and preserved raw evidence. Re-running it would add no baseline identity evidence.",
+    "candidate_regression_runs_per_case": 3,
+    "candidate_regression_timing": "After the V3 terminal assessment and before freeze; repeat only if the final candidate changes afterward.",
+    "veto_or_convergence_concern": {
+      "previously_passing_threshold_flips_to_fail": true,
+      "previously_failing_benefit_metric_absolute_drop": 0.1,
+      "previously_failing_error_metric_absolute_increase": 0.1,
+      "tuning_from_v2_regression_permitted": false
+    }
+  },
+  "v3_run_plan": {
+    "baseline": {
+      "design": "task075.epistemic-root-cause-v3",
+      "runs_per_case": 1,
+      "model_calls": 80,
+      "purpose": "Measure the unchanged V2-selected methodology on fresh independent V3 calibration truth."
+    },
+    "failure_attribution_before_change": true,
+    "feedback_iteration": {
+      "maximum_full_iterations_before_terminal": 1,
+      "runs_per_case": 1,
+      "model_calls": 80,
+      "condition": "Run only after shared V3 calibration failures justify a general QA, methodology, orchestration, deterministic-verification, or legitimate MCP/access change.",
+      "selection": "Select the candidate for terminal assessment only if it improves diagnostic utility or turns a failed primary threshold into a pass without worsening material false-accept rate or supported false-reject rate. Otherwise select the unchanged V3 baseline design."
+    },
+    "terminal": {
+      "maximum_assessments": 1,
+      "runs_per_case": 3,
+      "model_calls": 240,
+      "purpose": "Measure all unchanged success thresholds, including repeatability, on the selected V3 calibration design."
+    },
+    "v2_regression": {
+      "known_cases": 28,
+      "runs_per_case": 3,
+      "model_calls": 84,
+      "counted_against_v3_calibration_budget": false,
+      "purpose": "Measure regression only; V2 outcomes cannot motivate candidate changes."
+    },
+    "termination": "Freeze after the single V3 terminal assessment and required V2 regression. Record convergence only if the candidate meets V3 criteria without material V2 regression. No outcome may change scoring, thresholds, partitions, this budget, or the one-terminal-assessment limit."
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "history_version": "task075.v3-calibration-history.v1",
+  "benchmark_version": "rfi-qa-independent-v3.0.0",
+  "recorded_before_v3_calibration": true,
+  "starting_design": "task075.epistemic-root-cause-v3",
+  "starting_methodology": [
+    "authority ledger",
+    "claim/obligation ledger",
+    "deterministic verification",
+    "three-state epistemic decision",
+    "exact-class precedence"
+  ],
+  "v2_result_role": "Known regression evidence only; not V3 optimization feedback.",
+  "v3_iterations": [],
+  "v2_regressions": [],
+  "material_v3_changes": [],
+  "mcp_access_changes": [],
+  "suspected_reference_truth_defects": [],
+  "freeze": null,
+  "verification": null
+}

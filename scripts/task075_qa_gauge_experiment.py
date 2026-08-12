@@ -20,6 +20,7 @@ from rfi.qa_gauge.benchmark import (
     BenchmarkCorpus,
     prepare_control_manifests,
     prepare_v2_control_manifests,
+    prepare_v3_control_manifests,
     sha256,
 )
 from rfi.qa_gauge.contracts import GaugeReview, gauge_output_schema, parse_gauge_review
@@ -29,6 +30,7 @@ from rfi.qa_gauge.scoring import score_partition
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CORPUS = ROOT / "benchmarks/rfi_qa_candidates"
 V2_CORPUS = ROOT / "benchmarks/rfi_qa_candidates_v2"
+V3_CORPUS = ROOT / "benchmarks/rfi_qa_candidates_v3"
 DEFAULT_CONTROL = ROOT / "experiments/task075"
 DEFAULT_STATE = ROOT / ".artifacts/task075-control"
 SCORING = DEFAULT_CONTROL / "scoring-contract.json"
@@ -198,6 +200,67 @@ def prepare_v2(args: argparse.Namespace) -> int:
     return 0
 
 
+def prepare_v3(args: argparse.Namespace) -> int:
+    """Adopt the independent V3 visible split and mechanically size its call budget."""
+    state = args.state.resolve()
+    control = args.control.resolve()
+    corpus = args.corpus.resolve()
+    state.mkdir(parents=True, exist_ok=True)
+    if _phase_path(state).exists():
+        raise ValueError("TASK-075 v3 preparation already occurred")
+    subprocess.run(
+        [str(ROOT / ".venv/bin/python"), str(corpus / "validate_candidates.py"), "--visible"],
+        cwd=ROOT,
+        env={**os.environ, "PYTHONPATH": "src"},
+        check=True,
+    )
+    result = prepare_v3_control_manifests(
+        corpus_root=corpus,
+        scoring_path=DEFAULT_CONTROL / "scoring-contract.json",
+        base_config_path=DEFAULT_CONTROL / "optimization-config.json",
+        resumption_path=control / "resumption.json",
+        output=control,
+        authoring_commit="8a44d4a13b69db443953d7162b659d4034b1b982",
+    )
+    config = _json(control / "optimization-config.json")
+    _write_json(
+        state / "calibration-ledger.json",
+        {
+            "budget_version": config["config_version"],
+            "maximum_calibration_model_calls": config["optimization_budget"][
+                "maximum_calibration_model_calls"
+            ],
+            "model_calls_reserved": 0,
+            "model_calls_scheduled_total": 0,
+            "iterations": [],
+            "benchmark_v3_resumption": {
+                "baseline_calls": 80,
+                "maximum_feedback_iteration_calls": 80,
+                "terminal_calls": 240,
+                "planned_calls": 400,
+                "unallocated_contingency_calls": 0,
+                "decision_source": "experiments/task075/v3/resumption.json",
+            },
+        },
+    )
+    _write_json(
+        _phase_path(state),
+        {
+            "phase": "calibration",
+            "prepared_at_utc": datetime.now(UTC).isoformat(),
+            "preregistration_commit": PREREGISTRATION_COMMIT,
+            "benchmark_authoring_commit": "8a44d4a13b69db443953d7162b659d4034b1b982",
+            "benchmark_version": "rfi-qa-independent-v3.0.0",
+            "corpus_freeze_sha256": sha256(control / "corpus-freeze-manifest.json"),
+            "partition_sha256": sha256(control / "partition-manifest.json"),
+            "held_out_attempted": False,
+            "held_out_files_present": False,
+        },
+    )
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
 def _codex_version() -> str:
     return subprocess.run(
         ["codex", "--version"],
@@ -334,11 +397,18 @@ def _run_one(
 
 
 def _reserve_calibration_calls(
-    *, state: Path, iteration: str, calls: int, design: str, reason: str, attribution: str
+    *,
+    state: Path,
+    control: Path,
+    iteration: str,
+    calls: int,
+    design: str,
+    reason: str,
+    attribution: str,
 ) -> None:
     ledger_path = state / "calibration-ledger.json"
     ledger = _json(ledger_path)
-    config = _json(DEFAULT_CONTROL / "optimization-config.json")
+    config = _json(control / "optimization-config.json")
     updated = int(ledger["model_calls_reserved"]) + calls
     maximum = int(config["optimization_budget"]["maximum_calibration_model_calls"])
     if updated > maximum:
@@ -369,22 +439,43 @@ def _partition_case_ids(
     return sorted(corpus.by_id)
 
 
-def _run_partition(args: argparse.Namespace, partition_name: str) -> int:
+def _run_partition(
+    args: argparse.Namespace, partition_name: str, *, v2_regression: bool = False
+) -> int:
     state = args.state.resolve()
     control = args.control.resolve()
     corpus_root = args.corpus.resolve()
     phase = _phase(state)
-    _assert_frozen_inputs(control, corpus_root)
+    if v2_regression:
+        _assert_frozen_inputs(control, V3_CORPUS)
+        if corpus_root != V2_CORPUS.resolve():
+            raise ValueError("known regression may run only against the preserved V2 corpus")
+        expected = {
+            "validation/cases.jsonl": (
+                "22e98803f86c36fc1009ce8c16b153e3e4bc871b31740f2620bab13a16fb899d"
+            ),
+            "validation/fixtures.json": (
+                "9afb3a99090a85574f6c2a5effaf8a56fe93648eb85bbe280e21ccd84fbb0bbf"
+            ),
+        }
+        for relative, digest in expected.items():
+            if sha256(corpus_root / relative) != digest:
+                raise ValueError(f"known V2 regression input changed: {relative}")
+        if phase["phase"] != "calibration":
+            raise ValueError("V2 regression must precede the V3 gauge freeze")
+    else:
+        _assert_frozen_inputs(control, corpus_root)
     if partition_name == "calibration" and phase["phase"] != "calibration":
         raise ValueError("calibration is prohibited after the QA design freeze")
-    if partition_name == "validation":
+    held_out = partition_name in {"validation", "verification"} and not v2_regression
+    if held_out:
         if phase["phase"] != "frozen":
-            raise ValueError("held-out validation is protected until freeze")
+            raise ValueError("held-out verification is protected until freeze")
         assert_frozen_gauge(control, args.freeze.resolve())
         _assert_restored_validation(control, corpus_root)
-        marker = state / "validation-attempt.json"
+        marker = state / "held-out-attempt.json"
         if marker.exists():
-            raise ValueError("held-out validation has already been attempted")
+            raise ValueError("held-out verification has already been attempted")
         _write_json(
             marker,
             {
@@ -393,17 +484,18 @@ def _run_partition(args: argparse.Namespace, partition_name: str) -> int:
                 "status": "started; a second attempt is prohibited even if this attempt is invalid",
             },
         )
-        phase["validation_attempted"] = True
+        phase["held_out_attempted"] = True
         _write_json(_phase_path(state), phase)
     config = _json(control / "optimization-config.json")
     repeats = int(args.repeats)
-    if partition_name == "validation" and repeats != int(
+    if (held_out or v2_regression) and repeats != int(
         config["optimization_budget"]["terminal_runs_per_case"]
     ):
-        raise ValueError("validation must use the preregistered terminal repeat count")
+        raise ValueError("held-out or regression runs must use the terminal repeat count")
     if partition_name == "calibration":
         _reserve_calibration_calls(
             state=state,
+            control=control,
             iteration=args.iteration,
             calls=len(_load_partition(control)["calibration"]["case_ids"]) * repeats,
             design=args.design,
@@ -412,9 +504,14 @@ def _run_partition(args: argparse.Namespace, partition_name: str) -> int:
         )
     partition = _load_partition(control)
     corpus = BenchmarkCorpus.load(corpus_root, partition=partition_name)
-    case_ids = _partition_case_ids(
-        partition=partition, partition_name=partition_name, corpus=corpus
-    )
+    if v2_regression:
+        case_ids = sorted(corpus.by_id)
+        if len(case_ids) != 28:
+            raise ValueError("known V2 regression population differs from 28 cases")
+    else:
+        case_ids = _partition_case_ids(
+            partition=partition, partition_name=partition_name, corpus=corpus
+        )
     output = args.output.resolve()
     if output.exists() and any(output.iterdir()):
         raise ValueError("evaluation output directory must be new or empty")
@@ -458,7 +555,7 @@ def _run_partition(args: argparse.Namespace, partition_name: str) -> int:
     )
     manifest = {
         "experiment_version": "task075.qa-gauge-evaluation.v1",
-        "partition": partition_name,
+        "partition": "v2-known-regression" if v2_regression else partition_name,
         "benchmark_version": corpus.benchmark_version,
         "iteration": args.iteration,
         "design": args.design,
@@ -493,14 +590,14 @@ def _run_partition(args: argparse.Namespace, partition_name: str) -> int:
             sort_keys=True,
         )
     )
-    if partition_name == "validation":
-        marker = _json(state / "validation-attempt.json")
+    if held_out:
+        marker = _json(state / "held-out-attempt.json")
         marker["completed_at_utc"] = datetime.now(UTC).isoformat()
         marker["output"] = str(output)
         marker["score_sha256"] = sha256(output / "score.json")
         marker["all_thresholds_passed"] = score["all_thresholds_passed"]
         marker["status"] = "complete"
-        _write_json(state / "validation-attempt.json", marker)
+        _write_json(state / "held-out-attempt.json", marker)
     return 0
 
 
@@ -604,16 +701,15 @@ def finalize_interrupted(args: argparse.Namespace) -> int:
 
 def _implementation_files(control: Path) -> list[Path]:
     provenance = sorted((control / "provenance/v1").glob("*.json"))
-    return sorted((ROOT / "src/rfi/qa_gauge").glob("*.py")) + [
-        ROOT / "scripts/task075_qa_gauge_experiment.py",
-        control / "scoring-contract.json",
-        control / "optimization-config.json",
-        control / "benchmark-v2-resumption.json",
-        control / "calibration-history.json",
-        control / "corpus-freeze-manifest.json",
-        control / "quarantine-manifest.json",
-        control / "partition-manifest.json",
-    ] + provenance
+    controls = sorted(
+        path for path in control.glob("*.json") if path.name != "frozen-gauge-manifest.json"
+    )
+    return (
+        sorted((ROOT / "src/rfi/qa_gauge").glob("*.py"))
+        + [ROOT / "scripts/task075_qa_gauge_experiment.py"]
+        + controls
+        + provenance
+    )
 
 
 def freeze_gauge(args: argparse.Namespace) -> int:
@@ -706,26 +802,27 @@ def verify_controls(args: argparse.Namespace) -> int:
     _assert_frozen_inputs(control, corpus)
     partition = _load_partition(control)
     quarantine = _json(control / "quarantine-manifest.json")
-    if len(quarantine["cases"]) != 4:
-        raise ValueError("quarantine does not contain exactly four cases")
+    expected_quarantine = int(partition["quarantine_case_count"])
+    if len(quarantine["cases"]) != expected_quarantine:
+        raise ValueError("quarantine size differs from the partition manifest")
     calibration = set(partition["calibration"]["case_ids"])
-    validation_ids = partition["validation"].get("case_ids")
-    if validation_ids is None:
-        if len(calibration) != 44 or int(partition["validation"]["case_count"]) != 28:
-            raise ValueError("benchmark v2 partition size failed")
-        validation_count = int(partition["validation"]["case_count"])
+    held_out_name = "verification" if "verification" in partition else "validation"
+    held_out_ids = partition[held_out_name].get("case_ids")
+    if held_out_ids is None:
+        held_out_count = int(partition[held_out_name]["case_count"])
     else:
-        validation = set(validation_ids)
-        if calibration.intersection(validation) or len(calibration) != 40 or len(validation) != 22:
-            raise ValueError("partition disjointness or size failed")
-        validation_count = len(validation)
+        held_out_set = set(held_out_ids)
+        if calibration.intersection(held_out_set):
+            raise ValueError("partition disjointness failed")
+        held_out_count = len(held_out_set)
     if args.freeze:
         assert_frozen_gauge(control, args.freeze.resolve())
     result = {
         "controls_valid": True,
-        "objective_cases": len(calibration) + validation_count,
+        "objective_cases": len(calibration) + held_out_count,
         "calibration_cases": len(calibration),
-        "validation_cases": validation_count,
+        "held_out_partition": held_out_name,
+        "held_out_cases": held_out_count,
         "quarantined_cases": len(quarantine["cases"]),
         "freeze_valid": bool(args.freeze),
     }
@@ -741,7 +838,8 @@ def parser() -> argparse.ArgumentParser:
     subparsers = value.add_subparsers(dest="command", required=True)
     subparsers.add_parser("prepare")
     subparsers.add_parser("prepare-v2")
-    for name in ("run-calibration", "run-validation"):
+    subparsers.add_parser("prepare-v3")
+    for name in ("run-calibration", "run-validation", "run-verification", "run-v2-regression"):
         run = subparsers.add_parser(name)
         run.add_argument("--output", type=Path, required=True)
         run.add_argument("--iteration", required=True)
@@ -749,7 +847,7 @@ def parser() -> argparse.ArgumentParser:
         run.add_argument("--repeats", type=int, required=True)
         run.add_argument("--change-reason", required=True)
         run.add_argument("--failure-attribution", required=True)
-        if name == "run-validation":
+        if name in {"run-validation", "run-verification"}:
             run.add_argument("--freeze", type=Path, required=True)
     freeze = subparsers.add_parser("freeze")
     freeze.add_argument("--calibration", type=Path, required=True)
@@ -775,10 +873,16 @@ def main() -> int:
         return prepare(args)
     if args.command == "prepare-v2":
         return prepare_v2(args)
+    if args.command == "prepare-v3":
+        return prepare_v3(args)
     if args.command == "run-calibration":
         return _run_partition(args, "calibration")
     if args.command == "run-validation":
         return _run_partition(args, "validation")
+    if args.command == "run-verification":
+        return _run_partition(args, "verification")
+    if args.command == "run-v2-regression":
+        return _run_partition(args, "validation", v2_regression=True)
     if args.command == "freeze":
         return freeze_gauge(args)
     if args.command == "verify-controls":

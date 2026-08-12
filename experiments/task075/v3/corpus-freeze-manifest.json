@@ -1,0 +1,60 @@
+{
+  "authoring_commit": "8a44d4a13b69db443953d7162b659d4034b1b982",
+  "benchmark_mutation_permitted": false,
+  "benchmark_version": "rfi-qa-independent-v3.0.0",
+  "borderline_case_count": 6,
+  "calibration_case_count": 80,
+  "corpus_digest": "52962392643587aab0ae6211e7f9dea21a181805fb0e25bf808dc4c877103968",
+  "held_out_files": {
+    "verification/cases.jsonl": {
+      "sha256": "8184454d4cfbec057b41fc2d460fc8cf1eb9a1174200be8ca9cc3f10d166a257"
+    },
+    "verification/fixtures.json": {
+      "sha256": "a637f1dd86aebee72d435acf112f9a0014573ba99bcfc0fffa5d0703c8fd0b94"
+    }
+  },
+  "held_out_physically_absent_at_freeze": true,
+  "manifest_version": "task075.corpus-freeze.v3",
+  "objective_case_count": 120,
+  "objective_pair_count": 60,
+  "optimization_config_sha256": "389ad1dd32530b30252686440e7dcf26a0cdeb53d283e9c1c966d651856408ea",
+  "resumption_sha256": "a1fb80557cd810798965310d1a0222f3a80d331db247bac97f3fa39985c02dc5",
+  "scoring_contract_sha256": "79f6e5a5ef445d08880079f2c27a995e80ed16489bb7d823782c28795a197ae6",
+  "source_split_manifest": "benchmarks/rfi_qa_candidates_v3/split-manifest.json",
+  "source_split_manifest_sha256": "841fa708dd6713e3b2f7d90f6c41f3e29a97ff36b458f5ef5f5022e652ce2b96",
+  "verification_case_count": 40,
+  "visible_files": {
+    "authoring-metadata.json": {
+      "bytes": 1207,
+      "sha256": "ff13f7c4576e5ac83507cde7e59653e7e404aa9222224e8fc3cb30f620477e66"
+    },
+    "calibration/cases.jsonl": {
+      "bytes": 85584,
+      "sha256": "f1c14bf9af417f9cee11092f3803e805838ed0f8b2e4ffff38fdd38cf49fadb4"
+    },
+    "calibration/fixtures.json": {
+      "bytes": 30088,
+      "sha256": "aa7e44bf6d47921368c4579583268e06b49c0c7d2e57af9990395d496e235d79"
+    },
+    "case.schema.json": {
+      "bytes": 3715,
+      "sha256": "4d4e7a8c3fadcff394993da44aa65cbb4196975bf07196ccddf7c66bb01b0157"
+    },
+    "fixture.schema.json": {
+      "bytes": 1874,
+      "sha256": "bd3b3ceb494d49e09b05b021428d64ce151f0de6d966de22a6f3c42679a85807"
+    },
+    "quarantine/cases.jsonl": {
+      "bytes": 7601,
+      "sha256": "b90fec057431641f2023ab58cded15564670c8ec4a2b7a5fcd17a0fea5c62fa6"
+    },
+    "quarantine/fixtures.json": {
+      "bytes": 3288,
+      "sha256": "27d9b89db050e45531aa8ef0361eb4af8f772eacc6df0e600a487f61bb6d4c02"
+    },
+    "taxonomy.json": {
+      "bytes": 4390,
+      "sha256": "b2fb9df04c8547c0c34fb0ac4a71e6645092b3aef538b430242d5c29d2adb18c"
+    }
+  }
+}

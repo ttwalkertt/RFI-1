@@ -1,0 +1,149 @@
+{
+  "config_version": "task075.rbf-optimization.v3-size-adjusted",
+  "derivation": {
+    "base_config_path": "experiments/task075/optimization-config.json",
+    "base_config_sha256": "b0670449fc0f24ff28af98e69f0bfe995a6b9009d81154084ca1ecf3a4d70330",
+    "changed_fields": [
+      "config_version",
+      "partition.random_seed",
+      "partition.calibration_pairs",
+      "partition.validation_pairs",
+      "partition.rerandomization",
+      "optimization_budget.maximum_calibration_model_calls"
+    ],
+    "outcome_observed_before_derivation": false,
+    "resumption_path": "experiments/task075/v3/resumption.json",
+    "resumption_sha256": "a1fb80557cd810798965310d1a0222f3a80d331db247bac97f3fa39985c02dc5"
+  },
+  "freeze": {
+    "includes": [
+      "QA code",
+      "prompts",
+      "roles",
+      "orchestration",
+      "contracts",
+      "deterministic checks",
+      "MCP/access surface",
+      "scoring implementation and contract",
+      "corpus and partition digests",
+      "calibration results",
+      "Codex/runtime identity",
+      "dependency versions"
+    ],
+    "post_validation_tuning": false,
+    "required_before_validation": true,
+    "validation_attempts": 1
+  },
+  "live_transfer": {
+    "case_count": 3,
+    "human_reference_adjudication_required": true,
+    "permitted_only_if_validation_passes_all_thresholds": true,
+    "post_live_tuning": false
+  },
+  "objective": "Improve the RFI investigation-QA capability until it meets the predetermined calibration success criteria while preserving reference truth, architectural authority boundaries, and benchmark integrity.",
+  "optimization_budget": {
+    "diagnostic_runs_per_case": 1,
+    "maximum_calibration_model_calls": 400,
+    "maximum_material_design_changes": 3,
+    "maximum_terminal_calibration_assessments": 1,
+    "terminal_runs_per_case": 3
+  },
+  "partition": {
+    "calibration_pairs": 40,
+    "coverage_preflight": {
+      "defect_families": {
+        "identity_attribution_provenance_mapping": [
+          "entity_conflation",
+          "attribution_unsupported",
+          "ambiguous_reference_overresolved",
+          "provenance_authority_error",
+          "evidence_mapping_incorrect",
+          "evidence_mapping_missing"
+        ],
+        "scope_qualification_epistemic": [
+          "qualification_omitted",
+          "claim_strength_overstatement",
+          "causal_overstatement",
+          "insufficiency_miscalibrated",
+          "corpus_completeness_overstatement",
+          "absence_overstatement",
+          "false_absence",
+          "undefined_evaluation_criterion"
+        ],
+        "source_value_and_computation": [
+          "numeric_mismatch",
+          "denominator_error",
+          "unit_mismatch",
+          "aggregation_error",
+          "duplicate_counting"
+        ],
+        "time_boundaries_status_eligibility": [
+          "chronology_boundary_incorrect",
+          "chronology_basis_mismatch",
+          "date_imputation",
+          "timezone_conversion_error",
+          "boundary_inclusion_error",
+          "temporal_scope_mismatch",
+          "status_mischaracterized",
+          "record_eligibility_error",
+          "version_supersession_ignored"
+        ],
+        "whole_answer_integrity": [
+          "internal_inconsistency",
+          "conflicting_evidence_omitted",
+          "quote_context_distortion",
+          "unsupported_claim"
+        ]
+      },
+      "minimum_defect_families_in_each_partition": 4,
+      "minimum_difficulty_groups_in_each_partition": 3,
+      "required_dispositions_in_each_partition": [
+        "supported",
+        "defective",
+        "indeterminate"
+      ]
+    },
+    "random_seed": 20260812,
+    "rerandomization": "Not permitted: the independently authored first V3 split already passed coverage.",
+    "validation_pairs": 20
+  },
+  "runtime": {
+    "adapter": "fresh ephemeral codex exec context per independent run",
+    "concurrency": 4,
+    "model": "Codex CLI default; no model override",
+    "rules_loaded": false,
+    "sandbox": "read-only",
+    "substantive_judgment_retry_limit": 0,
+    "transport_retry_limit": 1,
+    "user_configuration_loaded": false
+  },
+  "stopping_rules": {
+    "budget": "Stop and freeze the best predeclared design when any optimization budget is exhausted.",
+    "diagnostic_utility": "0.20 disposition_accuracy + 0.15 (1-material_false_accept_rate) + 0.10 (1-supported_false_reject_rate) + 0.15 material_finding_recall + 0.10 defect_class_attribution_f1 + 0.10 evidence_grounding_rate + 0.05 (1-unsupported_finding_rate) + 0.05 indeterminate_accuracy + 0.10 matched_pair_discrimination",
+    "reference_defect": "Quarantine the affected case from further optimization feedback without changing it; report it for independent adjudication. It remains a scored failure unless an independently issued benchmark version replaces the corpus in a future task.",
+    "stall": "Stop after two consecutive full diagnostic calibration iterations improve weighted diagnostic utility by less than 0.02 and do not turn any previously failing primary threshold into a pass.",
+    "success": "Stop and freeze when one terminal three-run calibration assessment satisfies every scoring-contract threshold."
+  },
+  "visibility": {
+    "rbf_allowed": [
+      "calibration cases",
+      "calibration reference truth",
+      "calibration outputs",
+      "calibration scores",
+      "TASK-074 prior evidence",
+      "QA implementation and prompts"
+    ],
+    "rbf_prohibited_until_freeze": [
+      "validation case payloads",
+      "validation reference truth",
+      "validation outputs",
+      "validation scores"
+    ],
+    "reviewer_withheld_fields": [
+      "reference_qa",
+      "adjudicability",
+      "pair_id",
+      "title"
+    ]
+  }
+}

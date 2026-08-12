@@ -1,0 +1,38 @@
+{
+  "cases": [
+    {
+      "case_id": "R3Q-001",
+      "human_review_required": true,
+      "sha256": "ae29be6c833fd4112c5cfa0d265df47ec54f0fc024d1b549c49671ef9aad5838"
+    },
+    {
+      "case_id": "R3Q-002",
+      "human_review_required": true,
+      "sha256": "06bf262b358f4eaeb4241cac69d96391ed5a927f5239c5f995c717e239c9c397"
+    },
+    {
+      "case_id": "R3Q-003",
+      "human_review_required": true,
+      "sha256": "965852a48e36ba32e16e39b6f99c9fbbe27ca19fbcb074b1dc0535da90e6a646"
+    },
+    {
+      "case_id": "R3Q-004",
+      "human_review_required": true,
+      "sha256": "04a32ac6ae33b477e9b1a977a7e67d246afe3eef6d116eed7a21fd778e7f1d81"
+    },
+    {
+      "case_id": "R3Q-005",
+      "human_review_required": true,
+      "sha256": "d55d19af5cb26e4e6c76319d4fa40732565b3706a5641aa784891d95eeb4466f"
+    },
+    {
+      "case_id": "R3Q-006",
+      "human_review_required": true,
+      "sha256": "58b95de7104f27e1b0ac667fef599af4170d911fb4f0e27953ed935d29e40d07"
+    }
+  ],
+  "manifest_version": "task075.quarantine.v3",
+  "reason": "judgment-dependent; excluded unchanged from calibration, verification, scoring, RBF feedback, regression, and success criteria",
+  "source_cases_sha256": "b90fec057431641f2023ab58cded15564670c8ec4a2b7a5fcd17a0fea5c62fa6",
+  "source_fixtures_sha256": "27d9b89db050e45531aa8ef0361eb4af8f772eacc6df0e600a487f61bb6d4c02"
+}

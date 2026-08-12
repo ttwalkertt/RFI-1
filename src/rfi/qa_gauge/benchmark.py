@@ -6,6 +6,7 @@ import hashlib
 import json
 import random
 import shutil
+from copy import deepcopy
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,12 +39,17 @@ class BenchmarkCorpus:
     def load(cls, root: Path, *, partition: str = "calibration") -> BenchmarkCorpus:
         resolved = root.resolve()
         if (resolved / "split-manifest.json").exists() and (resolved / "calibration").is_dir():
-            if partition not in {"calibration", "validation", "quarantine"}:
-                raise ValueError(f"unknown benchmark v2 partition: {partition}")
+            manifest = json.loads((resolved / "split-manifest.json").read_text(encoding="utf-8"))
+            available = set(manifest["partitions"])
+            if partition not in available:
+                raise ValueError(f"unknown partition for {manifest['benchmark_version']}: {partition}")
             case_path = resolved / partition / "cases.jsonl"
             fixture_path = resolved / partition / "fixtures.json"
             if not case_path.exists() or not fixture_path.exists():
-                raise ValueError(f"benchmark v2 {partition} partition is physically absent")
+                raise ValueError(
+                    f"benchmark {manifest['benchmark_version']} {partition} partition is "
+                    "physically absent"
+                )
             cases = tuple(
                 json.loads(line)
                 for line in case_path.read_text(encoding="utf-8").splitlines()
@@ -51,13 +57,13 @@ class BenchmarkCorpus:
             )
             fixture_payload = json.loads(fixture_path.read_text(encoding="utf-8"))
             fixtures = {str(item["fixture_id"]): item for item in fixture_payload["fixtures"]}
-            manifest = json.loads((resolved / "split-manifest.json").read_text(encoding="utf-8"))
             expected = manifest["partitions"][partition]
             if len(cases) != int(expected["case_count"]) or len(fixtures) != int(
                 expected["fixture_count"]
             ):
                 raise ValueError(
-                    f"benchmark v2 {partition} composition differs from split manifest"
+                    f"benchmark {manifest['benchmark_version']} {partition} composition "
+                    "differs from split manifest"
                 )
             return cls(
                 resolved,
@@ -460,5 +466,198 @@ def prepare_v2_control_manifests(
         "calibration_cases": 44,
         "validation_cases_absent": 28,
         "quarantined_cases": 4,
+        "rerandomized": False,
+    }
+
+
+def prepare_v3_control_manifests(
+    *,
+    corpus_root: Path,
+    scoring_path: Path,
+    base_config_path: Path,
+    resumption_path: Path,
+    output: Path,
+    authoring_commit: str,
+) -> dict[str, Any]:
+    """Adopt the independently authored visible-only v3 split without recreating it."""
+    root = corpus_root.resolve()
+    split_path = root / "split-manifest.json"
+    split = json.loads(split_path.read_text(encoding="utf-8"))
+    resumption = json.loads(resumption_path.read_text(encoding="utf-8"))
+    if split["benchmark_version"] != "rfi-qa-independent-v3.0.0":
+        raise ValueError("unexpected benchmark v3 identity")
+    expected_corpus_digest = (
+        "52962392643587aab0ae6211e7f9dea21a181805fb0e25bf808dc4c877103968"
+    )
+    if split["digests"]["corpus_sha256"] != expected_corpus_digest:
+        raise ValueError("benchmark v3 corpus digest differs from the authorized value")
+    if split["split"] != {
+        "algorithm": (
+            "lexicographically sort R3P-001 through R3P-060; Python "
+            "random.Random(seed).shuffle; first 40 pairs calibration; remaining 20 "
+            "verification"
+        ),
+        "calibration_pair_target": 40,
+        "objective_pair_id_population": {
+            "count": 60,
+            "first": 1,
+            "format": "R3P-NNN",
+            "last": 60,
+        },
+        "random_seed": 20260812,
+        "randomization_unit": "matched_pair",
+        "rerandomization_performed": False,
+        "verification_pair_target": 20,
+    }:
+        raise ValueError("benchmark v3 split policy differs from authorization")
+    if (root / "verification/cases.jsonl").exists() or (
+        root / "verification/fixtures.json"
+    ).exists():
+        raise ValueError("held-out verification must be physically absent during v3 preparation")
+    calibration = BenchmarkCorpus.load(root, partition="calibration")
+    quarantine = BenchmarkCorpus.load(root, partition="quarantine")
+    if len(calibration.objective) != 80 or len(quarantine.borderline) != 6:
+        raise ValueError("benchmark v3 visible population differs from authorization")
+    if sha256(scoring_path) != resumption["preserved_contract"]["scoring_contract_sha256"]:
+        raise ValueError("preserved scoring contract differs before v3 calibration")
+    if sha256(base_config_path) != resumption["preserved_contract"][
+        "base_optimization_config_sha256"
+    ]:
+        raise ValueError("base optimization config differs before v3 calibration")
+    output.mkdir(parents=True, exist_ok=True)
+    for name in (
+        "corpus-freeze-manifest.json",
+        "quarantine-manifest.json",
+        "partition-manifest.json",
+        "scoring-contract.json",
+        "optimization-config.json",
+    ):
+        if (output / name).exists():
+            raise ValueError("TASK-075 v3 controls may be prepared exactly once")
+    shutil.copy2(scoring_path, output / "scoring-contract.json")
+    config = deepcopy(json.loads(base_config_path.read_text(encoding="utf-8")))
+    config["config_version"] = "task075.rbf-optimization.v3-size-adjusted"
+    config["partition"]["random_seed"] = 20260812
+    config["partition"]["calibration_pairs"] = 40
+    config["partition"]["validation_pairs"] = 20
+    config["partition"]["rerandomization"] = (
+        "Not permitted: the independently authored first V3 split already passed coverage."
+    )
+    config["optimization_budget"]["maximum_calibration_model_calls"] = 400
+    config["derivation"] = {
+        "base_config_path": str(base_config_path.relative_to(root.parents[1])),
+        "base_config_sha256": sha256(base_config_path),
+        "resumption_path": str(resumption_path.relative_to(root.parents[1])),
+        "resumption_sha256": sha256(resumption_path),
+        "outcome_observed_before_derivation": False,
+        "changed_fields": [
+            "config_version",
+            "partition.random_seed",
+            "partition.calibration_pairs",
+            "partition.validation_pairs",
+            "partition.rerandomization",
+            "optimization_budget.maximum_calibration_model_calls",
+        ],
+    }
+    (output / "optimization-config.json").write_text(
+        json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    expected_files: dict[str, str] = split["digests"]["corpus_files"]
+    visible_files = {
+        relative: {"sha256": expected, "bytes": (root / relative).stat().st_size}
+        for relative, expected in expected_files.items()
+        if not relative.startswith("verification/")
+    }
+    for relative, identity in visible_files.items():
+        if sha256(root / relative) != identity["sha256"]:
+            raise ValueError(f"benchmark v3 visible digest mismatch: {relative}")
+    freeze = {
+        "manifest_version": "task075.corpus-freeze.v3",
+        "benchmark_version": split["benchmark_version"],
+        "authoring_commit": authoring_commit,
+        "scoring_contract_sha256": sha256(output / "scoring-contract.json"),
+        "optimization_config_sha256": sha256(output / "optimization-config.json"),
+        "resumption_sha256": sha256(resumption_path),
+        "source_split_manifest": str(split_path.relative_to(root.parents[1])),
+        "source_split_manifest_sha256": sha256(split_path),
+        "corpus_digest": split["digests"]["corpus_sha256"],
+        "visible_files": visible_files,
+        "held_out_files": {
+            relative: {"sha256": expected}
+            for relative, expected in expected_files.items()
+            if relative.startswith("verification/")
+        },
+        "objective_case_count": 120,
+        "objective_pair_count": 60,
+        "calibration_case_count": 80,
+        "verification_case_count": 40,
+        "borderline_case_count": 6,
+        "held_out_physically_absent_at_freeze": True,
+        "benchmark_mutation_permitted": False,
+    }
+    quarantine_manifest = {
+        "manifest_version": "task075.quarantine.v3",
+        "reason": (
+            "judgment-dependent; excluded unchanged from calibration, verification, scoring, "
+            "RBF feedback, regression, and success criteria"
+        ),
+        "cases": [
+            {
+                "case_id": str(case["case_id"]),
+                "sha256": canonical_digest(case),
+                "human_review_required": True,
+            }
+            for case in quarantine.borderline
+        ],
+        "source_cases_sha256": expected_files["quarantine/cases.jsonl"],
+        "source_fixtures_sha256": expected_files["quarantine/fixtures.json"],
+    }
+    partition_manifest = {
+        "manifest_version": "task075.partition.v3",
+        "source": "independently authored split-manifest.json; not generated or rerandomized by RBF",
+        "source_split_manifest_sha256": sha256(split_path),
+        "seed": 20260812,
+        "algorithm": split["split"]["algorithm"],
+        "unit": "matched_pair",
+        "rerandomized": False,
+        "calibration": {
+            "case_ids": sorted(str(case["case_id"]) for case in calibration.objective),
+            "case_count": 80,
+            "pair_count": 40,
+            "pair_set_sha256": split["partitions"]["calibration"]["pair_set_sha256"],
+            "coverage": split["partitions"]["calibration"],
+        },
+        "verification": {
+            "case_ids": None,
+            "case_count": 40,
+            "pair_count": 20,
+            "pair_set_sha256": split["partitions"]["verification"]["pair_set_sha256"],
+            "coverage": split["partitions"]["verification"],
+            "physically_absent": True,
+        },
+        "quarantine_case_count": 6,
+        "objective_population_exhausted": True,
+        "disjoint": True,
+        "held_out_protection": (
+            "run-calibration loads only calibration/; run-verification requires a matching "
+            "frozen gauge and exact restored verification digests; no verification IDs or "
+            "content are present before restoration"
+        ),
+    }
+    for name, payload in (
+        ("corpus-freeze-manifest.json", freeze),
+        ("quarantine-manifest.json", quarantine_manifest),
+        ("partition-manifest.json", partition_manifest),
+    ):
+        (output / name).write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    return {
+        "benchmark_version": split["benchmark_version"],
+        "corpus_digest": freeze["corpus_digest"],
+        "calibration_cases": 80,
+        "verification_cases_absent": 40,
+        "quarantined_cases": 6,
+        "maximum_calibration_model_calls": 400,
         "rerandomized": False,
     }

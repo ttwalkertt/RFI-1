@@ -4,6 +4,7 @@ from rfi.qa_gauge.benchmark import (
     BenchmarkCorpus,
     prepare_control_manifests,
     prepare_v2_control_manifests,
+    prepare_v3_control_manifests,
 )
 from rfi.qa_gauge.contracts import (
     DEFECT_CLASSES,
@@ -26,5 +27,6 @@ __all__ = [
     "parse_gauge_review",
     "prepare_control_manifests",
     "prepare_v2_control_manifests",
+    "prepare_v3_control_manifests",
     "score_partition",
 ]

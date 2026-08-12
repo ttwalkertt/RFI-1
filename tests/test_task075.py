@@ -19,6 +19,7 @@ from rfi.qa_gauge import (
     parse_gauge_review,
     prepare_control_manifests,
     prepare_v2_control_manifests,
+    prepare_v3_control_manifests,
     score_partition,
 )
 from rfi.qa_gauge.prompts import DESIGN_GAUGE_V2, DESIGN_GAUGE_V3, prompt_for_design
@@ -26,6 +27,7 @@ from rfi.qa_gauge.prompts import DESIGN_GAUGE_V2, DESIGN_GAUGE_V3, prompt_for_de
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS_ROOT = ROOT / "benchmarks/rfi_qa_candidates"
 V2_CORPUS_ROOT = ROOT / "benchmarks/rfi_qa_candidates_v2"
+V3_CORPUS_ROOT = ROOT / "benchmarks/rfi_qa_candidates_v3"
 CONTROL = ROOT / "experiments/task075"
 
 
@@ -106,6 +108,42 @@ class GaugeContractTests(unittest.TestCase):
 
 
 class BenchmarkProtectionTests(unittest.TestCase):
+    def test_v3_visible_partition_is_exact_and_verification_is_physically_absent(self) -> None:
+        calibration = BenchmarkCorpus.load(V3_CORPUS_ROOT, partition="calibration")
+        quarantine = BenchmarkCorpus.load(V3_CORPUS_ROOT, partition="quarantine")
+        self.assertEqual((len(calibration.objective), len(calibration.fixtures)), (80, 40))
+        self.assertEqual((len(quarantine.borderline), len(quarantine.fixtures)), (6, 6))
+        self.assertFalse((V3_CORPUS_ROOT / "verification/cases.jsonl").exists())
+        self.assertFalse((V3_CORPUS_ROOT / "verification/fixtures.json").exists())
+        with self.assertRaisesRegex(ValueError, "physically absent"):
+            BenchmarkCorpus.load(V3_CORPUS_ROOT, partition="verification")
+
+    def test_v3_control_adopts_split_and_only_mechanically_sizes_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            result = prepare_v3_control_manifests(
+                corpus_root=V3_CORPUS_ROOT,
+                scoring_path=CONTROL / "scoring-contract.json",
+                base_config_path=CONTROL / "optimization-config.json",
+                resumption_path=CONTROL / "v3/resumption.json",
+                output=target,
+                authoring_commit="8a44d4a13b69db443953d7162b659d4034b1b982",
+            )
+            self.assertEqual(result["maximum_calibration_model_calls"], 400)
+            self.assertEqual(
+                hashlib.sha256((target / "scoring-contract.json").read_bytes()).hexdigest(),
+                hashlib.sha256((CONTROL / "scoring-contract.json").read_bytes()).hexdigest(),
+            )
+            partition = json.loads((target / "partition-manifest.json").read_text())
+            self.assertEqual(len(partition["calibration"]["case_ids"]), 80)
+            self.assertIsNone(partition["verification"]["case_ids"])
+            self.assertEqual(partition["quarantine_case_count"], 6)
+            config = json.loads((target / "optimization-config.json").read_text())
+            self.assertEqual(
+                config["optimization_budget"]["maximum_calibration_model_calls"], 400
+            )
+            self.assertEqual(config["optimization_budget"]["terminal_runs_per_case"], 3)
+
     def test_v2_visible_partition_is_exact_and_held_out_is_physically_absent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             visible = Path(directory) / "visible-corpus"
@@ -304,7 +342,7 @@ class HarnessBoundaryTests(unittest.TestCase):
     def test_validation_requires_freeze_and_one_shot_marker_is_implemented(self) -> None:
         source = (ROOT / "scripts/task075_qa_gauge_experiment.py").read_text(encoding="utf-8")
         self.assertIn('phase["phase"] != "frozen"', source)
-        self.assertIn("held-out validation has already been attempted", source)
+        self.assertIn("held-out verification has already been attempted", source)
         self.assertIn("assert_frozen_gauge", source)
         self.assertIn("post-freeze mutation detected", source)
         self.assertNotIn(
