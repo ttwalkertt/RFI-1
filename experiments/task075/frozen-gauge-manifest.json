@@ -1,0 +1,85 @@
+{
+  "calibration_all_thresholds_passed": false,
+  "calibration_manifest": "/Users/tim-macbook/src/RFI-1/.artifacts/task075-v2-calibration/terminal-epistemic-root-cause-v3/manifest.json",
+  "calibration_manifest_sha256": "3034d139f2ee5c3abe72b4d42c9dc9aae4176fb1dd10ee3b4d90d5cbc62c1ceb",
+  "calibration_score": "/Users/tim-macbook/src/RFI-1/.artifacts/task075-v2-calibration/terminal-epistemic-root-cause-v3/score.json",
+  "calibration_score_sha256": "4508d2bcec0fd974d4967dffad93c683907c8efaab6e4c8a7ef0bd0e91639532",
+  "codex_version": "codex-cli 0.145.0",
+  "design": "task075.epistemic-root-cause-v3",
+  "files": {
+    "experiments/task075/benchmark-v2-resumption.json": {
+      "bytes": 6021,
+      "sha256": "cdbd1612af49b6ff16270d820e8110c1f4ed879861c38cf21be394040199a847"
+    },
+    "experiments/task075/calibration-history.json": {
+      "bytes": 10979,
+      "sha256": "3a99a5f9c094db255492287c2f7413db69554e94869ce6973a06212eaddf2d86"
+    },
+    "experiments/task075/corpus-freeze-manifest.json": {
+      "bytes": 2313,
+      "sha256": "ad00bf4b527e256de1556020d03a47be41921dfacca146153bd968d127a8b5fa"
+    },
+    "experiments/task075/optimization-config.json": {
+      "bytes": 4549,
+      "sha256": "b0670449fc0f24ff28af98e69f0bfe995a6b9009d81154084ca1ecf3a4d70330"
+    },
+    "experiments/task075/partition-manifest.json": {
+      "bytes": 4513,
+      "sha256": "2b7c38aaf1b8ebb1950cb1e2fe4bbcaad32c4943dc7047a6b3382b3035d45b49"
+    },
+    "experiments/task075/provenance/v1/corpus-freeze-manifest.json": {
+      "bytes": 6947,
+      "sha256": "10bf26facf69515425dc82edb01b39cd71485a162468d2ebe595f1b5af81f134"
+    },
+    "experiments/task075/provenance/v1/partition-manifest.json": {
+      "bytes": 5903,
+      "sha256": "1f29ed6bdaaea5c21e7e184f093bdad0b444f5e4f0d5e8b7a0cb87c043d2f1d4"
+    },
+    "experiments/task075/provenance/v1/quarantine-manifest.json": {
+      "bytes": 847,
+      "sha256": "e1685fbb1ac67535924e59552e8176dc3ad9e214b208fd54df7a25568991f0b5"
+    },
+    "experiments/task075/quarantine-manifest.json": {
+      "bytes": 1028,
+      "sha256": "58c910e05bf7178366dde95e52fab661677b821ca4e5e116c74e44635205409b"
+    },
+    "experiments/task075/scoring-contract.json": {
+      "bytes": 6136,
+      "sha256": "79f6e5a5ef445d08880079f2c27a995e80ed16489bb7d823782c28795a197ae6"
+    },
+    "scripts/task075_qa_gauge_experiment.py": {
+      "bytes": 33139,
+      "sha256": "13786eab72d73552f10d5c0aca7e0be21477676469dea371d6dc69ec38ac17d0"
+    },
+    "src/rfi/qa_gauge/__init__.py": {
+      "bytes": 710,
+      "sha256": "2fc4cd3981525affeb849678292b90e14d739c8bc9b954a4f9f9ada43f5c7325"
+    },
+    "src/rfi/qa_gauge/benchmark.py": {
+      "bytes": 19243,
+      "sha256": "5caf77a7c3cde46b51b7a92ce97f58302f508069cc5cc5c3cdbf9b721f90f085"
+    },
+    "src/rfi/qa_gauge/contracts.py": {
+      "bytes": 6312,
+      "sha256": "e8e0326fd906e5cd5d66072b553ce8d316a2274815eee6c05951e962ad325a21"
+    },
+    "src/rfi/qa_gauge/prompts.py": {
+      "bytes": 14832,
+      "sha256": "5702ee399de511d188cb11edb3d9275ac96d8b5e48002c9ad6dd8ea10c0fd486"
+    },
+    "src/rfi/qa_gauge/scoring.py": {
+      "bytes": 16059,
+      "sha256": "82ed15c59fed66f0c163a940b6f7f666135ab5a18871f0bcfc7a9f8241c1929f"
+    }
+  },
+  "frozen_at_utc": "2026-08-12T00:28:18.338052+00:00",
+  "held_out_validation_attempt_limit": 1,
+  "jsonschema": "4.26.0",
+  "manifest_version": "task075.frozen-gauge.v1",
+  "mcp_access_changes": [],
+  "mcp_access_disposition": "No MCP was used: benchmark fixture authority and exact records are supplied through the general evidence-input contract.",
+  "model": "Codex CLI default; no override",
+  "post_freeze_tuning_permitted": false,
+  "python": "Python 3.14.6",
+  "termination_reason": "budget"
+}

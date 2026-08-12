@@ -52,7 +52,7 @@ expose all applied bounds or access-generation health.
     complete bound/diagnostic reporting. These are access semantics, not investigative behavior.
 
 The detailed provisional resource/tool catalog and validation method are defined in
-[`docs/rfi_mcp_surface_design.md`](../rfi_mcp_surface_design.md).
+[`docs/design/rfi_mcp_surface_design.md`](../design/rfi_mcp_surface_design.md).
 
 ## Consequences
 

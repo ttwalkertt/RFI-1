@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 12760,
+      "destination_size": 13051,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "076914dec4678ce4b54dc43ec1f335311cdb2e41fd6baf4e4d4ff25f737edd22",
-      "content_change": "complete extant task index reconciled by TASK-068 and advanced through TASK-074"
+      "destination_sha256": "44418e580c29b5fe95b8cb2366501c6c81da594705d17b3f86038f022a3a0233",
+      "content_change": "complete extant task index reconciled by TASK-068 and advanced through the TASK-075 frozen-calibration checkpoint"
     },
     {
       "source": "ROADMAP.md",

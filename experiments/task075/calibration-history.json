@@ -127,6 +127,71 @@
       },
       "mcp_access_disposition": "No MCP change justified; the prompt received both draft and signed-final records plus the governing authority declaration.",
       "stopping_decision": "Select v3 for the preregistered terminal assessment. It improved diagnostic utility by more than 0.02, passed every non-repeatability threshold, and improved both false-reject and false-accept controls. The fixed call plan permits no further full feedback iteration before reserving the 132-call terminal assessment."
+    },
+    {
+      "iteration": "v2-terminal-epistemic-root-cause",
+      "design": "task075.epistemic-root-cause-v3",
+      "runs_per_case": 3,
+      "logical_model_judgments": 132,
+      "transport_invocations": 138,
+      "retried_judgments": 6,
+      "timed_out_invocations": 8,
+      "invalid_judgments": 2,
+      "manifest_sha256": "3034d139f2ee5c3abe72b4d42c9dc9aae4176fb1dd10ee3b4d90d5cbc62c1ceb",
+      "score_sha256": "4508d2bcec0fd974d4967dffad93c683907c8efaab6e4c8a7ef0bd0e91639532",
+      "all_thresholds_passed": false,
+      "metrics": {
+        "valid_evaluation_rate": 0.9772727272727273,
+        "disposition_accuracy": 1.0,
+        "material_false_accept_rate": 0.0,
+        "supported_false_reject_rate": 0.0,
+        "material_finding_recall": 0.8636363636363636,
+        "defect_class_attribution_f1": 0.8837209302325582,
+        "evidence_grounding_rate": 1.0,
+        "unsupported_finding_rate": 0.09523809523809523,
+        "indeterminate_accuracy": 1.0,
+        "matched_pair_discrimination": 0.8636363636363636,
+        "disposition_full_agreement": 0.0,
+        "disposition_pairwise_agreement": 0.0,
+        "material_detection_full_agreement": 0.0,
+        "defect_class_mean_jaccard": 0.0,
+        "evidence_reference_mean_jaccard": 0.0,
+        "supported_false_positive_count_variance": 1.0
+      },
+      "counts": {
+        "false_accepts": 0,
+        "false_rejects": 0,
+        "expected_findings": 22,
+        "matched_findings": 19,
+        "unsupported_findings": 2,
+        "invalid_cases": 1
+      },
+      "invalid_cases": {
+        "R2C-032": "Two of three independent judgments exhausted the preregistered transport retry after two 180-second timeouts each. The scoring contract therefore rejected terminal consensus and forced every repeatability metric to fail."
+      },
+      "failure_attribution": {
+        "QA reasoning/prompt failure": [
+          {
+            "cases": ["R2C-027"],
+            "cause": "Terminal consensus selected boundary inclusion instead of temporal scope for inclusion of an out-of-period award."
+          },
+          {
+            "cases": ["R2C-069"],
+            "cause": "Terminal consensus again selected version supersession instead of governing-source provenance for a draft-versus-signed-final conflict."
+          }
+        ],
+        "QA orchestration failure": [
+          {
+            "cases": ["R2C-032"],
+            "cause": "Two independent contexts failed to return within both allowed transport attempts, preventing a complete three-run consensus and a valid repeatability measurement."
+          }
+        ],
+        "MCP/access gap": [],
+        "repository-authority limitation": [],
+        "suspected benchmark/reference-truth defect": []
+      },
+      "mcp_access_disposition": "No MCP change justified. The two semantic misses had complete governing evidence, and the invalid case was a reviewer-runtime failure rather than evidence access.",
+      "stopping_decision": "Stop without retry or retuning. The single terminal calibration assessment has been consumed, v2 used 220 of 240 logical-judgment calls, and another full iteration or terminal assessment is outside the preregistered controls. Freeze v3 with a budget/terminal-limit negative calibration result."
     }
   ],
   "terminal_selection": {
@@ -138,6 +203,18 @@
     "projected_v2_calls_after_terminal": 220,
     "maximum_v2_calls": 240,
     "additional_tuning_before_terminal": false
+  },
+  "optimization_termination": {
+    "reason": "maximum_terminal_calibration_assessments_exhausted",
+    "freeze_termination_reason": "budget",
+    "v2_logical_model_judgments": 220,
+    "v2_maximum_logical_model_judgments": 240,
+    "material_design_changes_total": 2,
+    "maximum_material_design_changes": 3,
+    "selected_design": "task075.epistemic-root-cause-v3",
+    "calibration_success": false,
+    "post_terminal_tuning": false,
+    "held_out_validation_permitted_before_human_restore": false
   },
   "material_changes": [
     {

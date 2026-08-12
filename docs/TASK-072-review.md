@@ -7,7 +7,8 @@ recommends proceeding with a bounded Codex Work experiment after implementing a 
 surface and correcting three access-layer gaps: immutable artifact-ID reads, transcript access
 generation/health/typed outcomes, and a standalone data dictionary.
 
-The primary deliverable is [`rfi_mcp_surface_design.md`](rfi_mcp_surface_design.md). The accepted
+The primary deliverable is
+[`rfi_mcp_surface_design.md`](design/rfi_mcp_surface_design.md). The accepted
 experimental boundary is recorded in
 [`ADR-0028`](decisions/0028-agent-legible-rfi-mcp-boundary.md).
 

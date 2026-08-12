@@ -349,7 +349,7 @@ Optimize for:
 
 Produce:
 
-1. `docs/rfi_mcp_surface_design.md` — primary design document;
+1. `docs/design/rfi_mcp_surface_design.md` — primary design document;
 2. current-state RFI capability inventory relevant to MCP;
 3. proposed MCP resource/resource-template catalog;
 4. proposed MCP tool catalog with schemas and semantics;
@@ -424,7 +424,8 @@ State the reasons, principal risks, required first implementation slice, and wha
 TASK-072 completed the design-only milestone without implementing MCP, adding dependencies, or
 changing production behavior.
 
-The primary design is [`docs/rfi_mcp_surface_design.md`](../docs/rfi_mcp_surface_design.md). It
+The primary design is
+[`docs/design/rfi_mcp_surface_design.md`](../docs/design/rfi_mcp_surface_design.md). It
 contains the repository-grounded capability inventory, resource/resource-template/tool catalog,
 data dictionary, result and failure contracts, responsibility matrix, Seagate walkthrough,
 diagnostic-attribution analysis, gap classification, rejected alternatives, minimal implementation

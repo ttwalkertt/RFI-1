@@ -89,6 +89,7 @@ Rebuildable indexes and UI projections are not independent authorities.
 | Management and earnings transcripts | Usable with limitations | Integrated | One broad non-earnings management corpus and a narrow earnings-call corpus; StockAnalysis is the only provider, deterministic title vocabulary is bounded, and coverage may be indeterminate |
 | Retained-transcript knowledge access and investigation | Useful experimental vertical slice; access/model quality provisional | Implemented POC | `rfi.research`; public artifact reads, disposable lexical/temporal index, exact expansion, bounded live-model loop, insufficiency, and traces; no stable CLI/UI or workspace composition |
 | Independent investigation QA and bounded repair | Useful experimental contracts; reviewer quality provisional | Implemented POC | `rfi.investigation_qa`; independent QA, one repair, terminal re-review, and complete traces over five fixed answers; three known misses and three false terminal passes |
+| Independent QA measurement gauge | Calibration-frozen experimental gauge; repeatability not established | Implemented POC, held-out validation pending | `rfi.qa_gauge`; independent v2 matched-pair calibration improved one-run accuracy, but the terminal repeatability regime failed after incomplete reviewer runs; frozen design awaits human-restored held-out validation |
 | WDC Business Wire press releases | Implemented but operationally blocked | Registered in Pull Workflow, unsupported for live operation | fixture/browser-capture parsing passes; direct production transport is denied or times out |
 | RSS/Atom feeds | Complete for public credential-free feeds | Integrated | `rfi.feeds`; external recurrence only, no authenticated feeds or redirect DNS pinning |
 | Mailing-list evidence and workflow | Usable with bounded Lore/local-operation limits | Integrated | `rfi.mailing_lists`; no durable scheduler or global rate coordination |
@@ -189,6 +190,12 @@ and scale evidence. These are roadmap or backlog concerns until a task ticket au
   of four terminal passes was diagnostically sound. This is an implemented POC, not a stable quality
   gate or product-composed workflow; the evidence supports a future first-pass prompting experiment,
   not additional repair/escalation machinery inside TASK-074.
+- TASK-075 adds a separate calibration-frozen QA measurement gauge over an independently authored
+  matched-pair benchmark. Its v3 design reached perfect one-run calibration disposition and
+  indeterminate accuracy with no false accepts or false rejects, but its only terminal three-repeat
+  assessment had an incomplete case and failed the fixed repeatability and pair-discrimination
+  criteria. The gauge is not accepted as trustworthy, no MCP change was justified, and the exact
+  held-out archive remains under human custody for one post-freeze validation run.
 - Transcript event classification is deterministic and intentionally fails closed for the narrow
   earnings corpus. Unrecognized substantial events remain available as broad management
   transcripts; the current event-kind vocabulary is useful but not an exhaustive ontology.
