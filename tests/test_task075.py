@@ -22,7 +22,12 @@ from rfi.qa_gauge import (
     prepare_v3_control_manifests,
     score_partition,
 )
-from rfi.qa_gauge.prompts import DESIGN_GAUGE_V2, DESIGN_GAUGE_V3, prompt_for_design
+from rfi.qa_gauge.prompts import (
+    DESIGN_GAUGE_V2,
+    DESIGN_GAUGE_V3,
+    DESIGN_GAUGE_V4,
+    prompt_for_design,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS_ROOT = ROOT / "benchmarks/rfi_qa_candidates"
@@ -338,6 +343,18 @@ class HarnessBoundaryTests(unittest.TestCase):
         self.assertIn("internal_inconsistency", prompt)
         self.assertIn("qualification_omitted", prompt)
         self.assertIn("provenance_authority_error", prompt)
+
+    def test_v4_separates_truth_finding_admission_cause_and_disposition(self) -> None:
+        payload = {"case_id": "case"}
+        prompt = prompt_for_design(DESIGN_GAUGE_V4, payload)
+        self.assertIn("TASK CONTRACT", prompt)
+        self.assertIn("PROPOSITION VERDICTS", prompt)
+        self.assertIn("FINDING ADMISSION", prompt)
+        self.assertIn("earliest operation", prompt)
+        self.assertIn("A caution or calibration requirement never", prompt)
+        self.assertIn("incidental extra locator", prompt)
+        self.assertIn("distinct governing source", prompt)
+        self.assertLess(len(prompt), len(prompt_for_design(DESIGN_GAUGE_V3, payload)))
 
     def test_validation_requires_freeze_and_one_shot_marker_is_implemented(self) -> None:
         source = (ROOT / "scripts/task075_qa_gauge_experiment.py").read_text(encoding="utf-8")

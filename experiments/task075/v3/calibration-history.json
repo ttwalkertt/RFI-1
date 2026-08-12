@@ -11,9 +11,111 @@
     "exact-class precedence"
   ],
   "v2_result_role": "Known regression evidence only; not V3 optimization feedback.",
-  "v3_iterations": [],
+  "v3_iterations": [
+    {
+      "iteration": "v3-iteration-00-v2-selected-baseline",
+      "design": "task075.epistemic-root-cause-v3",
+      "runs_per_case": 1,
+      "logical_model_judgments": 80,
+      "transport_invocations": 87,
+      "retried_judgments": 7,
+      "invalid_judgments": 1,
+      "manifest_sha256": "a0205a182f9eaf9cf1bf93b12bb0acc3b39b3c8c926f83aefdf81d3a22e6de1f",
+      "score_sha256": "fe9eb71dac0a29d7c6572f30e128c58c75685706958e526c8f8e100671ab4357",
+      "diagnostic_utility": 0.9211867088607593,
+      "all_thresholds_passed": false,
+      "metrics": {
+        "valid_evaluation_rate": 0.9875,
+        "disposition_accuracy": 0.9746835443037974,
+        "material_false_accept_rate": 0.0,
+        "supported_false_reject_rate": 0.025,
+        "material_finding_recall": 0.85,
+        "defect_class_attribution_f1": 0.85,
+        "evidence_grounding_rate": 1.0,
+        "unsupported_finding_rate": 0.15,
+        "indeterminate_accuracy": 0.875,
+        "matched_pair_discrimination": 0.8
+      },
+      "counts": {
+        "false_accepts": 0,
+        "false_rejects": 1,
+        "expected_findings": 40,
+        "matched_findings": 34,
+        "unsupported_findings": 6,
+        "invalid_cases": 1
+      },
+      "failure_attribution": {
+        "QA reasoning/prompt failure": [
+          {
+            "cases": ["R3C-041"],
+            "cause": "Finding admission treated an incidental out-of-period extra locator as an independent evidence-mapping defect even though the requested total was correct, correctly supported, and no exhaustive one-to-one mapping was required."
+          },
+          {
+            "cases": ["R3C-049"],
+            "cause": "Mechanism classification named the downstream denominator symptom instead of the earliest failed operation: an ineligible draft record entered the certified population."
+          },
+          {
+            "cases": ["R3C-063"],
+            "cause": "Mechanism classification treated an unevidenced named caller attribution as ambiguous-reference resolution rather than unsupported attribution."
+          },
+          {
+            "cases": ["R3C-069", "R3C-072"],
+            "cause": "The reviewer again used version supersession for elevation of a lower-authority preliminary or unsigned draft over a distinct governing audited or signed source. The same class-boundary failure survived V2's explicit precedence instruction."
+          },
+          {
+            "cases": ["R3C-103"],
+            "cause": "Disposition aggregation converted violation of a caution requirement into refutation even though partial OCR authority left the universal absence proposition unresolved."
+          },
+          {
+            "cases": ["R3C-120"],
+            "cause": "Mechanism classification treated meaning reversal in a direct quotation/paraphrase as generic qualification omission rather than quote-context distortion."
+          }
+        ],
+        "QA orchestration failure": [
+          {
+            "cases": ["R3C-021"],
+            "cause": "The isolated context exhausted both preregistered 180-second transport attempts and returned no review."
+          }
+        ],
+        "MCP/access gap": [],
+        "repository-authority limitation": [
+          {
+            "cases": ["R3C-103"],
+            "cause": "The supplied OCR authority is intentionally partial; correct behavior is an indeterminate judgment, not retrieval expansion."
+          }
+        ],
+        "suspected benchmark/reference-truth defect": []
+      },
+      "methodology_assessment": {
+        "retained_strengths": "Authority modeling and direct record verification produced high disposition accuracy, zero false accepts, and perfect evidence grounding on matched findings.",
+        "rejected_abstraction": "A fused obligation/claim ledger followed by exact-class precedence is not an adequate final abstraction. Six unsupported findings cluster at finding-admission or adjacent-class boundaries, and two provenance misses repeat despite a V2 precedence patch.",
+        "replacement_required": "Separate task-contract parsing from proposition truth, admit only independently material violations, classify each admitted violation by its earliest causal operation, and aggregate disposition from epistemic verdicts without allowing caution requirements to manufacture refutation."
+      },
+      "mcp_access_disposition": "No MCP change justified. All seven semantic misses supplied the governing authority, exact records, and stable locators; the invalid case was transport/runtime failure."
+    }
+  ],
   "v2_regressions": [],
-  "material_v3_changes": [],
+  "material_v3_changes": [
+    {
+      "sequence": 1,
+      "status": "selected_for_diagnostic_implementation",
+      "origin": "v3-iteration-00-v2-selected-baseline",
+      "design": "task075.causal-admission-gauge-v4",
+      "change": "Replace the fused obligation/claim ledger and brittle exact-class precedence with task-contract extraction -> evidence model -> proposition verdict -> finding admission -> earliest-causal-mechanism classification -> epistemic aggregation. Compact the prompt while preserving complete taxonomy coverage to reduce context/runtime pressure.",
+      "motivating_cases": [
+        "R3C-021",
+        "R3C-041",
+        "R3C-049",
+        "R3C-063",
+        "R3C-069",
+        "R3C-072",
+        "R3C-103",
+        "R3C-120"
+      ],
+      "failure_attribution": "QA reasoning/prompt failure plus one QA orchestration failure",
+      "mcp_access_change": false
+    }
+  ],
   "mcp_access_changes": [],
   "suspected_reference_truth_defects": [],
   "freeze": null,
