@@ -11,6 +11,7 @@
     "exact-class precedence"
   ],
   "v2_result_role": "Known regression evidence only; not V3 optimization feedback.",
+  "candidate_selection_boundary": "Gauge quality controls selection. Runtime, latency, prompt length, and context pressure are secondary operational characteristics only; they cannot rescue a semantically inferior candidate or veto a materially better candidate that stays within declared runtime limits.",
   "v3_iterations": [
     {
       "iteration": "v3-iteration-00-v2-selected-baseline",
@@ -92,13 +93,93 @@
         "replacement_required": "Separate task-contract parsing from proposition truth, admit only independently material violations, classify each admitted violation by its earliest causal operation, and aggregate disposition from epistemic verdicts without allowing caution requirements to manufacture refutation."
       },
       "mcp_access_disposition": "No MCP change justified. All seven semantic misses supplied the governing authority, exact records, and stable locators; the invalid case was transport/runtime failure."
+    },
+    {
+      "iteration": "v3-iteration-01-causal-admission",
+      "design": "task075.causal-admission-gauge-v4",
+      "runs_per_case": 1,
+      "logical_model_judgments": 80,
+      "transport_invocations": 81,
+      "retried_judgments": 1,
+      "invalid_judgments": 0,
+      "manifest_sha256": "b7a35b5e8c31fbd9a7142bb174ce28eb60bed57236041db177238c911a63e503",
+      "score_sha256": "ec2a3589e9dbb0ed0aac83964d3edd9610c7932eebd2a795be7cd46f81385ef1",
+      "diagnostic_utility": 0.9125,
+      "diagnostic_utility_change": -0.0086867088607593,
+      "all_thresholds_passed": false,
+      "metrics": {
+        "valid_evaluation_rate": 1.0,
+        "disposition_accuracy": 0.9625,
+        "material_false_accept_rate": 0.0,
+        "supported_false_reject_rate": 0.0,
+        "material_finding_recall": 0.85,
+        "defect_class_attribution_f1": 0.85,
+        "evidence_grounding_rate": 1.0,
+        "unsupported_finding_rate": 0.15,
+        "indeterminate_accuracy": 0.75,
+        "matched_pair_discrimination": 0.775
+      },
+      "counts": {
+        "false_accepts": 0,
+        "false_rejects": 0,
+        "expected_findings": 40,
+        "matched_findings": 34,
+        "unsupported_findings": 6,
+        "invalid_cases": 0
+      },
+      "failure_attribution": {
+        "QA reasoning/prompt failure": [
+          {
+            "cases": ["R3C-030", "R3C-067"],
+            "cause": "The replacement still allowed a caution requirement to become an objective deliverable failure and upgrade an unresolved date or referent assertion from indeterminate to defective."
+          },
+          {
+            "cases": ["R3C-084"],
+            "cause": "The replacement over-corrected epistemic separation: it converted an objectively omitted material applicability qualification into indeterminate instead of preserving the defective qualification failure."
+          },
+          {
+            "cases": ["R3C-037", "R3C-042", "R3C-043"],
+            "cause": "The earliest-operation router flattened explicit boundary and temporal-scope mechanisms into generic record eligibility."
+          },
+          {
+            "cases": ["R3C-093", "R3C-096"],
+            "cause": "The causal router replaced general insufficiency findings with unsupported attribution or ambiguous-reference classes even though missing authority, rather than a resolved contrary actor/referent, was the governing mechanism."
+          },
+          {
+            "cases": ["R3C-111"],
+            "cause": "The earliest-operation router selected one contradicted status symptom and suppressed the material whole-answer internal inconsistency."
+          }
+        ],
+        "QA orchestration failure": [],
+        "MCP/access gap": [],
+        "repository-authority limitation": [
+          {
+            "cases": ["R3C-030", "R3C-067", "R3C-093", "R3C-096"],
+            "cause": "The supplied authority intentionally leaves the asserted date, referent, identity, or mechanism unresolved; no retrieval expansion is authorized or needed for correct indeterminate handling."
+          }
+        ],
+        "suspected benchmark/reference-truth defect": []
+      },
+      "predicted_consequence_assessment": {
+        "unsupported_findings_decrease": false,
+        "material_finding_recall_preserved_or_improved": true,
+        "class_attribution_improves": false,
+        "indeterminate_handling_preserved_or_improved": false,
+        "matched_pair_discrimination_improves": false,
+        "high_disposition_accuracy_preserved": true,
+        "evidence_grounding_preserved": true,
+        "finding": "The candidate corrected the prior run's seven semantic misses but introduced nine different semantic misses. Unsupported findings, recall, and class F1 were unchanged; indeterminate accuracy, pair discrimination, disposition accuracy, and diagnostic utility declined. This is error displacement, not a more accurate causal gauge."
+      },
+      "runtime_selection_disposition": "The candidate achieved 100% valid reviews with one transport retry and used a 27% shorter static prompt. These are secondary operational observations and contributed no credit to methodology selection.",
+      "mcp_access_disposition": "No MCP change justified. Every semantic miss had complete access to the benchmark-supplied authority and exact evidence.",
+      "selection_decision": "Reject causal-admission v4 and select the unchanged epistemic-root-cause v3 starting design for the terminal assessment. Diagnostic utility fell by 0.00869; none of the failed semantic-primary thresholds became a pass; unsupported rate, recall, and class F1 did not improve; and indeterminate accuracy and pair discrimination worsened. Improved runtime validity and supported false-reject rate do not establish superior causal gauge quality."
     }
   ],
   "v2_regressions": [],
   "material_v3_changes": [
     {
       "sequence": 1,
-      "status": "selected_for_diagnostic_implementation",
+      "status": "diagnosed_and_rejected_after_v3_calibration",
       "origin": "v3-iteration-00-v2-selected-baseline",
       "design": "task075.causal-admission-gauge-v4",
       "change": "Replace the fused obligation/claim ledger and brittle exact-class precedence with task-contract extraction -> evidence model -> proposition verdict -> finding admission -> earliest-causal-mechanism classification -> epistemic aggregation. Compact the prompt while preserving complete taxonomy coverage to reduce context/runtime pressure.",
@@ -116,6 +197,20 @@
       "mcp_access_change": false
     }
   ],
+  "terminal_selection": {
+    "design": "task075.epistemic-root-cause-v3",
+    "selection_source": "V3 calibration only",
+    "selected_after_iteration": "v3-iteration-01-causal-admission",
+    "baseline_diagnostic_utility": 0.9211867088607593,
+    "candidate_diagnostic_utility": 0.9125,
+    "semantic_thresholds_newly_passed_by_candidate": [],
+    "runtime_characteristics_used_for_selection": false,
+    "calls_before_terminal": 160,
+    "terminal_calls_reserved": 240,
+    "projected_total_calls": 400,
+    "maximum_calls": 400,
+    "additional_feedback_iteration_permitted": false
+  },
   "mcp_access_changes": [],
   "suspected_reference_truth_defects": [],
   "freeze": null,
