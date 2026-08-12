@@ -130,7 +130,7 @@ def prepare(args: argparse.Namespace) -> int:
 
 
 def prepare_v2(args: argparse.Namespace) -> int:
-    """Adopt benchmark v2 while carrying the original calibration budget and trajectory."""
+    """Adopt benchmark v2 while preserving the original trajectory as provenance."""
     state = args.state.resolve()
     control = args.control.resolve()
     corpus = args.corpus.resolve()
@@ -157,15 +157,25 @@ def prepare_v2(args: argparse.Namespace) -> int:
     ledger = {
         "budget_version": "task075.rbf-optimization.v1",
         "maximum_calibration_model_calls": 240,
-        "model_calls_reserved": 80,
-        "model_calls_scheduled_total": int(previous.get("model_calls_scheduled_total", 80)),
-        "iterations": previous["iterations"],
+        "model_calls_reserved": 0,
+        "model_calls_scheduled_total": 0,
+        "iterations": [],
+        "prior_v1_trajectory": {
+            "model_calls_reserved": 80,
+            "model_calls_scheduled_total": int(
+                previous.get("model_calls_scheduled_total", 80)
+            ),
+            "iterations": previous["iterations"],
+        },
         "benchmark_v2_resumption": {
             "retained_design": "task075.decomposed-gauge-v2",
-            "prior_calls_consumed": 80,
-            "calls_remaining": 160,
+            "prior_v1_calls_preserved_as_provenance": 80,
+            "v2_calls_remaining": 240,
+            "baseline_v2_calls_preregistered": 44,
+            "full_feedback_iteration_calls_preregistered": 44,
             "terminal_v2_calls_preregistered": 132,
-            "post_terminal_calls_remaining": 28,
+            "planned_v2_calls": 220,
+            "unallocated_contingency_calls": 20,
             "decision_source": "experiments/task075/benchmark-v2-resumption.json",
         },
     }
