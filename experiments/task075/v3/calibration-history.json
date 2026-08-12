@@ -252,7 +252,76 @@
       "stopping_decision": "Stop V3 optimization without retry or retuning. The only terminal calibration assessment is consumed and all 400 mechanically preregistered V3 calibration calls are exhausted. Preserve the negative calibration result, run the required known V2 regression on this same selected design, then freeze."
     }
   ],
-  "v2_regressions": [],
+  "v2_regressions": [
+    {
+      "iteration": "v2-known-regression-final",
+      "role": "Known regression suite only; not V3 optimization truth or redesign feedback.",
+      "design": "task075.epistemic-root-cause-v3",
+      "runs_per_case": 3,
+      "logical_model_judgments": 84,
+      "transport_invocations": 92,
+      "retried_judgments": 8,
+      "timed_out_invocations": 11,
+      "invalid_judgments": 3,
+      "invalid_cases": ["R2C-015", "R2C-040", "R2C-065"],
+      "manifest_sha256": "307ab9ba9ee4bb7052a70ba4102e0e52b92f927589e9616ecb6ad56be494de8f",
+      "score_sha256": "71f69b654de11549d0825a29c392bf3eb70c4308b6e17d7c223d33c98f8f505e",
+      "all_thresholds_passed": false,
+      "metrics": {
+        "valid_evaluation_rate": 0.8928571428571429,
+        "disposition_accuracy": 1.0,
+        "material_false_accept_rate": 0.0,
+        "supported_false_reject_rate": 0.0,
+        "material_finding_recall": 0.4375,
+        "defect_class_attribution_f1": 0.5185185185185185,
+        "evidence_grounding_rate": 1.0,
+        "unsupported_finding_rate": 0.36363636363636365,
+        "indeterminate_accuracy": 0.5,
+        "matched_pair_discrimination": 0.5,
+        "disposition_full_agreement": 0.0,
+        "disposition_pairwise_agreement": 0.0,
+        "material_detection_full_agreement": 0.0,
+        "defect_class_mean_jaccard": 0.0,
+        "evidence_reference_mean_jaccard": 0.0,
+        "supported_false_positive_count_variance": 1.0
+      },
+      "counts": {
+        "false_accepts": 0,
+        "false_rejects": 0,
+        "expected_findings": 16,
+        "matched_findings": 7,
+        "unsupported_findings": 4,
+        "invalid_cases": 3
+      },
+      "prior_v2_result_sha256": "96e3d46bca063e4f9728df6eb094c5943a88fb6681853b71dcf16e63d288a9c8",
+      "comparison_to_prior_v2_measurement": {
+        "valid_evaluation_rate_delta": -0.1071428571428571,
+        "disposition_accuracy_delta": 0.0357142857142857,
+        "material_false_accept_rate_delta": 0.0,
+        "supported_false_reject_rate_delta": 0.0,
+        "material_finding_recall_delta": -0.25,
+        "defect_class_attribution_f1_delta": -0.2148148148148149,
+        "evidence_grounding_rate_delta": 0.0,
+        "unsupported_finding_rate_delta": 0.1493506493506494,
+        "indeterminate_accuracy_delta": -0.25,
+        "matched_pair_discrimination_delta": -0.2142857142857143,
+        "repeatability_thresholds_flipped_from_pass_to_fail": true,
+        "material_regression": true,
+        "material_regression_reasons": [
+          "Previously passing validity and all repeatability thresholds became failures because three cases lacked complete consensus.",
+          "Finding recall, class F1, indeterminate accuracy, and pair discrimination each fell by at least 0.10 absolute.",
+          "Unsupported-finding rate increased by at least 0.10 absolute."
+        ]
+      },
+      "semantic_observations": {
+        "class_or_completeness_misses": ["R2C-005", "R2C-007", "R2C-018", "R2C-029", "R2C-044", "R2C-072"],
+        "incomplete_consensus_cases": ["R2C-015", "R2C-040", "R2C-065"],
+        "interpretation": "The same unchanged design did not reproduce its prior V2 finding quality or repeatability. Correct aggregate dispositions and perfect grounding of matched findings do not offset incomplete findings, unsupported classes, weak matched-pair discrimination, poor indeterminate handling, or incomplete consensus."
+      },
+      "post_regression_tuning_performed": false,
+      "mcp_access_disposition": "No MCP change or QA tuning is permitted from known V2 regression outcomes."
+    }
+  ],
   "material_v3_changes": [
     {
       "sequence": 1,
@@ -288,8 +357,44 @@
     "maximum_calls": 400,
     "additional_feedback_iteration_permitted": false
   },
+  "optimization_termination": {
+    "reason": "maximum_terminal_calibration_assessments_and_v3_call_budget_exhausted",
+    "freeze_termination_reason": "budget",
+    "v3_calibration_model_judgments": 400,
+    "v3_maximum_calibration_model_judgments": 400,
+    "material_v3_design_changes": 1,
+    "maximum_material_design_changes": 3,
+    "terminal_assessments": 1,
+    "maximum_terminal_assessments": 1,
+    "selected_design": "task075.epistemic-root-cause-v3",
+    "selected_prompt_sha256": "5702ee399de511d188cb11edb3d9275ac96d8b5e48002c9ad6dd8ea10c0fd486",
+    "v3_calibration_success": false,
+    "material_v2_regression": true,
+    "post_terminal_tuning": false,
+    "post_regression_tuning": false,
+    "held_out_verification_observed": false
+  },
+  "architectural_disposition": {
+    "status": "not_converged",
+    "decision": "Do not promote the current QA methodology as an accurate and repeatable measurement gauge.",
+    "evidence": "V3 terminal calibration failed finding recall, class F1, unsupported-finding, indeterminate, pair-discrimination, validity, and every repeatability threshold. A V3-evidenced fundamental replacement displaced rather than reduced semantic errors and was rejected. The unchanged selected design then materially regressed on known V2 behavior.",
+    "runtime_role": "Runtime invalidity is one independent quality failure, not the architectural decision's primary basis. Even valid consensus cases failed multiple semantic finding-quality and epistemic thresholds.",
+    "next_architectural_action": "Defer further QA-gauge promotion to a future independently bounded task. Any successor should investigate a more reliable structured finding-generation/classification mechanism and repeatable reviewer execution without tuning on V2 regression or V3 held-out truth."
+  },
   "mcp_access_changes": [],
   "suspected_reference_truth_defects": [],
-  "freeze": null,
+  "freeze": {
+    "status": "ready_to_freeze_negative_result",
+    "design": "task075.epistemic-root-cause-v3",
+    "termination_reason": "budget",
+    "terminal_calibration_manifest_sha256": "bdca76d785b8867bf9efc4ef2320cde16495f7990e96f82d1a8cde1909d28f31",
+    "terminal_calibration_score_sha256": "b9eb59a22a841416306e7ccb2e2aee452e386e80893bfe1f4536900fa6679b2a",
+    "v2_regression_manifest_sha256": "307ab9ba9ee4bb7052a70ba4102e0e52b92f927589e9616ecb6ad56be494de8f",
+    "v2_regression_score_sha256": "71f69b654de11549d0825a29c392bf3eb70c4308b6e17d7c223d33c98f8f505e",
+    "calibration_all_thresholds_passed": false,
+    "material_v2_regression": true,
+    "post_freeze_tuning_permitted": false,
+    "held_out_verification_attempts_permitted_after_exact_human_restore": 1
+  },
   "verification": null
 }
