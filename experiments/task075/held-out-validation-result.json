@@ -1,0 +1,152 @@
+{
+  "result_version": "task075.held-out-validation-result.v1",
+  "benchmark_version": "rfi-qa-independent-v2.0.0",
+  "benchmark_authoring_commit": "ac2837034078ec101ea7e2a582916268b88663fb",
+  "corpus_sha256": "09ec5ab31d4f9683e7ce7f9064fb294f388d4846b5f75a68875f69a6c740c54a",
+  "partition": {
+    "split_seed": 20260811,
+    "calibration_pairs": 22,
+    "calibration_cases": 44,
+    "validation_pairs": 14,
+    "validation_cases": 28,
+    "quarantine_cases": 4,
+    "rerandomized": false
+  },
+  "restored_validation_files": {
+    "validation/cases.jsonl": "22e98803f86c36fc1009ce8c16b153e3e4bc871b31740f2620bab13a16fb899d",
+    "validation/fixtures.json": "9afb3a99090a85574f6c2a5effaf8a56fe93648eb85bbe280e21ccd84fbb0bbf"
+  },
+  "freeze": {
+    "design": "task075.epistemic-root-cause-v3",
+    "manifest_sha256": "ef2a44d43288ee9273c2582d22a07e19cd03d8815ed8909ab1328c0e59231d86",
+    "post_freeze_tuning": false,
+    "mcp_access_changes": []
+  },
+  "validation_attempt": {
+    "attempt_number": 1,
+    "attempt_limit": 1,
+    "started_at_utc": "2026-08-12T01:15:21.258567+00:00",
+    "completed_at_utc": "2026-08-12T01:22:11.713388+00:00",
+    "iteration": "v2-held-out-validation-frozen-v3",
+    "repeat_count": 3,
+    "logical_judgments": 84,
+    "transport_invocations": 88,
+    "retried_judgments": 4,
+    "timed_out_invocations": 4,
+    "invalid_judgments": 0,
+    "raw_evidence_path": ".artifacts/task075-v2-validation/frozen-epistemic-root-cause-v3",
+    "manifest_sha256": "c8dcd099ee756e453c084a660fb67078cda357c3ba20a6cdc282358f8f227bcd",
+    "score_sha256": "31d77a019536a59828c715bebd5c8893094ecb047b38ba64305ea50482a4b49b"
+  },
+  "all_thresholds_passed": false,
+  "metrics": {
+    "valid_evaluation_rate": 1.0,
+    "disposition_accuracy": 0.9642857142857143,
+    "material_false_accept_rate": 0.0,
+    "supported_false_reject_rate": 0.0,
+    "material_finding_recall": 0.6875,
+    "defect_class_attribution_f1": 0.7333333333333334,
+    "evidence_grounding_rate": 1.0,
+    "unsupported_finding_rate": 0.21428571428571427,
+    "indeterminate_accuracy": 0.75,
+    "matched_pair_discrimination": 0.7142857142857143,
+    "disposition_full_agreement": 1.0,
+    "disposition_pairwise_agreement": 1.0,
+    "material_detection_full_agreement": 1.0,
+    "defect_class_mean_jaccard": 0.9404761904761905,
+    "evidence_reference_mean_jaccard": 0.9298245614035089,
+    "supported_false_positive_count_variance": 0.0
+  },
+  "failed_thresholds": {
+    "material_finding_recall": {
+      "observed": 0.6875,
+      "operator": ">=",
+      "required": 0.85
+    },
+    "defect_class_attribution_f1": {
+      "observed": 0.7333333333333334,
+      "operator": ">=",
+      "required": 0.85
+    },
+    "unsupported_finding_rate": {
+      "observed": 0.21428571428571427,
+      "operator": "<=",
+      "required": 0.1
+    },
+    "indeterminate_accuracy": {
+      "observed": 0.75,
+      "operator": ">=",
+      "required": 1.0
+    },
+    "matched_pair_discrimination": {
+      "observed": 0.7142857142857143,
+      "operator": ">=",
+      "required": 0.9
+    }
+  },
+  "failed_pairs": [
+    "R2P-003",
+    "R2P-008",
+    "R2P-009",
+    "R2P-015"
+  ],
+  "material_failure_attribution": [
+    {
+      "case_id": "R2C-005",
+      "category": "qa_reasoning_prompt_failure",
+      "observed": "correct indeterminate disposition but ambiguous_reference_overresolved substituted for attribution_unsupported"
+    },
+    {
+      "case_id": "R2C-007",
+      "category": "qa_reasoning_prompt_failure",
+      "observed": "qualification_omitted detected but the second material class claim_strength_overstatement was omitted"
+    },
+    {
+      "case_id": "R2C-015",
+      "category": "qa_reasoning_prompt_failure",
+      "observed": "reference indeterminate corpus-completeness assertion was promoted to defective"
+    },
+    {
+      "case_id": "R2C-018",
+      "category": "qa_reasoning_prompt_failure",
+      "observed": "correct indeterminate disposition but insufficiency_miscalibrated substituted for causal_overstatement"
+    },
+    {
+      "case_id": "R2C-029",
+      "category": "qa_reasoning_prompt_failure",
+      "observed": "provenance_authority_error substituted for status_mischaracterized"
+    },
+    {
+      "case_id": "R2C-072",
+      "category": "qa_reasoning_prompt_failure",
+      "observed": "denominator_error detected but the second material class qualification_omitted was omitted"
+    }
+  ],
+  "other_failure_categories": {
+    "qa_orchestration_failure": [],
+    "mcp_access_gap": [],
+    "repository_authority_limitation_preventing_correct_scoring": [],
+    "suspected_benchmark_reference_truth_defect": []
+  },
+  "calibration_to_validation_delta": {
+    "basis": "validation metric minus frozen terminal calibration metric",
+    "valid_evaluation_rate": 0.022727272727272707,
+    "disposition_accuracy": -0.0357142857142857,
+    "material_false_accept_rate": 0.0,
+    "supported_false_reject_rate": 0.0,
+    "material_finding_recall": -0.17613636363636365,
+    "defect_class_attribution_f1": -0.15038759689922476,
+    "evidence_grounding_rate": 0.0,
+    "unsupported_finding_rate": 0.11904761904761904,
+    "indeterminate_accuracy": -0.25,
+    "matched_pair_discrimination": -0.14935064935064934,
+    "repeatability_note": "The frozen calibration repeatability metrics were fail-closed because one case lacked all three runs; validation repeatability is complete and must not be interpreted as a comparable positive delta."
+  },
+  "fresh_live_transfer": {
+    "permitted": false,
+    "attempted": false,
+    "reason": "The held-out validation did not pass every preregistered threshold."
+  },
+  "final_architectural_disposition": "QA improved materially but did not meet the predetermined gauge criteria",
+  "trustworthy_measurement_gauge": false
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate or verify the commit-aware TASK-075 frozen-calibration review package."""
+"""Generate or verify the commit-aware final TASK-075 review package."""
 
 from __future__ import annotations
 
@@ -23,6 +23,8 @@ CORPUS = ROOT / "benchmarks/rfi_qa_candidates_v2"
 CONTROL = ROOT / "experiments/task075"
 STATE = ROOT / ".artifacts/task075-v2-control"
 V2_CALIBRATION = ROOT / ".artifacts/task075-v2-calibration"
+V2_VALIDATION = ROOT / ".artifacts/task075-v2-validation/frozen-epistemic-root-cause-v3"
+VALIDATION_RESULT = CONTROL / "held-out-validation-result.json"
 V1_CONTROL = ROOT / ".artifacts/task075-control"
 V1_CALIBRATION = ROOT / ".artifacts/task075-calibration"
 EXPECTED_OPERATOR_FILES = {"pull-results.txt", "pull_stx.py"}
@@ -84,7 +86,7 @@ def tree_members(root: Path, prefix: str) -> list[tuple[str, Path]]:
 
 
 def generate(base: str | None) -> int:
-    """Verify the committed freeze checkpoint and assemble its review package."""
+    """Verify the one-shot result and assemble the final review package."""
     base_ref = base or "origin/main"
     dirty_only_for_operator_files = review_tree_is_commit_exact()
     outcomes = [
@@ -101,16 +103,20 @@ def generate(base: str | None) -> int:
                 str(STATE),
                 "--calibration",
                 str(V2_CALIBRATION),
+                "--validation",
+                str(V2_VALIDATION),
+                "--result",
+                str(VALIDATION_RESULT),
                 "--output",
                 str(EVALUATION),
             ],
         ),
         run(
-            "visible-benchmark-validator",
+            "full-benchmark-validator",
             [
                 ".venv/bin/python",
                 "benchmarks/rfi_qa_candidates_v2/validate_candidates.py",
-                "--visible",
+                "--full",
             ],
         ),
         run(
@@ -167,18 +173,20 @@ def generate(base: str | None) -> int:
             "evaluation/experiment-evidence-summary.json",
             EVALUATION / "experiment-evidence-summary.json",
         ),
-        *tree_members(CORPUS, "benchmark/v2-visible"),
+        ("evaluation/held-out-validation-result.json", VALIDATION_RESULT),
+        *tree_members(CORPUS, "benchmark/v2-full"),
         *tree_members(CONTROL, "controls"),
         *tree_members(ROOT / "src/rfi/qa_gauge", "implementation/qa-gauge"),
         *tree_members(V1_CONTROL, "provenance/v1-control"),
         *tree_members(V1_CALIBRATION, "provenance/v1-calibration"),
         *tree_members(STATE, "experiment/v2-state"),
         *tree_members(V2_CALIBRATION, "experiment/v2-calibration"),
+        *tree_members(V2_VALIDATION, "experiment/v2-held-out-validation"),
         *(
             (f"validation/{name}.txt", VALIDATION / f"{name}.txt")
             for name in (
                 "experiment-evidence",
-                "visible-benchmark-validator",
+                "full-benchmark-validator",
                 "frozen-controls",
                 "focused-regressions",
                 "committed-diff-check",
@@ -205,9 +213,11 @@ def generate(base: str | None) -> int:
         **report,
         "zip": str(ZIP_PATH),
         "sha256": zip_digest,
-        "checkpoint": "frozen calibration; held-out validation not attempted",
+        "checkpoint": "final negative held-out validation; no post-freeze tuning",
         "excluded_preexisting_operator_files": sorted(EXPECTED_OPERATOR_FILES),
-        "held_out_validation_included": False,
+        "held_out_validation_included": True,
+        "held_out_validation_passed": False,
+        "fresh_live_transfer_attempted": False,
         "post_freeze_tuning": False,
     }
     REPORT_PATH.write_text(

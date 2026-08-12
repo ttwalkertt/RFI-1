@@ -10,3 +10,8 @@ These controls were authored and committed before partition generation or QA exe
 
 Changing either file after partition creation invalidates TASK-075. A future experiment must use a
 new version instead of weakening this contract.
+
+The completed one-shot outcome is recorded separately in `held-out-validation-result.json`. It
+identifies the restored benchmark bytes, unchanged frozen design, raw evidence hashes, exact
+metrics and failed thresholds, case-level failure attribution, and the resulting no-live-transfer
+decision without modifying either preregistered control.

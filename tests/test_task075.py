@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -105,20 +107,47 @@ class GaugeContractTests(unittest.TestCase):
 
 class BenchmarkProtectionTests(unittest.TestCase):
     def test_v2_visible_partition_is_exact_and_held_out_is_physically_absent(self) -> None:
-        calibration = BenchmarkCorpus.load(V2_CORPUS_ROOT, partition="calibration")
-        quarantine = BenchmarkCorpus.load(V2_CORPUS_ROOT, partition="quarantine")
-        self.assertEqual((len(calibration.objective), len(calibration.fixtures)), (44, 22))
-        self.assertEqual((len(quarantine.borderline), len(quarantine.fixtures)), (4, 4))
-        self.assertFalse((V2_CORPUS_ROOT / "validation/cases.jsonl").exists())
-        self.assertFalse((V2_CORPUS_ROOT / "validation/fixtures.json").exists())
-        with self.assertRaisesRegex(ValueError, "physically absent"):
-            BenchmarkCorpus.load(V2_CORPUS_ROOT, partition="validation")
+        with tempfile.TemporaryDirectory() as directory:
+            visible = Path(directory) / "visible-corpus"
+            shutil.copytree(
+                V2_CORPUS_ROOT,
+                visible,
+                ignore=shutil.ignore_patterns("validation"),
+            )
+            calibration = BenchmarkCorpus.load(visible, partition="calibration")
+            quarantine = BenchmarkCorpus.load(visible, partition="quarantine")
+            self.assertEqual((len(calibration.objective), len(calibration.fixtures)), (44, 22))
+            self.assertEqual((len(quarantine.borderline), len(quarantine.fixtures)), (4, 4))
+            self.assertFalse((visible / "validation/cases.jsonl").exists())
+            self.assertFalse((visible / "validation/fixtures.json").exists())
+            with self.assertRaisesRegex(ValueError, "physically absent"):
+                BenchmarkCorpus.load(visible, partition="validation")
+
+    def test_restored_v2_validation_matches_preregistered_hashes(self) -> None:
+        expected = {
+            "cases.jsonl": "22e98803f86c36fc1009ce8c16b153e3e4bc871b31740f2620bab13a16fb899d",
+            "fixtures.json": "9afb3a99090a85574f6c2a5effaf8a56fe93648eb85bbe280e21ccd84fbb0bbf",
+        }
+        for name, digest in expected.items():
+            path = V2_CORPUS_ROOT / "validation" / name
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), digest)
+        validation = BenchmarkCorpus.load(V2_CORPUS_ROOT, partition="validation")
+        self.assertEqual((len(validation.objective), len(validation.fixtures)), (28, 14))
 
     def test_v2_control_adopts_author_split_without_rerandomization(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            tempfile.TemporaryDirectory() as corpus_directory,
+        ):
             target = Path(directory)
+            visible = Path(corpus_directory) / "visible-corpus"
+            shutil.copytree(
+                V2_CORPUS_ROOT,
+                visible,
+                ignore=shutil.ignore_patterns("validation"),
+            )
             result = prepare_v2_control_manifests(
-                corpus_root=V2_CORPUS_ROOT,
+                corpus_root=visible,
                 scoring_path=CONTROL / "scoring-contract.json",
                 config_path=CONTROL / "optimization-config.json",
                 output=target,
