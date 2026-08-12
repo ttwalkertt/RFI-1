@@ -609,6 +609,7 @@ def _implementation_files(control: Path) -> list[Path]:
         control / "scoring-contract.json",
         control / "optimization-config.json",
         control / "benchmark-v2-resumption.json",
+        control / "calibration-history.json",
         control / "corpus-freeze-manifest.json",
         control / "quarantine-manifest.json",
         control / "partition-manifest.json",

@@ -19,7 +19,7 @@ from rfi.qa_gauge import (
     prepare_v2_control_manifests,
     score_partition,
 )
-from rfi.qa_gauge.prompts import DESIGN_GAUGE_V2, prompt_for_design
+from rfi.qa_gauge.prompts import DESIGN_GAUGE_V2, DESIGN_GAUGE_V3, prompt_for_design
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS_ROOT = ROOT / "benchmarks/rfi_qa_candidates"
@@ -261,6 +261,16 @@ class HarnessBoundaryTests(unittest.TestCase):
         self.assertIn("neither establishable nor refutable", prompt)
         self.assertIn("denominator_error", prompt)
         self.assertNotIn("reference_qa", prompt)
+
+    def test_v3_design_prioritizes_epistemic_state_and_root_cause(self) -> None:
+        prompt = prompt_for_design(DESIGN_GAUGE_V3, {"case_id": "case"})
+        self.assertIn("Truth status controls disposition", prompt)
+        self.assertIn("A calibration requirement does not manufacture a contrary fact", prompt)
+        self.assertIn("smallest set of non-overlapping material root-cause findings", prompt)
+        self.assertIn("ordinary connective wording", prompt)
+        self.assertIn("internal_inconsistency", prompt)
+        self.assertIn("qualification_omitted", prompt)
+        self.assertIn("provenance_authority_error", prompt)
 
     def test_validation_requires_freeze_and_one_shot_marker_is_implemented(self) -> None:
         source = (ROOT / "scripts/task075_qa_gauge_experiment.py").read_text(encoding="utf-8")

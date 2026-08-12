@@ -1,0 +1,104 @@
+{
+  "history_version": "task075.calibration-history.v1",
+  "benchmark": {
+    "version": "rfi-qa-independent-v2.0.0",
+    "corpus_sha256": "09ec5ab31d4f9683e7ce7f9064fb294f388d4846b5f75a68875f69a6c740c54a",
+    "calibration_cases": 44,
+    "validation_content_observed": false
+  },
+  "controls": {
+    "scoring_contract_sha256": "79f6e5a5ef445d08880079f2c27a995e80ed16489bb7d823782c28795a197ae6",
+    "optimization_config_sha256": "b0670449fc0f24ff28af98e69f0bfe995a6b9009d81154084ca1ecf3a4d70330"
+  },
+  "prior_v1_provenance": {
+    "model_judgments": 80,
+    "material_changes": 1,
+    "retained_design": "task075.decomposed-gauge-v2",
+    "retained_architecture": [
+      "authority ledger",
+      "claim/obligation ledger",
+      "deterministic verification",
+      "three-state epistemic decision",
+      "exact-class precedence"
+    ],
+    "validation_run": false,
+    "validation_boundary_invalidated_by_exposure": true
+  },
+  "v2_iterations": [
+    {
+      "iteration": "v2-iteration-00-baseline",
+      "design": "task075.decomposed-gauge-v2",
+      "runs_per_case": 1,
+      "model_calls": 44,
+      "manifest_sha256": "6adb1001cb4eb78208c9462d53b77a0d46b95068d4f8a97880b0d8ca555412eb",
+      "score_sha256": "98b3590ccb6dee54e95ab65edc6ece03cd285f46df620fc0cd06264f5030aeae",
+      "diagnostic_utility": 0.8131586073500967,
+      "all_thresholds_passed": false,
+      "metrics": {
+        "valid_evaluation_rate": 1.0,
+        "disposition_accuracy": 0.9090909090909091,
+        "material_false_accept_rate": 0.0,
+        "supported_false_reject_rate": 0.045454545454545456,
+        "material_finding_recall": 0.7727272727272727,
+        "defect_class_attribution_f1": 0.7234042553191491,
+        "evidence_grounding_rate": 1.0,
+        "unsupported_finding_rate": 0.32,
+        "indeterminate_accuracy": 0.0,
+        "matched_pair_discrimination": 0.6363636363636364
+      },
+      "counts": {
+        "false_accepts": 0,
+        "false_rejects": 1,
+        "expected_findings": 22,
+        "matched_findings": 17,
+        "unsupported_findings": 8
+      },
+      "failure_attribution": {
+        "QA reasoning/prompt failure": [
+          {
+            "cases": ["R2C-037", "R2C-056", "R2C-060"],
+            "cause": "The prompt treated an explicit evidence-calibration requirement as refutation, converting genuinely unresolved assertions from indeterminate to defective."
+          },
+          {
+            "cases": ["R2C-014", "R2C-057", "R2C-060"],
+            "cause": "The reviewer double-counted an evidence-mapping symptom after identifying, or instead of identifying, the substantive root defect."
+          },
+          {
+            "cases": ["R2C-010", "R2C-032", "R2C-061", "R2C-069"],
+            "cause": "The exact-class precedence was underspecified for internal inconsistency, omitted conflict, population qualification, and governing-source provenance."
+          },
+          {
+            "cases": ["R2C-054"],
+            "cause": "The reviewer elevated an incidental grammatical actor outside the requested quantity into a material unsupported attribution."
+          }
+        ],
+        "QA orchestration failure": [],
+        "MCP/access gap": [],
+        "repository-authority limitation": [
+          {
+            "cases": ["R2C-037", "R2C-056", "R2C-060"],
+            "cause": "The supplied authority intentionally cannot resolve the asserted fact; correct gauge behavior is indeterminate, not additional retrieval."
+          }
+        ],
+        "suspected benchmark/reference-truth defect": []
+      },
+      "mcp_access_disposition": "No MCP change justified. Every missed case supplied the governing authority, exact records, and stable locators needed for the reference judgment."
+    }
+  ],
+  "material_changes": [
+    {
+      "sequence": 1,
+      "origin": "v1 calibration",
+      "design": "task075.decomposed-gauge-v2",
+      "change": "authority ledger -> claim/obligation ledger -> deterministic verification -> three-state epistemic decision -> exact-class precedence"
+    },
+    {
+      "sequence": 2,
+      "origin": "v2-iteration-00-baseline",
+      "design": "task075.epistemic-root-cause-v3",
+      "change": "Make truth status dominant over evidence-calibration requirements, require minimal non-overlapping root-cause findings, tighten materiality, and add general class precedence for whole-answer inconsistency, omitted conflict, population qualification, and draft-versus-governing-source errors.",
+      "failure_attribution": "QA reasoning/prompt failure",
+      "mcp_access_change": false
+    }
+  ]
+}

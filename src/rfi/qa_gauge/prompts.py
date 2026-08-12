@@ -9,6 +9,7 @@ from rfi.qa_gauge.contracts import DEFECT_CLASSES
 
 DESIGN_BASELINE = "task075.baseline-v1"
 DESIGN_GAUGE_V2 = "task075.decomposed-gauge-v2"
+DESIGN_GAUGE_V3 = "task075.epistemic-root-cause-v3"
 
 _DEFINITIONS = {
     "absence_overstatement": (
@@ -129,6 +130,60 @@ CASE INPUT
 """
 
 
+def root_cause_gauge_prompt(payload: dict[str, Any]) -> str:
+    """Apply v2-calibration-derived epistemic, materiality, and class precedence."""
+    prompt = decomposed_gauge_prompt(payload)
+    replacements = {
+        "B. refuted or contradicted by the declared authority or an explicit requirement;": (
+            "B. refuted or contradicted by the declared authority;"
+        ),
+        (
+            "5. WHOLE-ANSWER DISPOSITION. If every proposition/obligation is A, return "
+            "`supported`. If any material proposition/obligation is B, return `defective`. "
+            "Otherwise, if an answer asserts certainty for a C proposition, return "
+            "`indeterminate`. A finding can identify an improper assertion even when its "
+            "disposition is indeterminate."
+        ): (
+            "5. WHOLE-ANSWER DISPOSITION. Truth status controls disposition. If the evidence "
+            "refutes a material assertion, or objectively demonstrates a material non-truth "
+            "deliverable failure, return `defective`. If no assertion is refuted but the answer "
+            "asserts certainty for any C proposition, return `indeterminate`, even when an answer "
+            "requirement said to identify something only if established. A calibration "
+            "requirement does not manufacture a contrary fact. Otherwise return `supported`. A "
+            "finding can identify the improper assertion in an indeterminate answer."
+        ),
+    }
+    for old, new in replacements.items():
+        if prompt.count(old) != 1:
+            raise RuntimeError("decomposed prompt anchor changed")
+        prompt = prompt.replace(old, new)
+    precedence = """
+Root-cause and materiality precedence:
+- Emit the smallest set of non-overlapping material root-cause findings. Do not add an
+  `evidence_mapping_incorrect` symptom when a more specific substantive class already explains a
+  false claim. Reserve mapping classes for a correct material claim with a missing or
+  non-supporting required locator, or when mapping itself is the independent material failure.
+- Treat ordinary connective wording or an incidental grammatical actor as immaterial when it
+  does not change the requested fact, quantity, identity, attribution, or conclusion.
+- If one answer gives incompatible values for the same requested fact, use
+  `internal_inconsistency`; do not reduce the whole-answer conflict to one `numeric_mismatch`.
+- Use `false_absence` for a direct assertion that no matching item exists when matching evidence
+  is present. Use `conflicting_evidence_omitted` when a whole-set or synthesis conclusion
+  selectively omits an available contrary outcome that changes the conclusion.
+- Use `denominator_error` for erroneous arithmetic or a rate computed from an explicit numerator
+  and denominator. Use `qualification_omitted` when a correctly reported statistic is generalized
+  from its measured population to a materially different population.
+- Use `version_supersession_ignored` for an explicitly corrected or revised version of the same
+  governed record. Use `provenance_authority_error` when a draft, proposal, preliminary, indirect,
+  or otherwise lower-authority source is elevated over a governing signed or final source.
+
+"""
+    anchor = "Report only material findings."
+    if prompt.count(anchor) != 1:
+        raise RuntimeError("material-finding prompt anchor changed")
+    return prompt.replace(anchor, precedence + anchor)
+
+
 def decomposed_gauge_prompt(payload: dict[str, Any]) -> str:
     """Render the calibration-derived claim/authority/check/decision architecture."""
     if set(_DEFINITIONS) != set(DEFECT_CLASSES):
@@ -211,4 +266,6 @@ def prompt_for_design(design: str, payload: dict[str, Any]) -> str:
         return baseline_prompt(payload)
     if design == DESIGN_GAUGE_V2:
         return decomposed_gauge_prompt(payload)
+    if design == DESIGN_GAUGE_V3:
+        return root_cause_gauge_prompt(payload)
     raise ValueError(f"unknown QA design: {design}")
