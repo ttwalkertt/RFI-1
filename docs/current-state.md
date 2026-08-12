@@ -190,13 +190,15 @@ and scale evidence. These are roadmap or backlog concerns until a task ticket au
   of four terminal passes was diagnostically sound. This is an implemented POC, not a stable quality
   gate or product-composed workflow; the evidence supports a future first-pass prompting experiment,
   not additional repair/escalation machinery inside TASK-074.
-- TASK-075 adds a separate QA measurement gauge over an independently authored matched-pair
-  benchmark. The frozen v3 design completed its one held-out run with 96.43% disposition accuracy,
-  no false accepts or supported false rejects, 100% disposition/material-detection repeatability,
-  and fully grounded exact-class matches. It nevertheless failed material-finding recall, exact
-  class F1, unsupported-finding rate, indeterminate accuracy, and matched-pair discrimination. The
-  gauge is not accepted as trustworthy, no MCP change was justified, no live transfer ran, and no
-  post-validation tuning occurred.
+- TASK-075 adds a separate QA measurement gauge over independently authored matched-pair
+  benchmarks. V2 showed a repeatable but insufficiently accurate gauge. A fresh V3 calibration
+  then tested the unchanged selected methodology and one V3-justified fundamental replacement.
+  The replacement displaced rather than reduced semantic errors and was rejected on gauge quality;
+  its shorter prompt and better one-run runtime validity received no selection credit. The selected
+  design's terminal V3 calibration failed finding recall, exact-class F1, unsupported-finding,
+  indeterminate, pair-discrimination, validity, and every repeatability threshold, and materially
+  regressed on the known V2 suite. The negative design is frozen with no MCP change and awaits human
+  restoration of the physically absent V3 held-out partition for the single permitted validation.
 - Transcript event classification is deterministic and intentionally fails closed for the narrow
   earnings corpus. Unrecognized substantial events remain available as broad management
   transcripts; the current event-kind vocabulary is useful but not an exhaustive ontology.

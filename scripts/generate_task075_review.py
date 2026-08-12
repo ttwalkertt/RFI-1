@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate or verify the commit-aware final TASK-075 review package."""
+"""Generate or verify the commit-aware TASK-075 frozen pre-verification package."""
 
 from __future__ import annotations
 
@@ -17,17 +17,28 @@ TICKET = ROOT / "tasks/TASK-075-establish-qa-gauge-capability-through-rbf-optimi
 PACKAGE = ROOT / ".artifacts/review/TASK-075"
 ZIP_PATH = ROOT / ".artifacts/review/TASK-075-review.zip"
 REPORT_PATH = ROOT / ".artifacts/review/TASK-075-review-report.json"
-VALIDATION = ROOT / ".artifacts/task075-validation"
-EVALUATION = ROOT / ".artifacts/task075-evaluation"
-CORPUS = ROOT / "benchmarks/rfi_qa_candidates_v2"
-CONTROL = ROOT / "experiments/task075"
-STATE = ROOT / ".artifacts/task075-v2-control"
+VALIDATION = ROOT / ".artifacts/task075-v3-validation"
+EVALUATION = ROOT / ".artifacts/task075-v3-evaluation"
+V3_CORPUS = ROOT / "benchmarks/rfi_qa_candidates_v3"
+V2_CORPUS = ROOT / "benchmarks/rfi_qa_candidates_v2"
+V3_CONTROL = ROOT / "experiments/task075/v3"
+ALL_CONTROL = ROOT / "experiments/task075"
+V3_STATE = ROOT / ".artifacts/task075-v3-control"
+V3_CALIBRATION = ROOT / ".artifacts/task075-v3-calibration"
+V3_REGRESSION = ROOT / ".artifacts/task075-v3-regression/v2-final-selected-design"
+V2_STATE = ROOT / ".artifacts/task075-v2-control"
 V2_CALIBRATION = ROOT / ".artifacts/task075-v2-calibration"
-V2_VALIDATION = ROOT / ".artifacts/task075-v2-validation/frozen-epistemic-root-cause-v3"
-VALIDATION_RESULT = CONTROL / "held-out-validation-result.json"
-V1_CONTROL = ROOT / ".artifacts/task075-control"
+V2_VALIDATION = ROOT / ".artifacts/task075-v2-validation"
+V1_STATE = ROOT / ".artifacts/task075-control"
 V1_CALIBRATION = ROOT / ".artifacts/task075-calibration"
+CANDIDATE_COMMIT = "52040de"
+CANDIDATE_PATH = "src/rfi/qa_gauge/prompts.py"
+CANDIDATE_SHA256 = "478d077444d17ef15d1071bbce6aeac133b2ce1e0f1e5bbf55fc3f0bd2ff2b3a"
 EXPECTED_OPERATOR_FILES = {"pull-results.txt", "pull_stx.py"}
+EXPECTED_FROZEN_FORMAT_FAILURES = {
+    "src/rfi/qa_gauge/benchmark.py:45: line exceeds 100 characters",
+    "src/rfi/qa_gauge/benchmark.py:617: line exceeds 100 characters",
+}
 
 
 def run(name: str, command: list[str], timeout: int = 1800) -> dict[str, object]:
@@ -49,6 +60,23 @@ def run(name: str, command: list[str], timeout: int = 1800) -> dict[str, object]
         encoding="utf-8",
     )
     return {"name": name, "command": command, "exit_code": result.returncode}
+
+
+def preserve_candidate_source() -> Path:
+    """Preserve the rejected material candidate implementation from its commit."""
+    result = subprocess.run(
+        ["git", "show", f"{CANDIDATE_COMMIT}:{CANDIDATE_PATH}"],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+    if hashlib.sha256(result.stdout).hexdigest() != CANDIDATE_SHA256:
+        raise RuntimeError("candidate source identity differs from the recorded commit")
+    target = EVALUATION / "rejected-causal-admission-v4-prompts.py"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(result.stdout)
+    return target
 
 
 def review_tree_is_commit_exact() -> bool:
@@ -85,38 +113,54 @@ def tree_members(root: Path, prefix: str) -> list[tuple[str, Path]]:
     ]
 
 
+def full_validation_has_only_frozen_format_debt() -> bool:
+    """Recognize only the two freeze-locked line-length failures."""
+    transcript = (VALIDATION / "full-validation.txt").read_text(encoding="utf-8")
+    observed = {
+        line.strip()
+        for line in transcript.splitlines()
+        if "line exceeds 100 characters" in line
+    }
+    return observed == EXPECTED_FROZEN_FORMAT_FAILURES and "exit_code: 2" in transcript
+
+
 def generate(base: str | None) -> int:
-    """Verify the one-shot result and assemble the final review package."""
+    """Verify and package the frozen negative calibration checkpoint."""
     base_ref = base or "origin/main"
     dirty_only_for_operator_files = review_tree_is_commit_exact()
+    candidate_source = preserve_candidate_source()
     outcomes = [
         run(
             "experiment-evidence",
             [
                 ".venv/bin/python",
                 "scripts/task075_review_evidence.py",
+                "--root",
+                str(ROOT),
                 "--corpus",
-                str(CORPUS),
+                str(V3_CORPUS),
+                "--v2-corpus",
+                str(V2_CORPUS),
                 "--control",
-                str(CONTROL),
+                str(V3_CONTROL),
                 "--state",
-                str(STATE),
+                str(V3_STATE),
                 "--calibration",
-                str(V2_CALIBRATION),
-                "--validation",
-                str(V2_VALIDATION),
-                "--result",
-                str(VALIDATION_RESULT),
+                str(V3_CALIBRATION),
+                "--regression",
+                str(V3_REGRESSION),
+                "--candidate-prompts",
+                str(candidate_source),
                 "--output",
                 str(EVALUATION),
             ],
         ),
         run(
-            "full-benchmark-validator",
+            "visible-benchmark-validator",
             [
                 ".venv/bin/python",
-                "benchmarks/rfi_qa_candidates_v2/validate_candidates.py",
-                "--full",
+                "benchmarks/rfi_qa_candidates_v3/validate_candidates.py",
+                "--visible",
             ],
         ),
         run(
@@ -125,72 +169,84 @@ def generate(base: str | None) -> int:
                 ".venv/bin/python",
                 "scripts/task075_qa_gauge_experiment.py",
                 "--corpus",
-                str(CORPUS),
+                str(V3_CORPUS),
+                "--control",
+                str(V3_CONTROL),
                 "--state",
-                str(STATE),
+                str(V3_STATE),
                 "verify-controls",
                 "--freeze",
-                str(CONTROL / "frozen-gauge-manifest.json"),
+                str(V3_CONTROL / "frozen-gauge-manifest.json"),
             ],
         ),
         run("focused-regressions", ["make", "task075-test"]),
         run("committed-diff-check", ["git", "diff", "--check", f"{base_ref}..HEAD"]),
         run("full-validation", ["make", "validate"], timeout=3600),
+        run(
+            "remaining-validation-after-frozen-format",
+            [
+                "make",
+                "typecheck",
+                "import-check",
+                "docs-check",
+                "baseline-check",
+                "build",
+            ],
+        ),
     ]
     (VALIDATION / "results.json").write_text(
         json.dumps(outcomes, indent=2) + "\n", encoding="utf-8"
     )
-    if any(item["exit_code"] for item in outcomes):
+    unexpected_failures = [
+        item
+        for item in outcomes
+        if item["exit_code"] and item["name"] != "full-validation"
+    ]
+    if unexpected_failures:
         raise RuntimeError("one or more TASK-075 validations failed")
+    full_validation = next(item for item in outcomes if item["name"] == "full-validation")
+    if full_validation["exit_code"] and not full_validation_has_only_frozen_format_debt():
+        raise RuntimeError("full validation failed for reasons beyond frozen formatting debt")
     copied = [
         ("task-ticket.md", TICKET),
         ("completion/architectural-review.md", ROOT / "docs/TASK-075-review.md"),
-        (
-            "completion/qa-gauge-evaluation.md",
-            ROOT / "docs/task075-qa-gauge-evaluation.md",
-        ),
-        (
-            "architecture/rfi-mcp-surface-design.md",
-            ROOT / "docs/design/rfi_mcp_surface_design.md",
-        ),
+        ("completion/qa-gauge-evaluation.md", ROOT / "docs/task075-qa-gauge-evaluation.md"),
+        ("architecture/rfi-mcp-surface-design.md", ROOT / "docs/design/rfi_mcp_surface_design.md"),
         ("architecture/current-state.md", ROOT / "docs/current-state.md"),
+        ("architecture/design-baseline.json", ROOT / "docs/design-baseline.json"),
         ("architecture/TASKS.md", ROOT / "TASKS.md"),
         ("implementation/Makefile", ROOT / "Makefile"),
         ("evidence/task075-tests.py", ROOT / "tests/test_task075.py"),
-        (
-            "evidence/qa-gauge-experiment-runner.py",
-            ROOT / "scripts/task075_qa_gauge_experiment.py",
-        ),
-        (
-            "evidence/experiment-evidence-verifier.py",
-            ROOT / "scripts/task075_review_evidence.py",
-        ),
-        (
-            "evidence/review-package-generator.py",
-            ROOT / "scripts/generate_task075_review.py",
-        ),
+        ("evidence/qa-gauge-experiment-runner.py", ROOT / "scripts/task075_qa_gauge_experiment.py"),
+        ("evidence/experiment-evidence-verifier.py", ROOT / "scripts/task075_review_evidence.py"),
+        ("evidence/review-package-generator.py", ROOT / "scripts/generate_task075_review.py"),
         (
             "evaluation/experiment-evidence-summary.json",
             EVALUATION / "experiment-evidence-summary.json",
         ),
-        ("evaluation/held-out-validation-result.json", VALIDATION_RESULT),
-        *tree_members(CORPUS, "benchmark/v2-full"),
-        *tree_members(CONTROL, "controls"),
+        ("evaluation/rejected-causal-admission-v4-prompts.py", candidate_source),
+        *tree_members(V3_CORPUS, "benchmark/v3-visible"),
+        *tree_members(V2_CORPUS, "benchmark/v2-known-regression"),
+        *tree_members(ALL_CONTROL, "controls"),
         *tree_members(ROOT / "src/rfi/qa_gauge", "implementation/qa-gauge"),
-        *tree_members(V1_CONTROL, "provenance/v1-control"),
+        *tree_members(V1_STATE, "provenance/v1-state"),
         *tree_members(V1_CALIBRATION, "provenance/v1-calibration"),
-        *tree_members(STATE, "experiment/v2-state"),
-        *tree_members(V2_CALIBRATION, "experiment/v2-calibration"),
-        *tree_members(V2_VALIDATION, "experiment/v2-held-out-validation"),
+        *tree_members(V2_STATE, "provenance/v2-state"),
+        *tree_members(V2_CALIBRATION, "provenance/v2-calibration"),
+        *tree_members(V2_VALIDATION, "provenance/v2-held-out-validation"),
+        *tree_members(V3_STATE, "experiment/v3-state"),
+        *tree_members(V3_CALIBRATION, "experiment/v3-calibration"),
+        *tree_members(V3_REGRESSION, "experiment/v2-known-regression-final"),
         *(
             (f"validation/{name}.txt", VALIDATION / f"{name}.txt")
             for name in (
                 "experiment-evidence",
-                "full-benchmark-validator",
+                "visible-benchmark-validator",
                 "frozen-controls",
                 "focused-regressions",
                 "committed-diff-check",
                 "full-validation",
+                "remaining-validation-after-frozen-format",
             )
         ),
         ("validation/results.json", VALIDATION / "results.json"),
@@ -213,16 +269,23 @@ def generate(base: str | None) -> int:
         **report,
         "zip": str(ZIP_PATH),
         "sha256": zip_digest,
-        "checkpoint": "final negative held-out validation; no post-freeze tuning",
+        "checkpoint": "frozen V3 negative calibration; awaiting held-out restoration",
         "excluded_preexisting_operator_files": sorted(EXPECTED_OPERATOR_FILES),
-        "held_out_validation_included": True,
-        "held_out_validation_passed": False,
+        "held_out_validation_included": False,
+        "held_out_validation_attempted": False,
+        "held_out_files_physically_absent": True,
+        "terminal_calibration_passed": False,
+        "material_v2_regression": True,
+        "full_validation_passed": False,
+        "full_validation_limitation": (
+            "The format check reports two pre-freeze overlong lines in the immutable QA "
+            "benchmark loader; all other focused and full validation stages passed."
+        ),
         "fresh_live_transfer_attempted": False,
         "post_freeze_tuning": False,
     }
     REPORT_PATH.write_text(
-        json.dumps(package_report, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+        json.dumps(package_report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     print(json.dumps(package_report, indent=2))
     return 0
@@ -235,12 +298,7 @@ def main() -> int:
     parser.add_argument("--base")
     arguments = parser.parse_args()
     if arguments.verify:
-        print(
-            json.dumps(
-                verify_package(arguments.verify, expected_task_id="TASK-075"),
-                indent=2,
-            )
-        )
+        print(json.dumps(verify_package(arguments.verify, expected_task_id="TASK-075"), indent=2))
         return 0
     return generate(arguments.base)
 

@@ -28,7 +28,7 @@ milestones.
 
 | Task | Architectural milestone | Current status |
 |---|---|---|
-| [TASK-075](tasks/TASK-075-establish-qa-gauge-capability-through-rbf-optimization-v2.md) | Establish an accurate and repeatable QA measurement gauge through protected RBF optimization | Complete; frozen held-out validation failed five criteria, so the gauge is not an accepted measurement gate |
+| [TASK-075](tasks/TASK-075-establish-qa-gauge-capability-through-rbf-optimization-v2.md) | Establish an accurate and repeatable QA measurement gauge through protected RBF optimization | In progress; V3 calibration ended negative and the gauge is frozen pending human restoration for one-shot held-out verification |
 
 ## Historical and authorized milestones
 
