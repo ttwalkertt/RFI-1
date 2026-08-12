@@ -83,8 +83,62 @@
         "suspected benchmark/reference-truth defect": []
       },
       "mcp_access_disposition": "No MCP change justified. Every missed case supplied the governing authority, exact records, and stable locators needed for the reference judgment."
+    },
+    {
+      "iteration": "v2-iteration-01-epistemic-root-cause",
+      "design": "task075.epistemic-root-cause-v3",
+      "runs_per_case": 1,
+      "model_calls": 44,
+      "manifest_sha256": "ef43e9cf858075d5c4cf61ac940fcebe0adc23e723930ddaf65c6b7186e4f8a2",
+      "score_sha256": "9f52a3a8233bb756278603db97671eaa12ec4e5c495b55fe420c43727cd3d7a9",
+      "diagnostic_utility": 0.9818181818181818,
+      "diagnostic_utility_improvement": 0.1686595744680851,
+      "all_non_repeatability_thresholds_passed": true,
+      "metrics": {
+        "valid_evaluation_rate": 1.0,
+        "disposition_accuracy": 1.0,
+        "material_false_accept_rate": 0.0,
+        "supported_false_reject_rate": 0.0,
+        "material_finding_recall": 0.9545454545454546,
+        "defect_class_attribution_f1": 0.9545454545454546,
+        "evidence_grounding_rate": 1.0,
+        "unsupported_finding_rate": 0.045454545454545456,
+        "indeterminate_accuracy": 1.0,
+        "matched_pair_discrimination": 0.9545454545454546
+      },
+      "counts": {
+        "false_accepts": 0,
+        "false_rejects": 0,
+        "expected_findings": 22,
+        "matched_findings": 21,
+        "unsupported_findings": 1
+      },
+      "failure_attribution": {
+        "QA reasoning/prompt failure": [
+          {
+            "cases": ["R2C-069"],
+            "cause": "Despite explicit general precedence, this run classified elevation of an unsigned negotiation draft over the signed final settlement as version supersession instead of provenance authority."
+          }
+        ],
+        "QA orchestration failure": [],
+        "MCP/access gap": [],
+        "repository-authority limitation": [],
+        "suspected benchmark/reference-truth defect": []
+      },
+      "mcp_access_disposition": "No MCP change justified; the prompt received both draft and signed-final records plus the governing authority declaration.",
+      "stopping_decision": "Select v3 for the preregistered terminal assessment. It improved diagnostic utility by more than 0.02, passed every non-repeatability threshold, and improved both false-reject and false-accept controls. The fixed call plan permits no further full feedback iteration before reserving the 132-call terminal assessment."
     }
   ],
+  "terminal_selection": {
+    "design": "task075.epistemic-root-cause-v3",
+    "selected_after_iteration": "v2-iteration-01-epistemic-root-cause",
+    "selection_rule_satisfied": true,
+    "v2_calls_before_terminal": 88,
+    "terminal_calls_reserved": 132,
+    "projected_v2_calls_after_terminal": 220,
+    "maximum_v2_calls": 240,
+    "additional_tuning_before_terminal": false
+  },
   "material_changes": [
     {
       "sequence": 1,
