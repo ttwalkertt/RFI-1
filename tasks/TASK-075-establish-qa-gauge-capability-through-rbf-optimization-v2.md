@@ -1,8 +1,8 @@
 # TASK-075 — Establish QA Gauge Capability Through RBF Optimization
 
-**Status:** Draft  
-**Type:** Bounded capability-development and evaluation experiment  
-**Depends on:** TASK-074 and the independent RFI QA candidate corpus  
+**Status:** Draft
+**Type:** Bounded capability-development and evaluation experiment
+**Depends on:** TASK-074 and the independent RFI QA candidate corpus
 **Scope:** Determine whether Codex RBF can evolve the RFI investigation-QA capability into an accurate and repeatable measurement gauge against independently labeled reference truth
 
 ## Objective
