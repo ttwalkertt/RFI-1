@@ -1,0 +1,14 @@
+{
+  "algorithm": "sha256",
+  "benchmark_id": "rfi-native-seagate-transcripts-v1.0.0",
+  "members": {
+    "calibration/cases.jsonl": "ae6d83ca8f8716f08166ab72ce47df2e314722e494873293279247ad4729fd53",
+    "calibration/reference.jsonl": "1adc1574e7028ec67489f958af8ae8bfe4e2ad5c14915e4486cab4381109987c",
+    "corpus/seagate-transcript-corpus-manifest.json": "08d969a9e9700ca7e7b44a34715f3749cb4a6f272d681bac7ce3235e59f2df64",
+    "quarantine/cases.jsonl": "2bcf4e94df5ac7bcbf864073f7e46ba42ec1b43ef2aefe21cd706b6f5908b358",
+    "quarantine/reference.jsonl": "575258e20e33657d1a816cd41dd505fb838e56d7adb13e2543110561233fa136",
+    "split-manifest.json": "0ee4fe6853fa5949d46c4556728ff3c27938fff1acf5986666c3737b472055fd"
+  },
+  "held_out_payload_tree_sha256": "9a689088e8cecfeee5e40678fa022ad9331d545b3c28f70eac732fbe88af4aa0",
+  "held_out_archive_sha256": "c6e839f0d60afe09640901a78c127764f8043355921cb17d99b3d4e4a7274ff5"
+}

@@ -1,0 +1,31 @@
+{
+  "checks": [
+    "schema and stable IDs",
+    "corpus scope and date basis",
+    "exact locator resolution",
+    "matched-pair integrity",
+    "label and taxonomy consistency",
+    "scenario partition co-location and disjointness",
+    "quarantine exclusion",
+    "fixed-seed split replay",
+    "payload and member digests",
+    "held-out visible-tree isolation",
+    "evidence-withheld leakage controls"
+  ],
+  "corpus": {
+    "date_from": "2024-09-04",
+    "date_through": "2026-07-28",
+    "segments": 2268,
+    "snapshot": "sqlite-revision-8237",
+    "transcripts": 21
+  },
+  "mode": "full",
+  "population": {
+    "answer_cases": 80,
+    "calibration_cases": 48,
+    "held_out_cases": 32,
+    "quarantine_cases": 4,
+    "scenarios": 40
+  },
+  "result": "PASS"
+}

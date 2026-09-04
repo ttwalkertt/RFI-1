@@ -1,0 +1,21 @@
+{
+  "algorithm": "sha256",
+  "members": [
+    {
+      "bytes": 28667,
+      "path": "cases.jsonl",
+      "sha256": "416b9f67c178430c45cfbde578b7d7b64f752086c4112a665dac7158dde75ae9"
+    },
+    {
+      "bytes": 23266,
+      "path": "private-split-manifest.json",
+      "sha256": "4e2453d98762c08fbdd62570444f68e2c96e332afeca9524ab89461458e9d3dc"
+    },
+    {
+      "bytes": 135139,
+      "path": "reference.jsonl",
+      "sha256": "15b64ea96d621174b1dde8c70441c70c255760a09b885a1972cd4791d327cc06"
+    }
+  ],
+  "tree_digest": "9a689088e8cecfeee5e40678fa022ad9331d545b3c28f70eac732fbe88af4aa0"
+}

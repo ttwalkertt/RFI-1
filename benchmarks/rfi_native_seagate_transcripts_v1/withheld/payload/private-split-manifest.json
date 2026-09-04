@@ -1,0 +1,677 @@
+{
+  "algorithm": "python.random.Random(seed).shuffle(sorted scenario IDs); first 24 calibration, remaining 16 held out",
+  "benchmark_id": "rfi-native-seagate-transcripts-v1.0.0",
+  "calibration_scenario_ids": [
+    "stx-s001",
+    "stx-s002",
+    "stx-s003",
+    "stx-s005",
+    "stx-s008",
+    "stx-s011",
+    "stx-s014",
+    "stx-s015",
+    "stx-s016",
+    "stx-s017",
+    "stx-s019",
+    "stx-s020",
+    "stx-s022",
+    "stx-s023",
+    "stx-s024",
+    "stx-s025",
+    "stx-s026",
+    "stx-s027",
+    "stx-s030",
+    "stx-s032",
+    "stx-s033",
+    "stx-s034",
+    "stx-s038",
+    "stx-s040"
+  ],
+  "held_out_scenario_ids": [
+    "stx-s004",
+    "stx-s006",
+    "stx-s007",
+    "stx-s009",
+    "stx-s010",
+    "stx-s012",
+    "stx-s013",
+    "stx-s018",
+    "stx-s021",
+    "stx-s028",
+    "stx-s029",
+    "stx-s031",
+    "stx-s035",
+    "stx-s036",
+    "stx-s037",
+    "stx-s039"
+  ],
+  "scenario_assignments": [
+    {
+      "evidence_dates": [
+        "2024-09-04"
+      ],
+      "evidence_documents": [
+        "document-e54b133f8fb4a34926f3cbf08980050b56a6a119593556de25473ec16b3e1b16"
+      ],
+      "failure_mechanism": "wrong_earliest_boundary",
+      "partition": "calibration",
+      "question_family": "first_last_mention",
+      "reasoning_structure": "corpus_chronology",
+      "scenario_id": "stx-s001"
+    },
+    {
+      "evidence_dates": [
+        "2024-09-04",
+        "2025-05-22",
+        "2025-09-03",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-9fa353261ac8c48fab6e7c82d7d235ae53a862f72b62d26e00bb835804c64a9e",
+        "document-bad59a7584faa6dc22933b5965c40d1afdf9d1af79060842fb217b4c8f1fa477",
+        "document-e54b133f8fb4a34926f3cbf08980050b56a6a119593556de25473ec16b3e1b16"
+      ],
+      "failure_mechanism": "flattened_roadmap_evolution",
+      "partition": "calibration",
+      "question_family": "technology_chronology",
+      "reasoning_structure": "multi_call_progression",
+      "scenario_id": "stx-s002"
+    },
+    {
+      "evidence_dates": [
+        "2024-10-22",
+        "2024-12-03",
+        "2025-07-29",
+        "2026-01-27"
+      ],
+      "evidence_documents": [
+        "document-7859cb6edf5e26418e6c41ec446f8173808ff61d9c9783ba8a264a690c0374e7",
+        "document-92df22173b6cbdbf926c71ce2b1b140514640352c354b10034c24c0466ed3337",
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a",
+        "document-fb050678cdbc1ce8f1ecc071009a11319990e3ef0c4a9d3f7be68e4b4ba15372"
+      ],
+      "failure_mechanism": "omitted_later_evidence",
+      "partition": "calibration",
+      "question_family": "qualification_progression",
+      "reasoning_structure": "multi_call_quantified_progression",
+      "scenario_id": "stx-s003"
+    },
+    {
+      "evidence_dates": [
+        "2025-05-28",
+        "2026-01-27",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a",
+        "document-ecc27cd87b68625ffbafbacdae99fe0aa90d2f8502a01d763dfcf6a54ea52ab5"
+      ],
+      "failure_mechanism": "unit_exabyte_conflation",
+      "partition": "held_out_verification",
+      "question_family": "hamr_adoption",
+      "reasoning_structure": "milestone_synthesis",
+      "scenario_id": "stx-s004"
+    },
+    {
+      "evidence_dates": [
+        "2024-09-04"
+      ],
+      "evidence_documents": [
+        "document-e54b133f8fb4a34926f3cbf08980050b56a6a119593556de25473ec16b3e1b16"
+      ],
+      "failure_mechanism": "reversed_technical_claim",
+      "partition": "calibration",
+      "question_family": "manufacturing",
+      "reasoning_structure": "single_call_multi_passage",
+      "scenario_id": "stx-s005"
+    },
+    {
+      "evidence_dates": [
+        "2024-09-04",
+        "2025-03-04",
+        "2025-06-03",
+        "2025-09-03"
+      ],
+      "evidence_documents": [
+        "document-931e3d6817cfaba27eff0506a380318e865cbf9e9cecc3c5c445a86ed46e1b61",
+        "document-9fa353261ac8c48fab6e7c82d7d235ae53a862f72b62d26e00bb835804c64a9e",
+        "document-a06d239e903bb7af7e9bcde984e614f47be73b3e93580f5b6914e8dae6b9ce0b",
+        "document-e54b133f8fb4a34926f3cbf08980050b56a6a119593556de25473ec16b3e1b16"
+      ],
+      "failure_mechanism": "bill_of_material_misstatement",
+      "partition": "held_out_verification",
+      "question_family": "capacity_roadmap",
+      "reasoning_structure": "cross_call_mechanism_confirmation",
+      "scenario_id": "stx-s006"
+    },
+    {
+      "evidence_dates": [
+        "2025-05-22",
+        "2025-12-09",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-a79bf0b0cdbb868a351f3f6adf428819f5d0012d4a33470f618c863fa975f438",
+        "document-bad59a7584faa6dc22933b5965c40d1afdf9d1af79060842fb217b4c8f1fa477"
+      ],
+      "failure_mechanism": "forecast_as_achieved_fact",
+      "partition": "held_out_verification",
+      "question_family": "technology_roadmap",
+      "reasoning_structure": "forecast_vs_achievement",
+      "scenario_id": "stx-s007"
+    },
+    {
+      "evidence_dates": [
+        "2026-03-03",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-f5bd9743e23e70638fa83d23bb05fe9f93dab0c4ab23b4877079d1af4aea7bb1"
+      ],
+      "failure_mechanism": "omitted_current_evidence",
+      "partition": "calibration",
+      "question_family": "latest_status",
+      "reasoning_structure": "latest_call_status",
+      "scenario_id": "stx-s008"
+    },
+    {
+      "evidence_dates": [
+        "2024-10-22",
+        "2025-07-29",
+        "2026-01-27",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-92df22173b6cbdbf926c71ce2b1b140514640352c354b10034c24c0466ed3337",
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a",
+        "document-fb050678cdbc1ce8f1ecc071009a11319990e3ef0c4a9d3f7be68e4b4ba15372"
+      ],
+      "failure_mechanism": "trend_reversal",
+      "partition": "held_out_verification",
+      "question_family": "demand_chronology",
+      "reasoning_structure": "multi_call_trend",
+      "scenario_id": "stx-s009"
+    },
+    {
+      "evidence_dates": [
+        "2024-10-22"
+      ],
+      "evidence_documents": [
+        "document-92df22173b6cbdbf926c71ce2b1b140514640352c354b10034c24c0466ed3337"
+      ],
+      "failure_mechanism": "unbounded_inventory_inference",
+      "partition": "held_out_verification",
+      "question_family": "inventory",
+      "reasoning_structure": "qualified_single_claim",
+      "scenario_id": "stx-s010"
+    },
+    {
+      "evidence_dates": [
+        "2024-10-22",
+        "2024-12-04",
+        "2025-09-08",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-92df22173b6cbdbf926c71ce2b1b140514640352c354b10034c24c0466ed3337",
+        "document-a613979a3e7948f5cafa60c4234a6174abe67dfd144c505d5e450249fdf83fe0",
+        "document-d163ca3011adec36329ee4044330535a47a4cf9f49f66055e0e953f55a883281"
+      ],
+      "failure_mechanism": "commitment_recharacterization",
+      "partition": "calibration",
+      "question_family": "build_to_order",
+      "reasoning_structure": "contract_progression",
+      "scenario_id": "stx-s011"
+    },
+    {
+      "evidence_dates": [
+        "2025-09-03",
+        "2026-02-25",
+        "2026-03-03"
+      ],
+      "evidence_documents": [
+        "document-3689fd5590ce9f5aa0adb0fd73dbc3dc2265bc1493612ea4cdabb140e0d57ad9",
+        "document-9fa353261ac8c48fab6e7c82d7d235ae53a862f72b62d26e00bb835804c64a9e",
+        "document-f5bd9743e23e70638fa83d23bb05fe9f93dab0c4ab23b4877079d1af4aea7bb1"
+      ],
+      "failure_mechanism": "wrong_duration",
+      "partition": "held_out_verification",
+      "question_family": "production_timing",
+      "reasoning_structure": "cross_call_timing",
+      "scenario_id": "stx-s012"
+    },
+    {
+      "evidence_dates": [
+        "2024-09-04",
+        "2025-07-29",
+        "2025-12-01",
+        "2026-01-27"
+      ],
+      "evidence_documents": [
+        "document-9e6f9afc977f9b9b0f73c90d5002cb275e7ba8b54a3aff5677f4e106d0a092da",
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a",
+        "document-e54b133f8fb4a34926f3cbf08980050b56a6a119593556de25473ec16b3e1b16",
+        "document-fb050678cdbc1ce8f1ecc071009a11319990e3ef0c4a9d3f7be68e4b4ba15372"
+      ],
+      "failure_mechanism": "units_exabytes_conflation",
+      "partition": "held_out_verification",
+      "question_family": "supply_strategy",
+      "reasoning_structure": "metric_disambiguation",
+      "scenario_id": "stx-s013"
+    },
+    {
+      "evidence_dates": [
+        "2025-04-29",
+        "2025-07-29"
+      ],
+      "evidence_documents": [
+        "document-bc6c399823bf7af5e5ec058148877138731af2188a8fb2965370228abd23b827",
+        "document-fb050678cdbc1ce8f1ecc071009a11319990e3ef0c4a9d3f7be68e4b4ba15372"
+      ],
+      "failure_mechanism": "demand_inversion",
+      "partition": "calibration",
+      "question_family": "supply_constraints",
+      "reasoning_structure": "cause_qualification",
+      "scenario_id": "stx-s014"
+    },
+    {
+      "evidence_dates": [
+        "2024-09-04",
+        "2024-12-11",
+        "2025-10-28",
+        "2026-01-27"
+      ],
+      "evidence_documents": [
+        "document-5efb69f5b82f70cf2b632b92c35e3f58c0117403044ca19805af629cad715e7e",
+        "document-9b5f044753a5c17248a7f0790a54c942b4384c3a9e19126bc5ef213c858844f9",
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a",
+        "document-e54b133f8fb4a34926f3cbf08980050b56a6a119593556de25473ec16b3e1b16"
+      ],
+      "failure_mechanism": "price_metric_conflation",
+      "partition": "calibration",
+      "question_family": "pricing",
+      "reasoning_structure": "metric_and_strategy_synthesis",
+      "scenario_id": "stx-s015"
+    },
+    {
+      "evidence_dates": [
+        "2024-10-22",
+        "2025-01-21",
+        "2026-01-27",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-92df22173b6cbdbf926c71ce2b1b140514640352c354b10034c24c0466ed3337",
+        "document-a00ea7ab93d77dc22c440a772c7c55a4d298071f05fd389256425a84fa60314f",
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a"
+      ],
+      "failure_mechanism": "swapped_values",
+      "partition": "calibration",
+      "question_family": "financial_chronology",
+      "reasoning_structure": "quantitative_multi_call",
+      "scenario_id": "stx-s016"
+    },
+    {
+      "evidence_dates": [
+        "2024-10-22",
+        "2026-01-27",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-92df22173b6cbdbf926c71ce2b1b140514640352c354b10034c24c0466ed3337",
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a"
+      ],
+      "failure_mechanism": "apples_to_oranges_growth",
+      "partition": "calibration",
+      "question_family": "financial_metrics",
+      "reasoning_structure": "noncomparable_metric_mapping",
+      "scenario_id": "stx-s017"
+    },
+    {
+      "evidence_dates": [
+        "2024-10-22",
+        "2026-01-27",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-92df22173b6cbdbf926c71ce2b1b140514640352c354b10034c24c0466ed3337",
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a"
+      ],
+      "failure_mechanism": "apples_to_oranges_growth",
+      "partition": "held_out_verification",
+      "question_family": "shipment_metrics",
+      "reasoning_structure": "noncomparable_metric_mapping",
+      "scenario_id": "stx-s018"
+    },
+    {
+      "evidence_dates": [
+        "2025-09-03",
+        "2026-01-27",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-9fa353261ac8c48fab6e7c82d7d235ae53a862f72b62d26e00bb835804c64a9e",
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a"
+      ],
+      "failure_mechanism": "percentage_magnitude_error",
+      "partition": "calibration",
+      "question_family": "capital_intensity",
+      "reasoning_structure": "cross_call_consistency",
+      "scenario_id": "stx-s019"
+    },
+    {
+      "evidence_dates": [
+        "2026-01-27",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a"
+      ],
+      "failure_mechanism": "directional_reversal",
+      "partition": "calibration",
+      "question_family": "cash_and_debt",
+      "reasoning_structure": "quantitative_progression",
+      "scenario_id": "stx-s020"
+    },
+    {
+      "evidence_dates": [
+        "2024-10-22",
+        "2026-01-27",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-92df22173b6cbdbf926c71ce2b1b140514640352c354b10034c24c0466ed3337",
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a"
+      ],
+      "failure_mechanism": "dividend_buyback_conflation",
+      "partition": "held_out_verification",
+      "question_family": "capital_returns",
+      "reasoning_structure": "metric_scope_synthesis",
+      "scenario_id": "stx-s021"
+    },
+    {
+      "evidence_dates": [
+        "2024-09-04",
+        "2024-10-22",
+        "2026-02-25",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3689fd5590ce9f5aa0adb0fd73dbc3dc2265bc1493612ea4cdabb140e0d57ad9",
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-92df22173b6cbdbf926c71ce2b1b140514640352c354b10034c24c0466ed3337",
+        "document-e54b133f8fb4a34926f3cbf08980050b56a6a119593556de25473ec16b3e1b16"
+      ],
+      "failure_mechanism": "single_cause_overclaim",
+      "partition": "calibration",
+      "question_family": "ai_demand",
+      "reasoning_structure": "multi_call_qualified_synthesis",
+      "scenario_id": "stx-s022"
+    },
+    {
+      "evidence_dates": [
+        "2024-10-22",
+        "2026-02-25"
+      ],
+      "evidence_documents": [
+        "document-3689fd5590ce9f5aa0adb0fd73dbc3dc2265bc1493612ea4cdabb140e0d57ad9",
+        "document-92df22173b6cbdbf926c71ce2b1b140514640352c354b10034c24c0466ed3337"
+      ],
+      "failure_mechanism": "authority_inflation",
+      "partition": "calibration",
+      "question_family": "video_demand",
+      "reasoning_structure": "claim_vs_verification",
+      "scenario_id": "stx-s023"
+    },
+    {
+      "evidence_dates": [
+        "2024-09-04",
+        "2025-07-29",
+        "2026-01-27",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a",
+        "document-e54b133f8fb4a34926f3cbf08980050b56a6a119593556de25473ec16b3e1b16",
+        "document-fb050678cdbc1ce8f1ecc071009a11319990e3ef0c4a9d3f7be68e4b4ba15372"
+      ],
+      "failure_mechanism": "omitted_trend_evidence",
+      "partition": "calibration",
+      "question_family": "enterprise_demand",
+      "reasoning_structure": "multi_call_trend",
+      "scenario_id": "stx-s024"
+    },
+    {
+      "evidence_dates": [
+        "2026-01-27"
+      ],
+      "evidence_documents": [
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a"
+      ],
+      "failure_mechanism": "scope_overgeneralization",
+      "partition": "calibration",
+      "question_family": "seasonality",
+      "reasoning_structure": "qualified_outlook",
+      "scenario_id": "stx-s025"
+    },
+    {
+      "evidence_dates": [
+        "2024-10-22",
+        "2025-09-08"
+      ],
+      "evidence_documents": [
+        "document-92df22173b6cbdbf926c71ce2b1b140514640352c354b10034c24c0466ed3337",
+        "document-a613979a3e7948f5cafa60c4234a6174abe67dfd144c505d5e450249fdf83fe0"
+      ],
+      "failure_mechanism": "external_fact_promotion",
+      "partition": "calibration",
+      "question_family": "technology_comparison",
+      "reasoning_structure": "management_claim_attribution",
+      "scenario_id": "stx-s026"
+    },
+    {
+      "evidence_dates": [
+        "2025-05-28",
+        "2026-01-27"
+      ],
+      "evidence_documents": [
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a",
+        "document-ecc27cd87b68625ffbafbacdae99fe0aa90d2f8502a01d763dfcf6a54ea52ab5"
+      ],
+      "failure_mechanism": "claim_as_universal_proof",
+      "partition": "calibration",
+      "question_family": "reliability",
+      "reasoning_structure": "claim_and_later_observation",
+      "scenario_id": "stx-s027"
+    },
+    {
+      "evidence_dates": [
+        "2026-02-25"
+      ],
+      "evidence_documents": [
+        "document-3689fd5590ce9f5aa0adb0fd73dbc3dc2265bc1493612ea4cdabb140e0d57ad9"
+      ],
+      "failure_mechanism": "invented_exact_mix",
+      "partition": "held_out_verification",
+      "question_family": "product_modes",
+      "reasoning_structure": "single_call_multi_claim",
+      "scenario_id": "stx-s028"
+    },
+    {
+      "evidence_dates": [
+        "2026-01-27"
+      ],
+      "evidence_documents": [
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a"
+      ],
+      "failure_mechanism": "wrong_executive_role",
+      "partition": "held_out_verification",
+      "question_family": "executive_attribution",
+      "reasoning_structure": "explicit_introduction",
+      "scenario_id": "stx-s029"
+    },
+    {
+      "evidence_dates": [
+        "2026-02-25"
+      ],
+      "evidence_documents": [
+        "document-3689fd5590ce9f5aa0adb0fd73dbc3dc2265bc1493612ea4cdabb140e0d57ad9"
+      ],
+      "failure_mechanism": "unsupported_speaker_certainty",
+      "partition": "calibration",
+      "question_family": "speaker_attribution",
+      "reasoning_structure": "metadata_insufficiency",
+      "scenario_id": "stx-s030"
+    },
+    {
+      "evidence_dates": [
+        "2024-09-04"
+      ],
+      "evidence_documents": [
+        "document-e54b133f8fb4a34926f3cbf08980050b56a6a119593556de25473ec16b3e1b16"
+      ],
+      "failure_mechanism": "silent_reclassification",
+      "partition": "held_out_verification",
+      "question_family": "classification_semantics",
+      "reasoning_structure": "authority_vs_content",
+      "scenario_id": "stx-s031"
+    },
+    {
+      "evidence_dates": [
+        "2024-09-04",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-e54b133f8fb4a34926f3cbf08980050b56a6a119593556de25473ec16b3e1b16"
+      ],
+      "failure_mechanism": "unbounded_completeness_claim",
+      "partition": "calibration",
+      "question_family": "coverage",
+      "reasoning_structure": "corpus_insufficiency",
+      "scenario_id": "stx-s032"
+    },
+    {
+      "evidence_dates": [
+        "2024-09-04"
+      ],
+      "evidence_documents": [
+        "document-e54b133f8fb4a34926f3cbf08980050b56a6a119593556de25473ec16b3e1b16"
+      ],
+      "failure_mechanism": "corpus_first_as_world_first",
+      "partition": "calibration",
+      "question_family": "real_world_first",
+      "reasoning_structure": "corpus_boundary",
+      "scenario_id": "stx-s033"
+    },
+    {
+      "evidence_dates": [
+        "2024-09-04",
+        "2026-02-25"
+      ],
+      "evidence_documents": [
+        "document-3689fd5590ce9f5aa0adb0fd73dbc3dc2265bc1493612ea4cdabb140e0d57ad9",
+        "document-e54b133f8fb4a34926f3cbf08980050b56a6a119593556de25473ec16b3e1b16"
+      ],
+      "failure_mechanism": "external_competitor_fact",
+      "partition": "calibration",
+      "question_family": "competition",
+      "reasoning_structure": "evidence_limit_and_claim_attribution",
+      "scenario_id": "stx-s034"
+    },
+    {
+      "evidence_dates": [
+        "2026-01-27"
+      ],
+      "evidence_documents": [
+        "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a"
+      ],
+      "failure_mechanism": "invented_customer_names",
+      "partition": "held_out_verification",
+      "question_family": "customer_identity",
+      "reasoning_structure": "metadata_insufficiency",
+      "scenario_id": "stx-s035"
+    },
+    {
+      "evidence_dates": [
+        "2025-09-03"
+      ],
+      "evidence_documents": [
+        "document-9fa353261ac8c48fab6e7c82d7d235ae53a862f72b62d26e00bb835804c64a9e"
+      ],
+      "failure_mechanism": "unsupported_percentage",
+      "partition": "held_out_verification",
+      "question_family": "workforce",
+      "reasoning_structure": "partial_evidence_insufficiency",
+      "scenario_id": "stx-s036"
+    },
+    {
+      "evidence_dates": [
+        "2025-07-29",
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+        "document-fb050678cdbc1ce8f1ecc071009a11319990e3ef0c4a9d3f7be68e4b4ba15372"
+      ],
+      "failure_mechanism": "single_factor_causation",
+      "partition": "held_out_verification",
+      "question_family": "causal_synthesis",
+      "reasoning_structure": "multi_factor_explanation",
+      "scenario_id": "stx-s037"
+    },
+    {
+      "evidence_dates": [
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354"
+      ],
+      "failure_mechanism": "compound_certainty",
+      "partition": "calibration",
+      "question_family": "compound_answer",
+      "reasoning_structure": "supported_plus_forecast",
+      "scenario_id": "stx-s038"
+    },
+    {
+      "evidence_dates": [
+        "2025-07-29"
+      ],
+      "evidence_documents": [
+        "document-fb050678cdbc1ce8f1ecc071009a11319990e3ef0c4a9d3f7be68e4b4ba15372"
+      ],
+      "failure_mechanism": "compound_overreach",
+      "partition": "held_out_verification",
+      "question_family": "compound_answer",
+      "reasoning_structure": "supported_plus_insufficient",
+      "scenario_id": "stx-s039"
+    },
+    {
+      "evidence_dates": [
+        "2026-07-28"
+      ],
+      "evidence_documents": [
+        "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354"
+      ],
+      "failure_mechanism": "future_target_as_achieved",
+      "partition": "calibration",
+      "question_family": "milestone_status",
+      "reasoning_structure": "target_vs_current_state",
+      "scenario_id": "stx-s040"
+    }
+  ],
+  "seed": 20260813
+}

@@ -568,30 +568,34 @@ class PullWorkflow:
         revision_id = (
             firm.profile.source_profile_revision_id if firm.profile is not None else "defaults"
         )
+        name = f"{firm.firm.canonical_name}: {artifact.label}"
+        mechanism = registration.source_adapter.mechanism
+        policy = {
+            "firm_id": firm.firm.firm_id,
+            "artifact_id": artifact.artifact_id,
+            **(
+                {"alternate_artifact_ids": ["management_transcript"]}
+                if artifact.artifact_id == "earnings_transcript" else {}
+            ),
+            "source_profile_revision_id": revision_id,
+            "retrieval_adapter_id": adapter_id,
+            "document_id": f"document-{firm.firm.firm_id}-{artifact.artifact_id}",
+        }
         source_id = self._source_id(
             firm.firm.firm_id,
             artifact.artifact_id,
-            revision_id,
+            name,
             candidate_value,
-            adapter_id,
+            mechanism,
+            policy,
         )
         return SourceProfile(
             source_id=source_id,
-            name=f"{firm.firm.canonical_name}: {artifact.label}",
+            name=name,
             enabled=True,
-            mechanism=registration.source_adapter.mechanism,
+            mechanism=mechanism,
             configuration=candidate_value,
-            policy={
-                "firm_id": firm.firm.firm_id,
-                "artifact_id": artifact.artifact_id,
-                **(
-                    {"alternate_artifact_ids": ["management_transcript"]}
-                    if artifact.artifact_id == "earnings_transcript" else {}
-                ),
-                "source_profile_revision_id": revision_id,
-                "retrieval_adapter_id": adapter_id,
-                "document_id": f"document-{firm.firm.firm_id}-{artifact.artifact_id}",
-            },
+            policy=policy,
         )
 
     def _artifact_ids(self, result: Any) -> tuple[str, ...]:
@@ -860,17 +864,27 @@ class PullWorkflow:
     def _source_id(
         firm_id: str,
         artifact_id: str,
-        revision_id: str,
+        name: str,
         candidate: dict[str, Any],
-        adapter_id: str,
+        mechanism: str,
+        policy: dict[str, Any],
     ) -> str:
+        """Derive an ID from every immutable governed-source field.
+
+        The repository correctly rejects a changed payload under an existing source ID.
+        Consequently this identity must cover presentation fields too: firm revisions can
+        change the display name while leaving a source-profile revision unchanged.
+        """
         payload = json.dumps(
             {
+                "identity_schema": "pull-source-v2",
                 "firm_id": firm_id,
                 "artifact_id": artifact_id,
-                "revision_id": revision_id,
-                "candidate": candidate,
-                "adapter_id": adapter_id,
+                "name": name,
+                "enabled": True,
+                "mechanism": mechanism,
+                "configuration": candidate,
+                "policy": policy,
             },
             sort_keys=True,
             separators=(",", ":"),

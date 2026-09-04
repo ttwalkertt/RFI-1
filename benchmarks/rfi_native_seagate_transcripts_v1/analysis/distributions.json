@@ -1,0 +1,52 @@
+{
+  "acceptable_failure_class_coverage": {
+    "authority_boundary_violation": 1,
+    "authority_inflation": 3,
+    "contradicted_claim": 10,
+    "forecast_as_fact": 2,
+    "incomplete_compound_answer": 2,
+    "incorrect_chronology": 3,
+    "incorrect_quantitative_synthesis": 11,
+    "invented_fact": 1,
+    "misattribution": 1,
+    "omitted_material_evidence": 1,
+    "overgeneralization": 8,
+    "scope_violation": 1,
+    "unbounded_absence_claim": 3,
+    "unsupported_certainty": 11,
+    "unsupported_quantification": 3,
+    "unsupported_speaker_attribution": 1
+  },
+  "answer_quality": {
+    "acceptable": 40,
+    "defective": 40
+  },
+  "partition": {
+    "calibration_cases": 48,
+    "held_out_verification_cases": 32,
+    "quarantine_cases": 4
+  },
+  "primary_failure": {
+    "authority_boundary_violation": 1,
+    "authority_inflation": 2,
+    "contradicted_claim": 8,
+    "forecast_as_fact": 1,
+    "incomplete_compound_answer": 2,
+    "incorrect_chronology": 3,
+    "incorrect_quantitative_synthesis": 9,
+    "invented_fact": 1,
+    "misattribution": 1,
+    "overgeneralization": 4,
+    "scope_violation": 1,
+    "unbounded_absence_claim": 2,
+    "unsupported_certainty": 3,
+    "unsupported_quantification": 1,
+    "unsupported_speaker_attribution": 1
+  },
+  "proposition_state": {
+    "contradicted": 21,
+    "indeterminate": 18,
+    "mixed": 11,
+    "supported": 30
+  }
+}

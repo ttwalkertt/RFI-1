@@ -1,0 +1,55 @@
+{
+  "answer_character_count": {
+    "acceptable": {
+      "mean": 286.75,
+      "median": 283.5
+    },
+    "defective": {
+      "mean": 282.4,
+      "median": 275.5
+    }
+  },
+  "answer_word_count": {
+    "acceptable": {
+      "maximum": 71,
+      "mean": 43.65,
+      "median": 43.5,
+      "minimum": 19
+    },
+    "defective": {
+      "maximum": 72,
+      "mean": 43.1,
+      "median": 42.5,
+      "minimum": 19
+    }
+  },
+  "locator_count": {
+    "acceptable": {
+      "distribution": {
+        "1": 12,
+        "2": 8,
+        "3": 8,
+        "4": 12
+      },
+      "mean": 2.5
+    },
+    "defective": {
+      "distribution": {
+        "1": 12,
+        "2": 8,
+        "3": 8,
+        "4": 12
+      },
+      "mean": 2.5
+    }
+  },
+  "paired_word_delta_acceptable_minus_defective": {
+    "max_absolute": 9,
+    "mean": 0.55,
+    "median": 0.0
+  },
+  "pairs": 40,
+  "result": "PASS",
+  "same_evidence_universe_pairs": 40,
+  "same_question_pairs": 40
+}

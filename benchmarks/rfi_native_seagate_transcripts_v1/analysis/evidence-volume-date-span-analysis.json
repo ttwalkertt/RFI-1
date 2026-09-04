@@ -1,0 +1,44 @@
+{
+  "cited_date_from": "2024-09-04",
+  "cited_date_through": "2026-07-28",
+  "corpus_date_from": "2024-09-04",
+  "corpus_date_through": "2026-07-28",
+  "corpus_transcripts": 21,
+  "date_span_per_scenario": {
+    "distribution": {
+      "1": 14,
+      "2": 9,
+      "3": 7,
+      "4": 10
+    },
+    "maximum": 4,
+    "mean": 2.325,
+    "minimum": 1
+  },
+  "evidence_per_scenario": {
+    "distribution": {
+      "1": 12,
+      "2": 8,
+      "3": 8,
+      "4": 12
+    },
+    "maximum": 4,
+    "mean": 2.5,
+    "median": 2.5,
+    "minimum": 1
+  },
+  "transcript_coverage_fraction": 1.0,
+  "transcript_span_per_scenario": {
+    "distribution": {
+      "1": 14,
+      "2": 9,
+      "3": 7,
+      "4": 10
+    },
+    "maximum": 4,
+    "mean": 2.325,
+    "minimum": 1
+  },
+  "unique_cited_dates": 21,
+  "unique_cited_transcripts": 21
+}

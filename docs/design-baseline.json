@@ -53,10 +53,10 @@
       "source": "TASKS.md",
       "destination": "TASKS.md",
       "source_size": 1238,
-      "destination_size": 13077,
+      "destination_size": 13331,
       "source_sha256": "2703bec5277d5ff18b4cafc62b197e06142165e3f97262934728acf525bd4d18",
-      "destination_sha256": "4f61d421e36a9533893ecd83205aa193b17ecc60ed06a4241f7a33f060cfa693",
-      "content_change": "complete extant task index reconciled by TASK-068 and advanced through the frozen TASK-075 V3 pre-verification checkpoint"
+      "destination_sha256": "d39ec594e726ed1f6273302dd273a8d735e3ce2cd695737c4b5747c1cb64eb07",
+      "content_change": "complete extant task index reconciled by TASK-068, advanced through the frozen TASK-075 V3 checkpoint, and extended with the independently authored TASK-076 benchmark"
     },
     {
       "source": "ROADMAP.md",

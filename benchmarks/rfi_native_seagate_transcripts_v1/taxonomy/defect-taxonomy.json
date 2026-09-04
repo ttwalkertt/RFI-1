@@ -1,0 +1,28 @@
+{
+  "taxonomy_id": "rfi-native-investigation-defects-v1",
+  "policy": "primary_failure is the earliest material failure when stable; acceptable_failure_classes preserves reasonable reviewer overlap",
+  "classes": {
+    "authority_boundary_violation": "Silently reclassifies, upgrades, or replaces repository authority.",
+    "authority_inflation": "Promotes a retained management statement or projection into independent proof.",
+    "contradicted_claim": "Makes a material proposition contradicted by decisive retained evidence.",
+    "forecast_as_fact": "Reports a forecast, target, or expectation as an achieved fact.",
+    "incomplete_compound_answer": "Fails to adjudicate materially different clauses independently.",
+    "incorrect_chronology": "Misorders, omits, or misstates a material temporal boundary.",
+    "incorrect_quantitative_synthesis": "Misstates, conflates, or combines quantities or metric scopes.",
+    "invented_fact": "Introduces a specific fact or identity absent from the declared retained evidence.",
+    "misattribution": "Assigns a claim or role to the wrong retained speaker or executive.",
+    "omitted_material_evidence": "Omits evidence that materially changes the supported conclusion.",
+    "overgeneralization": "Extends a bounded statement beyond its retained population, time, or authority.",
+    "scope_violation": "Answers from evidence outside the declared firm, artifact, or corpus boundary.",
+    "unbounded_absence_claim": "Treats bounded retained absence or inventory as proof of real-world absence or completeness.",
+    "unsupported_certainty": "Claims a determinate conclusion that retained evidence does not establish.",
+    "unsupported_quantification": "Introduces a number, percentage, or causal allocation not established by retained evidence.",
+    "unsupported_speaker_attribution": "Assigns an isolated passage to a named speaker without retained attribution support."
+  },
+  "overlap_examples": {
+    "forecast_as_fact": ["unsupported_certainty", "incorrect_chronology"],
+    "authority_inflation": ["unsupported_certainty", "overgeneralization"],
+    "unbounded_absence_claim": ["unsupported_certainty", "overgeneralization"],
+    "incorrect_quantitative_synthesis": ["unsupported_quantification", "overgeneralization"]
+  }
+}

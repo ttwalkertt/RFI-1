@@ -1,0 +1,7 @@
+{
+  "algorithm": "sha256",
+  "archive": "rfi-native-seagate-held-out-v1.tar.gz",
+  "bytes": 45236,
+  "sha256": "c6e839f0d60afe09640901a78c127764f8043355921cb17d99b3d4e4a7274ff5",
+  "removal_boundary": "Remove the entire withheld/ directory before calibration or optimization."
+}

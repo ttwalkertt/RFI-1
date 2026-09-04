@@ -1,0 +1,19 @@
+{
+  "algorithm": "python.random.Random(seed).shuffle(sorted scenario IDs); first 24 calibration, remaining 16 held out",
+  "benchmark_id": "rfi-native-seagate-transcripts-v1.0.0",
+  "counts": {
+    "calibration_cases": 48,
+    "calibration_scenarios": 24,
+    "held_out_cases": 32,
+    "held_out_scenarios": 16,
+    "quarantine_cases": 4
+  },
+  "held_out_payload_sha256": "9a689088e8cecfeee5e40678fa022ad9331d545b3c28f70eac732fbe88af4aa0",
+  "privacy_note": "No held-out scenario IDs, questions, answers, labels, evidence selections, or defect assignments appear in this visible manifest.",
+  "ratio": {
+    "calibration": 0.6,
+    "held_out_verification": 0.4
+  },
+  "seed": 20260813,
+  "unit": "independent question/evidence scenario"
+}

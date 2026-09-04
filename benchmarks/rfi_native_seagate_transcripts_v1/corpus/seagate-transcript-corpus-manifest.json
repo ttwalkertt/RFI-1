@@ -1,0 +1,489 @@
+{
+  "access_generation": {
+    "authority_note": "Derived deterministic access generation; repository artifacts remain authority.",
+    "generation_identity": "61a341d2e35140a67a0387293a24c68e25dc42b36bcadf32825816d026588c3f",
+    "implementation": "rfi.research.TranscriptKnowledgeAccess",
+    "scope": {
+      "canonical_artifact_ids": [
+        "earnings_transcript"
+      ],
+      "firm_ids": [
+        "seagate"
+      ],
+      "source_effective_from": null,
+      "source_effective_through": null
+    },
+    "segment_count": 2268
+  },
+  "authority": "repository-retained immutable transcript evidence",
+  "authority_revision": 8237,
+  "benchmark_id": "rfi-native-seagate-transcripts-v1.0.0",
+  "canonical_artifact_ids": [
+    "earnings_transcript"
+  ],
+  "classification_semantics": "Canonical artifact classification is repository authority. Historical conference/investor-event titles remain earnings_transcript where retained authority says so; event_kind is unavailable and is not repaired in the benchmark.",
+  "corpus_scope_id": "stx-retained-earnings-transcripts-sqlite-revision-8237",
+  "coverage": {
+    "basis": "retained inventory only; acquisition completeness is not established",
+    "state": "indeterminate"
+  },
+  "date_from": "2024-09-04",
+  "date_through": "2026-07-28",
+  "documents": [
+    {
+      "artifact_id": "artifact-4ee1429e077c8bc13558d5fff71a31cdfa4c4d89cfd002b76422b3d25efb1560",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "4ee1429e077c8bc13558d5fff71a31cdfa4c4d89cfd002b76422b3d25efb1560",
+      "content_size": 32031,
+      "document_id": "document-e54b133f8fb4a34926f3cbf08980050b56a6a119593556de25473ec16b3e1b16",
+      "event_date": "2024-09-04",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-262f6a1705e1ef2b21bd037b591f5e1bc6e9ad36db940473db74d5922d4a532f",
+      "observed_at": "2026-08-07T18:46:51.054173+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/224487-citi-s-global-tmt-conference-2024/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 165,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Citi's Global TMT Conference 2024"
+    },
+    {
+      "artifact_id": "artifact-86daa8e537293cfb95d292ac730fcd7b3f9f17ff2affa6ec19bfcc1a59a57cd1",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "86daa8e537293cfb95d292ac730fcd7b3f9f17ff2affa6ec19bfcc1a59a57cd1",
+      "content_size": 51482,
+      "document_id": "document-92df22173b6cbdbf926c71ce2b1b140514640352c354b10034c24c0466ed3337",
+      "event_date": "2024-10-22",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-4a3b9dcb2e7aa2d0e12041c85f8e4d5b694c0fe49c9c9350adbb0a00c8c75d61",
+      "observed_at": "2026-08-07T18:47:10.609327+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/215124-q1-2025/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 122,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Earnings Call: Q1 2025"
+    },
+    {
+      "artifact_id": "artifact-535c3628d68b09c416d4a011f25fbcffd535f9659f15fdf52a4f0f42799089df",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "535c3628d68b09c416d4a011f25fbcffd535f9659f15fdf52a4f0f42799089df",
+      "content_size": 28601,
+      "document_id": "document-7859cb6edf5e26418e6c41ec446f8173808ff61d9c9783ba8a264a690c0374e7",
+      "event_date": "2024-12-03",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-36dca29eb46fe4bafe17a0a7fe290d4dace00eac1ca9ce0f1ffa76ec7a099e1a",
+      "observed_at": "2026-08-07T18:47:32.729698+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/258692-ubs-global-technology-and-ai-conference/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 67,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "UBS Global Technology and AI Conference"
+    },
+    {
+      "artifact_id": "artifact-91c8ccae0a7c84fb98e23c6bbc89695321f5b5984c88789a3fa3277f2b11154d",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "91c8ccae0a7c84fb98e23c6bbc89695321f5b5984c88789a3fa3277f2b11154d",
+      "content_size": 27986,
+      "document_id": "document-d163ca3011adec36329ee4044330535a47a4cf9f49f66055e0e953f55a883281",
+      "event_date": "2024-12-04",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-2a631fa74c49cc69dee071d2732de50608a62738fec7cb67081cde16cddfc3fb",
+      "observed_at": "2026-08-07T18:47:52.581716+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/258818-wells-fargo-8th-annual-tmt-summit/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 67,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Wells Fargo 8th Annual TMT Summit"
+    },
+    {
+      "artifact_id": "artifact-d100a38e2c94e869e26a56884cd60d5d4682d7cb22a819b565f5838dc1667abe",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "d100a38e2c94e869e26a56884cd60d5d4682d7cb22a819b565f5838dc1667abe",
+      "content_size": 27356,
+      "document_id": "document-5efb69f5b82f70cf2b632b92c35e3f58c0117403044ca19805af629cad715e7e",
+      "event_date": "2024-12-11",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-0ee3bdd304f81b8c691c51da9d09037a00c2dba434572de26331b010a2e419ca",
+      "observed_at": "2026-08-07T18:48:12.579021+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/262313-barclays-22nd-annual-global-technology-conference-2024/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 71,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Barclays 22nd Annual Global Technology Conference 2024"
+    },
+    {
+      "artifact_id": "artifact-2e7b283ddd85e3a513266e2de1cfd8f13fa699367b93bdfb1fb2aff91f7f667b",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "2e7b283ddd85e3a513266e2de1cfd8f13fa699367b93bdfb1fb2aff91f7f667b",
+      "content_size": 46667,
+      "document_id": "document-a00ea7ab93d77dc22c440a772c7c55a4d298071f05fd389256425a84fa60314f",
+      "event_date": "2025-01-21",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-7b0c1e7bf825dbc4d172e487963cc0c83dce439905a0eef637266da0de46d7d6",
+      "observed_at": "2026-08-07T18:48:32.713965+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/241726-q2-2025/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 106,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Earnings Call: Q2 2025"
+    },
+    {
+      "artifact_id": "artifact-ed7564611870c1c0b78541ea3fcbfdb1941a597f3c77fc382ea623f92a1c2471",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "ed7564611870c1c0b78541ea3fcbfdb1941a597f3c77fc382ea623f92a1c2471",
+      "content_size": 29521,
+      "document_id": "document-931e3d6817cfaba27eff0506a380318e865cbf9e9cecc3c5c445a86ed46e1b61",
+      "event_date": "2025-03-04",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-866bdb7cb217f0a4ca60255c8ec3ba3484ec8da2f99ff5984438476e1312a93f",
+      "observed_at": "2026-08-07T18:48:52.360221+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/321117-morgan-stanley-technology-media-telecom-conference/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 93,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Morgan Stanley Technology, Media & Telecom Conference"
+    },
+    {
+      "artifact_id": "artifact-fd1269507c820cfd0b01e40edf4dc897829e3481fe1ffb955615c08f1c254c74",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "fd1269507c820cfd0b01e40edf4dc897829e3481fe1ffb955615c08f1c254c74",
+      "content_size": 42008,
+      "document_id": "document-bc6c399823bf7af5e5ec058148877138731af2188a8fb2965370228abd23b827",
+      "event_date": "2025-04-29",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-b78a3e23aba9e085e6c4430e5086c04f1f52e2ccab491775d50de86c787bf882",
+      "observed_at": "2026-08-07T18:49:11.535211+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/308443-q3-2025/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 100,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Earnings Call: Q3 2025"
+    },
+    {
+      "artifact_id": "artifact-d3404906c77c90973ae83f3fb030616d10f8ee94dbb198a4e2db2d9f2ddc2246",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "d3404906c77c90973ae83f3fb030616d10f8ee94dbb198a4e2db2d9f2ddc2246",
+      "content_size": 108623,
+      "document_id": "document-bad59a7584faa6dc22933b5965c40d1afdf9d1af79060842fb217b4c8f1fa477",
+      "event_date": "2025-05-22",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-467b16eea60a8a9f04074b29ade2cd1579bcbb6588c6fe6f54b0daebd0e1935a",
+      "observed_at": "2026-08-07T18:49:30.161534+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/349479-investor-day-2025/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 235,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Investor Day 2025"
+    },
+    {
+      "artifact_id": "artifact-be747ba5803af942994f2e092fddfd29bbfbac35ec2ce05050f749ebdd3f93f6",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "be747ba5803af942994f2e092fddfd29bbfbac35ec2ce05050f749ebdd3f93f6",
+      "content_size": 24936,
+      "document_id": "document-ecc27cd87b68625ffbafbacdae99fe0aa90d2f8502a01d763dfcf6a54ea52ab5",
+      "event_date": "2025-05-28",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-e6fb432173685978ebe26d52eff53e9a165468de227150a35573c599e5845c32",
+      "observed_at": "2026-08-07T18:49:48.050488+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/347530-td-cowen-s-53rd-annual-technology-media-telecom-conference-2025/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 126,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "TD Cowen’s 53rd Annual Technology, Media & Telecom Conference 2025"
+    },
+    {
+      "artifact_id": "artifact-cf129da7788e5b75fe193b5acf896095dcc45fb040cdcbac62a46ebcdc8799d0",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "cf129da7788e5b75fe193b5acf896095dcc45fb040cdcbac62a46ebcdc8799d0",
+      "content_size": 24962,
+      "document_id": "document-a06d239e903bb7af7e9bcde984e614f47be73b3e93580f5b6914e8dae6b9ce0b",
+      "event_date": "2025-06-03",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-d08553f784f533477993a88736ce40e8930f669debcbd4afd8b63559cd520121",
+      "observed_at": "2026-08-07T18:50:05.276914+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/347586-bank-of-america-global-technology-conference-2025/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 56,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Bank of America Global Technology Conference 2025"
+    },
+    {
+      "artifact_id": "artifact-73d81083c5c0a29b70aa73d7bfe67f2197450eb4391e7f830268e4cf41277202",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "73d81083c5c0a29b70aa73d7bfe67f2197450eb4391e7f830268e4cf41277202",
+      "content_size": 50909,
+      "document_id": "document-fb050678cdbc1ce8f1ecc071009a11319990e3ef0c4a9d3f7be68e4b4ba15372",
+      "event_date": "2025-07-29",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-eaf6ef5f24bb69ab0ba84f9e1d14be1d72228e670046db584d5ceaf030c7b008",
+      "observed_at": "2026-08-07T18:50:22.889613+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/336637-q4-2025/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 192,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Earnings Call: Q4 2025"
+    },
+    {
+      "artifact_id": "artifact-35a9dd0b5c2da77f4818d2c453fb79b5ece9f08b85284171701c73211a344a36",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "35a9dd0b5c2da77f4818d2c453fb79b5ece9f08b85284171701c73211a344a36",
+      "content_size": 31793,
+      "document_id": "document-9fa353261ac8c48fab6e7c82d7d235ae53a862f72b62d26e00bb835804c64a9e",
+      "event_date": "2025-09-03",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-b178299cc253aa08f5e495bcd217b95a5c3980d0816574be8ff430705c4baa5c",
+      "observed_at": "2026-08-07T18:50:40.749363+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/375197-citi-s-2025-global-technology-media-and-telecommunications-conference/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 80,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Citi’s 2025 Global Technology, Media and Telecommunications Conference"
+    },
+    {
+      "artifact_id": "artifact-12cf15c7fb7a2db407fc54ce640b15f52f91bba2ca8d6d33b40bd21f9d627343",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "12cf15c7fb7a2db407fc54ce640b15f52f91bba2ca8d6d33b40bd21f9d627343",
+      "content_size": 25045,
+      "document_id": "document-a613979a3e7948f5cafa60c4234a6174abe67dfd144c505d5e450249fdf83fe0",
+      "event_date": "2025-09-08",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-1a60259a0f01aa4febc2f9fa30ef2200470caf47aee47ee82485525a20da23b1",
+      "observed_at": "2026-08-07T18:50:57.679520+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/375203-goldman-sachs-communicopia-technology-conference-2025/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 57,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Goldman Sachs Communicopia + Technology Conference 2025"
+    },
+    {
+      "artifact_id": "artifact-002fa45161ebfc46b0f4f0827ca9556a85bb16910571cd49d8c3c7bc59d0baaf",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "002fa45161ebfc46b0f4f0827ca9556a85bb16910571cd49d8c3c7bc59d0baaf",
+      "content_size": 50432,
+      "document_id": "document-9b5f044753a5c17248a7f0790a54c942b4384c3a9e19126bc5ef213c858844f9",
+      "event_date": "2025-10-28",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-780dcfed07133dfa4aa910908e3653e89bce84da417baa6cbeb9faeb4b553420",
+      "observed_at": "2026-08-07T18:51:13.314962+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/368343-q1-2026/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 126,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Earnings Call: Q1 2026"
+    },
+    {
+      "artifact_id": "artifact-7a0297ae47b1765eae25d87a762042346b2a5f0dcf069f2c3f9cf26464238a21",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "7a0297ae47b1765eae25d87a762042346b2a5f0dcf069f2c3f9cf26464238a21",
+      "content_size": 23653,
+      "document_id": "document-9e6f9afc977f9b9b0f73c90d5002cb275e7ba8b54a3aff5677f4e106d0a092da",
+      "event_date": "2025-12-01",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-2f23cc4659443ab5cae24810b5307515f0e5b3f62478252e59ec49e372643b48",
+      "observed_at": "2026-08-07T18:51:30.728903+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/421050-ubs-s-2025-global-technology-and-ai-conference/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 59,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "UBS’s 2025 Global Technology and AI Conference"
+    },
+    {
+      "artifact_id": "artifact-38439fecc482ab3143e10c7156fe197960af2a675bf94eda7000de4a63947d1b",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "38439fecc482ab3143e10c7156fe197960af2a675bf94eda7000de4a63947d1b",
+      "content_size": 23605,
+      "document_id": "document-a79bf0b0cdbb868a351f3f6adf428819f5d0012d4a33470f618c863fa975f438",
+      "event_date": "2025-12-09",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-00735191363b01311355971a60f6fd5fe356bbc32e1874dc55d0e65d643a36ba",
+      "observed_at": "2026-08-07T18:51:46.672763+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/421062-53rd-annual-nasdaq-investor-conference/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 51,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "53rd Annual Nasdaq Investor Conference"
+    },
+    {
+      "artifact_id": "artifact-e9b02f6240a52829be3ef595bbc421ce7a4d76ae2b3a98b16a88f9145a058363",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "e9b02f6240a52829be3ef595bbc421ce7a4d76ae2b3a98b16a88f9145a058363",
+      "content_size": 48820,
+      "document_id": "document-d902784998495713ebb4a69d9e0a3765111afc0d62a36d3b258af223be25de3a",
+      "event_date": "2026-01-27",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-32857b3279db7a0a3a88431f32b14afa63f0fab2423fb28627f5e5e86be4daa9",
+      "observed_at": "2026-08-07T18:52:02.696021+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/398954-q2-2026/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 119,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Earnings Call: Q2 2026"
+    },
+    {
+      "artifact_id": "artifact-7e051a73e2ad41950582f37b41a373da627a31868f06df55f5ba3322cde7857e",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "7e051a73e2ad41950582f37b41a373da627a31868f06df55f5ba3322cde7857e",
+      "content_size": 35868,
+      "document_id": "document-3689fd5590ce9f5aa0adb0fd73dbc3dc2265bc1493612ea4cdabb140e0d57ad9",
+      "event_date": "2026-02-25",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-82b35d2c83190a630b9fbf4ac65f8a9fb49aa207cf293857382b944417b906c5",
+      "observed_at": "2026-08-07T18:52:18.164207+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/560440-bernstein-insights-what-s-next-in-tech-4th-annual-tech-media-telecom-forum/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 183,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Bernstein Insights: What's next in tech? - 4th Annual Tech, Media, Telecom Forum"
+    },
+    {
+      "artifact_id": "artifact-f03ca000f9bd9fb5245d8d4364b32c8549b6597eeda4900ada033982cc7b770a",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "f03ca000f9bd9fb5245d8d4364b32c8549b6597eeda4900ada033982cc7b770a",
+      "content_size": 31183,
+      "document_id": "document-f5bd9743e23e70638fa83d23bb05fe9f93dab0c4ab23b4877079d1af4aea7bb1",
+      "event_date": "2026-03-03",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-e33863eda26a83b5e3e78ddaa90337305daa5877a5b80a843091385f9159e3eb",
+      "observed_at": "2026-08-07T18:52:33.388391+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/556508-morgan-stanley-technology-media-telecom-conference-2026/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 100,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Morgan Stanley Technology, Media & Telecom Conference 2026"
+    },
+    {
+      "artifact_id": "artifact-6aa52100428273ed19584eea733a6b640f23eace4415ebe0b25be1c7e2fcc9f5",
+      "canonical_artifact_id": "earnings_transcript",
+      "checksum_sha256": "6aa52100428273ed19584eea733a6b640f23eace4415ebe0b25be1c7e2fcc9f5",
+      "content_size": 49274,
+      "document_id": "document-3e6ce93a3e1ea4017b93c0ded959716856dba03b38b5621bb0538e1754090354",
+      "event_date": "2026-07-28",
+      "event_kind": null,
+      "firm_id": "seagate",
+      "observation_id": "observation-21c2f3f498fff953cd7829ad1c8632f5fa4ae802b7f678fe9cd45108b668ada3",
+      "observed_at": "2026-08-05T14:31:47.464918+00:00",
+      "provenance_locations": [
+        "https://stockanalysis.com/stocks/stx/transcripts/",
+        "https://stockanalysis.com/stocks/stx/transcripts/649904-q4-2026/"
+      ],
+      "provider": "stockanalysis",
+      "segment_count": 93,
+      "source_effective_date_basis": "trusted_event_date",
+      "speaker_context_available": false,
+      "title": "Earnings Call: Q4 2026"
+    }
+  ],
+  "firm_scope": {
+    "canonical_name": "Seagate",
+    "firm_id": "seagate",
+    "legal_name": "Seagate Technology Holdings plc"
+  },
+  "metadata_gaps": [
+    "speaker labels were not retained in one or more transcript artifacts; do not attribute those passages to a named speaker",
+    "repository event-kind diagnostics are absent on historical observations; canonical artifact classification remains authoritative",
+    "retained-artifact coverage is bounded and does not prove that every call or management event was acquired"
+  ],
+  "repository_id": "repository-3cc74b7b56983605e27858afc34cd599",
+  "repository_snapshot": "sqlite-revision-8237",
+  "transcript_count": 21,
+  "transcripts_lacking_trustworthy_source_effective_date": []
+}

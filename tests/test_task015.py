@@ -7,6 +7,7 @@ import threading
 import time
 import unittest
 import urllib.request
+from dataclasses import replace
 from email.message import Message
 from pathlib import Path
 from types import SimpleNamespace
@@ -276,6 +277,39 @@ class PullWorkflowCase(unittest.TestCase):
             first.source_profile_revision_id,
         )
         self.assertEqual(self.acquisition.verify_integrity()["artifacts"], 1)
+
+    def test_firm_revision_creates_a_new_governed_source_identity(self) -> None:
+        """A changed firm display name must not conflict with prior source authority."""
+        self.adapter.contents["https://fixture.test/annual"] = b"annual report"
+        self.profiles.publish(
+            self.draft(
+                "seagate",
+                {"annual_report": (True, self.direct("https://fixture.test/annual"))},
+            ),
+            None,
+        )
+
+        first = self.workflow.run(PullRequest(("seagate",)))
+        first_attempt = first.firms[0].artifacts[0].attempts[0]
+        self.assertEqual(first_attempt.status, RunStatus.COMPLETE)
+
+        current = self.firms.get("seagate")
+        self.firms.revise(
+            "seagate",
+            replace(
+                FirmRepository.to_draft(current),
+                canonical_name="Seagate Technology Holdings",
+            ),
+            current.revision_id,
+        )
+
+        second = self.workflow.run(PullRequest(("seagate",)))
+        second_artifact = second.firms[0].artifacts[0]
+        second_attempt = second_artifact.attempts[0]
+        self.assertNotEqual(first_attempt.acquisition_run_id, second_attempt.acquisition_run_id)
+        self.assertEqual(second_attempt.status, RunStatus.COMPLETE)
+        self.assertEqual(second_artifact.outcome, ArtifactOutcome.DUPLICATE)
+        self.assertEqual(len(self.acquisition.sources()), 2)
 
     def test_status_reports_current_source_while_retrieval_is_running(self) -> None:
         url = "https://fixture.test/slow"

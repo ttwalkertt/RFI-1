@@ -1,0 +1,18 @@
+{
+  "acceptance_threshold": "No answer-quality control may reach 0.70 accuracy; defect-family text accuracy must remain below 0.35.",
+  "defect_family_control": {
+    "class_count": 15,
+    "leave_one_case_out_bag_of_words_naive_bayes_accuracy": 0.225,
+    "uniform_chance_accuracy": 0.06666666666666667
+  },
+  "interpretation": "Passing reduces obvious shortcut signal in this authored corpus; it does not prove absence of every possible leakage channel.",
+  "protocol": "Evidence-withheld controls use answer text and locator counts only; each held-out scenario's evidence, rationales, and labels are unavailable to its classifier.",
+  "quality_controls": {
+    "chance_accuracy": 0.5,
+    "leave_one_scenario_out_bag_of_words_naive_bayes_accuracy": 0.6875,
+    "longer_answer_pair_heuristic_accuracy": 0.5375,
+    "more_locators_pair_heuristic_accuracy": 0.5,
+    "more_uncertainty_terms_pair_heuristic_accuracy": 0.5375
+  },
+  "result": "PASS"
+}

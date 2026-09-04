@@ -28,6 +28,7 @@ milestones.
 
 | Task | Architectural milestone | Current status |
 |---|---|---|
+| [TASK-076](tasks/TASK-076-rfi-native-seagate-transcript-qa-benchmark.md) | Author an independently labeled RFI-native Seagate transcript QA benchmark | Complete; validated and review-ready, with human label acceptance required before operational use |
 | [TASK-075](tasks/TASK-075-establish-qa-gauge-capability-through-rbf-optimization-v2.md) | Establish an accurate and repeatable QA measurement gauge through protected RBF optimization | In progress; V3 calibration ended negative and the gauge is frozen pending human restoration for one-shot held-out verification |
 
 ## Historical and authorized milestones
